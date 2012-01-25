@@ -256,8 +256,7 @@ module mor1kx_execute_alu
 		* converted back to negative later on
 		*/
 	       if (opc_alu_i == `OR1K_ALU_OPC_DIV) begin
-		  if ((a[OPTION_OPERAND_WIDTH-1] & !b[OPTION_OPERAND_WIDTH-1]) |
-		      (!a[OPTION_OPERAND_WIDTH-1] & b[OPTION_OPERAND_WIDTH-1]))
+		  if (a[OPTION_OPERAND_WIDTH-1] ^ b[OPTION_OPERAND_WIDTH-1])
 		    div_neg <= 1'b1;
 
 		  if (a[OPTION_OPERAND_WIDTH-1])
