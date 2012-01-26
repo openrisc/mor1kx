@@ -1,0 +1,484 @@
+/*
+ * ALU
+ * 
+ * inputs are opcodes, the immediate field, operands from RF, instruction 
+ * opcode
+ * 
+ * TODO -
+ * serial multiplier
+ * serial dividier
+ * serial shifter
+ * 
+ * */
+
+`include "mor1kx-defines.v"
+
+module mor1kx_execute_alu
+  (/*AUTOARG*/
+   // Outputs
+   flag_set_o, flag_clear_o, alu_result_o, alu_valid_o,
+   // Inputs
+   clk, rst, padv_i, opc_alu_i, opc_alu_secondary_i, imm16_i,
+   opc_insn_i, decode_valid_i, op_jbr_i, op_jr_i, immjbr_upper_i,
+   pc_execute_i, rfa_i, rfb_i
+   );
+
+   
+   parameter OPTION_OPERAND_WIDTH = 32;
+   
+   parameter FEATURE_MULTIPLIER = "THREESTAGE";
+   parameter FEATURE_DIVIDER = "NONE";
+
+   parameter FEATURE_ADDC = "NONE";
+   parameter FEATURE_SRA = "ENABLED";
+   parameter FEATURE_ROR = "NONE";
+   parameter FEATURE_EXT = "NONE";
+   parameter FEATURE_CMOV = "NONE";
+   parameter FEATURE_FFL1 = "NONE";
+   
+   parameter FEATURE_CUST1 = "NONE";
+   parameter FEATURE_CUST2 = "NONE";
+   parameter FEATURE_CUST3 = "NONE";
+   parameter FEATURE_CUST4 = "NONE";
+   parameter FEATURE_CUST5 = "NONE";
+   parameter FEATURE_CUST6 = "NONE";
+   parameter FEATURE_CUST7 = "NONE";
+   parameter FEATURE_CUST8 = "NONE";
+
+   parameter OPTION_BARREL_SHIFTER = "ENABLED";
+
+   input clk, rst;
+
+   // pipeline control signal in
+   input padv_i;
+   
+   // inputs to ALU
+   input [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_i;
+   input [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_secondary_i;
+   
+   input [`OR1K_IMM_WIDTH-1:0]    imm16_i;
+   
+   input [`OR1K_OPCODE_WIDTH-1:0] opc_insn_i;
+
+   input 			  decode_valid_i;
+   
+
+   input 			  op_jbr_i, op_jr_i;
+   input [9:0] 			  immjbr_upper_i;
+   input [OPTION_OPERAND_WIDTH-1:0] pc_execute_i;
+   
+   input [OPTION_OPERAND_WIDTH-1:0] rfa_i;
+   input [OPTION_OPERAND_WIDTH-1:0] rfb_i;
+   
+   output  			     flag_set_o, 
+				     flag_clear_o;
+   
+   output [OPTION_OPERAND_WIDTH-1:0] alu_result_o;
+   output 			     alu_valid_o;
+
+   reg 					 alu_valid; /* combinatorial */
+   
+   
+   wire 				  comp_op;
+   
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  a;
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  b;
+   
+   // Adder & comparator wires
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  adder_result;
+   wire 				  adder_carryout;
+   
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  b_neg;
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  b_mux;
+   wire 				  carry_in;
+   
+   wire 				  a_eq_b;
+   wire 				  a_lt_b;
+   wire 				  adder_do_sub;
+   
+   // Shifter wires
+   wire [`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0] opc_alu_shr;
+   wire 				  shift_op;
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  shift_result;
+   wire 				  shift_done;   
+
+   wire  				  alu_result_valid;
+   reg [OPTION_OPERAND_WIDTH-1:0] 	  alu_result;  // comb.
+   
+   
+   // Comparison wires
+   reg 					  flag_set; // comb.
+
+   // Logic wires
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  and_result;
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  or_result;
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  xor_result;
+
+   // Multiplier wires
+   wire [(OPTION_OPERAND_WIDTH*2)-1:0]	  mul_result;
+   wire 				  mul_valid;
+
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  div_result;
+   wire 				  div_valid;
+
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  ffl1_result;
+   
+   
+   // First stage signals - detect which operands we should take
+   wire 				  operandb_sext_imm;
+   wire 				  operandb_zext_imm;
+
+   assign operandb_sext_imm = ((opc_insn_i[5:4] == 2'b10) & 
+			     ~(opc_insn_i==`OR1K_OPCODE_ORI) &
+			     ~(opc_insn_i==`OR1K_OPCODE_ANDI)) |
+			     (opc_insn_i==`OR1K_OPCODE_SW) |
+			     (opc_insn_i==`OR1K_OPCODE_SH) |
+			     (opc_insn_i==`OR1K_OPCODE_SB);
+   
+   assign operandb_zext_imm = ((opc_insn_i[5:4] == 2'b10) & 
+			      ((opc_insn_i==`OR1K_OPCODE_ORI) |
+			       (opc_insn_i==`OR1K_OPCODE_ANDI))) |
+			     (opc_insn_i==`OR1K_OPCODE_MTSPR);
+			     
+   assign a = (op_jbr_i | op_jr_i) ? pc_execute_i : rfa_i;
+   assign b = operandb_sext_imm ? {{16{imm16_i[15]}},imm16_i[15:0]} :
+	      operandb_zext_imm ? {{16{1'b0}},imm16_i[15:0]} :
+	      (opc_insn_i==`OR1K_OPCODE_MOVHI) ? {imm16_i,16'd0} :
+	      op_jbr_i ? {{4{immjbr_upper_i[9]}},immjbr_upper_i,imm16_i,2'b00} :
+	      rfb_i ;
+   
+   assign comp_op = opc_insn_i==`OR1K_OPCODE_SF ||
+		    opc_insn_i==`OR1K_OPCODE_SFIMM;
+
+   assign opc_alu_shr = opc_alu_secondary_i[`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0];
+   
+   // Subtract when comparing to check if equal
+   assign adder_do_sub = (opc_insn_i==`OR1K_OPCODE_ALU & 
+			  opc_alu_i==`OR1K_ALU_OPC_SUB) |
+			 comp_op;
+
+   // Adder/subtractor inputs
+   assign b_neg = ~b;
+   assign carry_in = adder_do_sub;
+   assign b_mux = adder_do_sub ? b_neg : b;
+   // Adder
+   assign {adder_carryout, adder_result} = a + b_mux + 
+					   {{OPTION_OPERAND_WIDTH-1{1'b0}},
+					    carry_in};
+
+   generate
+      if (FEATURE_MULTIPLIER=="THREESTAGE") begin
+
+	 reg [(OPTION_OPERAND_WIDTH*2)-1:0] 	  mul_result0, mul_result1, mul_result2;
+	 reg [1:0] 				  mul_valid_shr;
+
+	 always @(posedge clk)
+	   begin
+	      mul_result0 <= a * b;
+	      mul_result1 <= mul_result0;
+	      // Use enable for last stage.
+	      // TODO - check if this is better than registering inputs for synthesis.
+	      if (mul_valid_shr==2'b01)
+		mul_result2 <= mul_result1;
+	   end
+	 
+	 assign mul_result = mul_result2;
+	 
+	 always @(posedge clk `OR_ASYNC_RST)
+	   if (rst)
+	     mul_valid_shr <= 0;
+	   else if (decode_valid_i)
+	     mul_valid_shr <= 0;
+	   else
+	     mul_valid_shr <= {mul_valid_shr[0],1'b1};
+	 
+	 assign mul_valid = mul_valid_shr[1] & !decode_valid_i;
+
+      end // if (FEATURE_MULTIPLIER=="THREESTAGE")
+      else if (FEATURE_MULTIPLIER=="SIMULATION") begin
+	 // Simple multiplier result   
+	 assign mul_result = a * b;
+	 assign mul_valid = 1;
+      end
+      else if (FEATURE_MULTIPLIER=="NONE") begin
+	 // No multiplier
+	 assign mul_result = adder_result;
+	 assign mul_valid = alu_result_valid;
+      end
+      else begin
+	 // Incorrect configuration option
+	 initial begin
+	    $display("%m: Error - chosen multiplier implementation (%s) not available",
+		    FEATURE_MULTIPLIER);
+	    $finish;
+	 end
+      end
+   endgenerate
+
+   generate
+      if (FEATURE_DIVIDER=="SIMULATION") begin
+	 assign div_result = a / b;
+	 assign div_valid = 1;
+      end
+      else if (FEATURE_DIVIDER=="NONE") begin
+	 assign div_result = adder_result;
+	 assign div_valid = alu_result_valid;
+      end
+      else begin
+	 // Incorrect configuration option
+	 initial begin
+	    $display("%m: Error - chosen divider implementation (%s) not available",
+		     FEATURE_DIVIDER);
+	    $finish;
+	 end
+      end
+   endgenerate
+
+   generate
+      if (FEATURE_FFL1=="ENABLED") begin
+	 assign ffl1_result = (opc_alu_secondary_i[2]) ? 
+	      
+			      (a[31] ? 32 : a[30] ? 31 : a[29] ? 30 : 
+			       a[28] ? 29 : a[27] ? 28 : a[26] ? 27 : 
+			       a[25] ? 26 : a[24] ? 25 : a[23] ? 24 : 
+			       a[22] ? 23 : a[21] ? 22 : a[20] ? 21 : 
+			       a[19] ? 20 : a[18] ? 19 : a[17] ? 18 : 
+			       a[16] ? 17 : a[15] ? 16 : a[14] ? 15 : 
+			       a[13] ? 14 : a[12] ? 13 : a[11] ? 12 : 
+			       a[10] ? 11 : a[9] ? 10 : a[8] ? 9 : 
+			       a[7] ? 8 : a[6] ? 7 : a[5] ? 6 : a[4] ? 5 : 
+			       a[3] ? 4 : a[2] ? 3 : a[1] ? 2 : a[0] ? 1 : 0 ) :
+			      (a[0] ? 1 : a[1] ? 2 : a[2] ? 3 : a[3] ? 4 : 
+			       a[4] ? 5 : a[5] ? 6 : a[6] ? 7 : a[7] ? 8 : 
+			       a[8] ? 9 : a[9] ? 10 : a[10] ? 11 : a[11] ? 12 :
+			       a[12] ? 13 : a[13] ? 14 : a[14] ? 15 : 
+			       a[15] ? 16 : a[16] ? 17 : a[17] ? 18 : 
+			       a[18] ? 19 : a[19] ? 20 : a[20] ? 21 : 
+			       a[21] ? 22 : a[22] ? 23 : a[23] ? 24 : 
+			       a[24] ? 25 : a[25] ? 26 : a[26] ? 27 : 
+			       a[27] ? 28 : a[28] ? 29 : a[29] ? 30 : 
+			       a[30] ? 31 : a[31] ? 32 : 0);
+      end
+      else begin
+	 assign ffl1_result = adder_result;
+      end
+   endgenerate
+
+   // Adder result is zero if equal
+   assign a_eq_b = !(|adder_result);
+   assign a_lt_b = opc_alu_secondary_i[3] ? // Signed compare
+		   ((a[OPTION_OPERAND_WIDTH-1] & 
+		     !b[OPTION_OPERAND_WIDTH-1]) |
+		    (!a[OPTION_OPERAND_WIDTH-1] & 
+		     !b[OPTION_OPERAND_WIDTH-1] &
+		     adder_result[OPTION_OPERAND_WIDTH-1]) |
+		    (a[OPTION_OPERAND_WIDTH-1] & 
+		     b[OPTION_OPERAND_WIDTH-1] &
+		     adder_result[OPTION_OPERAND_WIDTH-1])) :
+		   (a < b);
+   /*
+		   // Unsigned compare
+		   // check for a < b: if result of a - b has wrapped
+                   adder_result[OPTION_OPERAND_WIDTH-1] &&
+		   // and check that a >>> b
+		   !(a[OPTION_OPERAND_WIDTH-1] & !b[OPTION_OPERAND_WIDTH-1]);
+   */
+		    
+   
+   assign shift_op = (opc_alu_i == `OR1K_ALU_OPC_SHRT || 
+		      opc_insn_i == `OR1K_OPCODE_SHRTI) ;
+
+   generate
+      if (OPTION_BARREL_SHIFTER=="ENABLED" &&
+	  FEATURE_SRA=="ENABLED" &&
+	  FEATURE_ROR=="ENABLED") begin
+	 
+	 assign shift_done = 1;
+	 assign shift_result = 
+			       (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
+			       ({32{a[OPTION_OPERAND_WIDTH-1]}} <<
+				(/*7'd*/OPTION_OPERAND_WIDTH-{2'b0,b[4:0]})) |
+		               a >> b[4:0] :
+			       (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_ROR) ?
+			       (a << (6'd32-{1'b0,b[4:0]})) |
+			       (a >> b[4:0]) :
+			       (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?
+			       a << b[4:0] :
+			       //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
+			       a >> b[4:0];
+      end // if (OPTION_BARREL_SHIFTER=="ENABLED" &&...
+      else if (OPTION_BARREL_SHIFTER=="ENABLED" &&
+	       FEATURE_SRA=="ENABLED" &&
+	       FEATURE_ROR!="ENABLED") begin
+	 assign shift_done = 1;
+	 assign shift_result = 
+			       (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
+			       ({32{a[OPTION_OPERAND_WIDTH-1]}} <<
+				(/*7'd*/OPTION_OPERAND_WIDTH-{2'b0,b[4:0]})) |
+		               a >> b[4:0] :
+			       (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?
+			       a << b[4:0] :
+			       //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
+			       a >> b[4:0];
+      end // if (OPTION_BARREL_SHIFTER=="ENABLED" &&...
+      else if (OPTION_BARREL_SHIFTER=="ENABLED" &&
+	       FEATURE_SRA!="ENABLED" &&
+	       FEATURE_ROR!="ENABLED") begin
+	 assign shift_done = 1;
+	 assign shift_result = 
+			       (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?
+			       a << b[4:0] :
+			       //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
+			       a >> b[4:0];
+      end
+      else if (OPTION_BARREL_SHIFTER!="ENABLED") begin
+	 // TODO: serial shifter implementation
+      end
+   endgenerate
+
+   // Comparison logic
+   assign flag_set_o = flag_set & comp_op;
+   assign flag_clear_o = !flag_set & comp_op;
+
+   // Combinatorial block
+   always @*    
+     case(opc_alu_secondary_i)
+       `OR1K_COMP_OPC_EQ:
+	 flag_set = a_eq_b;
+       `OR1K_COMP_OPC_NE:
+	 flag_set = !a_eq_b;
+       `OR1K_COMP_OPC_GTU,
+	 `OR1K_COMP_OPC_GTS:
+	   flag_set = !(a_eq_b | a_lt_b);
+       `OR1K_COMP_OPC_GEU,
+	 `OR1K_COMP_OPC_GES:
+	   flag_set = !a_lt_b;
+       `OR1K_COMP_OPC_LTU,
+	 `OR1K_COMP_OPC_LTS:
+	   flag_set = a_lt_b;
+       `OR1K_COMP_OPC_LEU,
+	 `OR1K_COMP_OPC_LES:
+	   flag_set = a_eq_b | a_lt_b;
+       default:
+	 flag_set = 0;
+     endcase // case (opc_alu_secondary_i)
+   
+   
+   // Logic operations
+   assign and_result = a & b;
+   assign or_result = a | b;
+   assign xor_result = a ^ b;
+
+
+   // Result muxing - result is registered in RF
+   always @*
+     case(opc_insn_i)
+       `OR1K_OPCODE_ALU:
+	 case(opc_alu_i)
+/*	   
+	   `OR1K_ALU_OPC_ADDC,
+	   `OR1K_ALU_OPC_ADD:
+	     alu_result = adder_result;
+	   `OR1K_ALU_OPC_SUB:
+	     alu_result = adder_result;
+*/ 
+	   `OR1K_ALU_OPC_AND:
+	     alu_result = and_result;
+	   `OR1K_ALU_OPC_OR:
+	     alu_result = or_result;
+	   `OR1K_ALU_OPC_XOR:
+	     alu_result = xor_result;
+	   `OR1K_ALU_OPC_MUL,
+	   `OR1K_ALU_OPC_MULU:
+	     alu_result = mul_result[OPTION_OPERAND_WIDTH-1:0];
+	   `OR1K_ALU_OPC_SHRT:
+	     alu_result = shift_result;
+	   `OR1K_ALU_OPC_DIV,
+	   `OR1K_ALU_OPC_DIVU:
+	     alu_result = div_result;
+	   `OR1K_ALU_OPC_FFL1:
+	     alu_result = ffl1_result;
+	     default:
+	       alu_result = adder_result;
+	   endcase // case (opc_alu_i)
+	 `OR1K_OPCODE_SHRTI:
+	   alu_result = shift_result;
+	 `OR1K_OPCODE_ADDIC,
+	 `OR1K_OPCODE_ADDI:
+	   alu_result = adder_result;
+	 `OR1K_OPCODE_ANDI:
+	   alu_result = and_result;
+	 `OR1K_OPCODE_ORI:
+	   alu_result = or_result;
+	 `OR1K_OPCODE_XORI:
+	   alu_result = xor_result;
+	 `OR1K_OPCODE_MULI:
+	   alu_result = mul_result[OPTION_OPERAND_WIDTH-1:0];
+         `OR1K_OPCODE_SW,
+	 `OR1K_OPCODE_SH,
+	 `OR1K_OPCODE_SB,
+	 `OR1K_OPCODE_LWZ,
+	 `OR1K_OPCODE_LWS,
+	 `OR1K_OPCODE_LBZ,
+	 `OR1K_OPCODE_LBS,
+	 `OR1K_OPCODE_LHZ,
+         `OR1K_OPCODE_LHS:
+	   alu_result = adder_result;
+         `OR1K_OPCODE_MOVHI:
+	   alu_result = b;
+         `OR1K_OPCODE_MFSPR,
+	 `OR1K_OPCODE_MTSPR:
+	   alu_result = or_result;
+       	 `OR1K_OPCODE_J,
+	 `OR1K_OPCODE_JAL,
+	 `OR1K_OPCODE_BNF,
+	 `OR1K_OPCODE_BF,
+	 `OR1K_OPCODE_JR,
+	 `OR1K_OPCODE_JALR:
+	   alu_result = adder_result;
+       default:
+	 // Default out is b - for jump reg instructions
+	 alu_result = b;
+       endcase // case (opc_insn_i)
+   
+   assign alu_result_valid = 1'b1; // ALU (adder, logic ops) always ready
+   assign alu_result_o = alu_result;
+
+   // ALU finished/valid MUXing
+   always @*
+     case(opc_insn_i)
+       `OR1K_OPCODE_ALU:
+	 case(opc_alu_i)
+	   `OR1K_ALU_OPC_MUL,
+	     `OR1K_ALU_OPC_MULU:
+	       alu_valid = mul_valid;
+
+	   `OR1K_ALU_OPC_DIV,
+	     `OR1K_ALU_OPC_DIVU:
+	       alu_valid = div_valid;
+/*
+	   `OR1K_ALU_OPC_SHRT,
+*/ 
+	   default:
+	     alu_valid = alu_result_valid;
+	 endcase // case (opc_alu_i)
+
+       `OR1K_OPCODE_MULI:
+	 alu_valid = mul_valid;
+/*       
+       `OR1K_OPCODE_SHRTI:
+*/        
+       default:
+	 alu_valid = alu_result_valid;
+     endcase // case (opc_insn_i)
+   
+   
+   assign alu_valid_o = alu_valid;
+
+endmodule // mor1kx_execute_alu
+	
+
+
+   
+   
+   
