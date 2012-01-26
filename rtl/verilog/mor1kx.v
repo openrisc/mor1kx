@@ -52,7 +52,7 @@ module mor1kx
 				`OR1K_RESET_VECTOR,8'd0};
 
    parameter FEATURE_MULTIPLIER = "THREESTAGE";
-   parameter FEATURE_DIVIDER = "NONE";
+   parameter FEATURE_DIVIDER = "SERIAL";
 
    parameter FEATURE_ADDC = "NONE";
    parameter FEATURE_SRA = "ENABLED";
