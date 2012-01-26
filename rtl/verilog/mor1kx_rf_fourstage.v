@@ -168,7 +168,13 @@ module mor1kx_rf_fourstage
        waiting_for_wb <= 1;
 	
    
-   mor1kx_rf_ram rfa
+   mor1kx_rf_ram
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
+       .OPTION_RF_WORDS(OPTION_RF_WORDS)
+       )
+     rfa
      (
       .clk(clk), 
       .rst(rst),
@@ -180,11 +186,13 @@ module mor1kx_rf_fourstage
       .wrda_i(result_i)
       );
 
-   defparam rfa.OPTION_OPERAND_WIDTH = OPTION_OPERAND_WIDTH;
-   defparam rfa.OPTION_RF_ADDR_WIDTH = OPTION_RF_ADDR_WIDTH;
-   defparam rfa.OPTION_RF_WORDS = OPTION_RF_WORDS;
-
-   mor1kx_rf_ram rfb
+   mor1kx_rf_ram
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
+       .OPTION_RF_WORDS(OPTION_RF_WORDS)
+       )
+   rfb
      (
       .clk(clk), 
       .rst(rst),
@@ -195,8 +203,5 @@ module mor1kx_rf_fourstage
       .wren_i(rf_wren),
       .wrda_i(result_i)
       );
-   defparam rfb.OPTION_OPERAND_WIDTH = OPTION_OPERAND_WIDTH;
-   defparam rfb.OPTION_RF_ADDR_WIDTH = OPTION_RF_ADDR_WIDTH;
-   defparam rfb.OPTION_RF_WORDS = OPTION_RF_WORDS;
 
 endmodule // mor1kx_execute_alu
