@@ -216,7 +216,74 @@ module mor1kx_execute_alu
    endgenerate
 
    generate
-      if (FEATURE_DIVIDER=="SIMULATION") begin
+      if (FEATURE_DIVIDER=="SERIAL") begin
+	 reg [4:0] div_count;
+	 reg [OPTION_OPERAND_WIDTH-1:0] div_n;
+	 reg [OPTION_OPERAND_WIDTH-1:0] div_d;
+	 reg [OPTION_OPERAND_WIDTH-1:0] div_r;
+	 wire [OPTION_OPERAND_WIDTH:0] 	div_sub;
+	 reg 				div_neg;
+	 reg 				div_done;
+
+	 assign div_sub = {div_r[OPTION_OPERAND_WIDTH-2:0],
+			   div_n[OPTION_OPERAND_WIDTH-1]} - div_d;
+
+	 /* Cycle counter */
+	 always @(posedge clk `OR_ASYNC_RST)
+	   if (rst)
+	     div_count <= OPTION_OPERAND_WIDTH-1;
+	   else if (decode_valid_i)
+	     div_count <= OPTION_OPERAND_WIDTH-1;
+	   else
+	     div_count <= div_count - 1;
+
+	 always @(posedge clk `OR_ASYNC_RST) begin
+	    if (rst) begin
+	       div_n <= a;
+	       div_d <= b;
+	       div_r <= 0;
+	       div_neg <= 1'b0;
+	       div_done <= 1'b0;
+	    end else if (decode_valid_i) begin
+	       div_n <= a;
+	       div_d <= b;
+	       div_r <= 0;
+	       div_neg <= 1'b0;
+	       div_done <= 1'b0;
+	       /*
+		* Convert negative operands in the case of signed division.
+		* If only one of the operands is negative, the result is
+		* converted back to negative later on
+		*/
+	       if (opc_alu_i == `OR1K_ALU_OPC_DIV) begin
+		  if ((a[OPTION_OPERAND_WIDTH-1] & !b[OPTION_OPERAND_WIDTH-1]) |
+		      (!a[OPTION_OPERAND_WIDTH-1] & b[OPTION_OPERAND_WIDTH-1]))
+		    div_neg <= 1'b1;
+
+		  if (a[OPTION_OPERAND_WIDTH-1])
+		    div_n <= ~a + 1;
+
+		  if (b[OPTION_OPERAND_WIDTH-1])
+		    div_d <= ~b + 1;
+	       end
+	    end else begin
+	       if (!div_sub[OPTION_OPERAND_WIDTH]) begin // div_sub >= 0
+		  div_r <= div_sub[OPTION_OPERAND_WIDTH-1:0];
+		  div_n <= {div_n[OPTION_OPERAND_WIDTH-2:0], 1'b1};
+	       end else begin // div_sub < 0
+		  div_r <= {div_r[OPTION_OPERAND_WIDTH-2:0],
+			    div_n[OPTION_OPERAND_WIDTH-1]};
+		  div_n <= {div_n[OPTION_OPERAND_WIDTH-2:0], 1'b0};
+	       end
+	       if (div_count == 0)
+		 div_done <= 1'b1;
+	   end
+	 end
+
+	 assign div_valid = div_done & !decode_valid_i;
+	 assign div_result = div_neg ? ~div_n + 1 : div_n;
+      end
+      else if (FEATURE_DIVIDER=="SIMULATION") begin
 	 assign div_result = a / b;
 	 assign div_valid = 1;
       end
