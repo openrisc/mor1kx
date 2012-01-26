@@ -210,7 +210,12 @@ module mor1kx_cpu_fourstage
     .du_restart_pc_i                    (du_restart_pc_o),
     .du_restart_i                       (du_restart_o),
     ); */
-   mor1kx_fetch_fourstage mor1kx_fetch_fourstage
+   mor1kx_fetch_fourstage
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .OPTION_RESET_PC(OPTION_RESET_PC)
+       )
+     mor1kx_fetch_fourstage
      (/*AUTOINST*/
       // Outputs
       .ibus_adr_o			(ibus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -233,9 +238,6 @@ module mor1kx_cpu_fourstage
       .du_restart_pc_i			(du_restart_pc_o),	 // Templated
       .du_restart_i			(du_restart_o),		 // Templated
       .pipeline_flush_i			(pipeline_flush_o));	 // Templated
-   
-   defparam mor1kx_fetch_fourstage.OPTION_OPERAND_WIDTH = OPTION_OPERAND_WIDTH;
-   defparam mor1kx_fetch_fourstage.OPTION_RESET_PC = OPTION_RESET_PC;
 
    /* mor1kx_decode AUTO_TEMPLATE (
     .padv_i				(padv_decode_o),
@@ -245,7 +247,33 @@ module mor1kx_cpu_fourstage
     .pipeline_flush_i			(pipeline_flush_o),
     .pc_execute_o                       (pc_decode_to_execute),
     ); */
-   mor1kx_decode mor1kx_decode 
+   mor1kx_decode
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .OPTION_RESET_PC(OPTION_RESET_PC),
+       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
+       .FEATURE_SYSCALL(FEATURE_SYSCALL),
+       .FEATURE_TRAP(FEATURE_TRAP),
+       .FEATURE_RANGE(FEATURE_RANGE),
+       .FEATURE_MAC(FEATURE_MAC),
+       .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER),
+       .FEATURE_DIVIDER(FEATURE_DIVIDER),
+       .FEATURE_ADDC(FEATURE_ADDC),
+       .FEATURE_SRA(FEATURE_SRA),
+       .FEATURE_ROR(FEATURE_ROR),
+       .FEATURE_EXT(FEATURE_EXT),
+       .FEATURE_CMOV(FEATURE_CMOV),
+       .FEATURE_FFL1(FEATURE_FFL1),
+       .FEATURE_CUST1(FEATURE_CUST1),
+       .FEATURE_CUST2(FEATURE_CUST2),
+       .FEATURE_CUST3(FEATURE_CUST3),
+       .FEATURE_CUST4(FEATURE_CUST4),
+       .FEATURE_CUST5(FEATURE_CUST5),
+       .FEATURE_CUST6(FEATURE_CUST6),
+       .FEATURE_CUST7(FEATURE_CUST7),
+       .FEATURE_CUST8(FEATURE_CUST8)
+       )
+     mor1kx_decode 
      (/*AUTOINST*/
       // Outputs
       .opc_alu_o			(opc_alu_o[`OR1K_ALU_OPC_WIDTH-1:0]),
@@ -277,32 +305,7 @@ module mor1kx_cpu_fourstage
       .pc_decode_i			(pc_fetch_to_decode),	 // Templated
       .decode_insn_i			(insn_fetch_to_decode),	 // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
-      .decode_except_ibus_err_i		(decode_except_ibus_err_o)); // Templated
-
-   defparam mor1kx_decode.OPTION_OPERAND_WIDTH = OPTION_OPERAND_WIDTH;
-   defparam mor1kx_decode.OPTION_RESET_PC = OPTION_RESET_PC;
-   defparam mor1kx_decode.OPTION_RF_ADDR_WIDTH = OPTION_RF_ADDR_WIDTH;
-   defparam mor1kx_decode.FEATURE_SYSCALL = FEATURE_SYSCALL;
-   defparam mor1kx_decode.FEATURE_TRAP = FEATURE_TRAP;
-   defparam mor1kx_decode.FEATURE_RANGE = FEATURE_RANGE;
-   defparam mor1kx_decode.FEATURE_MAC = FEATURE_MAC;
-   defparam mor1kx_decode.FEATURE_MULTIPLIER = FEATURE_MULTIPLIER;
-   defparam mor1kx_decode.FEATURE_DIVIDER = FEATURE_DIVIDER;
-   defparam mor1kx_decode.FEATURE_ADDC = FEATURE_ADDC;
-   defparam mor1kx_decode.FEATURE_SRA = FEATURE_SRA;
-   defparam mor1kx_decode.FEATURE_ROR = FEATURE_ROR;
-   defparam mor1kx_decode.FEATURE_EXT = FEATURE_EXT;
-   defparam mor1kx_decode.FEATURE_CMOV = FEATURE_CMOV;
-   defparam mor1kx_decode.FEATURE_FFL1 = FEATURE_FFL1;
-   defparam mor1kx_decode.FEATURE_CUST1 = FEATURE_CUST1;
-   defparam mor1kx_decode.FEATURE_CUST2 = FEATURE_CUST2;
-   defparam mor1kx_decode.FEATURE_CUST3 = FEATURE_CUST3;
-   defparam mor1kx_decode.FEATURE_CUST4 = FEATURE_CUST4;
-   defparam mor1kx_decode.FEATURE_CUST5 = FEATURE_CUST5;
-   defparam mor1kx_decode.FEATURE_CUST6 = FEATURE_CUST6;
-   defparam mor1kx_decode.FEATURE_CUST7 = FEATURE_CUST7;
-   defparam mor1kx_decode.FEATURE_CUST8 = FEATURE_CUST8;
-   
+      .decode_except_ibus_err_i		(decode_except_ibus_err_o)); // Templated   
    
    /* mor1kx_execute_alu AUTO_TEMPLATE (
     .padv_i				(padv_execute_o),    
@@ -318,7 +321,28 @@ module mor1kx_cpu_fourstage
     .rfa_i				(rfa_o),
     .rfb_i				(rfb_o),
     ); */
-   mor1kx_execute_alu mor1kx_execute_alu 
+   mor1kx_execute_alu
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER),
+       .FEATURE_DIVIDER(FEATURE_DIVIDER),
+       .FEATURE_ADDC(FEATURE_ADDC),
+       .FEATURE_SRA(FEATURE_SRA),
+       .FEATURE_ROR(FEATURE_ROR),
+       .FEATURE_EXT(FEATURE_EXT),
+       .FEATURE_CMOV(FEATURE_CMOV),
+       .FEATURE_FFL1(FEATURE_FFL1),
+       .FEATURE_CUST1(FEATURE_CUST1),
+       .FEATURE_CUST2(FEATURE_CUST2),
+       .FEATURE_CUST3(FEATURE_CUST3),
+       .FEATURE_CUST4(FEATURE_CUST4),
+       .FEATURE_CUST5(FEATURE_CUST5),
+       .FEATURE_CUST6(FEATURE_CUST6),
+       .FEATURE_CUST7(FEATURE_CUST7),
+       .FEATURE_CUST8(FEATURE_CUST8),
+       .OPTION_BARREL_SHIFTER(OPTION_BARREL_SHIFTER)
+       )
+     mor1kx_execute_alu 
      (/*AUTOINST*/
       // Outputs
       .flag_set_o			(flag_set_o),
@@ -341,24 +365,6 @@ module mor1kx_cpu_fourstage
       .rfa_i				(rfa_o),		 // Templated
       .rfb_i				(rfb_o));		 // Templated
 
-   defparam mor1kx_execute_alu.OPTION_OPERAND_WIDTH = OPTION_OPERAND_WIDTH;
-   defparam mor1kx_execute_alu.FEATURE_MULTIPLIER = FEATURE_MULTIPLIER;
-   defparam mor1kx_execute_alu.FEATURE_DIVIDER = FEATURE_DIVIDER;
-   defparam mor1kx_execute_alu.FEATURE_ADDC = FEATURE_ADDC;
-   defparam mor1kx_execute_alu.FEATURE_SRA = FEATURE_SRA;
-   defparam mor1kx_execute_alu.FEATURE_ROR = FEATURE_ROR;
-   defparam mor1kx_execute_alu.FEATURE_EXT = FEATURE_EXT;
-   defparam mor1kx_execute_alu.FEATURE_CMOV = FEATURE_CMOV;
-   defparam mor1kx_execute_alu.FEATURE_FFL1 = FEATURE_FFL1;
-   defparam mor1kx_execute_alu.FEATURE_CUST1 = FEATURE_CUST1;
-   defparam mor1kx_execute_alu.FEATURE_CUST2 = FEATURE_CUST2;
-   defparam mor1kx_execute_alu.FEATURE_CUST3 = FEATURE_CUST3;
-   defparam mor1kx_execute_alu.FEATURE_CUST4 = FEATURE_CUST4;
-   defparam mor1kx_execute_alu.FEATURE_CUST5 = FEATURE_CUST5;
-   defparam mor1kx_execute_alu.FEATURE_CUST6 = FEATURE_CUST6;
-   defparam mor1kx_execute_alu.FEATURE_CUST7 = FEATURE_CUST7;
-   defparam mor1kx_execute_alu.FEATURE_CUST8 = FEATURE_CUST8;
-   defparam mor1kx_execute_alu.OPTION_BARREL_SHIFTER = OPTION_BARREL_SHIFTER;
    
    /* mor1kx_lsu_fourstage AUTO_TEMPLATE (
     .padv_execute_i			(padv_execute_o),
@@ -369,7 +375,11 @@ module mor1kx_cpu_fourstage
     .op_lsu_load_i			(op_lsu_load_o),
     .op_lsu_store_i			(op_lsu_store_o),
     ); */
-   mor1kx_lsu_fourstage mor1kx_lsu_fourstage 
+   mor1kx_lsu_fourstage
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
+       )
+     mor1kx_lsu_fourstage 
      (/*AUTOINST*/
       // Outputs
       .lsu_result_o			(lsu_result_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -395,9 +405,7 @@ module mor1kx_cpu_fourstage
       .dbus_ack_i			(dbus_ack_i),
       .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
 
-   defparam mor1kx_lsu_fourstage.OPTION_OPERAND_WIDTH = OPTION_OPERAND_WIDTH;
    
-
    /* mor1kx_wb_mux_fourstage AUTO_TEMPLATE (
     .alu_result_i			(alu_result_o),
     .lsu_result_i			(lsu_result_o),
@@ -407,7 +415,11 @@ module mor1kx_cpu_fourstage
     .pc_execute_i			(pc_decode_to_execute),
     .op_mfspr_i			        (op_mfspr_o),
     ); */
-   mor1kx_wb_mux_fourstage mor1kx_wb_mux_fourstage 
+   mor1kx_wb_mux_fourstage
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
+       )
+     mor1kx_wb_mux_fourstage 
      (/*AUTOINST*/
       // Outputs
       .rf_result_o			(rf_result_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -421,8 +433,6 @@ module mor1kx_cpu_fourstage
       .op_jal_i				(op_jal_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
       .op_mfspr_i			(op_mfspr_o));		 // Templated
-
-   defparam mor1kx_wb_mux_fourstage.OPTION_OPERAND_WIDTH = OPTION_OPERAND_WIDTH;
    
    
    /* mor1kx_rf_fourstage AUTO_TEMPLATE (
@@ -436,7 +446,13 @@ module mor1kx_cpu_fourstage
     .write_mask_i			(1'b0),
     .rf_wb_i				(rf_wb_o),
     ); */
-   mor1kx_rf_fourstage mor1kx_rf_fourstage 
+   mor1kx_rf_fourstage
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
+       .OPTION_RF_WORDS(OPTION_RF_WORDS)
+       )
+     mor1kx_rf_fourstage 
      (/*AUTOINST*/
       // Outputs
       .rfa_o				(rfa_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -453,10 +469,6 @@ module mor1kx_cpu_fourstage
       .execute_rf_we_i			(execute_rf_we_o),	 // Templated
       .result_i				(rf_result_o),		 // Templated
       .write_mask_i			(1'b0));			 // Templated
-   
-   defparam mor1kx_rf_fourstage.OPTION_OPERAND_WIDTH = OPTION_OPERAND_WIDTH;
-   defparam mor1kx_rf_fourstage.OPTION_RF_ADDR_WIDTH = OPTION_RF_ADDR_WIDTH;
-   defparam mor1kx_rf_fourstage.OPTION_RF_WORDS = OPTION_RF_WORDS;
 
    	 
    /* Debug signals required for the debug monitor */
@@ -504,7 +516,12 @@ module mor1kx_cpu_fourstage
     .pipeline_flush_i			(pipeline_flush_o),
     .pc_ctrl_o                          (pc_execute_to_ctrl),
     ); */
-   mor1kx_execute_ctrl_fourstage mor1kx_execute_ctrl_fourstage 
+   mor1kx_execute_ctrl_fourstage
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .OPTION_RESET_PC(OPTION_RESET_PC)
+       )
+     mor1kx_execute_ctrl_fourstage 
      (/*AUTOINST*/
       // Outputs
       .execute_rf_we_o			(execute_rf_we_o),
@@ -550,9 +567,6 @@ module mor1kx_cpu_fourstage
       .rf_wb_i				(rf_wb_o),		 // Templated
       .ctrl_mfspr_we_i			(ctrl_mfspr_we_o));	 // Templated
 
-   defparam mor1kx_execute_ctrl_fourstage.OPTION_OPERAND_WIDTH = OPTION_OPERAND_WIDTH;
-   defparam mor1kx_execute_ctrl_fourstage.OPTION_RESET_PC = OPTION_RESET_PC;
-
    /* mor1kx_ctrl_branch_fourstage AUTO_TEMPLATE (
     .ex_alu_result_i			(alu_result_o),
     .ex_rfb_i				(rfb_o),
@@ -566,6 +580,9 @@ module mor1kx_cpu_fourstage
     .execute_except_ibus_align_i	(execute_except_ibus_align_o),
     ); */
    mor1kx_ctrl_branch_fourstage
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
+       )
      mor1kx_ctrl_branch_fourstage
      (/*AUTOINST*/
       // Outputs
@@ -584,7 +601,6 @@ module mor1kx_cpu_fourstage
       .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o), // Templated
       .execute_except_ibus_align_i	(execute_except_ibus_align_o), // Templated
       .ctrl_except_ibus_align_i		(ctrl_except_ibus_align_o)); // Templated
-   defparam mor1kx_ctrl_branch_fourstage.OPTION_OPERAND_WIDTH = OPTION_OPERAND_WIDTH;
    
 
    /* mor1kx_ctrl_fourstage AUTO_TEMPLATE (   
@@ -611,7 +627,31 @@ module mor1kx_cpu_fourstage
     .execute_opc_insn_i		(opc_insn_o),    
     .fetch_branch_taken_i	(fetch_branch_taken_o),
     ); */
-   mor1kx_ctrl_fourstage mor1kx_ctrl_fourstage 
+   mor1kx_ctrl_fourstage
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .OPTION_RESET_PC(OPTION_RESET_PC),
+       .FEATURE_PIC(FEATURE_PIC),
+       .FEATURE_TIMER(FEATURE_TIMER),
+       .OPTION_PIC_TRIGGER(OPTION_PIC_TRIGGER),
+       .FEATURE_DATACACHE(FEATURE_DATACACHE),
+       .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
+       .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
+       .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
+       .FEATURE_DMMU(FEATURE_DMMU),
+       .FEATURE_INSTRUCTIONCACHE(FEATURE_INSTRUCTIONCACHE),
+       .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
+       .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
+       .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
+       .FEATURE_IMMU(FEATURE_IMMU),
+       .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
+       .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
+       .FEATURE_MAC(FEATURE_MAC),
+       .FEATURE_SYSCALL(FEATURE_SYSCALL),
+       .FEATURE_TRAP(FEATURE_TRAP),
+       .FEATURE_RANGE(FEATURE_RANGE)
+       )
+     mor1kx_ctrl_fourstage 
      (/*AUTOINST*/
       // Outputs
       .mfspr_dat_o			(mfspr_dat_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -680,28 +720,5 @@ module mor1kx_cpu_fourstage
       .spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
       .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
       .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
-
-   defparam mor1kx_ctrl_fourstage.OPTION_OPERAND_WIDTH = OPTION_OPERAND_WIDTH;
-   defparam mor1kx_ctrl_fourstage.OPTION_RESET_PC = OPTION_RESET_PC;
-   defparam mor1kx_ctrl_fourstage.FEATURE_PIC = FEATURE_PIC;
-   defparam mor1kx_ctrl_fourstage.FEATURE_TIMER = FEATURE_TIMER;
-   defparam mor1kx_ctrl_fourstage.OPTION_PIC_TRIGGER = OPTION_PIC_TRIGGER;
-
-   defparam mor1kx_ctrl_fourstage.FEATURE_DATACACHE = FEATURE_DATACACHE;
-   defparam mor1kx_ctrl_fourstage.OPTION_DCACHE_BLOCK_WIDTH = OPTION_DCACHE_BLOCK_WIDTH;
-   defparam mor1kx_ctrl_fourstage.OPTION_DCACHE_SET_WIDTH = OPTION_DCACHE_SET_WIDTH;
-   defparam mor1kx_ctrl_fourstage.OPTION_DCACHE_WAYS = OPTION_DCACHE_WAYS;
-   defparam mor1kx_ctrl_fourstage.FEATURE_DMMU = FEATURE_DMMU;
-   defparam mor1kx_ctrl_fourstage.FEATURE_INSTRUCTIONCACHE = FEATURE_INSTRUCTIONCACHE;
-   defparam mor1kx_ctrl_fourstage.OPTION_ICACHE_BLOCK_WIDTH = OPTION_ICACHE_BLOCK_WIDTH;
-   defparam mor1kx_ctrl_fourstage.OPTION_ICACHE_SET_WIDTH = OPTION_ICACHE_SET_WIDTH;
-   defparam mor1kx_ctrl_fourstage.OPTION_ICACHE_WAYS = OPTION_ICACHE_WAYS;
-   defparam mor1kx_ctrl_fourstage.FEATURE_IMMU = FEATURE_IMMU;
-   defparam mor1kx_ctrl_fourstage.FEATURE_DEBUGUNIT = FEATURE_DEBUGUNIT;
-   defparam mor1kx_ctrl_fourstage.FEATURE_PERFCOUNTERS = FEATURE_PERFCOUNTERS;
-   defparam mor1kx_ctrl_fourstage.FEATURE_MAC = FEATURE_MAC;
-   defparam mor1kx_ctrl_fourstage.FEATURE_SYSCALL = FEATURE_SYSCALL;
-   defparam mor1kx_ctrl_fourstage.FEATURE_TRAP = FEATURE_TRAP;
-   defparam mor1kx_ctrl_fourstage.FEATURE_RANGE = FEATURE_RANGE;
 
 endmodule // mor1kx_cpu_fourstage
