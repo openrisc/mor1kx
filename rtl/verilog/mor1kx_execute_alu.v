@@ -441,7 +441,7 @@ module mor1kx_execute_alu
       else
 	 initial begin
 	    $display("%m: Error - chosen shifter implementation (%s) not available",
-		     FEATURE_SHIFTER);
+		     OPTION_SHIFTER);
 	    $finish;
 	 
       end
