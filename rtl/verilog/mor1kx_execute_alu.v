@@ -45,7 +45,7 @@ module mor1kx_execute_alu
    parameter FEATURE_CUST7 = "NONE";
    parameter FEATURE_CUST8 = "NONE";
 
-   parameter OPTION_BARREL_SHIFTER = "ENABLED";
+   parameter OPTION_SHIFTER = "ENABLED";
 
    input clk, rst;
 
@@ -100,7 +100,7 @@ module mor1kx_execute_alu
    wire [`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0] opc_alu_shr;
    wire 				  shift_op;
    wire [OPTION_OPERAND_WIDTH-1:0] 	  shift_result;
-   wire 				  shift_done;   
+   wire 				  shift_valid;   
 
    wire  				  alu_result_valid;
    reg [OPTION_OPERAND_WIDTH-1:0] 	  alu_result;  // comb.
@@ -356,11 +356,11 @@ module mor1kx_execute_alu
 		      opc_insn_i == `OR1K_OPCODE_SHRTI) ;
 
    generate
-      if (OPTION_BARREL_SHIFTER=="ENABLED" &&
+      if (OPTION_SHIFTER=="BARREL" &&
 	  FEATURE_SRA=="ENABLED" &&
-	  FEATURE_ROR=="ENABLED") begin
+	  FEATURE_ROR=="ENABLED") begin : full_barrel_shifter
 	 
-	 assign shift_done = 1;
+	 assign shift_valid = 1;
 	 assign shift_result = 
 			       (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
 			       ({32{a[OPTION_OPERAND_WIDTH-1]}} <<
@@ -373,11 +373,11 @@ module mor1kx_execute_alu
 			       a << b[4:0] :
 			       //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
 			       a >> b[4:0];
-      end // if (OPTION_BARREL_SHIFTER=="ENABLED" &&...
-      else if (OPTION_BARREL_SHIFTER=="ENABLED" &&
+      end // if (OPTION_SHIFTER=="ENABLED" &&...
+      else if (OPTION_SHIFTER=="BARREL" &&
 	       FEATURE_SRA=="ENABLED" &&
-	       FEATURE_ROR!="ENABLED") begin
-	 assign shift_done = 1;
+	       FEATURE_ROR!="ENABLED") begin : bull_barrel_shifter_no_ror
+	 assign shift_valid = 1;
 	 assign shift_result = 
 			       (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
 			       ({32{a[OPTION_OPERAND_WIDTH-1]}} <<
@@ -387,19 +387,63 @@ module mor1kx_execute_alu
 			       a << b[4:0] :
 			       //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
 			       a >> b[4:0];
-      end // if (OPTION_BARREL_SHIFTER=="ENABLED" &&...
-      else if (OPTION_BARREL_SHIFTER=="ENABLED" &&
+      end // if (OPTION_SHIFTER=="ENABLED" &&...
+      else if (OPTION_SHIFTER=="BARREL" &&
 	       FEATURE_SRA!="ENABLED" &&
-	       FEATURE_ROR!="ENABLED") begin
-	 assign shift_done = 1;
+	       FEATURE_ROR!="ENABLED") begin : bull_barrel_shifter_no_ror_sra
+	 assign shift_valid = 1;
 	 assign shift_result = 
 			       (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?
 			       a << b[4:0] :
 			       //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
 			       a >> b[4:0];
       end
-      else if (OPTION_BARREL_SHIFTER!="ENABLED") begin
-	 // TODO: serial shifter implementation
+      else if (OPTION_SHIFTER=="SERIAL") begin : serial_shifter
+	 // Serial shifter
+	 reg [4:0] shift_cnt;
+	 reg 	   shift_go;
+	 reg [OPTION_OPERAND_WIDTH-1:0] shift_result_r;
+	 always @(posedge clk `OR_ASYNC_RST)
+	   if (rst)
+	     shift_go <= 0;
+	   else if (decode_valid_i)
+	     shift_go <= shift_op;
+	 
+	 always @(posedge clk `OR_ASYNC_RST)
+	   if (rst) begin
+	      shift_cnt <= 0;
+	      shift_result_r <= 0;
+	   end
+	   else if (decode_valid_i & shift_op) begin
+	      shift_cnt <= 0;
+	      shift_result_r <= a;
+	   end
+	   else if (shift_go && !(shift_cnt==b[4:0])) begin
+	      shift_cnt <= shift_cnt + 1;
+	      if (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL)
+		shift_result_r <= {1'b0,shift_result_r[OPTION_OPERAND_WIDTH-1:1]};
+	      else if (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL)
+		shift_result_r <= {shift_result_r[OPTION_OPERAND_WIDTH-2:0],1'b0};
+	      else if (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_ROR)
+		shift_result_r <= {shift_result_r[0]
+				   ,shift_result_r[OPTION_OPERAND_WIDTH-1:1]};
+	      
+	      else if (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA)
+		shift_result_r <= {a[OPTION_OPERAND_WIDTH-1],
+				   shift_result_r[OPTION_OPERAND_WIDTH-1:1]};
+	   end // if (shift_go && !(shift_cnt==b[4:0]))
+
+	 assign shift_valid = (shift_cnt==b[4:0]) & shift_go & !decode_valid_i;
+	 
+	 assign shift_result = shift_result_r;
+
+      end // if (OPTION_SHIFTER=="SERIAL")
+      else
+	 initial begin
+	    $display("%m: Error - chosen shifter implementation (%s) not available",
+		     FEATURE_SHIFTER);
+	    $finish;
+	 
       end
    endgenerate
 
@@ -523,18 +567,19 @@ module mor1kx_execute_alu
 	   `OR1K_ALU_OPC_DIV,
 	     `OR1K_ALU_OPC_DIVU:
 	       alu_valid = div_valid;
-/*
-	   `OR1K_ALU_OPC_SHRT,
-*/ 
+
+	   `OR1K_ALU_OPC_SHRT:
+	     alu_valid = shift_valid;
+ 
 	   default:
 	     alu_valid = alu_result_valid;
 	 endcase // case (opc_alu_i)
 
        `OR1K_OPCODE_MULI:
 	 alu_valid = mul_valid;
-/*       
+       
        `OR1K_OPCODE_SHRTI:
-*/        
+         alu_valid = shift_valid;
        default:
 	 alu_valid = alu_result_valid;
      endcase // case (opc_insn_i)

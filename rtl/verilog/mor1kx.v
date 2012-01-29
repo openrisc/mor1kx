@@ -70,7 +70,7 @@ module mor1kx
    parameter FEATURE_CUST7 = "NONE";
    parameter FEATURE_CUST8 = "NONE";
    
-   parameter OPTION_BARREL_SHIFTER = "ENABLED";
+   parameter OPTION_SHIFTER = "BARREL";
 
    parameter BUS_IF_TYPE = "WISHBONE32";
    
@@ -471,7 +471,7 @@ module mor1kx
 	     .FEATURE_CUST6(FEATURE_CUST6),
 	     .FEATURE_CUST7(FEATURE_CUST7),
 	     .FEATURE_CUST8(FEATURE_CUST8),
-	     .OPTION_BARREL_SHIFTER(OPTION_BARREL_SHIFTER)
+	     .OPTION_SHIFTER(OPTION_SHIFTER)
 	     )
    mor1kx_cpu
      (/*AUTOINST*/

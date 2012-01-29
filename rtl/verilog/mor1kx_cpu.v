@@ -72,7 +72,7 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter FEATURE_CUST7 = "NONE";
    parameter FEATURE_CUST8 = "NONE";
    
-   parameter OPTION_BARREL_SHIFTER = "ENABLED";
+   parameter OPTION_SHIFTER = "ENABLED";
    
    // Instruction bus
    input ibus_err_i;
@@ -171,7 +171,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	     .FEATURE_CUST6(FEATURE_CUST6),
 	     .FEATURE_CUST7(FEATURE_CUST7),
 	     .FEATURE_CUST8(FEATURE_CUST8),
-	     .OPTION_BARREL_SHIFTER(OPTION_BARREL_SHIFTER)
+	     .OPTION_SHIFTER(OPTION_SHIFTER)
 	     )
 	   mor1kx_cpu
 	   (/*AUTOINST*/
