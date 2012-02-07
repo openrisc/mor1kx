@@ -119,9 +119,9 @@ module mor1kx_execute_ctrl_fourstage
    output reg 				  execute_waiting_o;
    
    output reg 				  execute_valid_o;
-
+   /* verilator lint_off UNOPTFLAT */
    wire 				  execute_valid;
-
+   /* verilator lint_on UNOPTFLAT */
    wire 				  op_mfspr;
 
    assign op_mfspr = opc_insn_i==`OR1K_OPCODE_MFSPR;
