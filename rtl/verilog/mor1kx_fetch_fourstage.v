@@ -220,7 +220,8 @@ module mor1kx_fetch_fourstage
 		       // stops address changing 1 cycle after we put req out
 		       !(pc_fetch_advance_r & !fetch_in_progress) &
 		       // wait one cycle for pc to advance after stalled cycle
-		       !(pc_fetched & padv_i);
+		       !(pc_fetched & padv_i) &
+		       !(branch_occur_i & fetch_valid_o);
 
    // Register instruction coming in
    always @(posedge clk `OR_ASYNC_RST)
