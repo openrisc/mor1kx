@@ -20,7 +20,8 @@ module mor1kx_fetch_espresso
    decode_except_ibus_err_o, fetch_advancing_o,
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, padv_i,
-   branch_occur_i, branch_dest_i, du_restart_i, du_restart_pc_i
+   branch_occur_i, branch_dest_i, du_restart_i, du_restart_pc_i,
+   fetch_take_exception_branch_i
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
@@ -61,6 +62,8 @@ module mor1kx_fetch_espresso
    input 				  du_restart_i;
    input [OPTION_OPERAND_WIDTH-1:0] 	  du_restart_pc_i;
 
+   input 				  fetch_take_exception_branch_i;
+   
    // instruction ibus error indication out
    output reg 				  decode_except_ibus_err_o;
 
@@ -83,7 +86,8 @@ module mor1kx_fetch_espresso
    assign ibus_adr_o = pc_fetch;
    assign ibus_req_o = fetch_req;
 
-   assign fetch_advancing_o = padv_i & next_fetch_done_o;
+   assign fetch_advancing_o = (padv_i | fetch_take_exception_branch_i) & 
+			      next_fetch_done_o;
    
    // Early RF address fetch
    assign fetch_rfa_adr_o = insn_buffer[`OR1K_RA_SELECT];
@@ -92,7 +96,7 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        pc_fetch <= OPTION_RESET_PC;
-     else if (padv_i)
+     else if (padv_i | fetch_take_exception_branch_i)
        // next PC - are we going somewhere else or advancing?
        pc_fetch <= du_restart_i ? du_restart_pc_i :
 		   branch_occur_i ? branch_dest_i :
@@ -104,7 +108,7 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        fetch_req <= 1;
-     else if (padv_i)
+     else if (padv_i | fetch_take_exception_branch_i)
        fetch_req <= 1;
      else if (bus_access_done)
        fetch_req <= 0;
@@ -114,13 +118,17 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
+     else if (fetch_take_exception_branch_i)
+       // Put a NOP in the pipeline when doing a branch - remove any state
+       // which may be causing the exception
+       decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
      else if (padv_i)
        decode_insn_o <= insn_buffer;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        decode_except_ibus_err_o <= 0;
-     else if (padv_i & branch_occur_i)
+     else if ((padv_i | fetch_take_exception_branch_i) & branch_occur_i)
        decode_except_ibus_err_o <= 0;
      else if (fetch_req)
        decode_except_ibus_err_o <= ibus_err_i;

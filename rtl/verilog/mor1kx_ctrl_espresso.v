@@ -36,23 +36,24 @@ module mor1kx_ctrl_espresso
    // Outputs
    spr_npc_o, mfspr_dat_o, ctrl_mfspr_we_o, ctrl_flag_o,
    pipeline_flush_o, padv_fetch_o, padv_decode_o, padv_execute_o,
-   du_dat_o, du_ack_o, du_stall_o, du_restart_pc_o, du_restart_o,
-   spr_bus_addr_o, spr_bus_we_o, spr_bus_stb_o, spr_bus_dat_o,
-   spr_sr_o, ctrl_branch_target_o, ctrl_branch_occur_o, rf_we_o,
+   fetch_take_exception_branch_o, du_dat_o, du_ack_o, du_stall_o,
+   du_restart_pc_o, du_restart_o, spr_bus_addr_o, spr_bus_we_o,
+   spr_bus_stb_o, spr_bus_dat_o, spr_sr_o, ctrl_branch_target_o,
+   ctrl_branch_occur_o, rf_we_o,
    // Inputs
    clk, rst, ctrl_alu_result_i, ctrl_rfb_i, ctrl_flag_set_i,
    ctrl_flag_clear_i, ctrl_opc_insn_i, ctrl_branch_occur_i,
    ctrl_branch_target_i, pc_fetch_i, except_ibus_err_i,
    except_illegal_i, except_syscall_i, except_dbus_i, except_trap_i,
    except_align_i, next_fetch_done_i, alu_valid_i, lsu_valid_i,
-   op_alu_i, op_lsu_load_i, op_lsu_store_i, op_jr_i, op_jbr_i,
-   fetch_branch_taken_i, irq_i, du_addr_i, du_stb_i, du_dat_i,
-   du_we_i, du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i,
-   spr_bus_dat_ic_i, spr_bus_ack_ic_i, spr_bus_dat_dmmu_i,
-   spr_bus_ack_dmmu_i, spr_bus_dat_immu_i, spr_bus_ack_immu_i,
-   spr_bus_dat_mac_i, spr_bus_ack_mac_i, spr_bus_dat_pmu_i,
-   spr_bus_ack_pmu_i, spr_bus_dat_pcu_i, spr_bus_ack_pcu_i,
-   spr_bus_dat_fpu_i, spr_bus_ack_fpu_i, rf_wb_i
+   op_alu_i, op_lsu_load_i, op_lsu_store_i, op_jr_i, op_jbr_i, irq_i,
+   du_addr_i, du_stb_i, du_dat_i, du_we_i, du_stall_i,
+   spr_bus_dat_dc_i, spr_bus_ack_dc_i, spr_bus_dat_ic_i,
+   spr_bus_ack_ic_i, spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i,
+   spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
+   spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
+   spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
+   spr_bus_ack_fpu_i, rf_wb_i
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
@@ -126,8 +127,6 @@ module mor1kx_ctrl_espresso
    
    input 			    op_alu_i, op_lsu_load_i, op_lsu_store_i;
    input 			    op_jr_i, op_jbr_i;
-   
-   input 			    fetch_branch_taken_i;
 
    // External IRQ lines in
    input [31:0] 		    irq_i;
@@ -152,6 +151,10 @@ module mor1kx_ctrl_espresso
    output 			     padv_fetch_o;
    output 			     padv_decode_o;
    output 			     padv_execute_o;
+
+   // Skip this instruction
+   output 			     fetch_take_exception_branch_o;
+   
    
    // Debug bus
    input [15:0] 		     du_addr_i;
@@ -206,7 +209,6 @@ module mor1kx_ctrl_espresso
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_npc;
    reg 				     execute_delay_slot;
-   reg 				     ctrl_delay_slot;
    
    reg 				     mfspr_delay, mfspr_done;
    
@@ -271,6 +273,8 @@ module mor1kx_ctrl_espresso
    output 			     rf_we_o;
    input 			     rf_wb_i;
    wire 			     except_ibus_align;
+   wire 			     fetch_advance;
+
    
    /* Debug SPRs */
    reg [31:0] 			     spr_dmr1;
@@ -312,30 +316,34 @@ module mor1kx_ctrl_espresso
 			       except_ticktimer |
 			       except_pic | except_trap_i );
       
-   assign exception = exception_pending & execute_done;
+   assign exception = exception_pending /*& execute_done*/;
 
+   assign fetch_take_exception_branch_o = (exception_pending | doing_rfe_r) & 
+					  fetch_advance ;
+   
    assign execute_stage_exceptions = except_dbus_i | except_align_i;
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
 
    assign exception_re = exception & !exception_r & !exception_taken;
    
-   assign deassert_decode_execute_halt = fetch_branch_taken_i &
+   assign deassert_decode_execute_halt = ctrl_branch_occur &
 					 decode_execute_halt;
    
    assign ctrl_branch_except_pc = (op_rfe | doing_rfe) ? spr_epcr : 
 				  exception_pc_addr;
 
    // Exceptions take precedence
-   assign ctrl_branch_occur_o = ((ctrl_branch_exception) |
-			      // instruction is branch, and flag is right
-			      (op_jbr_i &
-			       // is l.j or l.jal
-			       (!(|ctrl_opc_insn_i[2:1]) |
-				// is l.bf/bnf and flag is right
+   assign ctrl_branch_occur = ((ctrl_branch_exception) |
+			       // instruction is branch, and flag is right
+			       (op_jbr_i &
+				// is l.j or l.jal
+				(!(|ctrl_opc_insn_i[2:1]) |
+				 // is l.bf/bnf and flag is right
 				(ctrl_opc_insn_i[2]==ctrl_flag_o))) |
-				(op_jr_i & !(except_ibus_align)))
-     & padv_fetch_o;
-
+			       (op_jr_i & !(except_ibus_align)))
+     & fetch_advance;
+   
+   assign ctrl_branch_occur_o = ctrl_branch_occur;
    
    assign ctrl_branch_target_o = ctrl_branch_exception ? 
 				 ctrl_branch_except_pc :
@@ -349,8 +357,6 @@ module mor1kx_ctrl_espresso
 				     & !((op_lsu_load_i | op_lsu_store_i) &
 					 except_dbus_i | except_align_i)) |
 				    (op_mfspr));
-   
-
    
    // Check for unaligned jump address from register
    assign except_ibus_align = op_jr_i & (|ctrl_rfb_i[1:0]);
@@ -406,9 +412,12 @@ module mor1kx_ctrl_espresso
        // Pulsing this high should at least cause fetch_valid to drop
        // for a cycle
        padv_fetch <= 1;
-*/	      
-   assign padv_fetch_o = (next_fetch_done_i & !execute_waiting & !wait_mfspr &
-			  (!stepping | (stepping & pstep[0] & !next_fetch_done_i)));
+*/	  
+
+   assign fetch_advance = (next_fetch_done_i & !execute_waiting & !wait_mfspr &
+			   (!stepping | (stepping & pstep[0] & !next_fetch_done_i)));
+
+   assign padv_fetch_o = fetch_advance & !exception_pending & !doing_rfe_r;
 
    assign padv_decode_o = 1;
    
@@ -506,19 +515,19 @@ module mor1kx_ctrl_espresso
        exception_taken <= 0;
      else if (exception_taken)
        exception_taken <= 0;
-     else if (exception_r & fetch_branch_taken_i)
+     else if (exception_r & ctrl_branch_occur)
        exception_taken <= 1;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        last_branch_insn_pc <= 0;
-     else if (execute_done & ctrl_branch_occur_i)
+     else if (execute_done & ctrl_branch_occur)
        last_branch_insn_pc <= spr_npc;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        last_branch_target_pc <= 0;
-     else if (execute_done & ctrl_branch_occur_i)
+     else if (execute_done & ctrl_branch_occur)
        last_branch_target_pc <= ctrl_branch_target_i;
 
    // Used to gate execute stage's advance signal in the case where a LSU op has
@@ -536,7 +545,7 @@ module mor1kx_ctrl_espresso
    assign doing_rfe = ((execute_done & op_rfe) | doing_rfe_r) & 
 		      !deassert_doing_rfe;
 
-   assign deassert_doing_rfe = fetch_branch_taken_i & doing_rfe_r;
+   assign deassert_doing_rfe = ctrl_branch_occur & doing_rfe_r;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -643,16 +652,12 @@ module mor1kx_ctrl_espresso
      else if (/*execute_done & exception*/ exception_re)
        begin
 	  if (except_ibus_err_i)
-	    spr_epcr <= last_branch_insn_pc;
+	    spr_epcr <= spr_ppc;
 	  else if (except_syscall_i | except_ticktimer | except_pic)
 	    // TODO - eliminate this adder by getting PC from pipeline stages
-	    spr_epcr <= ctrl_delay_slot ? last_branch_target_pc :
-			/* 
-			execute_delay_slot ? last_branch_insn_pc :
-			 */
-			spr_npc + 4;
+	    spr_epcr <= execute_delay_slot ? spr_ppc : spr_npc;
 	  else if (execute_stage_exceptions | decode_stage_exceptions)
-	    spr_epcr <= ctrl_delay_slot ? spr_ppc : spr_npc;
+	    spr_epcr <= execute_delay_slot ? spr_ppc : spr_npc;
 	  else
 	    spr_epcr <= execute_delay_slot ? spr_ppc : spr_npc;
        end
@@ -683,8 +688,9 @@ module mor1kx_ctrl_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_npc <= OPTION_RESET_PC;
-     else if (padv_fetch_o)
-       spr_npc <= pc_fetch_i; // PC we're now executing
+     else if (fetch_advance)
+       // PC we're now executing
+       spr_npc <= fetch_take_exception_branch_o ? exception_pc_addr : pc_fetch_i; 
 
    // assign the NPC for SPR accesses
    //assign spr_npc = du_npc_written ? du_spr_npc : pc_ctrl_i;
@@ -936,7 +942,7 @@ module mor1kx_ctrl_espresso
 			     !op_mtspr & !doing_rfe &
 			     // Stops back-to-back branch addresses going to 
 			     // fetch stage
-			     !ctrl_branch_occur_i &
+			     !ctrl_branch_occur &
 			     // Stops issues with PC when branching
 			     !execute_delay_slot;
 
@@ -997,7 +1003,7 @@ module mor1kx_ctrl_espresso
 				   !op_mtspr & !doing_rfe &
 				   // Stops back-to-back branch addresses to 
 				   // fetch  stage.
-				   !ctrl_branch_occur_i &
+				   !ctrl_branch_occur &
 				   // Stops issues with PC when branching
 				   !execute_delay_slot;
 
@@ -1217,7 +1223,7 @@ module mor1kx_ctrl_espresso
 	   if (rst)
 	     branch_step <= 0;
 	   else if (stepping & pstep[2])
-	     branch_step <= {branch_step[0], ctrl_branch_occur_i};
+	     branch_step <= {branch_step[0], ctrl_branch_occur};
 	   else if (!stepping & execute_done)
 	     branch_step <= {branch_step[0], execute_delay_slot};
 

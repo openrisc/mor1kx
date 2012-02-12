@@ -150,6 +150,7 @@ module mor1kx_cpu_espresso
    wire			fetch_advancing_o;	// From mor1kx_fetch_espresso of mor1kx_fetch_espresso.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa_adr_o;// From mor1kx_fetch_espresso of mor1kx_fetch_espresso.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_o;// From mor1kx_fetch_espresso of mor1kx_fetch_espresso.v
+   wire			fetch_take_exception_branch_o;// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire			flag_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			flag_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire [`OR1K_IMM_WIDTH-1:0] imm16_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -195,6 +196,7 @@ module mor1kx_cpu_espresso
     .decode_insn_o                      (insn_fetch_to_decode),
     .du_restart_pc_i                    (du_restart_pc_o),
     .du_restart_i                       (du_restart_o),
+    .fetch_take_exception_branch_i      (fetch_take_exception_branch_o),
     ); */
    mor1kx_fetch_espresso
      #(
@@ -224,7 +226,8 @@ module mor1kx_cpu_espresso
       .branch_occur_i			(ctrl_branch_occur_o),	 // Templated
       .branch_dest_i			(ctrl_branch_target_o),	 // Templated
       .du_restart_i			(du_restart_o),		 // Templated
-      .du_restart_pc_i			(du_restart_pc_o));	 // Templated
+      .du_restart_pc_i			(du_restart_pc_o),	 // Templated
+      .fetch_take_exception_branch_i	(fetch_take_exception_branch_o)); // Templated
 
    /* mor1kx_decode AUTO_TEMPLATE (
     .padv_i				(padv_decode_o),
@@ -477,7 +480,6 @@ module mor1kx_cpu_espresso
     .pc_ctrl_i			(),
     .pc_fetch_i 		(pc_fetch_o),    
     .ctrl_opc_insn_i		(opc_insn_o),
-    .ctrl_branch_occur_i	(ctrl_branch_occur_o),
     .ctrl_branch_target_i	(ctrl_branch_target_o),
     .op_alu_i			(op_alu_o),	 
     .op_lsu_load_i		(op_lsu_load_o), 
@@ -533,6 +535,7 @@ module mor1kx_cpu_espresso
 	.padv_fetch_o			(padv_fetch_o),
 	.padv_decode_o			(padv_decode_o),
 	.padv_execute_o			(padv_execute_o),
+	.fetch_take_exception_branch_o	(fetch_take_exception_branch_o),
 	.du_dat_o			(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
 	.du_ack_o			(du_ack_o),
 	.du_stall_o			(du_stall_o),
@@ -554,7 +557,7 @@ module mor1kx_cpu_espresso
 	.ctrl_flag_set_i		(flag_set_o),		 // Templated
 	.ctrl_flag_clear_i		(flag_clear_o),		 // Templated
 	.ctrl_opc_insn_i		(opc_insn_o),		 // Templated
-	.ctrl_branch_occur_i		(ctrl_branch_occur_o),	 // Templated
+	.ctrl_branch_occur_i		(ctrl_branch_occur_i),
 	.ctrl_branch_target_i		(ctrl_branch_target_o),	 // Templated
 	.pc_fetch_i			(pc_fetch_o),		 // Templated
 	.except_ibus_err_i		(execute_except_ibus_err_o), // Templated
@@ -571,7 +574,6 @@ module mor1kx_cpu_espresso
 	.op_lsu_store_i			(op_lsu_store_o),	 // Templated
 	.op_jr_i			(op_jr_o),		 // Templated
 	.op_jbr_i			(op_jbr_o),		 // Templated
-	.fetch_branch_taken_i		(fetch_branch_taken_o),	 // Templated
 	.irq_i				(irq_i[31:0]),
 	.du_addr_i			(du_addr_i[15:0]),
 	.du_stb_i			(du_stb_i),
