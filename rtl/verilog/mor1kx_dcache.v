@@ -237,8 +237,8 @@ module mor1kx_dcache
 	 // Load address to invalidate from SPR bus
 	 mem_adr <= spr_bus_dat_i;
       end else if (idle & !invalidating) begin
-	 start_adr <= cpu_adr_i[OPTION_DCACHE_BLOCK_WIDTH-1:0];
-	 mem_adr <= cpu_adr_i;
+	 start_adr <= {cpu_adr_i[OPTION_OPERAND_WIDTH-1:2], 2'b0};
+	 mem_adr <= {cpu_adr_i[OPTION_OPERAND_WIDTH-1:2], 2'b0};
 	 cpu_bsel_r <= cpu_bsel_i;
 	 /*
 	  * First req in refill will always be a match,
