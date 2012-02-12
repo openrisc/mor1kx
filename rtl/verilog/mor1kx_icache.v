@@ -68,7 +68,6 @@ module mor1kx_icache
    wire				      idle;
    wire				      refill;
 
-   reg 				      cpu_req_r;
    reg 				      cpu_ack;
    wire [31:0] 			      cpu_dat;
 
@@ -245,12 +244,6 @@ module mor1kx_icache
 	 end
       end
    end
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       cpu_req_r <= 0;
-     else
-       cpu_req_r <= cpu_req_i;
 
    always @(*) begin
       next_state = state;
