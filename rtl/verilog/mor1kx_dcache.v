@@ -121,7 +121,7 @@ module mor1kx_dcache
    assign dc_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
    assign dc_we_o = (cache_req) ? mem_we : cpu_we_i;
    assign dc_dat_o = cpu_dat_i;
-   assign dc_bsel_o = cpu_bsel_i;
+   assign dc_bsel_o = refill ? 4'b1111 : cpu_bsel_i;
 
    assign tag_raddr = idle ?
 		      cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH] :
