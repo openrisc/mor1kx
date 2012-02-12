@@ -118,7 +118,7 @@ module mor1kx_dcache
    assign cpu_dat_o = (cache_req) ? cpu_dat : dc_dat_i;
    assign dc_adr_o = (cache_req | refill) ? mem_adr : cpu_adr_i;
    assign dc_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
-   assign dc_we_o = (cache_req) ? mem_we : cpu_we_i;
+   assign dc_we_o = (cache_req | refill) ? mem_we : cpu_we_i;
    assign dc_dat_o = cpu_dat_i;
    assign dc_bsel_o = refill ? 4'b1111 : cpu_bsel_i;
 
