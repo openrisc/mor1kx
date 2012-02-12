@@ -377,6 +377,8 @@ module mor1kx_dcache
 	      end
 	   end
 	end
+	default:
+	  next_state = IDLE;
       endcase
 
       // Lazy invalidation, invalidate everything that matches tag address
