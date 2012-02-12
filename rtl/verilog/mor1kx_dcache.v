@@ -328,6 +328,7 @@ module mor1kx_dcache
 		    end
 		    if (OPTION_DCACHE_WAYS == 2) begin
 		       if (way_hit[1]) begin
+			  way_we[1] = 1'b1;
 			  tag_din[TAG_LRU] = 1'b0;
 		       end
 		    end
