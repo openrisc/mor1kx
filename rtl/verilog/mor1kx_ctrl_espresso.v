@@ -1036,7 +1036,7 @@ module mor1kx_ctrl_espresso
    /* SPR access control - allow accesses from either the instructions or from
     the debug interface */
    assign spr_read_access = (op_mfspr | (du_access & !du_we_i));
-   assign spr_write_access = (op_mtspr | (du_access & du_we_i));
+   assign spr_write_access = ((execute_done & op_mtspr) | (du_access & du_we_i));
 
    assign spr_write_dat = du_access ? du_dat_i : b;   
    assign spr_we = spr_write_access & spr_group_present;
