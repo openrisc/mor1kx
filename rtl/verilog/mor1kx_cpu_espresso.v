@@ -363,6 +363,7 @@ module mor1kx_cpu_espresso
     .opc_insn_i			        (opc_insn_o),
     .op_lsu_load_i			(op_lsu_load_o),
     .op_lsu_store_i			(op_lsu_store_o),
+    .exception_taken_i                  (fetch_take_exception_branch_o),
     ); */
    mor1kx_lsu_espresso
      #(
@@ -389,6 +390,7 @@ module mor1kx_cpu_espresso
       .opc_insn_i			(opc_insn_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
       .op_lsu_store_i			(op_lsu_store_o),	 // Templated
+      .exception_taken_i		(fetch_take_exception_branch_o), // Templated
       .dbus_err_i			(dbus_err_i),
       .dbus_ack_i			(dbus_ack_i),
       .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]));

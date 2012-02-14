@@ -19,7 +19,8 @@ module mor1kx_lsu_espresso
    dbus_adr_o, dbus_req_o, dbus_dat_o, dbus_bsel_o, dbus_we_o,
    // Inputs
    clk, rst, padv_fetch_i, alu_result_i, rfb_i, opc_insn_i,
-   op_lsu_load_i, op_lsu_store_i, dbus_err_i, dbus_ack_i, dbus_dat_i
+   op_lsu_load_i, op_lsu_store_i, exception_taken_i, dbus_err_i,
+   dbus_ack_i, dbus_dat_i
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
@@ -37,6 +38,8 @@ module mor1kx_lsu_espresso
    // from decode stage regs, indicate if load or store
    input 			    op_lsu_load_i;
    input 			    op_lsu_store_i;
+
+   input 			    exception_taken_i;
 
    output [OPTION_OPERAND_WIDTH-1:0] lsu_result_o;
    output 			     lsu_valid_o;
@@ -132,7 +135,7 @@ module mor1kx_lsu_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        except_align_r <= 0;
-     else if (lsu_go)
+     else if (exception_taken_i)
        except_align_r <= 0;
      else
        except_align_r <= except_align;
@@ -140,7 +143,7 @@ module mor1kx_lsu_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        except_dbus <= 0;
-     else if (lsu_go)
+     else if (exception_taken_i)
        except_dbus <= 0;
      else if (dbus_err_i)
        except_dbus <= 1;

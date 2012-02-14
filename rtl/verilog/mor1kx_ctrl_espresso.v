@@ -318,8 +318,8 @@ module mor1kx_ctrl_espresso
       
    assign exception = exception_pending /*& execute_done*/;
 
-   assign fetch_take_exception_branch_o = (exception_pending | doing_rfe_r) & 
-					  fetch_advance ;
+   assign fetch_take_exception_branch_o = (exception_pending | exception_r | 
+					   doing_rfe_r) & fetch_advance ;
    
    assign execute_stage_exceptions = except_dbus_i | except_align_i;
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
@@ -653,7 +653,10 @@ module mor1kx_ctrl_espresso
        begin
 	  if (except_ibus_err_i)
 	    spr_epcr <= spr_ppc;
-	  else if (except_syscall_i | except_ticktimer | except_pic)
+	  else if (except_syscall_i)
+	    // EPCR after syscall is address of next not executed insn.
+	    spr_epcr <= pc_fetch_i;
+	  else if (except_ticktimer | except_pic)
 	    // TODO - eliminate this adder by getting PC from pipeline stages
 	    spr_epcr <= execute_delay_slot ? spr_ppc : spr_npc;
 	  else if (execute_stage_exceptions | decode_stage_exceptions)
@@ -699,7 +702,7 @@ module mor1kx_ctrl_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        execute_delay_slot <= 0;
-     else if (execute_done)
+     else if (padv_fetch_o)
        execute_delay_slot <= ctrl_branch_occur_o & !ctrl_branch_exception;
       
    wire [31:0] spr_vr;
