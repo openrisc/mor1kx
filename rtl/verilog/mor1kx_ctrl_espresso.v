@@ -210,9 +210,6 @@ module mor1kx_ctrl_espresso
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_npc;
    reg 				     execute_delay_slot;
    
-   reg 				     mfspr_delay, mfspr_done;
-   
-
    output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o;
 //   reg 				     padv_fetch;
    reg 				     execute_go;
@@ -263,8 +260,6 @@ module mor1kx_ctrl_espresso
    wire 			     execute_valid;
    /* verilator lint_on UNOPTFLAT */
    
-   wire 			     wait_mfspr;
-
    wire 			     deassert_decode_execute_halt;
 
    wire 			     ctrl_branch_occur;
@@ -333,18 +328,23 @@ module mor1kx_ctrl_espresso
 				  exception_pc_addr;
 
    // Exceptions take precedence
-   assign ctrl_branch_occur = ((ctrl_branch_exception) |
-			       // instruction is branch, and flag is right
-			       (op_jbr_i &
-				// is l.j or l.jal
-				(!(|ctrl_opc_insn_i[2:1]) |
-				 // is l.bf/bnf and flag is right
+   assign ctrl_branch_occur = // instruction is branch, and flag is right
+			      (op_jbr_i &
+			       // is l.j or l.jal
+			       (!(|ctrl_opc_insn_i[2:1]) |
+				// is l.bf/bnf and flag is right
 				(ctrl_opc_insn_i[2]==ctrl_flag_o))) |
-			       (op_jr_i & !(except_ibus_align)))
-     & fetch_advance;
+			      (op_jr_i & !(except_ibus_align));
    
-   assign ctrl_branch_occur_o = ctrl_branch_occur;
-   
+   assign ctrl_branch_occur_o = // Usual branch signaling
+				((ctrl_branch_occur | ctrl_branch_exception) &
+				fetch_advance) |
+				// Need to tell the fetch stage to branch
+				// when it gets the next instruction because
+				// there was fetch stalls between the branch
+				// and the delay slot insn
+				(execute_delay_slot);
+      
    assign ctrl_branch_target_o = ctrl_branch_exception ? 
 				 ctrl_branch_except_pc :
 				 // jump or branch?
@@ -400,7 +400,6 @@ module mor1kx_ctrl_espresso
    assign op_mfspr = ctrl_opc_insn_i==`OR1K_OPCODE_MFSPR;
    assign op_rfe = ctrl_opc_insn_i==`OR1K_OPCODE_RFE;
 
-   assign wait_mfspr = !mfspr_delay & !mfspr_done;
    /*
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -414,8 +413,9 @@ module mor1kx_ctrl_espresso
        padv_fetch <= 1;
 */	  
 
-   assign fetch_advance = (next_fetch_done_i & !execute_waiting & !wait_mfspr &
-			   (!stepping | (stepping & pstep[0] & !next_fetch_done_i)));
+   assign fetch_advance = (next_fetch_done_i & !execute_waiting & 
+			   (!stepping | (stepping & pstep[0] & 
+					 !next_fetch_done_i)));
 
    assign padv_fetch_o = fetch_advance & !exception_pending & !doing_rfe_r;
 
@@ -452,7 +452,7 @@ module mor1kx_ctrl_espresso
 			   & !cpu_stall & (!stepping | (stepping & pstep[2]));
 */   
    assign spr_addr = du_access ? du_addr_i : ctrl_alu_result_i[15:0];
-   assign ctrl_mfspr_we_o = mfspr_delay;
+   assign ctrl_mfspr_we_o = op_mfspr & execute_go;
 
    // Pipeline flush
    assign pipeline_flush_o = (execute_done & op_rfe) |
@@ -464,24 +464,6 @@ module mor1kx_ctrl_espresso
 			ctrl_flag_set_i;
 
    
-   // Generate delay if necessary, when we have mtspr followed by mfspr
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       mfspr_delay <= 0;
-     else if (mfspr_delay)
-       mfspr_delay <= 0;
-     else if (!mfspr_done)
-       mfspr_delay <= 1;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       mfspr_done <= 0;
-     else if (padv_decode_o )
-       mfspr_done <= 0;
-   /* TODO - wait on bus access if we need to */
-     else if (mfspr_delay)
-       mfspr_done <= 1;
-
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        execute_waiting_r <= 0;
@@ -702,8 +684,9 @@ module mor1kx_ctrl_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        execute_delay_slot <= 0;
-     else if (padv_fetch_o)
-       execute_delay_slot <= ctrl_branch_occur_o & !ctrl_branch_exception;
+     else if (execute_done)
+       execute_delay_slot <= execute_delay_slot ? 0 : 
+			     ctrl_branch_occur;
       
    wire [31:0] spr_vr;
    wire [31:0] spr_upr;

@@ -73,8 +73,8 @@ module mor1kx_rf_espresso
    // Avoid read-write
    // Use when this instruction actually will write to its destination
    // register.
-   assign rfa_o_use_last = (rfd_last == rfa_adr_i); 
-   assign rfb_o_use_last = (rfd_last == rfb_adr_i);
+   assign rfa_o_use_last = (rfd_last == rfa_r); 
+   assign rfb_o_use_last = (rfd_last == rfb_r);
 
    assign rfa_o = rfa_o_use_last ? result_last : rfa_ram_o;
    
@@ -84,7 +84,7 @@ module mor1kx_rf_espresso
    assign rfb_rden = rf_re_i;
    
    assign rf_wren = rf_we_i;
-/*
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
 	rfa_r <= 0;
@@ -97,7 +97,7 @@ module mor1kx_rf_espresso
 	  rfb_r <= rfb_adr_i;
 	  rfd_r <= rfd_adr_i;
        end
-*/   
+   
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        rfd_last <= 0;

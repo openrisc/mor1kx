@@ -185,8 +185,8 @@ module mor1kx
 	  ); */
 	 
 	 mor1kx_bus_if_wb32 
-		      #(.BUS_IF_TYPE("CLASSIC"))
-//		      #(.BUS_IF_TYPE("B3_READ_BURSTING"))
+//		      #(.BUS_IF_TYPE("CLASSIC"))
+		      #(.BUS_IF_TYPE("B3_READ_BURSTING"))
 	 ibus_bridge
 		      (/*AUTOINST*/
 		       // Outputs
