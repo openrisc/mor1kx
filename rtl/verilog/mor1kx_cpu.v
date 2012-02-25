@@ -129,6 +129,7 @@ module mor1kx_cpu(/*AUTOARG*/
    output [15:0] 		     spr_sr_o;
 
    wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_decode_insn/* verilator public */;
+   wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_execute_insn/* verilator public */;   
    wire 			     monitor_decode_advance/* verilator public */;
    wire 			     monitor_execute_advance/* verilator public */;
    wire 			     monitor_flag_set/* verilator public */;
@@ -357,37 +358,24 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
-`ifdef NOT_DEFINED
-	 // synthesis translate_off
-	 wire [`OR1K_INSN_WIDTH-1:0] monitor_decode_insn/* verilator public */;
-	 wire 			     monitor_decode_advance/* verilator public */;
-	 wire 			     monitor_execute_advance/* verilator public */;
-	 wire 			     monitor_flag_set/* verilator public */;
-	 wire 			     monitor_flag_clear/* verilator public */;
-	 wire 			     monitor_flag_sr/* verilator public */;
-	 wire 			     monitor_flag/* verilator public */;
-	 wire [OPTION_OPERAND_WIDTH-1:0] monitor_spr_sr/* verilator public */;
-	 wire [OPTION_OPERAND_WIDTH-1:0] monitor_execute_pc/* verilator public */;
-	 wire [OPTION_OPERAND_WIDTH-1:0] monitor_rf_result_in/* verilator public */;
-	 wire 				 monitor_clk/* verilator public */;
-	 wire [OPTION_OPERAND_WIDTH-1:0] monitor_spr_epcr/* verilator public */;
-	 wire [OPTION_OPERAND_WIDTH-1:0] monitor_spr_eear/* verilator public */;
-	 wire [OPTION_OPERAND_WIDTH-1:0] monitor_spr_esr/* verilator public */;
-`endif	 
 
 	 assign monitor_flag =  monitor_flag_set ? 1 :
 			        monitor_flag_clear ? 0 : 
 				monitor_flag_sr;
 	 assign monitor_clk = clk;
-
-	 assign monitor_decode_insn = espresso.mor1kx_cpu.mor1kx_decode.decode_insn_i;
-	 assign monitor_decode_advance = espresso.mor1kx_cpu.padv_decode_o;
-	 assign monitor_execute_advance = espresso.mor1kx_cpu.padv_execute_o;
+	 wire 				 cpu_fetch_branched;
+	 assign cpu_fetch_branched = !espresso.mor1kx_cpu.mor1kx_fetch_espresso.branch_occur_i &
+				     !espresso.mor1kx_cpu.mor1kx_fetch_espresso.bus_access_done &
+				     !espresso.mor1kx_cpu.mor1kx_fetch_espresso.bus_access_done_r;
+//	 assign monitor_decode_insn = espresso.mor1kx_cpu.mor1kx_fetch_espresso.insn_buffer;
+//	 assign monitor_decode_advance = espresso.mor1kx_cpu.padv_fetch_o & !cpu_fetch_branched;
+	 assign monitor_execute_insn = espresso.mor1kx_cpu.mor1kx_fetch_espresso.decode_insn_o;
+	 assign monitor_execute_advance = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.execute_done;
  	 assign monitor_flag_set = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.ctrl_flag_set_i;
 	 assign monitor_flag_clear = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.ctrl_flag_clear_i;
 	 assign monitor_flag_sr = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.ctrl_flag_o;
 	 assign monitor_spr_sr = {16'd0,espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_sr[15:`OR1K_SPR_SR_F+1],espresso.mor1kx_cpu.mor1kx_ctrl_espresso.ctrl_flag_o,espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_sr[`OR1K_SPR_SR_F-1:0]};
-	 assign monitor_execute_pc = espresso.mor1kx_cpu.pc_decode_to_execute;
+	 assign monitor_execute_pc = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_ppc;
 	 assign monitor_rf_result_in = espresso.mor1kx_cpu.mor1kx_rf_espresso.result_i;
 	 assign monitor_spr_esr = {16'd0,espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_esr};
 	 assign monitor_spr_epcr = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_epcr;
