@@ -15,17 +15,6 @@
  * 
  * contains PIC logic
  * 
- * 
- * l.mfspr implemented as follows:
- * We receieve an indication from the execute stage if it has a l.mfspr 
- * instruction. We take note of this and it causes a 1-cycle stall of
- * the fetch and decode stages. We still issue the asserted padv_execute so
- * we get the result from the ALU which will be the address of the SPR to write
- * into the register file. On the next cycle, with the SPR address known, the
- * data is output to the RF and the ctrl_mfspr_we_o is asserted ensuring this 
- * value is written into the RF. As we introduced a delay in the fetch/decode
- * logic, this should not clash with the next instruction to be executed.
- * 
  */
 
 
@@ -34,21 +23,20 @@
 module mor1kx_ctrl_espresso
   (/*AUTOARG*/
    // Outputs
-   spr_npc_o, mfspr_dat_o, ctrl_mfspr_we_o, ctrl_flag_o,
+   spr_npc_o, spr_ppc_o, mfspr_dat_o, ctrl_mfspr_we_o, ctrl_flag_o,
    pipeline_flush_o, padv_fetch_o, padv_decode_o, padv_execute_o,
-   fetch_take_exception_branch_o, du_dat_o, du_ack_o, du_stall_o,
-   du_restart_pc_o, du_restart_o, spr_bus_addr_o, spr_bus_we_o,
-   spr_bus_stb_o, spr_bus_dat_o, spr_sr_o, ctrl_branch_target_o,
-   ctrl_branch_occur_o, rf_we_o,
+   fetch_take_exception_branch_o, execute_waiting_o, du_dat_o,
+   du_ack_o, du_stall_o, du_restart_pc_o, du_restart_o,
+   spr_bus_addr_o, spr_bus_we_o, spr_bus_stb_o, spr_bus_dat_o,
+   spr_sr_o, ctrl_branch_target_o, ctrl_branch_occur_o, rf_we_o,
    // Inputs
    clk, rst, ctrl_alu_result_i, ctrl_rfb_i, ctrl_flag_set_i,
-   ctrl_flag_clear_i, ctrl_opc_insn_i, ctrl_branch_occur_i,
-   ctrl_branch_target_i, pc_fetch_i, except_ibus_err_i,
-   except_illegal_i, except_syscall_i, except_dbus_i, except_trap_i,
-   except_align_i, next_fetch_done_i, alu_valid_i, lsu_valid_i,
-   op_alu_i, op_lsu_load_i, op_lsu_store_i, op_jr_i, op_jbr_i, irq_i,
-   du_addr_i, du_stb_i, du_dat_i, du_we_i, du_stall_i,
-   spr_bus_dat_dc_i, spr_bus_ack_dc_i, spr_bus_dat_ic_i,
+   ctrl_flag_clear_i, ctrl_opc_insn_i, pc_fetch_i, fetch_advancing_i,
+   except_ibus_err_i, except_illegal_i, except_syscall_i,
+   except_dbus_i, except_trap_i, except_align_i, next_fetch_done_i,
+   alu_valid_i, lsu_valid_i, op_alu_i, op_lsu_load_i, op_lsu_store_i,
+   op_jr_i, op_jbr_i, irq_i, du_addr_i, du_stb_i, du_dat_i, du_we_i,
+   du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i, spr_bus_dat_ic_i,
    spr_bus_ack_ic_i, spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i,
    spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
    spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
@@ -102,17 +90,14 @@ module mor1kx_ctrl_espresso
    input 			    ctrl_flag_set_i, ctrl_flag_clear_i;
    
    output [OPTION_OPERAND_WIDTH-1:0] spr_npc_o;
+   output [OPTION_OPERAND_WIDTH-1:0] spr_ppc_o;
 
    input [`OR1K_OPCODE_WIDTH-1:0]   ctrl_opc_insn_i;
    
-   // Indicate if branch will be taken based on instruction currently in
-   // execute stage. Combinatorially generated, uses signals from both
-   // execute and ctrl stage.
-   input 			    ctrl_branch_occur_i;
-   input [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_i;
-
    // PC of execute stage (NPC)
    input [OPTION_OPERAND_WIDTH-1:0] pc_fetch_i;
+   input 			    fetch_advancing_i;
+   
    
    // Exception inputs, registered on output of execute stage
    input 			    except_ibus_err_i, 
@@ -154,6 +139,7 @@ module mor1kx_ctrl_espresso
 
    // Skip this instruction
    output 			     fetch_take_exception_branch_o;
+   output 			     execute_waiting_o;
    
    
    // Debug bus
@@ -209,9 +195,10 @@ module mor1kx_ctrl_espresso
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_npc;
    reg 				     execute_delay_slot;
+   reg 				     delay_slot_rf_we_done;
    
    output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o;
-//   reg 				     padv_fetch;
+   //   reg 				     padv_fetch;
    reg 				     execute_go;
    wire 			     execute_done;
 
@@ -353,10 +340,11 @@ module mor1kx_ctrl_espresso
 
    // Do writeback when we register our output to the next stage, or if
    // we're doing mfspr
-   assign rf_we_o = execute_done & ((rf_wb_i & !op_mfspr 
-				     & !((op_lsu_load_i | op_lsu_store_i) &
-					 except_dbus_i | except_align_i)) |
-				    (op_mfspr));
+   assign rf_we_o = (execute_done & !delay_slot_rf_we_done) & 
+		    ((rf_wb_i & !op_mfspr 
+		      & !((op_lsu_load_i | op_lsu_store_i) &
+			  except_dbus_i | except_align_i)) |
+		     (op_mfspr));
    
    // Check for unaligned jump address from register
    assign except_ibus_align = op_jr_i & (|ctrl_rfb_i[1:0]);
@@ -419,7 +407,16 @@ module mor1kx_ctrl_espresso
 
    assign padv_fetch_o = fetch_advance & !exception_pending & !doing_rfe_r;
 
-   assign padv_decode_o = 1;
+   reg 				     padv_decode_r;
+   // Some bits of the pipeline (execute_alu for instance) require a falling
+   // edge of the decode signal to start work on multi-cycle ops.
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       padv_decode_r <= 0;
+     else
+       padv_decode_r <= padv_fetch_o;
+   
+   assign padv_decode_o = padv_decode_r;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -435,8 +432,9 @@ module mor1kx_ctrl_espresso
 			  lsu_valid_i : 1'b1;
 
 
-   assign execute_waiting = !execute_valid;
-
+   assign execute_waiting = !execute_valid & !waiting_for_fetch;
+   assign execute_waiting_o = execute_waiting;
+   
    
    assign padv_execute_o = execute_done;
    			   /*((!execute_waiting &
@@ -510,7 +508,7 @@ module mor1kx_ctrl_espresso
      if (rst)
        last_branch_target_pc <= 0;
      else if (execute_done & ctrl_branch_occur)
-       last_branch_target_pc <= ctrl_branch_target_i;
+       last_branch_target_pc <= ctrl_branch_target_o;
 
    // Used to gate execute stage's advance signal in the case where a LSU op has
    // finished before the next instruction has been fetched. Typically this
@@ -669,6 +667,7 @@ module mor1kx_ctrl_espresso
        spr_ppc <= spr_npc; // PC we've just executed
 
    assign spr_npc_o = spr_npc;
+   assign spr_ppc_o = spr_ppc;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -683,11 +682,18 @@ module mor1kx_ctrl_espresso
    // Remember when we're in a delay slot in execute stage.
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       execute_delay_slot <= 0;
+	execute_delay_slot <= 0;
      else if (execute_done)
        execute_delay_slot <= execute_delay_slot ? 0 : 
 			     ctrl_branch_occur;
-      
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       delay_slot_rf_we_done <= 0;
+     else
+       delay_slot_rf_we_done <= rf_we_o & execute_delay_slot;
+   
+   
    wire [31:0] spr_vr;
    wire [31:0] spr_upr;
    wire [31:0] spr_cpucfgr;

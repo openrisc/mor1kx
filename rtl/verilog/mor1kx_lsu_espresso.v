@@ -116,7 +116,7 @@ module mor1kx_lsu_espresso
 
    assign lsu_except_align_o = except_align_r;
 
-   assign lsu_go = execute_go & op_lsu_load_i & op_lsu_store_i;
+   assign lsu_go = execute_go & (op_lsu_load_i | op_lsu_store_i);
       
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)

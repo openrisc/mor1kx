@@ -21,7 +21,7 @@ module mor1kx_fetch_espresso
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, padv_i,
    branch_occur_i, branch_dest_i, du_restart_i, du_restart_pc_i,
-   fetch_take_exception_branch_i
+   fetch_take_exception_branch_i, execute_waiting_i
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
@@ -63,6 +63,9 @@ module mor1kx_fetch_espresso
    input [OPTION_OPERAND_WIDTH-1:0] 	  du_restart_pc_i;
 
    input 				  fetch_take_exception_branch_i;
+
+   input 				  execute_waiting_i;
+   
    
    // instruction ibus error indication out
    output reg 				  decode_except_ibus_err_o;
@@ -72,7 +75,7 @@ module mor1kx_fetch_espresso
    // registers
    reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch;
    reg 					  fetch_req;
-   reg 					  pc_fetched;
+   reg 					  next_insn_buffered;
    reg [OPTION_OPERAND_WIDTH-1:0] 	  insn_buffer;
    reg 					  branch_occur_r;
    reg 					  bus_access_done_re_r;
@@ -80,6 +83,9 @@ module mor1kx_fetch_espresso
    
    wire [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch_next;
    wire 				  bus_access_done;
+   wire 				  bus_access_done_fe;
+   wire 				  branch_occur_re;
+   wire 				  awkward_transition_to_branch_target;
    
    assign bus_access_done =  ibus_ack_i | ibus_err_i;
 
@@ -98,8 +104,9 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        pc_fetch <= OPTION_RESET_PC;
-     else if ((padv_i & bus_access_done) | fetch_take_exception_branch_i | 
-	      bus_access_done)
+     else if (fetch_take_exception_branch_i |
+	      (bus_access_done & !execute_waiting_i) |
+	      awkward_transition_to_branch_target)
        // next PC - are we going somewhere else or advancing?
        pc_fetch <= du_restart_i ? du_restart_pc_i :
 		   branch_occur_i ? branch_dest_i :
@@ -113,7 +120,9 @@ module mor1kx_fetch_espresso
        fetch_req <= 1;
      else if (padv_i | fetch_take_exception_branch_i)
        fetch_req <= 1;
-     else if (bus_access_done & fetch_take_exception_branch_i)
+     else if (!fetch_req & !execute_waiting_i)
+       fetch_req <= 1;
+     else if (bus_access_done & (fetch_take_exception_branch_i | execute_waiting_i))
        fetch_req <= 0;
 
    reg 					  bus_access_done_r;
@@ -129,8 +138,22 @@ module mor1kx_fetch_espresso
 	  branch_occur_r <= branch_occur_i;
        end
    
-   assign next_fetch_done_o = bus_access_done_r;
+   assign next_fetch_done_o = bus_access_done_r | next_insn_buffered;
 
+   assign branch_occur_re = branch_occur_i & !branch_occur_r;
+
+   /* When this occurs we had the insn burst stream finish just as we
+    had a new branch address requested. Because the control logic will 
+    immediately continue onto the delay slot instruction, the branch target
+    is only valid for 1 cycle. The PC out to the bus/cache will then need
+    to change 1 cycle after it requested the insn after the delay slot.
+    This is annoying for the bus control/cache logic, but should result in
+    less cycles wasted fetching something we don't need, and as well reduce
+    the number of flops as we don't need to save the target PC which we had
+    for only 1 cycle */
+   assign awkward_transition_to_branch_target = branch_occur_re & 
+						bus_access_done_fe;
+   
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
@@ -138,8 +161,9 @@ module mor1kx_fetch_espresso
        // Put a NOP in the pipeline when doing a branch - remove any state
        // which may be causing the exception
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
-     else if ((padv_i & (bus_access_done_r | bus_access_done) & 
-	       !branch_occur_r) |
+     else if ((padv_i & (bus_access_done_r | bus_access_done | 
+			 next_insn_buffered) & 
+	       !branch_occur_r ) |
 	      // This case is when we stalled to get the delay-slot instruction
 	      // and we don't get enough padv to push it through the buffer
 	      (branch_occur_i & !bus_access_done & bus_access_done_r & 
@@ -157,7 +181,7 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        insn_buffer <= {`OR1K_OPCODE_NOP,26'd0};
-     else if (ibus_ack_i)
+     else if (ibus_ack_i & !execute_waiting_i)
        insn_buffer <= ibus_dat_i;
 
    // Register rising edge on bus_access_done
@@ -166,6 +190,18 @@ module mor1kx_fetch_espresso
        bus_access_done_re_r <= 0;
      else
        bus_access_done_re_r <= bus_access_done & !bus_access_done_r;
+
+   assign bus_access_done_fe = !bus_access_done & bus_access_done_r;
+
+   /* If insn_buffer contains the next insn we need, save that information 
+    here */
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       next_insn_buffered <= 0;
+     else if (padv_i)
+       next_insn_buffered <= 0;
+     else if (ibus_ack_i & execute_waiting_i)
+       next_insn_buffered <= 1;
    
 endmodule // mor1kx_fetch_espresso
 
