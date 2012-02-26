@@ -303,7 +303,7 @@ module mor1kx_cpu_fourstage
       .pc_decode_i			(pc_fetch_to_decode),	 // Templated
       .decode_insn_i			(insn_fetch_to_decode),	 // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
-      .decode_except_ibus_err_i		(decode_except_ibus_err_o)); // Templated   
+      .decode_except_ibus_err_i		(decode_except_ibus_err_o)); // Templated
    
    /* mor1kx_execute_alu AUTO_TEMPLATE (
     .padv_i				(padv_execute_o),    
