@@ -674,7 +674,8 @@ module mor1kx_ctrl_espresso
        spr_npc <= OPTION_RESET_PC;
      else if (fetch_advance)
        // PC we're now executing
-       spr_npc <= fetch_take_exception_branch_o ? exception_pc_addr : pc_fetch_i; 
+       spr_npc <= fetch_take_exception_branch_o ? exception_pc_addr : 
+		  ctrl_branch_occur ? ctrl_branch_target_o : pc_fetch_i; 
 
    // assign the NPC for SPR accesses
    //assign spr_npc = du_npc_written ? du_spr_npc : pc_ctrl_i;

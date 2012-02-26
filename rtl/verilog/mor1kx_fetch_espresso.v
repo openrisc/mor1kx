@@ -79,6 +79,7 @@ module mor1kx_fetch_espresso
    reg [OPTION_OPERAND_WIDTH-1:0] 	  insn_buffer;
    reg 					  branch_occur_r;
    reg 					  bus_access_done_re_r;
+   reg 					  advancing_into_branch;
    
    
    wire [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch_next;
@@ -130,15 +131,26 @@ module mor1kx_fetch_espresso
      if (rst)
        begin
 	  bus_access_done_r <= 0;
-	  branch_occur_r <= 0;	  
+	  branch_occur_r <= 0;
        end
      else
        begin
 	  bus_access_done_r <= bus_access_done;
 	  branch_occur_r <= branch_occur_i;
        end
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       advancing_into_branch <= 0;
+     else
+       advancing_into_branch <= fetch_advancing_o & branch_occur_i;
    
-   assign next_fetch_done_o = bus_access_done_r | next_insn_buffered;
+   assign next_fetch_done_o = (bus_access_done_r | next_insn_buffered) &
+			      // Whenever we've just changed the fetch PC to
+			      // take a branch this will gate off any ACKs we
+			      // might get (legit or otherwise) from where we're
+			      // getting our instructions from (bus/cache).
+			      !(advancing_into_branch);
 
    assign branch_occur_re = branch_occur_i & !branch_occur_r;
 
