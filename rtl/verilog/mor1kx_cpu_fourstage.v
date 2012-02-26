@@ -189,7 +189,6 @@ module mor1kx_cpu_fourstage
    wire			padv_decode_o;		// From mor1kx_ctrl_fourstage of mor1kx_ctrl_fourstage.v
    wire			padv_execute_o;		// From mor1kx_ctrl_fourstage of mor1kx_ctrl_fourstage.v
    wire			padv_fetch_o;		// From mor1kx_ctrl_fourstage of mor1kx_ctrl_fourstage.v
-   wire [OPTION_OPERAND_WIDTH-1:0] pc_fetch_next_o;// From mor1kx_fetch_fourstage of mor1kx_fetch_fourstage.v
    wire			pipeline_flush_o;	// From mor1kx_ctrl_fourstage of mor1kx_ctrl_fourstage.v
    wire [OPTION_OPERAND_WIDTH-1:0] rf_result_o;	// From mor1kx_wb_mux_fourstage of mor1kx_wb_mux_fourstage.v
    wire			rf_wb_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -223,7 +222,6 @@ module mor1kx_cpu_fourstage
       .pc_decode_o			(pc_fetch_to_decode),	 // Templated
       .decode_insn_o			(insn_fetch_to_decode),	 // Templated
       .fetch_valid_o			(fetch_valid_o),
-      .pc_fetch_next_o			(pc_fetch_next_o[OPTION_OPERAND_WIDTH-1:0]),
       .decode_except_ibus_err_o		(decode_except_ibus_err_o),
       .fetch_branch_taken_o		(fetch_branch_taken_o),
       // Inputs
