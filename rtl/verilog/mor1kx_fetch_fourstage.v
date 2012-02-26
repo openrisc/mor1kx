@@ -1,14 +1,14 @@
 /*
  * mor1kx fetch unit
- * 
+ *
  * basically an interface to the ibus subsystem that can react to exception
  * and branch signals.
- * 
+ *
  * maybe take notice of jump instructions - allow a bit of spec. fetch
- * 
+ *
  * indicate ibus errors
- * 
- * */
+ *
+ */
 
 `include "mor1kx-defines.v"
 
@@ -16,7 +16,7 @@ module mor1kx_fetch_fourstage
   (/*AUTOARG*/
    // Outputs
    ibus_adr_o, ibus_req_o, pc_decode_o, decode_insn_o, fetch_valid_o,
-   pc_fetch_next_o, decode_except_ibus_err_o, fetch_branch_taken_o,
+   decode_except_ibus_err_o, fetch_branch_taken_o,
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, padv_i,
    branch_occur_i, branch_dest_i, du_restart_pc_i, du_restart_i,
@@ -24,29 +24,28 @@ module mor1kx_fetch_fourstage
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
-   
+
    parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
 				`OR1K_RESET_VECTOR,8'd0};
 
-   
+
    input clk, rst;
-   
+
    // interface to ibus
    output [OPTION_OPERAND_WIDTH-1:0] ibus_adr_o;
-   output 			      ibus_req_o;
+   output reg			      ibus_req_o;
    input 			      ibus_err_i;
    input 			      ibus_ack_i;
    input [`OR1K_INSN_WIDTH-1:0]       ibus_dat_i;
 
    // pipeline control input
    input 			      padv_i;
-   
+
    // interface to decode unit
    output reg [OPTION_OPERAND_WIDTH-1:0] pc_decode_o;
    output reg [`OR1K_INSN_WIDTH-1:0] 	  decode_insn_o;
    output reg 				  fetch_valid_o;
-   output [OPTION_OPERAND_WIDTH-1:0]	  pc_fetch_next_o;
-   
+
    // branch/jump indication
    input 				  branch_occur_i;
    input [OPTION_OPERAND_WIDTH-1:0] 	  branch_dest_i;
@@ -55,214 +54,192 @@ module mor1kx_fetch_fourstage
 
    // pipeline flush input from control unit
    input 				  pipeline_flush_i;
-   
-   
+
+
    // instruction ibus error indication out
    output reg 				  decode_except_ibus_err_o;
 
    output reg 				  fetch_branch_taken_o;
 
    // registers
-   reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch;   
-   reg 					  pc_fetched;
-   reg 					  pc_fetched_r;
-   wire 				  zero_cycle_stall;
-   reg 					  zero_cycle_stall_r;
-   reg 					  fetch_in_progress;
-   reg 					  branch_fetch;
-   reg 					  padv_r;
-   reg 					  will_branch;
+   reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch;
+   reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_addr;
+   reg 					  branch_fetch_valid;
    reg 					  branch_occur_r;
-   wire 				  branch_occur_re;
-   wire 				  discard_current_fetch;
-   reg 					  discard_current_fetch_r;
-   reg 					  current_fetch_discarded;
-   wire 				  pc_fetch_advance;
-   wire 				  pc_fetch_take_branch_addr;
-   reg 					  du_restart_r;
-   reg 					  pc_fetch_advance_r;
-   
-   wire [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch_next;
+
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  pc_addr_next;
    wire 				  bus_access_done;
-   
+   wire 				  branch_occur_edge;
+
+   // States
+   localparam INIT		= 4'd1;
+   localparam LOAD_REQ		= 4'd2;
+   localparam ADVANCE		= 4'd3;
+   localparam STALL		= 4'd4;
+   localparam BRANCH_WAITBUS	= 4'd5;
+   localparam BRANCH		= 4'd6;
+   localparam BRANCH_DONE	= 4'd7;
+
+   reg [3:0] 			  state;
+   reg [3:0] 			  pre_stall_state;
+   wire 			  advance = (state == ADVANCE);
+   wire 			  stall = (state == STALL);
+   wire 			  branch_waitbus = (state == BRANCH_WAITBUS);
+
    assign bus_access_done =  ibus_ack_i | ibus_err_i;
-
-   assign pc_fetch_next = pc_fetch + 4;
-   assign pc_fetch_next_o = pc_fetch_next;
-
-   assign pc_fetch_advance =  // not fetching and not just unstalled by DU
-			      (!ibus_req_o & !fetch_valid_o & !du_restart_r) |
-			      // end of normal fetch cycle.
-			      // the not fetch_branch_taken_o stops the case of
-			      // a new branch PC being incremented when an extra
-			      // ack from the previous fetches got through to us
-			      // after we've taken the new addr, thus
-			      // incrementing it before it's fetched
-			      (ibus_ack_i & padv_i & !fetch_branch_taken_o)    |
-			      // end of stalled fetch cycle
-			      (pc_fetched & padv_i)    |
-			      // end of bus excpt
-			      (decode_except_ibus_err_o & branch_occur_i) |
-			      // Just had an ACK, branch is incoming
-			      (branch_occur_i & fetch_valid_o & !branch_fetch);
-
-   assign pc_fetch_take_branch_addr = (branch_occur_i & 
-				       ((!branch_fetch)|discard_current_fetch));
-   
-   
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       pc_fetch <= OPTION_RESET_PC;
-     else if (pc_fetch_advance)
-       // next PC - are we going somewhere else or advancing?
-       pc_fetch <= du_restart_i ? du_restart_pc_i :
-		   pc_fetch_take_branch_addr ? branch_dest_i :
-		   !(pc_fetched & !padv_i) ? pc_fetch_next :
-		   pc_fetch;
+   assign ibus_adr_o = pc_addr;
+   assign pc_addr_next = pc_addr + 4;
+   assign branch_occur_edge = branch_occur_i & !branch_occur_r;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       branch_occur_r <= 0;
+       branch_occur_r <= 1'b0;
      else
        branch_occur_r <= branch_occur_i;
 
-   // Detect rising edge on incoming branch indicator signal
-   assign branch_occur_re = branch_occur_i & !branch_occur_r;
-
-   // Detect an acked discarded fetch in the case where
-   // the bus access is acked at the same time as the current
-   // fetch is deemed to be discarded.
-   // This is then used to clear the discard_current_fetch in the
-   // next cycle.
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       current_fetch_discarded <= 0;
-     else if (discard_current_fetch & bus_access_done)
-       current_fetch_discarded <= 1;
-     else
-       current_fetch_discarded <= 0;
+     if (rst) begin
+	pc_addr <= OPTION_RESET_PC;
+	state <= INIT;
+	pre_stall_state <= ADVANCE;
+	ibus_req_o <= 1'b0;
+     end else begin
+	ibus_req_o <= 1'b1;
+	fetch_valid_o <= 1'b0;
+	fetch_branch_taken_o <= 1'b0;
+	case (state)
+	  INIT: begin
+	     state <= LOAD_REQ;
+	  end
 
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       discard_current_fetch_r <= 0;
-     else if ((discard_current_fetch_r & bus_access_done) |
-	      current_fetch_discarded)
-       discard_current_fetch_r  <= 0;
-     else if (branch_occur_re & branch_fetch)
-       discard_current_fetch_r <= 1;
+	  LOAD_REQ: begin
+	     if ((pre_stall_state == ADVANCE) ||
+		 (pre_stall_state == BRANCH_DONE))
+	       pc_addr <= pc_addr_next;
+	     else
+	       pc_addr <= branch_dest_i;
 
-   assign discard_current_fetch = (branch_occur_re & branch_fetch) |
-				  discard_current_fetch_r;
+	     pc_fetch <= pc_addr;
+	     state <= pre_stall_state;
+	  end
 
-   // Asserted when branch indication comes in, but we're in the middle of
-   // waiting for another fetch. (In the case of branch indication coming in
-   // and we're streaming in instructions, fetch PC changes instantly.)
-   // This is then used to put out new fetch PC after next ACK from fetch
-   // interface.
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       will_branch <= 0;
-     else if (will_branch & ibus_ack_i)
-       will_branch <= 0;
-     else if (!will_branch)
-       will_branch <= branch_occur_i & !ibus_ack_i;
+	  ADVANCE: begin
+	     if (branch_occur_i) begin
+		if (bus_access_done) begin
+		   pc_addr <= branch_dest_i;
+		   pc_fetch <= pc_addr;
+		   state <= BRANCH;
+		end else begin
+		   /*
+		    * keep track if the ongoing access
+		    * should be discarded or if it is valid
+		    */
+		   branch_fetch_valid <= ~fetch_valid_o;
+		   state <= BRANCH_WAITBUS;
+		end
+	     end else if (bus_access_done) begin
+		fetch_valid_o <= 1;
+		pc_addr <= pc_addr_next;
+		pc_fetch <= pc_addr;
+	     end
+	  end
 
+	  STALL: begin
+	     if (padv_i & !ibus_req_o) begin
+		pc_addr <= pc_fetch;
+		state <= LOAD_REQ;
+	     end else if (ibus_req_o & ibus_ack_i | !ibus_req_o) begin
+		ibus_req_o <= 1'b0;
+	     end
+	  end
 
-   // Indicates if this fetch is in response to a branch request
-    always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       branch_fetch <= 0;
-     else if (bus_access_done | fetch_valid_o)
-       branch_fetch <= branch_occur_i;
+	  BRANCH_WAITBUS: begin
+	     if (bus_access_done) begin
+		fetch_valid_o <= branch_fetch_valid;
+		pc_addr <= branch_dest_i;
+		pc_fetch <= pc_addr;
+		state <= BRANCH;
+	     end
+	  end
 
-   /*
-   // Pulses when we're acking the first fetch of the branch
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       fetch_branch_taken_o <= 0;
-     else 
-       fetch_branch_taken_o <= ibus_ack_i & branch_fetch;
-*/
-    // Pulses when branch address goes out onto bus
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       fetch_branch_taken_o <= 0;
-     else if (fetch_branch_taken_o)
-       fetch_branch_taken_o <= 0;
-     else if (pc_fetch_advance)
-       fetch_branch_taken_o <= pc_fetch_take_branch_addr;
-   
-   // Signal to indicate if we've seen a new advance request since the last.
-   // Detects when later parts of pipeline have stalled while we've fetched.
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       pc_fetched <= 0;
-     else if (padv_i | du_restart_i)
-       pc_fetched <= 0;
-     else if ((bus_access_done) & !padv_i)
-       pc_fetched <= 1'b1;
+	  BRANCH: begin
+	     /*
+	      * check for a new incoming branch while branching,
+	      * for example an exception in delay slot
+	      */
+	     if (branch_occur_edge) begin
+		if (bus_access_done) begin
+		   pc_addr <= branch_dest_i;
+		   state <= BRANCH;
+		end else begin
+		   state <= BRANCH_WAITBUS;
+		end
+	     end else if (bus_access_done) begin
+		pc_addr <= pc_addr_next;
+		pc_fetch <= pc_addr;
+		fetch_branch_taken_o <= 1'b1;
+		state <= BRANCH_DONE;
+	     end
+	  end
 
-   always @(posedge clk)
-     pc_fetched_r <= pc_fetched;
+	  BRANCH_DONE: begin
+	     if (bus_access_done) begin
+		pc_addr <= pc_addr_next;
+		pc_fetch <= pc_addr;
+		fetch_valid_o <= 1'b1;
+		state <= ADVANCE;
+	     end
+	  end
+	endcase
 
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       fetch_in_progress <= 0;
-     else if (ibus_ack_i & !padv_i)
-       fetch_in_progress <= 0;
-     else if (padv_i)
-       fetch_in_progress <= 1;
-   
-   assign ibus_adr_o = pc_fetch ;
-   assign ibus_req_o = (padv_i | 
-		       (fetch_in_progress  & !(!padv_i & fetch_valid_o))) &
-		       !decode_except_ibus_err_o &
-		       // stops address changing 1 cycle after we put req out
-		       !(pc_fetch_advance_r & !fetch_in_progress) &
-		       // wait one cycle for pc to advance after stalled cycle
-		       !(pc_fetched & padv_i) &
-		       !(branch_occur_i & fetch_valid_o);
+	/*
+	 * deassertion of padv_i overrides all other
+	 * state transitions. The current state is saved
+	 * and pc_addr and pc_fetch keep their values
+	 */
+	if (!padv_i & !stall) begin
+	   if (ibus_req_o & ibus_ack_i)
+	     ibus_req_o <= 1'b0;
+	   pc_addr <= pc_addr;
+	   if (fetch_valid_o)
+	     pc_fetch <= pc_decode_o;
+	   else
+	     pc_fetch <= pc_fetch;
+	   fetch_valid_o <= 1'b0;
+	   fetch_branch_taken_o <= 1'b0;
+	   pre_stall_state <= state;
+	   state <= STALL;
+	end
+
+	/*
+	 * a debug unit restart also overrides all other states
+	 * and resets the FSM
+	 */
+	if (du_restart_i) begin
+	   pc_addr <= du_restart_pc_i;
+	   ibus_req_o <= 1'b1;
+	   fetch_valid_o <= 1'b0;
+	   fetch_branch_taken_o <= 1'b0;
+	   pre_stall_state <= ADVANCE;
+	   state <= LOAD_REQ;
+	end
+     end
 
    // Register instruction coming in
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        decode_insn_o <= 0;
-     else if (ibus_ack_i)
+     else if (ibus_ack_i & padv_i & !stall)
        decode_insn_o <= ibus_dat_i;
      else if (ibus_err_i)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
 
    // Register PC for later stages
-      always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       pc_decode_o <= OPTION_RESET_PC;
-     else if (bus_access_done)
-       pc_decode_o <= pc_fetch;
-
-   assign zero_cycle_stall = (pc_fetched & !pc_fetched_r & padv_i);
-
-   always @(posedge clk)
-     zero_cycle_stall_r <= zero_cycle_stall;
-
-   // Valid signal generation - assert when instruction received and we've not
-   // got a branch request. Then keep asserted as long as we're not advancing.
-   
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       fetch_valid_o <= 0;
-     else if (pipeline_flush_i)
-       fetch_valid_o <= 0;
-     else if (branch_occur_i & !will_branch & pc_fetch_advance_r)
-       fetch_valid_o <= 0;
-     else if (bus_access_done & !discard_current_fetch & !fetch_branch_taken_o)
-       fetch_valid_o <= 1;
-     else
-       // Keep valid high if we've fetched an instruction
-       // also handle the special case where we are stalling,
-       // but get an advance signal at the same time as pc_fetched goes high
-       fetch_valid_o <= (!padv_i &
-			 (pc_fetched | (fetch_valid_o & !zero_cycle_stall_r))) |
-			(zero_cycle_stall & !fetch_valid_o);
+       pc_decode_o <= OPTION_RESET_PC;
+     else if (bus_access_done & padv_i & !stall)
+       pc_decode_o <= pc_fetch;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -274,25 +251,4 @@ module mor1kx_fetch_fourstage
      else if (decode_except_ibus_err_o & branch_occur_i)
        decode_except_ibus_err_o <= 0;
 
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       padv_r <= 0;
-     else
-       padv_r <= padv_i;
-
-   // Register du restart signal so we know when we've just done a restart
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       du_restart_r <= 0;
-     else
-       du_restart_r <= du_restart_i;
-
-   // Register pc_fetch_advance  to break a combinatorial path between it and
-   // ibus_req_o
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       pc_fetch_advance_r <= 0;
-     else
-       pc_fetch_advance_r <= pc_fetch_advance;
-   
 endmodule // mor1kx_fetch
