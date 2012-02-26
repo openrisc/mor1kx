@@ -644,8 +644,7 @@ module mor1kx_ctrl_fourstage
    // propegate through the execute stage in a single cycle, so in that case
    // we are
    // can proceed.
-     else if (execute_delay_slot & fetch_branch_taken_i & 
-	      (padv_decode_o | !execute_waiting_i))
+     else if (execute_delay_slot & padv_execute_o)
        execute_delay_slot <= 0;
    // Register if a branch occurred when we're about to clock through
    // the next inputs to the execute stage.
