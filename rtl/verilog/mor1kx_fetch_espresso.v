@@ -67,6 +67,7 @@ module mor1kx_fetch_espresso
    input 				  execute_waiting_i;
    
    
+   
    // instruction ibus error indication out
    output reg 				  decode_except_ibus_err_o;
 
@@ -80,7 +81,8 @@ module mor1kx_fetch_espresso
    reg 					  branch_occur_r;
    reg 					  bus_access_done_re_r;
    reg 					  advancing_into_branch;
-   
+   reg 					  bus_access_done_r;
+   reg 					  wait_for_exception_after_ibus_err;
    
    wire [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch_next;
    wire 				  bus_access_done;
@@ -110,8 +112,8 @@ module mor1kx_fetch_espresso
 	      awkward_transition_to_branch_target)
        // next PC - are we going somewhere else or advancing?
        pc_fetch <= du_restart_i ? du_restart_pc_i :
-		   branch_occur_i ? branch_dest_i :
-		   pc_fetch_next;
+		   (fetch_take_exception_branch_i | branch_occur_i) ? 
+		   branch_dest_i : pc_fetch_next;
 
    // Actually goes to pipeline control
    assign pc_fetch_o = pc_fetch;
@@ -121,12 +123,13 @@ module mor1kx_fetch_espresso
        fetch_req <= 1;
      else if (padv_i | fetch_take_exception_branch_i)
        fetch_req <= 1;
-     else if (!fetch_req & !execute_waiting_i)
+     else if (!fetch_req & !execute_waiting_i & 
+	      !wait_for_exception_after_ibus_err)
        fetch_req <= 1;
-     else if (bus_access_done & (fetch_take_exception_branch_i | execute_waiting_i))
+     else if (bus_access_done & (fetch_take_exception_branch_i | 
+				 execute_waiting_i | ibus_err_i))
        fetch_req <= 0;
 
-   reg 					  bus_access_done_r;
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        begin
@@ -170,7 +173,7 @@ module mor1kx_fetch_espresso
      if (rst)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
      else if (fetch_take_exception_branch_i)
-       // Put a NOP in the pipeline when doing a branch - remove any state
+       // Put a NOP in the pipeline when starting exception - remove any state
        // which may be causing the exception
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
      else if ((padv_i & (bus_access_done_r | bus_access_done | 
@@ -210,10 +213,18 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        next_insn_buffered <= 0;
-     else if (padv_i)
+     else if (padv_i | fetch_take_exception_branch_i)
        next_insn_buffered <= 0;
      else if (ibus_ack_i & execute_waiting_i)
        next_insn_buffered <= 1;
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)       
+       wait_for_exception_after_ibus_err <= 0;
+     else if (fetch_take_exception_branch_i)
+       wait_for_exception_after_ibus_err <= 0;
+     else if (ibus_err_i)
+       wait_for_exception_after_ibus_err <= 1;
    
 endmodule // mor1kx_fetch_espresso
 

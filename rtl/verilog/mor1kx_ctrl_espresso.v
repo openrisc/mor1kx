@@ -191,7 +191,7 @@ module mor1kx_ctrl_espresso
    // Tick Timer SPRs
    reg [31:0] 			     spr_ttmr;
    reg [31:0] 			     spr_ttcr;
-   
+
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_npc;
    reg 				     execute_delay_slot;
@@ -210,7 +210,8 @@ module mor1kx_ctrl_espresso
    
    reg [OPTION_OPERAND_WIDTH-1:0]    last_branch_insn_pc;
    reg [OPTION_OPERAND_WIDTH-1:0]    last_branch_target_pc;
-   
+
+   reg 				     take_exception;
    reg 				     exception_r;
    
    reg [OPTION_OPERAND_WIDTH-1:0]    exception_pc_addr;
@@ -299,9 +300,8 @@ module mor1kx_ctrl_espresso
 			       except_pic | except_trap_i );
       
    assign exception = exception_pending /*& execute_done*/;
-
-   assign fetch_take_exception_branch_o = (exception_pending | exception_r | 
-					   doing_rfe_r) & fetch_advance ;
+   
+   assign fetch_take_exception_branch_o =  take_exception | op_rfe;
    
    assign execute_stage_exceptions = except_dbus_i | except_align_i;
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
@@ -399,14 +399,32 @@ module mor1kx_ctrl_espresso
        // Pulsing this high should at least cause fetch_valid to drop
        // for a cycle
        padv_fetch <= 1;
-*/	  
+*/
+   reg 				     waiting_for_except_fetch;
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       waiting_for_except_fetch <= 0;
+     else if (waiting_for_except_fetch & next_fetch_done_i)
+       waiting_for_except_fetch <= 0;
+     else if (fetch_take_exception_branch_o)
+       waiting_for_except_fetch <= 1;
 
-   assign fetch_advance = (next_fetch_done_i & !execute_waiting & 
-			   (!stepping | (stepping & pstep[0] & 
-					 !next_fetch_done_i)));
+   assign fetch_advance = (next_fetch_done_i | except_ibus_err_i) & 
+			  !execute_waiting & 
+			  (!stepping | 
+			   (stepping & pstep[0] & !next_fetch_done_i));
 
    assign padv_fetch_o = fetch_advance & !exception_pending & !doing_rfe_r;
 
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       take_exception <= 0;
+     else
+       take_exception <= (exception_pending | exception_r | doing_rfe_r) & 
+			 fetch_advance &
+			 // Would like this as only a single pulse
+			 !take_exception;
+   
    reg 				     padv_decode_r;
    // Some bits of the pipeline (execute_alu for instance) require a falling
    // edge of the decode signal to start work on multi-cycle ops.
@@ -495,14 +513,14 @@ module mor1kx_ctrl_espresso
        exception_taken <= 0;
      else if (exception_taken)
        exception_taken <= 0;
-     else if (exception_r & ctrl_branch_occur)
+     else if (exception_r & take_exception)
        exception_taken <= 1;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        last_branch_insn_pc <= 0;
-     else if (execute_done & ctrl_branch_occur)
-       last_branch_insn_pc <= spr_npc;
+     else if (fetch_advance & ctrl_branch_occur)
+       last_branch_insn_pc <= spr_ppc;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -525,8 +543,9 @@ module mor1kx_ctrl_espresso
    assign doing_rfe = ((execute_done & op_rfe) | doing_rfe_r) & 
 		      !deassert_doing_rfe;
 
-   assign deassert_doing_rfe = ctrl_branch_occur & doing_rfe_r;
-   
+   // Basically, the fetch stage should always take the rfe immediately
+   assign deassert_doing_rfe =  doing_rfe_r;
+      
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        doing_rfe_r <= 0;
@@ -629,20 +648,19 @@ module mor1kx_ctrl_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_epcr <= OPTION_RESET_PC;
-     else if (/*execute_done & exception*/ exception_re)
+     else if (exception_re)
        begin
 	  if (except_ibus_err_i)
-	    spr_epcr <= spr_ppc;
+	    spr_epcr <= spr_ppc-4;
 	  else if (except_syscall_i)
 	    // EPCR after syscall is address of next not executed insn.
-	    spr_epcr <= pc_fetch_i;
+	    spr_epcr <= spr_npc;
 	  else if (except_ticktimer | except_pic)
-	    // TODO - eliminate this adder by getting PC from pipeline stages
-	    spr_epcr <= execute_delay_slot ? spr_ppc : spr_npc;
+	    spr_epcr <= execute_delay_slot ? spr_ppc-4 : spr_ppc;
 	  else if (execute_stage_exceptions | decode_stage_exceptions)
-	    spr_epcr <= execute_delay_slot ? spr_ppc : spr_npc;
+	    spr_epcr <= execute_delay_slot ? spr_ppc-4 : spr_ppc;
 	  else
-	    spr_epcr <= execute_delay_slot ? spr_ppc : spr_npc;
+	    spr_epcr <= execute_delay_slot ? spr_ppc-4 : spr_ppc;
        end
      else if (spr_we && spr_addr==`OR1K_SPR_EPCR0_ADDR)
        spr_epcr <= spr_write_dat;
@@ -651,32 +669,35 @@ module mor1kx_ctrl_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_eear <= {OPTION_OPERAND_WIDTH{1'b0}};
-     else if (/*execute_done & exception*/ exception_re)
+     else if (exception_re)
        begin
 	  if (except_ibus_err_i)
-	    spr_eear <= spr_npc;
+	    spr_eear <= pc_fetch_i;
 	  else
 	    spr_eear <= ctrl_alu_result_i;
        end
 
-   // Track the PC
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       spr_ppc <= OPTION_RESET_PC;
-     else if (padv_fetch_o)
-       spr_ppc <= spr_npc; // PC we've just executed
-
-   assign spr_npc_o = spr_npc;
-   assign spr_ppc_o = spr_ppc;
-   
+   // Next PC (NPC)
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_npc <= OPTION_RESET_PC;
+     else if (deassert_doing_rfe)
+       spr_npc <= spr_epcr;   
      else if (fetch_advance)
        // PC we're now executing
        spr_npc <= fetch_take_exception_branch_o ? exception_pc_addr : 
 		  ctrl_branch_occur ? ctrl_branch_target_o : pc_fetch_i; 
 
+   // Previous PC (PPC)
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       spr_ppc <= OPTION_RESET_PC;
+     else if (padv_fetch_o)
+       spr_ppc <= spr_npc; // PC we've got in execute stage (about to finish)
+
+   assign spr_npc_o = spr_npc;
+   assign spr_ppc_o = spr_ppc;
+   
    // assign the NPC for SPR accesses
    //assign spr_npc = du_npc_written ? du_spr_npc : pc_ctrl_i;
    
