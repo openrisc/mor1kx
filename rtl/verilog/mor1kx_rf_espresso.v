@@ -70,6 +70,13 @@ module mor1kx_rf_espresso
    
    wire 			      rf_wren;
 
+   // Read enables to make sure the last write-while-read propagates through
+   // once the use_last signal goes away (we might rely on the value remaining
+   // what it was, but the last registered result might get written again) so
+   // this forces a read to get that value out.
+   wire 			      rfa_rden_for_last;
+   wire 			      rfb_rden_for_last;
+   
    // Avoid read-write
    // Use when this instruction actually will write to its destination
    // register.
@@ -80,10 +87,14 @@ module mor1kx_rf_espresso
    
    assign rfb_o = rfb_o_use_last ? result_last : rfb_ram_o;
 
-   assign rfa_rden = rf_re_i;   
-   assign rfb_rden = rf_re_i;
+   assign rfa_rden_for_last = (rfa_o_use_last & !rf_re_i);
+   assign rfb_rden_for_last = (rfb_o_use_last & !rf_re_i);
+   
+   assign rfa_rden = rf_re_i | rfa_rden_for_last;   
+   assign rfb_rden = rf_re_i | rfb_rden_for_last;
    
    assign rf_wren = rf_we_i;
+
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
