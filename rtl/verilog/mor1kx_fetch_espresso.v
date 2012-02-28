@@ -89,8 +89,11 @@ module mor1kx_fetch_espresso
    wire 				  bus_access_done_fe;
    wire 				  branch_occur_re;
    wire 				  awkward_transition_to_branch_target;
+   wire 				  taking_branch;
+
+   assign taking_branch = branch_occur_i & padv_i;   
    
-   assign bus_access_done =  ibus_ack_i | ibus_err_i;
+   assign bus_access_done =  (ibus_ack_i | ibus_err_i) & !(taking_branch);
 
    assign pc_fetch_next = pc_fetch + 4;
 
@@ -108,11 +111,11 @@ module mor1kx_fetch_espresso
      if (rst)
        pc_fetch <= OPTION_RESET_PC;
      else if (fetch_take_exception_branch_i |
-	      (bus_access_done & !execute_waiting_i) |
+	      ((bus_access_done | taking_branch) & !execute_waiting_i) |
 	      awkward_transition_to_branch_target)
        // next PC - are we going somewhere else or advancing?
        pc_fetch <= du_restart_i ? du_restart_pc_i :
-		   (fetch_take_exception_branch_i | branch_occur_i) ? 
+		   (fetch_take_exception_branch_i | taking_branch) ?
 		   branch_dest_i : pc_fetch_next;
 
    // Actually goes to pipeline control
@@ -121,8 +124,16 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        fetch_req <= 1;
-     else if (padv_i | fetch_take_exception_branch_i)
+     else if (fetch_take_exception_branch_i)
        fetch_req <= 1;
+     else if (padv_i)
+       // Force de-assert of req signal when branching.
+       // This is to stop (ironically) the case where we've got the
+       // instruction we're branching to already coming in on the bus, 
+       // which we usually don't assume will happen.
+       // TODO: fix things so that we don't have to force a penalty to make
+       // it work properly.
+       fetch_req <= !branch_occur_i;
      else if (!fetch_req & !execute_waiting_i & 
 	      !wait_for_exception_after_ibus_err)
        fetch_req <= 1;
@@ -176,13 +187,16 @@ module mor1kx_fetch_espresso
        // Put a NOP in the pipeline when starting exception - remove any state
        // which may be causing the exception
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
-     else if ((padv_i & (bus_access_done_r | bus_access_done | 
-			 next_insn_buffered) & 
+     else if ((padv_i & (
+			 bus_access_done_r | 
+			 bus_access_done | 
+			 next_insn_buffered
+			 ) & 
 	       !branch_occur_r ) |
 	      // This case is when we stalled to get the delay-slot instruction
 	      // and we don't get enough padv to push it through the buffer
-	      (branch_occur_i & !bus_access_done & bus_access_done_r & 
-	       padv_i & bus_access_done_re_r) )
+	      (branch_occur_i & padv_i & bus_access_done_re_r
+	       /*& !bus_access_done & bus_access_done_r */) )
        decode_insn_o <= insn_buffer;
    
    always @(posedge clk `OR_ASYNC_RST)
@@ -213,8 +227,13 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        next_insn_buffered <= 0;
-     else if (padv_i | fetch_take_exception_branch_i)
+     else if (fetch_take_exception_branch_i)
        next_insn_buffered <= 0;
+     else if (padv_i)
+       // Next instruction is usually buffered when we've got bus ack and
+       // pipeline advance, except when we're branching (usually throw
+       // away the fetch when branch is being indicated)
+       next_insn_buffered <= ibus_ack_i & !branch_occur_i;
      else if (ibus_ack_i & execute_waiting_i)
        next_insn_buffered <= 1;
 
