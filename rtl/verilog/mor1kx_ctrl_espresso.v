@@ -560,18 +560,25 @@ module mor1kx_ctrl_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_sr <= SPR_SR_RESET_VALUE;
-     else if (exception_re)
+     else if (/*exception_re*/ fetch_take_exception_branch_o)
        begin
-	  // Go into supervisor mode, disable interrupts, MMUs
-	  spr_sr[`OR1K_SPR_SR_SM  ] <= 1'b1;
-	  if (FEATURE_TIMER!="NONE")
-	    spr_sr[`OR1K_SPR_SR_TEE ] <= 1'b0;
-	  if (FEATURE_PIC!="NONE")
-	    spr_sr[`OR1K_SPR_SR_IEE ] <= 1'b0;
-	  if (FEATURE_DMMU!="NONE")
-	    spr_sr[`OR1K_SPR_SR_DME ] <= 1'b0;
-	  if (FEATURE_IMMU!="NONE")
-	    spr_sr[`OR1K_SPR_SR_IME ] <= 1'b0;
+	  if (op_rfe) 
+	    begin
+	       spr_sr <= spr_esr;
+	    end
+	  else 
+	    begin
+	       // Go into supervisor mode, disable interrupts, MMUs
+	       spr_sr[`OR1K_SPR_SR_SM  ] <= 1'b1;
+	       if (FEATURE_TIMER!="NONE")
+		 spr_sr[`OR1K_SPR_SR_TEE ] <= 1'b0;
+	       if (FEATURE_PIC!="NONE")
+		 spr_sr[`OR1K_SPR_SR_IEE ] <= 1'b0;
+	       if (FEATURE_DMMU!="NONE")
+		 spr_sr[`OR1K_SPR_SR_DME ] <= 1'b0;
+	       if (FEATURE_IMMU!="NONE")
+		 spr_sr[`OR1K_SPR_SR_IME ] <= 1'b0;
+	    end
        end
      else if (execute_done)
        begin
@@ -618,8 +625,6 @@ module mor1kx_ctrl_espresso
 	       spr_sr[`OR1K_SPR_SR_EPH ] <= spr_write_dat[`OR1K_SPR_SR_EPH ];
 
 	    end
-	  else if (op_rfe)
-	    spr_sr <= spr_esr;
        end // if (execute_done)
    
    // Exception SR
@@ -656,7 +661,7 @@ module mor1kx_ctrl_espresso
 	    // EPCR after syscall is address of next not executed insn.
 	    spr_epcr <= spr_npc;
 	  else if (except_ticktimer | except_pic)
-	    spr_epcr <= execute_delay_slot ? spr_ppc-4 : spr_ppc;
+	    spr_epcr <= execute_delay_slot ? spr_ppc-4 :/*check if delayed or not */ spr_ppc+4;
 	  else if (execute_stage_exceptions | decode_stage_exceptions)
 	    spr_epcr <= execute_delay_slot ? spr_ppc-4 : spr_ppc;
 	  else
