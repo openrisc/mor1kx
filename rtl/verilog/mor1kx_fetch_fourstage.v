@@ -84,6 +84,7 @@ module mor1kx_fetch_fourstage
    reg [3:0] 			  pre_stall_state;
    wire 			  advance = (state == ADVANCE);
    wire 			  stall = (state == STALL);
+   wire 			  load_req = (state == LOAD_REQ);
    wire 			  branch_waitbus = (state == BRANCH_WAITBUS);
 
    assign bus_access_done =  ibus_ack_i | ibus_err_i;
@@ -128,6 +129,7 @@ module mor1kx_fetch_fourstage
 		if (bus_access_done) begin
 		   pc_addr <= branch_dest_i;
 		   pc_fetch <= pc_addr;
+		   fetch_valid_o <= ~fetch_valid_o;
 		   state <= BRANCH;
 		end else begin
 		   /*
@@ -138,13 +140,15 @@ module mor1kx_fetch_fourstage
 		   state <= BRANCH_WAITBUS;
 		end
 	     end else if (bus_access_done) begin
-		fetch_valid_o <= 1;
+		fetch_valid_o <= 1'b1;
 		pc_addr <= pc_addr_next;
 		pc_fetch <= pc_addr;
 	     end
 	  end
 
 	  STALL: begin
+	     if (!padv_i)
+	       fetch_valid_o <= fetch_valid_o;
 	     if (padv_i & !ibus_req_o) begin
 		pc_addr <= pc_fetch;
 		state <= LOAD_REQ;
@@ -197,15 +201,12 @@ module mor1kx_fetch_fourstage
 	 * state transitions. The current state is saved
 	 * and pc_addr and pc_fetch keep their values
 	 */
-	if (!padv_i & !stall) begin
+	if (!padv_i & !stall & !load_req) begin
 	   if (ibus_req_o & ibus_ack_i)
 	     ibus_req_o <= 1'b0;
 	   pc_addr <= pc_addr;
-	   if (fetch_valid_o)
-	     pc_fetch <= pc_decode_o;
-	   else
-	     pc_fetch <= pc_fetch;
-	   fetch_valid_o <= 1'b0;
+	   pc_fetch <= pc_fetch;
+	   fetch_valid_o <= fetch_valid_o;
 	   fetch_branch_taken_o <= 1'b0;
 	   pre_stall_state <= state;
 	   state <= STALL;
