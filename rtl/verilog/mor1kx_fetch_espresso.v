@@ -102,7 +102,7 @@ module mor1kx_fetch_espresso
 
    assign fetch_advancing_o = (padv_i | fetch_take_exception_branch_i) & 
 			      next_fetch_done_o;
-   
+
    // Early RF address fetch
    assign fetch_rfa_adr_o = insn_buffer[`OR1K_RA_SELECT];
    assign fetch_rfb_adr_o = insn_buffer[`OR1K_RB_SELECT];
@@ -111,7 +111,8 @@ module mor1kx_fetch_espresso
      if (rst)
        pc_fetch <= OPTION_RESET_PC;
      else if (fetch_take_exception_branch_i |
-	      ((bus_access_done | taking_branch) & !execute_waiting_i) |
+	      ((bus_access_done | taking_branch) & 
+	       (!execute_waiting_i | !next_insn_buffered)) |
 	      awkward_transition_to_branch_target)
        // next PC - are we going somewhere else or advancing?
        pc_fetch <= du_restart_i ? du_restart_pc_i :
@@ -210,7 +211,7 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        insn_buffer <= {`OR1K_OPCODE_NOP,26'd0};
-     else if (ibus_ack_i & !execute_waiting_i)
+     else if (ibus_ack_i & (!execute_waiting_i | !next_insn_buffered))
        insn_buffer <= ibus_dat_i;
 
    // Register rising edge on bus_access_done
