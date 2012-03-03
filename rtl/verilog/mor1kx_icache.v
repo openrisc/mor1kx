@@ -255,12 +255,24 @@ module mor1kx_icache
 	REFILL: begin
 	   if (ic_ack_i) begin
 	      mem_adr <= next_mem_adr;
-	      refill_match <= 1'b0;
+
+	      if (cpu_adr_i == next_mem_adr)
+		refill_match <= 1'b1;
+	      else
+		refill_match <= 1'b0;
+	      /*
+	       * done refilling, reload tag and cache memory  with the
+	       * previous address in case this access was not a match
+	       */
 	      if (refill_done) begin
-		 mem_adr <= cpu_adr_prev;
+		 if (cpu_ack_o)
+		   mem_adr <= cpu_adr_i;
+		 else
+		   mem_adr <= cpu_adr_prev;
 		 state <= RESTART;
 	      end
 	   end
+	   /* prevent acking when no request */
 	   if (!cpu_req_i)
 	      refill_match <= 1'b0;
 	end
@@ -318,7 +330,7 @@ module mor1kx_icache
 	      end else begin
 		   way_we[0] = 1'b1;
 	      end
-	      if (refill_match & ic_enable)
+	      if (refill_match & ic_enable & (cpu_adr_prev == mem_adr))
 		 cpu_ack = 1'b1;
 
 	      if (refill_done) begin
