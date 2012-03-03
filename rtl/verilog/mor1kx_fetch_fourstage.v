@@ -72,7 +72,8 @@ module mor1kx_fetch_fourstage
    wire 				  branch_occur_edge;
 
    // States
-   localparam INIT		= 4'd1;
+   localparam INIT		= 4'd0;
+   localparam DU_RESTART	= 4'd1;
    localparam LOAD_REQ		= 4'd2;
    localparam ADVANCE		= 4'd3;
    localparam STALL		= 4'd4;
@@ -110,11 +111,17 @@ module mor1kx_fetch_fourstage
 	fetch_branch_taken_o <= 1'b0;
 	case (state)
 	  INIT: begin
+	     state <= LOAD_REQ;
+	  end
+
+	  DU_RESTART: begin
 	     /* wait out all bus accesses before proceeding */
-	     if (ibus_req_o | ibus_ack_i)
-	       ibus_req_o <= 1'b0;
-	     else
-	       state <= LOAD_REQ;
+	     if (ibus_req_o | ibus_ack_i) begin
+		ibus_req_o <= 1'b0;
+	     end else begin
+		fetch_branch_taken_o <= branch_occur_i;
+		state <= LOAD_REQ;
+	     end
 	  end
 
 	  LOAD_REQ: begin
@@ -226,7 +233,7 @@ module mor1kx_fetch_fourstage
 	   fetch_valid_o <= 1'b0;
 	   fetch_branch_taken_o <= 1'b0;
 	   pre_stall_state <= ADVANCE;
-	   state <= INIT;
+	   state <= DU_RESTART;
 	end
 
 	if (pipeline_flush_i)
