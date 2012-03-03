@@ -216,9 +216,8 @@ module mor1kx_icache
    /*
     * Save the previous reqed address when acking
     */
-
    always @(posedge clk)
-     if ((cpu_ack_o & cpu_req_i) | cpu_req_edge)
+     if ((cpu_ack_o & cpu_req_i) | cpu_req_edge | idle)
        cpu_adr_prev <= cpu_adr_i;
 
    /*
