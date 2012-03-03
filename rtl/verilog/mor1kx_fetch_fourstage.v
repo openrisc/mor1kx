@@ -110,7 +110,11 @@ module mor1kx_fetch_fourstage
 	fetch_branch_taken_o <= 1'b0;
 	case (state)
 	  INIT: begin
-	     state <= LOAD_REQ;
+	     /* wait out all bus accesses before proceeding */
+	     if (ibus_req_o | ibus_ack_i)
+	       ibus_req_o <= 1'b0;
+	     else
+	       state <= LOAD_REQ;
 	  end
 
 	  LOAD_REQ: begin
@@ -218,11 +222,11 @@ module mor1kx_fetch_fourstage
 	 */
 	if (du_restart_i) begin
 	   pc_addr <= du_restart_pc_i;
-	   ibus_req_o <= 1'b1;
+	   ibus_req_o <= 1'b0;
 	   fetch_valid_o <= 1'b0;
 	   fetch_branch_taken_o <= 1'b0;
 	   pre_stall_state <= ADVANCE;
-	   state <= LOAD_REQ;
+	   state <= INIT;
 	end
 
 	if (pipeline_flush_i)
