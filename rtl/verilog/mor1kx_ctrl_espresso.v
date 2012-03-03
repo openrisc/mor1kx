@@ -357,8 +357,9 @@ module mor1kx_ctrl_espresso
 		  (spr_esr[`OR1K_SPR_SR_TEE] & except_ticktimer_nonsrmasked);
    
    always @(posedge clk)
-     if (/*exception & !exception_r*/
-	 exception_re | (rfete & execute_done))
+     if (rst)
+       exception_pc_addr <= OPTION_RESET_PC;
+     else if (exception_re | (rfete & execute_done))
        casez(
 	     {except_ibus_err_i,
 	      except_illegal_i,
