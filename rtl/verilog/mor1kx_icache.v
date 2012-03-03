@@ -261,15 +261,20 @@ module mor1kx_icache
 	      else
 		refill_match <= 1'b0;
 	      /*
-	       * done refilling, reload tag and cache memory  with the
-	       * previous address in case this access was not a match
+	       * done refilling, reload tag and cache memory with the
+	       * previous address in case this access was not a match,
+	       * otherwise load the current address.
 	       */
 	      if (refill_done) begin
-		 if (cpu_ack_o)
-		   mem_adr <= cpu_adr_i;
-		 else
-		   mem_adr <= cpu_adr_prev;
-		 state <= RESTART;
+		 if (!cpu_req_i) begin
+		    state <= IDLE;
+		 end else if (cpu_ack_o | cpu_req_edge) begin
+		    mem_adr <= cpu_adr_i;
+		    state <= RESTART;
+		 end else begin
+		    mem_adr <= cpu_adr_prev;
+		    state <= RESTART;
+		 end
 	      end
 	   end
 	   /* prevent acking when no request */
