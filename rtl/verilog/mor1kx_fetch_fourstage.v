@@ -224,6 +224,9 @@ module mor1kx_fetch_fourstage
 	   pre_stall_state <= ADVANCE;
 	   state <= LOAD_REQ;
 	end
+
+	if (pipeline_flush_i)
+	  fetch_valid_o <= 1'b0;
      end
 
    // Register instruction coming in
