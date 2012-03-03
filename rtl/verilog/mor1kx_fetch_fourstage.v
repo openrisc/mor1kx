@@ -152,7 +152,7 @@ module mor1kx_fetch_fourstage
 	     if (padv_i & !ibus_req_o) begin
 		pc_addr <= pc_fetch;
 		state <= LOAD_REQ;
-	     end else if (ibus_req_o & ibus_ack_i | !ibus_req_o) begin
+	     end else if (ibus_req_o & bus_access_done | !ibus_req_o) begin
 		ibus_req_o <= 1'b0;
 	     end
 	  end
@@ -202,7 +202,7 @@ module mor1kx_fetch_fourstage
 	 * and pc_addr and pc_fetch keep their values
 	 */
 	if (!padv_i & !stall & !load_req) begin
-	   if (ibus_req_o & ibus_ack_i)
+	   if (ibus_req_o & bus_access_done)
 	     ibus_req_o <= 1'b0;
 	   pc_addr <= pc_addr;
 	   pc_fetch <= pc_fetch;
