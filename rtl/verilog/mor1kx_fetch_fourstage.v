@@ -198,7 +198,19 @@ module mor1kx_fetch_fourstage
 	  end
 
 	  BRANCH_DONE: begin
-	     if (bus_access_done) begin
+	     /*
+	      * check for a new incoming branch while branching,
+	      * for example an exception in delay slot
+	      */
+	     if (branch_occur_edge) begin
+		branch_fetch_valid <= 1'b0;
+		if (bus_access_done) begin
+		   pc_addr <= branch_dest_i;
+		   state <= BRANCH;
+		end else begin
+		   state <= BRANCH_WAITBUS;
+		end
+	     end else if (bus_access_done) begin
 		pc_addr <= pc_addr_next;
 		pc_fetch <= pc_addr;
 		fetch_valid_o <= 1'b1;
