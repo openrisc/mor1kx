@@ -233,6 +233,9 @@ module mor1kx_ctrl_espresso
 
    wire 			     except_ticktimer;
    wire 			     except_pic;
+
+   wire 			     except_ticktimer_nonsrmasked;
+   wire 			     except_pic_nonsrmasked;
    
    
    wire [15:0] 			     spr_addr;
@@ -244,9 +247,8 @@ module mor1kx_ctrl_espresso
    wire [OPTION_OPERAND_WIDTH-1:0]   b;
 
    wire 			     execute_waiting;
-   /* verilator lint_off UNOPTFLAT */
+
    wire 			     execute_valid;
-   /* verilator lint_on UNOPTFLAT */
    
    wire 			     deassert_decode_execute_halt;
 
@@ -257,6 +259,7 @@ module mor1kx_ctrl_espresso
    input 			     rf_wb_i;
    wire 			     except_ibus_align;
    wire 			     fetch_advance;
+   wire 			     rfete;
 
    
    /* Debug SPRs */
@@ -299,7 +302,7 @@ module mor1kx_ctrl_espresso
 			       except_ticktimer |
 			       except_pic | except_trap_i );
       
-   assign exception = exception_pending /*& execute_done*/;
+   assign exception = exception_pending;
    
    assign fetch_take_exception_branch_o =  take_exception | op_rfe;
    
@@ -311,7 +314,7 @@ module mor1kx_ctrl_espresso
    assign deassert_decode_execute_halt = ctrl_branch_occur &
 					 decode_execute_halt;
    
-   assign ctrl_branch_except_pc = (op_rfe | doing_rfe) ? spr_epcr : 
+   assign ctrl_branch_except_pc = (op_rfe | doing_rfe) & !rfete ? spr_epcr : 
 				  exception_pc_addr;
 
    // Exceptions take precedence
@@ -349,9 +352,13 @@ module mor1kx_ctrl_espresso
    // Check for unaligned jump address from register
    assign except_ibus_align = op_jr_i & (|ctrl_rfb_i[1:0]);
 
+   // Return from exception to exception (if pending tick or PIC ints)
+   assign rfete = (spr_esr[`OR1K_SPR_SR_IEE] & except_pic_nonsrmasked) |
+		  (spr_esr[`OR1K_SPR_SR_TEE] & except_ticktimer_nonsrmasked);
    
    always @(posedge clk)
-     if (exception & !exception_r)
+     if (/*exception & !exception_r*/
+	 exception_re | (rfete & execute_done))
        casez(
 	     {except_ibus_err_i,
 	      except_illegal_i,
@@ -360,8 +367,8 @@ module mor1kx_ctrl_espresso
 	      except_syscall_i,
 	      except_trap_i,
 	      except_dbus_i,
-	      except_pic,
-	      except_ticktimer
+	      except_pic_nonsrmasked,
+	      except_ticktimer_nonsrmasked
 	      }
 	     )
 	 9'b1????????:
@@ -562,7 +569,7 @@ module mor1kx_ctrl_espresso
        spr_sr <= SPR_SR_RESET_VALUE;
      else if (/*exception_re*/ fetch_take_exception_branch_o)
        begin
-	  if (op_rfe) 
+	  if (op_rfe & !rfete) 
 	    begin
 	       spr_sr <= spr_esr;
 	    end
@@ -631,7 +638,7 @@ module mor1kx_ctrl_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_esr <= SPR_SR_RESET_VALUE;
-     else if (/*execute_done & exception*/ exception_re)
+     else if (exception_re)
        begin
 	  spr_esr <= spr_sr;
 	  /* 
@@ -653,7 +660,7 @@ module mor1kx_ctrl_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_epcr <= OPTION_RESET_PC;
-     else if (exception_re)
+     else if (exception_re & !(rfete & op_rfe))
        begin
 	  if (except_ibus_err_i)
 	    spr_epcr <= spr_ppc-4;
@@ -687,7 +694,7 @@ module mor1kx_ctrl_espresso
      if (rst)
        spr_npc <= OPTION_RESET_PC;
      else if (deassert_doing_rfe)
-       spr_npc <= spr_epcr;   
+       spr_npc <= rfete ? exception_pc_addr : spr_epcr;   
      else if (fetch_advance)
        // PC we're now executing
        spr_npc <= fetch_take_exception_branch_o ? exception_pc_addr : 
@@ -956,14 +963,15 @@ module mor1kx_ctrl_espresso
 	 
 	 // Bottom two IRQs permanently unmasked
 	 assign irq_unmasked = {spr_picmr[31:2],2'b11} & irq_i;
-	 
-	 assign except_pic = (|spr_picsr) & spr_sr[`OR1K_SPR_SR_IEE] & 
-			     !op_mtspr & !doing_rfe &
+	 assign except_pic_nonsrmasked = (|spr_picsr) &  
+			     !op_mtspr & 
 			     // Stops back-to-back branch addresses going to 
 			     // fetch stage
 			     !ctrl_branch_occur &
 			     // Stops issues with PC when branching
 			     !execute_delay_slot;
+	 assign except_pic = spr_sr[`OR1K_SPR_SR_IEE] & except_pic_nonsrmasked &
+			     !doing_rfe;
 
 	 /* always single cycle access */
 	 assign spr_access_ack[9] = 1;
@@ -1018,13 +1026,16 @@ module mor1kx_ctrl_espresso
 	   else if (|spr_ttmr[31:30])
 	     spr_ttcr <= spr_ttcr + 1;
 
-	 assign except_ticktimer = spr_ttmr[28] & spr_sr[`OR1K_SPR_SR_TEE] & 
-				   !op_mtspr & !doing_rfe &
+	 assign except_ticktimer_nonsrmasked = spr_ttmr[28] &
+				   !op_mtspr & 
 				   // Stops back-to-back branch addresses to 
 				   // fetch  stage.
 				   !ctrl_branch_occur &
 				   // Stops issues with PC when branching
 				   !execute_delay_slot;
+	 
+	 assign except_ticktimer = except_ticktimer_nonsrmasked & 
+				   spr_sr[`OR1K_SPR_SR_TEE] & !doing_rfe;
 
 	 /* SPR bus reads */
 	 /* always single cycle access */
