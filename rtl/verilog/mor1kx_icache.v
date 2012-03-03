@@ -262,6 +262,8 @@ module mor1kx_icache
 		 state <= RESTART;
 	      end
 	   end
+	   if (!cpu_req_i)
+	      refill_match <= 1'b0;
 	end
 
 	INVALIDATE: begin
