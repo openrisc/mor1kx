@@ -265,7 +265,7 @@ module mor1kx_execute_alu
 		  if (b[OPTION_OPERAND_WIDTH-1])
 		    div_d <= ~b + 1;
 	       end
-	    end else begin
+	    end else if (!div_done) begin
 	       if (!div_sub[OPTION_OPERAND_WIDTH]) begin // div_sub >= 0
 		  div_r <= div_sub[OPTION_OPERAND_WIDTH-1:0];
 		  div_n <= {div_n[OPTION_OPERAND_WIDTH-2:0], 1'b1};
