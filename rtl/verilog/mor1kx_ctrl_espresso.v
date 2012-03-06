@@ -23,7 +23,7 @@
 module mor1kx_ctrl_espresso
   (/*AUTOARG*/
    // Outputs
-   spr_npc_o, spr_ppc_o, mfspr_dat_o, ctrl_mfspr_we_o, ctrl_flag_o,
+   spr_npc_o, spr_ppc_o, mfspr_dat_o, ctrl_mfspr_we_o,
    pipeline_flush_o, padv_fetch_o, padv_decode_o, padv_execute_o,
    fetch_take_exception_branch_o, execute_waiting_o, du_dat_o,
    du_ack_o, du_stall_o, du_restart_pc_o, du_restart_o,
@@ -123,7 +123,7 @@ module mor1kx_ctrl_espresso
    output 			     ctrl_mfspr_we_o;
    
    // Flag out to branch control, combinatorial
-   output 			     ctrl_flag_o;
+   reg 				     flag;
    
    // Branch indicator from control unit (l.rfe/exception)
    wire 			     ctrl_branch_exception;
@@ -323,7 +323,7 @@ module mor1kx_ctrl_espresso
 			       // is l.j or l.jal
 			       (!(|ctrl_opc_insn_i[2:1]) |
 				// is l.bf/bnf and flag is right
-				(ctrl_opc_insn_i[2]==ctrl_flag_o))) |
+				(ctrl_opc_insn_i[2]==flag))) |
 			      (op_jr_i & !(except_ibus_align));
    
    assign ctrl_branch_occur_o = // Usual branch signaling
@@ -483,11 +483,18 @@ module mor1kx_ctrl_espresso
 			     (exception_re) |
 			     cpu_stall;
 
-   // Flag output
-   assign ctrl_flag_o = (!ctrl_flag_clear_i & spr_sr[`OR1K_SPR_SR_F]) |
-			ctrl_flag_set_i;
-
+   // Flag 
+//     flag = 
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       flag <= 0;
+     else if (execute_done)
+       flag <= ctrl_flag_clear_i ? 0 :
+	       ctrl_flag_set_i ? 1 : flag;
    
+   /*    (!ctrl_flag_clear_i & spr_sr[`OR1K_SPR_SR_F]) |
+		 ctrl_flag_set_i;
+*/	      
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        execute_waiting_r <= 0;

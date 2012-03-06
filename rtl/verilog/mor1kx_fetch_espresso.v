@@ -16,7 +16,7 @@ module mor1kx_fetch_espresso
   (/*AUTOARG*/
    // Outputs
    ibus_adr_o, ibus_req_o, decode_insn_o, next_fetch_done_o,
-   fetch_rfa_adr_o, fetch_rfb_adr_o, pc_fetch_o,
+   fetch_rfa_adr_o, fetch_rfb_adr_o, pc_fetch_o, pc_fetch_next_o,
    decode_except_ibus_err_o, fetch_advancing_o,
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, padv_i,
@@ -52,6 +52,7 @@ module mor1kx_fetch_espresso
 
    // Signal back to the control
    output [OPTION_OPERAND_WIDTH-1:0] 	 pc_fetch_o;
+   output [OPTION_OPERAND_WIDTH-1:0] 	 pc_fetch_next_o;
    
    
    // branch/jump indication
@@ -90,7 +91,10 @@ module mor1kx_fetch_espresso
    wire 				  branch_occur_re;
    wire 				  awkward_transition_to_branch_target;
    wire 				  taking_branch;
-
+   wire					  jal_buffered;
+   wire 				  retain_fetch_pc;
+   
+   
    assign taking_branch = branch_occur_i & padv_i;   
    
    assign bus_access_done =  (ibus_ack_i | ibus_err_i) & !(taking_branch);
@@ -106,13 +110,18 @@ module mor1kx_fetch_espresso
    // Early RF address fetch
    assign fetch_rfa_adr_o = insn_buffer[`OR1K_RA_SELECT];
    assign fetch_rfb_adr_o = insn_buffer[`OR1K_RB_SELECT];
+   assign jal_buffered = insn_buffer[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JALR |
+			 insn_buffer[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JAL;
+
+   assign retain_fetch_pc = jal_buffered & bus_access_done;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        pc_fetch <= OPTION_RESET_PC;
      else if (fetch_take_exception_branch_i |
 	      ((bus_access_done | taking_branch) & 
-	       (!execute_waiting_i | !next_insn_buffered)) |
+	       (!execute_waiting_i | !next_insn_buffered) &
+	       !retain_fetch_pc) |
 	      awkward_transition_to_branch_target)
        // next PC - are we going somewhere else or advancing?
        pc_fetch <= du_restart_i ? du_restart_pc_i :
@@ -121,6 +130,7 @@ module mor1kx_fetch_espresso
 
    // Actually goes to pipeline control
    assign pc_fetch_o = pc_fetch;
+   assign pc_fetch_next_o = pc_fetch_next;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -136,7 +146,7 @@ module mor1kx_fetch_espresso
        // it work properly.
        fetch_req <= !branch_occur_i;
      else if (!fetch_req & !execute_waiting_i & 
-	      !wait_for_exception_after_ibus_err)
+	      !wait_for_exception_after_ibus_err & !retain_fetch_pc)
        fetch_req <= 1;
      else if (bus_access_done & (fetch_take_exception_branch_i | 
 				 execute_waiting_i | ibus_err_i))

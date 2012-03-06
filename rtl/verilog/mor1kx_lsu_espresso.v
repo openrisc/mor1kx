@@ -260,6 +260,7 @@ module mor1kx_lsu_espresso
      endcase // case (opc_insn_i[0])
 
    // Register result incase writeback doesn't occur for a few cycles
+   // TODO - remove this - we should write straight into the RF!
    always @(posedge clk)
      if (dbus_ack_i & op_lsu_load_i)
        lsu_result_r <= dbus_dat_extended;

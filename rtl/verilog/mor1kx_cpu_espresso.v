@@ -137,7 +137,6 @@ module mor1kx_cpu_espresso
    wire			alu_valid_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			ctrl_branch_occur_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o;// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
-   wire			ctrl_flag_o;		// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire			ctrl_mfspr_we_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire			decode_except_ibus_err_o;// From mor1kx_fetch_espresso of mor1kx_fetch_espresso.v
    wire			decode_valid_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -175,6 +174,7 @@ module mor1kx_cpu_espresso
    wire			padv_decode_o;		// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire			padv_execute_o;		// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire			padv_fetch_o;		// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
+   wire [OPTION_OPERAND_WIDTH-1:0] pc_fetch_next_o;// From mor1kx_fetch_espresso of mor1kx_fetch_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] pc_fetch_o;	// From mor1kx_fetch_espresso of mor1kx_fetch_espresso.v
    wire			pipeline_flush_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] rf_result_o;	// From mor1kx_wb_mux_espresso of mor1kx_wb_mux_espresso.v
@@ -217,6 +217,7 @@ module mor1kx_cpu_espresso
       .fetch_rfa_adr_o			(fetch_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .fetch_rfb_adr_o			(fetch_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .pc_fetch_o			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
+      .pc_fetch_next_o			(pc_fetch_next_o[OPTION_OPERAND_WIDTH-1:0]),
       .decode_except_ibus_err_o		(decode_except_ibus_err_o),
       .fetch_advancing_o		(fetch_advancing_o),
       // Inputs
@@ -239,6 +240,7 @@ module mor1kx_cpu_espresso
     .decode_except_ibus_err_i		(decode_except_ibus_err_o),
     .pipeline_flush_i			(pipeline_flush_o),
     .pc_execute_o                       (),
+    .pc_decode_i                        (),
     ); */
    mor1kx_decode
      #(
@@ -296,7 +298,7 @@ module mor1kx_cpu_espresso
       .clk				(clk),
       .rst				(rst),
       .padv_i				(padv_decode_o),	 // Templated
-      .pc_decode_i			(pc_decode_i[OPTION_OPERAND_WIDTH-1:0]),
+      .pc_decode_i			(),			 // Templated
       .decode_insn_i			(insn_fetch_to_decode),	 // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
       .decode_except_ibus_err_i		(decode_except_ibus_err_o)); // Templated
@@ -408,6 +410,7 @@ module mor1kx_cpu_espresso
     .op_lsu_load_i			(op_lsu_load_o),
     .ppc_i 			        (spr_ppc_o),
     .op_mfspr_i			        (op_mfspr_o),
+    .pc_fetch_next_i                    (pc_fetch_next_o),
     ); */
    mor1kx_wb_mux_espresso
      #(
@@ -423,6 +426,7 @@ module mor1kx_cpu_espresso
       .alu_result_i			(alu_result_o),		 // Templated
       .lsu_result_i			(lsu_result_o),		 // Templated
       .ppc_i				(spr_ppc_o),		 // Templated
+      .pc_fetch_next_i			(pc_fetch_next_o),	 // Templated
       .spr_i				(mfspr_dat_o),		 // Templated
       .op_jal_i				(op_jal_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
@@ -538,7 +542,6 @@ module mor1kx_cpu_espresso
 	.spr_ppc_o			(spr_ppc_o[OPTION_OPERAND_WIDTH-1:0]),
 	.mfspr_dat_o			(mfspr_dat_o[OPTION_OPERAND_WIDTH-1:0]),
 	.ctrl_mfspr_we_o		(ctrl_mfspr_we_o),
-	.ctrl_flag_o			(ctrl_flag_o),
 	.pipeline_flush_o		(pipeline_flush_o),
 	.padv_fetch_o			(padv_fetch_o),
 	.padv_decode_o			(padv_decode_o),
