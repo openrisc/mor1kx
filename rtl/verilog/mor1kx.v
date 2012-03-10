@@ -128,14 +128,9 @@ module mor1kx
    wire			dc_err_i;		// From dbus_bridge of mor1kx_bus_if_wb32.v
    wire [OPTION_OPERAND_WIDTH-1:0] ibus_adr_o;	// From mor1kx_cpu of mor1kx_cpu.v
    wire			ibus_req_o;		// From mor1kx_cpu of mor1kx_cpu.v
-   wire			ic_ack_i;		// From ibus_bridge of mor1kx_bus_if_wb32.v
-   wire [`OR1K_INSN_WIDTH-1:0] ic_dat_i;	// From ibus_bridge of mor1kx_bus_if_wb32.v
-   wire			ic_err_i;		// From ibus_bridge of mor1kx_bus_if_wb32.v
    wire			spr_bus_ack_dc_i;	// From mor1kx_dcache of mor1kx_dcache.v
-   wire			spr_bus_ack_ic_i;	// From mor1kx_icache of mor1kx_icache.v
    wire [15:0]		spr_bus_addr_o;		// From mor1kx_cpu of mor1kx_cpu.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_dc_i;// From mor1kx_dcache of mor1kx_dcache.v
-   wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_ic_i;// From mor1kx_icache of mor1kx_icache.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;// From mor1kx_cpu of mor1kx_cpu.v
    wire			spr_bus_stb_o;		// From mor1kx_cpu of mor1kx_cpu.v
    wire			spr_bus_we_o;		// From mor1kx_cpu of mor1kx_cpu.v
@@ -161,9 +156,9 @@ module mor1kx
       if (BUS_IF_TYPE=="WISHBONE32") begin : bus_gen
 
 	 /* mor1kx_bus_if_wb32 AUTO_TEMPLATE (
-	  .cpu_err_o			(ic_err_i),
-	  .cpu_ack_o			(ic_ack_i),
-	  .cpu_dat_o			(ic_dat_i[`OR1K_INSN_WIDTH-1:0]),
+	  .cpu_err_o			(ibus_err_i),
+	  .cpu_ack_o			(ibus_ack_i),
+	  .cpu_dat_o			(ibus_dat_i[`OR1K_INSN_WIDTH-1:0]),
 	  .wbm_adr_o			(iwbm_adr_o),
 	  .wbm_stb_o			(iwbm_stb_o),
 	  .wbm_cyc_o			(iwbm_cyc_o),
@@ -173,9 +168,9 @@ module mor1kx
 	  .wbm_bte_o			(iwbm_bte_o),
 	  .wbm_dat_o			(iwbm_dat_o),
 	  // Inputs
-	  .cpu_adr_i			(ic_adr_o),
+	  .cpu_adr_i			(ibus_adr_o),
 	  .cpu_dat_i			(0),
-	  .cpu_req_i			(ic_req_o),
+	  .cpu_req_i			(ibus_req_o),
 	  .cpu_we_i			(0),
 	  .cpu_bsel_i			(4'b1111),
 	  .wbm_err_i			(iwbm_err_i),
@@ -185,14 +180,14 @@ module mor1kx
 	  ); */
 	 
 	 mor1kx_bus_if_wb32 
-		      #(.BUS_IF_TYPE("CLASSIC"))
-//		      #(.BUS_IF_TYPE("B3_READ_BURSTING"))
+//		      #(.BUS_IF_TYPE("CLASSIC"))
+		      #(.BUS_IF_TYPE("B3_READ_BURSTING"))
 	 ibus_bridge
 		      (/*AUTOINST*/
 		       // Outputs
-		       .cpu_err_o	(ic_err_i),		 // Templated
-		       .cpu_ack_o	(ic_ack_i),		 // Templated
-		       .cpu_dat_o	(ic_dat_i[`OR1K_INSN_WIDTH-1:0]), // Templated
+		       .cpu_err_o	(ibus_err_i),		 // Templated
+		       .cpu_ack_o	(ibus_ack_i),		 // Templated
+		       .cpu_dat_o	(ibus_dat_i[`OR1K_INSN_WIDTH-1:0]), // Templated
 		       .wbm_adr_o	(iwbm_adr_o),		 // Templated
 		       .wbm_stb_o	(iwbm_stb_o),		 // Templated
 		       .wbm_cyc_o	(iwbm_cyc_o),		 // Templated
@@ -204,9 +199,9 @@ module mor1kx
 		       // Inputs
 		       .clk		(clk),
 		       .rst		(rst),
-		       .cpu_adr_i	(ic_adr_o),		 // Templated
+		       .cpu_adr_i	(ibus_adr_o),		 // Templated
 		       .cpu_dat_i	(0),			 // Templated
-		       .cpu_req_i	(ic_req_o),		 // Templated
+		       .cpu_req_i	(ibus_req_o),		 // Templated
 		       .cpu_bsel_i	(4'b1111),		 // Templated
 		       .cpu_we_i	(0),			 // Templated
 		       .wbm_err_i	(iwbm_err_i),		 // Templated
@@ -275,67 +270,6 @@ module mor1kx
 	      $finish();
 	   end
 	end // else: !if(BUS_IF_TYPE=="WISHBONE32")
-   endgenerate
-
-   generate
-      if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
-
-   /* mor1kx_icache AUTO_TEMPLATE (
-	    // Outputs
-	    .cpu_err_o			(ibus_err_i),
-	    .cpu_ack_o			(ibus_ack_i),
-	    .cpu_dat_o			(ibus_dat_i[31:0]),
-	    .spr_bus_dat_o		(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_o		(spr_bus_ack_ic_i),
-	    // Inputs
-	    .ic_enable			(spr_sr_o[`OR1K_SPR_SR_ICE]),
-	    .cpu_adr_i			(ibus_adr_o[31:0]),
-	    .cpu_req_i			(ibus_req_o),
-	    .spr_bus_addr_i		(spr_bus_addr_o[15:0]),
-	    .spr_bus_we_i		(spr_bus_we_o),
-	    .spr_bus_stb_i		(spr_bus_stb_o),
-	    .spr_bus_dat_i		(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
-    );*/
-
-   mor1kx_icache
-     #(
-       .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
-       .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
-       .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
-       .OPTION_ICACHE_LIMIT_WIDTH(OPTION_ICACHE_LIMIT_WIDTH)
-       )
-   mor1kx_icache
-	   (/*AUTOINST*/
-	    // Outputs
-	    .cpu_err_o			(ibus_err_i),		 // Templated
-	    .cpu_ack_o			(ibus_ack_i),		 // Templated
-	    .cpu_dat_o			(ibus_dat_i[31:0]),	 // Templated
-	    .ic_adr_o			(ic_adr_o[31:0]),
-	    .ic_req_o			(ic_req_o),
-	    .spr_bus_dat_o		(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
-	    .spr_bus_ack_o		(spr_bus_ack_ic_i),	 // Templated
-	    // Inputs
-	    .clk			(clk),
-	    .rst			(rst),
-	    .ic_enable			(spr_sr_o[`OR1K_SPR_SR_ICE]), // Templated
-	    .cpu_adr_i			(ibus_adr_o[31:0]),	 // Templated
-	    .cpu_req_i			(ibus_req_o),		 // Templated
-	    .ic_err_i			(ic_err_i),
-	    .ic_ack_i			(ic_ack_i),
-	    .ic_dat_i			(ic_dat_i[31:0]),
-	    .spr_bus_addr_i		(spr_bus_addr_o[15:0]),	 // Templated
-	    .spr_bus_we_i		(spr_bus_we_o),		 // Templated
-	    .spr_bus_stb_i		(spr_bus_stb_o),	 // Templated
-	    .spr_bus_dat_i		(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0])); // Templated
-      end
-      else
-	begin
-	   assign ibus_ack_i = ic_ack_i;
-	   assign ibus_dat_i = ic_dat_i;
-	   assign ibus_err_i = ic_err_i;
-	   assign ic_adr_o = ibus_adr_o;
-	   assign ic_req_o = ibus_req_o;
-	end
    endgenerate
 
    generate
@@ -412,10 +346,8 @@ module mor1kx
    endgenerate
 
    /* mor1kx_cpu AUTO_TEMPLATE
-    ( .spr_bus_dat_dc_i		(),
-    .spr_bus_ack_dc_i		(),
-    .spr_bus_dat_ic_i		(spr_bus_dat_ic_i),
-    .spr_bus_ack_ic_i		(spr_bus_ack_ic_i),
+    ( .spr_bus_dat_dc_i		(spr_bus_dat_dc_i),
+    .spr_bus_ack_dc_i		(spr_bus_ack_dc_i),
     .spr_bus_dat_dmmu_i		(),
     .spr_bus_ack_dmmu_i		(),
     .spr_bus_dat_immu_i		(),
@@ -442,6 +374,7 @@ module mor1kx
 	     .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
 	     .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
 	     .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
+	     .OPTION_ICACHE_LIMIT_WIDTH(OPTION_ICACHE_LIMIT_WIDTH),
 	     .FEATURE_IMMU(FEATURE_IMMU),
 	     .FEATURE_PIC(FEATURE_PIC),
 	     .FEATURE_TIMER(FEATURE_TIMER),
@@ -506,10 +439,8 @@ module mor1kx
       .du_dat_i				(du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
       .du_we_i				(du_we_i),
       .du_stall_i			(du_stall_i),
-      .spr_bus_dat_dc_i			(),			 // Templated
-      .spr_bus_ack_dc_i			(),			 // Templated
-      .spr_bus_dat_ic_i			(spr_bus_dat_ic_i),	 // Templated
-      .spr_bus_ack_ic_i			(spr_bus_ack_ic_i),	 // Templated
+      .spr_bus_dat_dc_i			(spr_bus_dat_dc_i),	 // Templated
+      .spr_bus_ack_dc_i			(spr_bus_ack_dc_i),	 // Templated
       .spr_bus_dat_dmmu_i		(),			 // Templated
       .spr_bus_ack_dmmu_i		(),			 // Templated
       .spr_bus_dat_immu_i		(),			 // Templated

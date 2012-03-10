@@ -16,7 +16,8 @@ module mor1kx_fetch_fourstage
   (/*AUTOARG*/
    // Outputs
    ibus_adr_o, ibus_req_o, pc_decode_o, decode_insn_o, fetch_valid_o,
-   decode_except_ibus_err_o, fetch_branch_taken_o,
+   pc_addr_o, pc_fetch_o, decode_except_ibus_err_o,
+   fetch_branch_taken_o,
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, padv_i,
    branch_occur_i, branch_dest_i, du_restart_pc_i, du_restart_i,
@@ -45,6 +46,10 @@ module mor1kx_fetch_fourstage
    output reg [OPTION_OPERAND_WIDTH-1:0] pc_decode_o;
    output reg [`OR1K_INSN_WIDTH-1:0] 	  decode_insn_o;
    output reg 				  fetch_valid_o;
+
+   // interface to icache/ibus
+   output [OPTION_OPERAND_WIDTH-1:0] 	  pc_addr_o;
+   output [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch_o;
 
    // branch/jump indication
    input 				  branch_occur_i;
@@ -92,6 +97,9 @@ module mor1kx_fetch_fourstage
    assign ibus_adr_o = pc_addr;
    assign pc_addr_next = pc_addr + 4;
    assign branch_occur_edge = branch_occur_i & !branch_occur_r;
+
+   assign pc_addr_o = pc_addr;
+   assign pc_fetch_o = pc_fetch;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)

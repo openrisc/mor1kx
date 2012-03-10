@@ -17,6 +17,9 @@ module mor1kx_icache
 
     input 			      ic_enable,
 
+    input [OPTION_OPERAND_WIDTH-1:0]  pc_addr_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  pc_fetch_i,
+
     // BUS Interface towards CPU
     output 			      cpu_err_o,
     output 			      cpu_ack_o,
@@ -25,11 +28,11 @@ module mor1kx_icache
     input 			      cpu_req_i,
 
     // BUS Interface towards MEM
-    input 			      ic_err_i,
-    input 			      ic_ack_i,
-    input [31:0] 		      ic_dat_i,
-    output [31:0] 		      ic_adr_o,
-    output 			      ic_req_o,
+    input 			      ibus_err_i,
+    input 			      ibus_ack_i,
+    input [31:0] 		      ibus_dat_i,
+    output [31:0] 		      ibus_adr_o,
+    output 			      ibus_req_o,
 
     // SPR interface
     input [15:0] 		      spr_bus_addr_i,
@@ -108,11 +111,11 @@ module mor1kx_icache
 
 
    // Bypass cache when not enabled and when invalidating
-   assign cpu_err_o = ic_err_i;
-   assign cpu_ack_o = (cache_req | refill) ? cpu_ack : ic_ack_i;
-   assign cpu_dat_o = (cache_req) ? cpu_dat : ic_dat_i;
-   assign ic_adr_o = (cache_req | refill) ? mem_adr : cpu_adr_i;
-   assign ic_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
+   assign cpu_err_o = ibus_err_i;
+   assign cpu_ack_o = (cache_req | refill) ? cpu_ack : ibus_ack_i;
+   assign cpu_dat_o = (cache_req) ? cpu_dat : ibus_dat_i;
+   assign ibus_adr_o = (cache_req | refill) ? mem_adr : cpu_adr_i;
+   assign ibus_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
 
    assign tag_raddr = (read | idle) ?
 		      cpu_adr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH] :
@@ -133,7 +136,7 @@ module mor1kx_icache
 	 assign way_raddr[i] = (read | idle) ? cpu_adr_i[WAY_WIDTH-1:2] :
 			       mem_adr[WAY_WIDTH-1:2];
 	 assign way_waddr[i] = mem_adr[WAY_WIDTH-1:2];
-	 assign way_din[i] = ic_dat_i;
+	 assign way_din[i] = ibus_dat_i;
 	 /*
 	  * compare tag stored index with incoming index
 	  * and check valid bit
@@ -163,10 +166,10 @@ module mor1kx_icache
 
    generate
       if (OPTION_ICACHE_WAYS == 2) begin
-	 assign cpu_dat = refill ? ic_dat_i :
+	 assign cpu_dat = refill ? ibus_dat_i :
 			  way_hit[0] ? way_dout[0] : way_dout[1];
       end else begin
-	 assign cpu_dat = refill ? ic_dat_i : way_dout[0];
+	 assign cpu_dat = refill ? ibus_dat_i : way_dout[0];
       end
    endgenerate
 
@@ -204,7 +207,7 @@ module mor1kx_icache
     always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        ic_enabled <= 1; /*SJK*/
-     else if (ic_enable & (ic_ack_i | !cpu_req_i))
+     else if (ic_enable & (ibus_ack_i | !cpu_req_i))
        ic_enabled <= 1;
      else if (!ic_enable & idle)
        ic_enabled <= 0;
@@ -253,7 +256,7 @@ module mor1kx_icache
 	end
 
 	REFILL: begin
-	   if (ic_ack_i) begin
+	   if (ibus_ack_i) begin
 	      mem_adr <= next_mem_adr;
 
 	      if (cpu_adr_i == next_mem_adr)
@@ -296,7 +299,7 @@ module mor1kx_icache
 	 state <= INVALIDATE;
       end
 
-      if (rst | ic_err_i)
+      if (rst | ibus_err_i)
 	state <= IDLE;
    end
 
@@ -326,7 +329,7 @@ module mor1kx_icache
 
 	REFILL: begin
 	   mem_req = 1'b1;
-	   if (ic_ack_i) begin
+	   if (ibus_ack_i) begin
 	      if (OPTION_ICACHE_WAYS == 2) begin
 		 if (lru)
 		   way_we[1] = 1'b1;
