@@ -25,8 +25,8 @@ module mor1kx_ctrl_espresso
    // Outputs
    spr_npc_o, spr_ppc_o, mfspr_dat_o, ctrl_mfspr_we_o,
    pipeline_flush_o, padv_fetch_o, padv_decode_o, padv_execute_o,
-   fetch_take_exception_branch_o, execute_waiting_o, du_dat_o,
-   du_ack_o, du_stall_o, du_restart_pc_o, du_restart_o,
+   fetch_take_exception_branch_o, execute_waiting_o, stepping_o,
+   du_dat_o, du_ack_o, du_stall_o, du_restart_pc_o, du_restart_o,
    spr_bus_addr_o, spr_bus_we_o, spr_bus_stb_o, spr_bus_dat_o,
    spr_sr_o, ctrl_branch_target_o, ctrl_branch_occur_o, rf_we_o,
    // Inputs
@@ -140,7 +140,7 @@ module mor1kx_ctrl_espresso
    // Skip this instruction
    output 			     fetch_take_exception_branch_o;
    output 			     execute_waiting_o;
-   
+   output 			     stepping_o;
    
    // Debug bus
    input [15:0] 		     du_addr_i;
@@ -272,7 +272,7 @@ module mor1kx_ctrl_espresso
    wire 			     du_access;
    wire 			     cpu_stall;
    wire 			     du_restart_from_stall;
-   wire [3:0] 			     pstep;
+   wire [1:0] 			     pstep;
    wire 			     stepping;
    wire 			     stepped_into_delay_slot;
    wire 			     du_npc_write;
@@ -418,11 +418,12 @@ module mor1kx_ctrl_espresso
        waiting_for_except_fetch <= 1;
 
    assign fetch_advance = (next_fetch_done_i | except_ibus_err_i) & 
-			  !execute_waiting & 
+			  !execute_waiting & !cpu_stall &
 			  (!stepping | 
 			   (stepping & pstep[0] & !next_fetch_done_i));
 
-   assign padv_fetch_o = fetch_advance & !exception_pending & !doing_rfe_r;
+   assign padv_fetch_o = fetch_advance & !exception_pending & !doing_rfe_r & 
+			 !cpu_stall;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -448,7 +449,8 @@ module mor1kx_ctrl_espresso
      if (rst)
        execute_go <= 0;
      else
-       execute_go <= padv_fetch_o | execute_waiting;
+       execute_go <= padv_fetch_o | execute_waiting | 
+		     (stepping & next_fetch_done_i);
 
    assign execute_done = execute_go & !execute_waiting;
 
@@ -540,7 +542,7 @@ module mor1kx_ctrl_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        last_branch_target_pc <= 0;
-     else if (execute_done & ctrl_branch_occur)
+     else if (execute_done & ctrl_branch_occur & stepping)
        last_branch_target_pc <= ctrl_branch_target_o;
 
    // Used to gate execute stage's advance signal in the case where a LSU op has
@@ -702,7 +704,11 @@ module mor1kx_ctrl_espresso
      if (rst)
        spr_npc <= OPTION_RESET_PC;
      else if (deassert_doing_rfe)
-       spr_npc <= rfete ? exception_pc_addr : spr_epcr;   
+       spr_npc <= rfete ? exception_pc_addr : spr_epcr;
+     else if (du_restart_o)
+       spr_npc <= du_restart_pc_o;
+     else if (stepping & next_fetch_done_i)
+       spr_npc <= execute_delay_slot ? last_branch_target_pc : pc_fetch_i;
      else if (fetch_advance)
        // PC we're now executing
        spr_npc <= fetch_take_exception_branch_o ? exception_pc_addr : 
@@ -712,7 +718,7 @@ module mor1kx_ctrl_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_ppc <= OPTION_RESET_PC;
-     else if (padv_fetch_o)
+     else if (padv_fetch_o | (stepping & next_fetch_done_i))
        spr_ppc <= spr_npc; // PC we've got in execute stage (about to finish)
 
    assign spr_npc_o = spr_npc;
@@ -1139,6 +1145,8 @@ module mor1kx_ctrl_espresso
 			     spr_addr[15:11]==5'h09 ||
 			     /* Tick Group */
 			     spr_addr[15:11]==5'h0a);
+
+   assign stepping_o = stepping;
    
    generate
       if (FEATURE_DEBUGUNIT!="NONE") begin : du
@@ -1147,7 +1155,7 @@ module mor1kx_ctrl_espresso
 	 
 	 reg 				du_ack;
 	 reg 				du_stall_r;
-	 reg [3:0] 			pstep_r;
+	 reg [1:0] 			pstep_r;
 	 reg [1:0] 			branch_step;
 	 reg 				stepped_into_exception;
 	 reg 				stepped_into_rfe;
@@ -1236,7 +1244,7 @@ module mor1kx_ctrl_espresso
 				  stepped_into_delay_slot ?
 				  last_branch_target_pc : 
 				  stepped_into_exception ? exception_pc_addr : 
-				  spr_npc + 4;
+				  spr_npc;
 
 	 assign du_restart_o = du_restart_from_stall;
 	 
@@ -1248,19 +1256,18 @@ module mor1kx_ctrl_espresso
 	   if (rst)
 	     pstep_r <= 0;
 	   else if (du_restart_from_stall & stepping)
-	     pstep_r <= 4'h1;
+	     pstep_r <= 2'd1;
 	   else if ((pstep[0] & next_fetch_done_i) |
 		    /* decode is always single cycle */
-		    (pstep[1] & padv_decode_o) | 
-		    (pstep[2] & execute_valid))
-	     pstep_r <= {pstep_r[2:0],1'b0};
+		    (pstep[1] & execute_done))
+	     pstep_r <= {pstep_r[0],1'b0};
 	 
 	 assign pstep = pstep_r;
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
 	     branch_step <= 0;
-	   else if (stepping & pstep[2])
+	   else if (stepping & pstep[1])
 	     branch_step <= {branch_step[0], ctrl_branch_occur};
 	   else if (!stepping & execute_done)
 	     branch_step <= {branch_step[0], execute_delay_slot};

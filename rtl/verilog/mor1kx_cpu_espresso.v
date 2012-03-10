@@ -187,6 +187,7 @@ module mor1kx_cpu_espresso
    wire [OPTION_RF_ADDR_WIDTH-1:0] rfd_adr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_npc_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_ppc_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
+   wire			stepping_o;		// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    // End of automatics
 
    /* mor1kx_fetch_espresso AUTO_TEMPLATE (
@@ -200,6 +201,7 @@ module mor1kx_cpu_espresso
     .du_restart_i                       (du_restart_o),
     .fetch_take_exception_branch_i      (fetch_take_exception_branch_o),
     .execute_waiting_i                  (execute_waiting_o),
+    .stepping_i                         (stepping_o),
     ); */
    mor1kx_fetch_espresso
      #(
@@ -232,7 +234,9 @@ module mor1kx_cpu_espresso
       .du_restart_i			(du_restart_o),		 // Templated
       .du_restart_pc_i			(du_restart_pc_o),	 // Templated
       .fetch_take_exception_branch_i	(fetch_take_exception_branch_o), // Templated
-      .execute_waiting_i		(execute_waiting_o));	 // Templated
+      .execute_waiting_i		(execute_waiting_o),	 // Templated
+      .du_stall_i			(du_stall_i),
+      .stepping_i			(stepping_o));		 // Templated
 
    /* mor1kx_decode AUTO_TEMPLATE (
     .padv_i				(padv_decode_o),
@@ -370,6 +374,7 @@ module mor1kx_cpu_espresso
     .op_lsu_load_i			(op_lsu_load_o),
     .op_lsu_store_i			(op_lsu_store_o),
     .exception_taken_i                  (fetch_take_exception_branch_o),
+    .du_restart_i                       (du_restart_o),
     ); */
    mor1kx_lsu_espresso
      #(
@@ -397,6 +402,7 @@ module mor1kx_cpu_espresso
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
       .op_lsu_store_i			(op_lsu_store_o),	 // Templated
       .exception_taken_i		(fetch_take_exception_branch_o), // Templated
+      .du_restart_i			(du_restart_o),		 // Templated
       .dbus_err_i			(dbus_err_i),
       .dbus_ack_i			(dbus_ack_i),
       .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
@@ -548,6 +554,7 @@ module mor1kx_cpu_espresso
 	.padv_execute_o			(padv_execute_o),
 	.fetch_take_exception_branch_o	(fetch_take_exception_branch_o),
 	.execute_waiting_o		(execute_waiting_o),
+	.stepping_o			(stepping_o),
 	.du_dat_o			(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
 	.du_ack_o			(du_ack_o),
 	.du_stall_o			(du_stall_o),

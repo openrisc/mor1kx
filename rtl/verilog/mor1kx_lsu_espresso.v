@@ -19,8 +19,8 @@ module mor1kx_lsu_espresso
    dbus_adr_o, dbus_req_o, dbus_dat_o, dbus_bsel_o, dbus_we_o,
    // Inputs
    clk, rst, padv_fetch_i, alu_result_i, rfb_i, opc_insn_i,
-   op_lsu_load_i, op_lsu_store_i, exception_taken_i, dbus_err_i,
-   dbus_ack_i, dbus_dat_i
+   op_lsu_load_i, op_lsu_store_i, exception_taken_i, du_restart_i,
+   dbus_err_i, dbus_ack_i, dbus_dat_i
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
@@ -40,6 +40,8 @@ module mor1kx_lsu_espresso
    input 			    op_lsu_store_i;
 
    input 			    exception_taken_i;
+   input 			    du_restart_i;
+   
 
    output [OPTION_OPERAND_WIDTH-1:0] lsu_result_o;
    output 			     lsu_valid_o;
@@ -122,12 +124,12 @@ module mor1kx_lsu_espresso
      if (rst)
        execute_go <= 0;
      else
-       execute_go <= padv_fetch_i;
+       execute_go <= padv_fetch_i | du_restart_i;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        access_done <= 0;
-     else if (padv_fetch_i)
+     else if (padv_fetch_i | du_restart_i)
        access_done <= 0;
      else if (dbus_ack_i | dbus_err_i | lsu_except_align_o)
        access_done <= 1;

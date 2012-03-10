@@ -21,7 +21,8 @@ module mor1kx_fetch_espresso
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, padv_i,
    branch_occur_i, branch_dest_i, du_restart_i, du_restart_pc_i,
-   fetch_take_exception_branch_i, execute_waiting_i
+   fetch_take_exception_branch_i, execute_waiting_i, du_stall_i,
+   stepping_i
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
@@ -66,7 +67,12 @@ module mor1kx_fetch_espresso
    input 				  fetch_take_exception_branch_i;
 
    input 				  execute_waiting_i;
+
+   // CPU is stalled
+   input 				  du_stall_i;
    
+   // We're single stepping - this should cause us to fetch only a single insn
+   input 				  stepping_i;
    
    
    // instruction ibus error indication out
@@ -104,7 +110,8 @@ module mor1kx_fetch_espresso
    assign ibus_adr_o = pc_fetch;
    assign ibus_req_o = fetch_req;
 
-   assign fetch_advancing_o = (padv_i | fetch_take_exception_branch_i) & 
+   assign fetch_advancing_o = (padv_i | fetch_take_exception_branch_i |
+			       stepping_i) & 
 			      next_fetch_done_o;
 
    // Early RF address fetch
@@ -122,7 +129,8 @@ module mor1kx_fetch_espresso
 	      ((bus_access_done | taking_branch) & 
 	       (!execute_waiting_i | !next_insn_buffered) &
 	       !retain_fetch_pc) |
-	      awkward_transition_to_branch_target)
+	      awkward_transition_to_branch_target |
+	      du_restart_i)
        // next PC - are we going somewhere else or advancing?
        pc_fetch <= du_restart_i ? du_restart_pc_i :
 		   (fetch_take_exception_branch_i | taking_branch) ?
@@ -135,7 +143,7 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        fetch_req <= 1;
-     else if (fetch_take_exception_branch_i)
+     else if (fetch_take_exception_branch_i | du_restart_i)
        fetch_req <= 1;
      else if (padv_i)
        // Force de-assert of req signal when branching.
@@ -144,12 +152,15 @@ module mor1kx_fetch_espresso
        // which we usually don't assume will happen.
        // TODO: fix things so that we don't have to force a penalty to make
        // it work properly.
-       fetch_req <= !branch_occur_i;
+       fetch_req <= !branch_occur_i & !du_stall_i;
+     else if (du_stall_i)
+       fetch_req <= fetch_req & !bus_access_done;
      else if (!fetch_req & !execute_waiting_i & 
-	      !wait_for_exception_after_ibus_err & !retain_fetch_pc)
+	      !wait_for_exception_after_ibus_err & !retain_fetch_pc &
+	      !du_stall_i & !stepping_i)
        fetch_req <= 1;
      else if (bus_access_done & (fetch_take_exception_branch_i | 
-				 execute_waiting_i | ibus_err_i))
+				 execute_waiting_i | ibus_err_i | stepping_i))
        fetch_req <= 0;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -206,8 +217,8 @@ module mor1kx_fetch_espresso
 	       !branch_occur_r ) |
 	      // This case is when we stalled to get the delay-slot instruction
 	      // and we don't get enough padv to push it through the buffer
-	      (branch_occur_i & padv_i & bus_access_done_re_r
-	       /*& !bus_access_done & bus_access_done_r */) )
+	      (branch_occur_i & padv_i & bus_access_done_re_r) |
+	      (bus_access_done_fe & stepping_i))
        decode_insn_o <= insn_buffer;
    
    always @(posedge clk `OR_ASYNC_RST)
