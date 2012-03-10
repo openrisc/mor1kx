@@ -126,7 +126,7 @@ module mor1kx_fetch_espresso
      if (rst)
        pc_fetch <= OPTION_RESET_PC;
      else if (fetch_take_exception_branch_i |
-	      ((bus_access_done | taking_branch) & 
+	      (((bus_access_done & !ibus_err_i) | taking_branch) & 
 	       (!execute_waiting_i | !next_insn_buffered) &
 	       !retain_fetch_pc) |
 	      awkward_transition_to_branch_target |
@@ -205,7 +205,7 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
-     else if (fetch_take_exception_branch_i)
+     else if (fetch_take_exception_branch_i | (du_stall_i & !execute_waiting_i))
        // Put a NOP in the pipeline when starting exception - remove any state
        // which may be causing the exception
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
@@ -224,7 +224,8 @@ module mor1kx_fetch_espresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        decode_except_ibus_err_o <= 0;
-     else if ((padv_i | fetch_take_exception_branch_i) & branch_occur_i)
+     else if ((padv_i | fetch_take_exception_branch_i) & branch_occur_i |
+	      du_stall_i)
        decode_except_ibus_err_o <= 0;
      else if (fetch_req)
        decode_except_ibus_err_o <= ibus_err_i;

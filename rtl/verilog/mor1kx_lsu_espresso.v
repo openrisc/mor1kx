@@ -5,7 +5,7 @@
  * All combinatorial outputs to pipeline
  * Dbus interface request signal out synchronous
  * 
- * 32-bit specific
+ * 32-bit specific due to sign extension of results
  * 
  * 
  */ 
@@ -20,7 +20,7 @@ module mor1kx_lsu_espresso
    // Inputs
    clk, rst, padv_fetch_i, alu_result_i, rfb_i, opc_insn_i,
    op_lsu_load_i, op_lsu_store_i, exception_taken_i, du_restart_i,
-   dbus_err_i, dbus_ack_i, dbus_dat_i
+   stepping_i, next_fetch_done_i, dbus_err_i, dbus_ack_i, dbus_dat_i
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
@@ -41,6 +41,8 @@ module mor1kx_lsu_espresso
 
    input 			    exception_taken_i;
    input 			    du_restart_i;
+   input 			    stepping_i;
+   input 			    next_fetch_done_i;
    
 
    output [OPTION_OPERAND_WIDTH-1:0] lsu_result_o;
@@ -124,7 +126,7 @@ module mor1kx_lsu_espresso
      if (rst)
        execute_go <= 0;
      else
-       execute_go <= padv_fetch_i | du_restart_i;
+       execute_go <= padv_fetch_i | (stepping_i & next_fetch_done_i);
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)

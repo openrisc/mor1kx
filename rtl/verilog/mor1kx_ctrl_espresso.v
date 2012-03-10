@@ -25,10 +25,11 @@ module mor1kx_ctrl_espresso
    // Outputs
    spr_npc_o, spr_ppc_o, mfspr_dat_o, ctrl_mfspr_we_o,
    pipeline_flush_o, padv_fetch_o, padv_decode_o, padv_execute_o,
-   fetch_take_exception_branch_o, execute_waiting_o, stepping_o,
-   du_dat_o, du_ack_o, du_stall_o, du_restart_pc_o, du_restart_o,
-   spr_bus_addr_o, spr_bus_we_o, spr_bus_stb_o, spr_bus_dat_o,
-   spr_sr_o, ctrl_branch_target_o, ctrl_branch_occur_o, rf_we_o,
+   fetch_take_exception_branch_o, exception_taken_o,
+   execute_waiting_o, stepping_o, du_dat_o, du_ack_o, du_stall_o,
+   du_restart_pc_o, du_restart_o, spr_bus_addr_o, spr_bus_we_o,
+   spr_bus_stb_o, spr_bus_dat_o, spr_sr_o, ctrl_branch_target_o,
+   ctrl_branch_occur_o, rf_we_o,
    // Inputs
    clk, rst, ctrl_alu_result_i, ctrl_rfb_i, ctrl_flag_set_i,
    ctrl_flag_clear_i, ctrl_opc_insn_i, pc_fetch_i, fetch_advancing_i,
@@ -137,8 +138,13 @@ module mor1kx_ctrl_espresso
    output 			     padv_decode_o;
    output 			     padv_execute_o;
 
-   // Skip this instruction
+   // This indicates to the fetch unit only that it should basically interrupt
+   // whatever it's doing and start fetching the exception
    output 			     fetch_take_exception_branch_o;
+   // This indicates to other parts of the CPU that we've handled an excption
+   // so can be used to clear exception indication registers
+   output 			     exception_taken_o;
+   
    output 			     execute_waiting_o;
    output 			     stepping_o;
    
@@ -304,7 +310,8 @@ module mor1kx_ctrl_espresso
       
    assign exception = exception_pending;
    
-   assign fetch_take_exception_branch_o =  take_exception | op_rfe;
+   assign fetch_take_exception_branch_o =  (take_exception | op_rfe) & 
+					   !stepping;
    
    assign execute_stage_exceptions = except_dbus_i | except_align_i;
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
@@ -430,7 +437,10 @@ module mor1kx_ctrl_espresso
        take_exception <= 0;
      else
        take_exception <= (exception_pending | exception_r | doing_rfe_r) & 
-			 fetch_advance &
+			 (fetch_advance |
+			  // Cause exception to always be 'taken' if stepping
+			  (stepping & execute_done)
+			  ) &
 			 // Would like this as only a single pulse
 			 !take_exception;
    
@@ -532,6 +542,8 @@ module mor1kx_ctrl_espresso
        exception_taken <= 0;
      else if (exception_r & take_exception)
        exception_taken <= 1;
+
+   assign exception_taken_o = exception_taken;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -709,6 +721,8 @@ module mor1kx_ctrl_espresso
        spr_npc <= du_restart_pc_o;
      else if (stepping & next_fetch_done_i)
        spr_npc <= execute_delay_slot ? last_branch_target_pc : pc_fetch_i;
+     else if (stepping & /*execute_done & exception_pending*/exception_r)
+       spr_npc <= exception_pc_addr;
      else if (fetch_advance)
        // PC we're now executing
        spr_npc <= fetch_take_exception_branch_o ? exception_pc_addr : 
@@ -1243,7 +1257,7 @@ module mor1kx_ctrl_espresso
 				  stepped_into_rfe ? spr_epcr :
 				  stepped_into_delay_slot ?
 				  last_branch_target_pc : 
-				  stepped_into_exception ? exception_pc_addr : 
+				  //stepped_into_exception ? exception_pc_addr : 
 				  spr_npc;
 
 	 assign du_restart_o = du_restart_from_stall;

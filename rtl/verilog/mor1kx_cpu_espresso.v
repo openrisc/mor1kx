@@ -142,6 +142,7 @@ module mor1kx_cpu_espresso
    wire			decode_valid_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			du_restart_o;		// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
+   wire			exception_taken_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire			execute_except_ibus_err_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_illegal_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_syscall_o;// From mor1kx_decode of mor1kx_decode.v
@@ -373,8 +374,10 @@ module mor1kx_cpu_espresso
     .opc_insn_i			        (opc_insn_o),
     .op_lsu_load_i			(op_lsu_load_o),
     .op_lsu_store_i			(op_lsu_store_o),
-    .exception_taken_i                  (fetch_take_exception_branch_o),
+    .exception_taken_i                  (exception_taken_o),
     .du_restart_i                       (du_restart_o),
+    .stepping_i                         (stepping_o),
+    .next_fetch_done_i                  (next_fetch_done_o),
     ); */
    mor1kx_lsu_espresso
      #(
@@ -401,8 +404,10 @@ module mor1kx_cpu_espresso
       .opc_insn_i			(opc_insn_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
       .op_lsu_store_i			(op_lsu_store_o),	 // Templated
-      .exception_taken_i		(fetch_take_exception_branch_o), // Templated
+      .exception_taken_i		(exception_taken_o),	 // Templated
       .du_restart_i			(du_restart_o),		 // Templated
+      .stepping_i			(stepping_o),		 // Templated
+      .next_fetch_done_i		(next_fetch_done_o),	 // Templated
       .dbus_err_i			(dbus_err_i),
       .dbus_ack_i			(dbus_ack_i),
       .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
@@ -553,6 +558,7 @@ module mor1kx_cpu_espresso
 	.padv_decode_o			(padv_decode_o),
 	.padv_execute_o			(padv_execute_o),
 	.fetch_take_exception_branch_o	(fetch_take_exception_branch_o),
+	.exception_taken_o		(exception_taken_o),
 	.execute_waiting_o		(execute_waiting_o),
 	.stepping_o			(stepping_o),
 	.du_dat_o			(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
