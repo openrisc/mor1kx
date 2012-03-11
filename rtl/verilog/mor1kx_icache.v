@@ -120,7 +120,7 @@ module mor1kx_icache
 		      mem_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
    assign tag_waddr = mem_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
 
-   assign tag_index = mem_adr[OPTION_ICACHE_LIMIT_WIDTH-1:WAY_WIDTH];
+   assign tag_index = pc_fetch_i[OPTION_ICACHE_LIMIT_WIDTH-1:WAY_WIDTH];
 
    generate
       if (OPTION_ICACHE_WAYS > 2) begin
