@@ -13,58 +13,49 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_fetch_fourstage
-  (/*AUTOARG*/
-   // Outputs
-   ibus_adr_o, ibus_req_o, pc_decode_o, decode_insn_o, fetch_valid_o,
-   pc_addr_o, pc_fetch_o, decode_except_ibus_err_o,
-   fetch_branch_taken_o,
-   // Inputs
-   clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, padv_i,
-   branch_occur_i, branch_dest_i, du_restart_pc_i, du_restart_i,
-   pipeline_flush_i
+  #(
+    parameter OPTION_OPERAND_WIDTH = 32,
+    parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
+				 `OR1K_RESET_VECTOR,8'd0}
+    )
+   (
+    input 				  clk,
+    input 				  rst,
+
+    // interface to ibus
+    output [OPTION_OPERAND_WIDTH-1:0] 	  ibus_adr_o,
+    output reg 				  ibus_req_o,
+    input 				  ibus_err_i,
+    input 				  ibus_ack_i,
+    input [`OR1K_INSN_WIDTH-1:0] 	  ibus_dat_i,
+
+    // pipeline control input
+    input 				  padv_i,
+
+    // interface to decode unit
+    output reg [OPTION_OPERAND_WIDTH-1:0] pc_decode_o,
+    output reg [`OR1K_INSN_WIDTH-1:0] 	  decode_insn_o,
+    output reg 				  fetch_valid_o,
+
+    // interface to icache/ibus
+    output [OPTION_OPERAND_WIDTH-1:0] 	  pc_addr_o,
+    output [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch_o,
+
+    // branch/jump indication
+    input 				  branch_occur_i,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  branch_dest_i,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  du_restart_pc_i,
+    input 				  du_restart_i,
+
+    // pipeline flush input from control unit
+    input 				  pipeline_flush_i,
+
+    // instruction ibus error indication out
+    output reg 				  decode_except_ibus_err_o,
+
+    output reg 				  fetch_branch_taken_o
    );
 
-   parameter OPTION_OPERAND_WIDTH = 32;
-
-   parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
-				`OR1K_RESET_VECTOR,8'd0};
-
-
-   input clk, rst;
-
-   // interface to ibus
-   output [OPTION_OPERAND_WIDTH-1:0] ibus_adr_o;
-   output reg			      ibus_req_o;
-   input 			      ibus_err_i;
-   input 			      ibus_ack_i;
-   input [`OR1K_INSN_WIDTH-1:0]       ibus_dat_i;
-
-   // pipeline control input
-   input 			      padv_i;
-
-   // interface to decode unit
-   output reg [OPTION_OPERAND_WIDTH-1:0] pc_decode_o;
-   output reg [`OR1K_INSN_WIDTH-1:0] 	  decode_insn_o;
-   output reg 				  fetch_valid_o;
-
-   // interface to icache/ibus
-   output [OPTION_OPERAND_WIDTH-1:0] 	  pc_addr_o;
-   output [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch_o;
-
-   // branch/jump indication
-   input 				  branch_occur_i;
-   input [OPTION_OPERAND_WIDTH-1:0] 	  branch_dest_i;
-   input [OPTION_OPERAND_WIDTH-1:0] 	  du_restart_pc_i;
-   input 				  du_restart_i;
-
-   // pipeline flush input from control unit
-   input 				  pipeline_flush_i;
-
-
-   // instruction ibus error indication out
-   output reg 				  decode_except_ibus_err_o;
-
-   output reg 				  fetch_branch_taken_o;
 
    // registers
    reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch;
