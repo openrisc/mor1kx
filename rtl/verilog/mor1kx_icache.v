@@ -24,7 +24,6 @@ module mor1kx_icache
     output 			      cpu_err_o,
     output 			      cpu_ack_o,
     output [31:0] 		      cpu_dat_o,
-    input [31:0] 		      cpu_adr_i,
     input 			      cpu_req_i,
 
     // BUS Interface towards MEM
@@ -114,11 +113,11 @@ module mor1kx_icache
    assign cpu_err_o = ibus_err_i;
    assign cpu_ack_o = (cache_req | refill) ? cpu_ack : ibus_ack_i;
    assign cpu_dat_o = (cache_req) ? cpu_dat : ibus_dat_i;
-   assign ibus_adr_o = (cache_req | refill) ? mem_adr : cpu_adr_i;
+   assign ibus_adr_o = (cache_req | refill) ? mem_adr : pc_addr_i;
    assign ibus_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
 
    assign tag_raddr = (read | idle) ?
-		      cpu_adr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH] :
+		      pc_addr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH] :
 		      mem_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
    assign tag_waddr = mem_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
 
@@ -133,7 +132,7 @@ module mor1kx_icache
       end
 
       for (i = 0; i < OPTION_ICACHE_WAYS; i=i+1) begin : ways
-	 assign way_raddr[i] = (read | idle) ? cpu_adr_i[WAY_WIDTH-1:2] :
+	 assign way_raddr[i] = (read | idle) ? pc_addr_i[WAY_WIDTH-1:2] :
 			       mem_adr[WAY_WIDTH-1:2];
 	 assign way_waddr[i] = mem_adr[WAY_WIDTH-1:2];
 	 assign way_din[i] = ibus_dat_i;
@@ -154,7 +153,7 @@ module mor1kx_icache
 	 assign cache_req = ic_enabled;
       end else if (OPTION_ICACHE_LIMIT_WIDTH < OPTION_OPERAND_WIDTH) begin
 	 assign cache_req = ic_enabled &
-			   (cpu_adr_i[OPTION_OPERAND_WIDTH-1:
+			   (pc_addr_i[OPTION_OPERAND_WIDTH-1:
 				      OPTION_ICACHE_LIMIT_WIDTH] == 0);
       end else begin
 	 initial begin
@@ -221,7 +220,7 @@ module mor1kx_icache
     */
    always @(posedge clk)
      if ((cpu_ack_o & cpu_req_i) | cpu_req_edge | idle)
-       cpu_adr_prev <= cpu_adr_i;
+       cpu_adr_prev <= pc_addr_i;
 
    /*
     * Cache FSM
@@ -231,8 +230,8 @@ module mor1kx_icache
 	IDLE: begin
 	   if (cpu_req_i & cache_req & ic_enable) begin
 	      state <= READ;
-	      mem_adr <= cpu_adr_i;
-	      start_adr <= cpu_adr_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
+	      mem_adr <= pc_addr_i;
+	      start_adr <= pc_addr_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
 	   end
 	end
 
@@ -243,8 +242,8 @@ module mor1kx_icache
 	READ: begin
 	   if (cpu_req_i & cache_req & ic_enable) begin
 	      if (hit) begin
-		mem_adr <= cpu_adr_i;
-		start_adr <= cpu_adr_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
+		mem_adr <= pc_addr_i;
+		start_adr <= pc_addr_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
 	      end else begin
 		 start_adr <= mem_adr[OPTION_ICACHE_BLOCK_WIDTH-1:0];
 		 refill_match <= 1'b1;
@@ -259,7 +258,7 @@ module mor1kx_icache
 	   if (ibus_ack_i) begin
 	      mem_adr <= next_mem_adr;
 
-	      if (cpu_adr_i == next_mem_adr)
+	      if (pc_addr_i == next_mem_adr)
 		refill_match <= 1'b1;
 	      else
 		refill_match <= 1'b0;
@@ -272,7 +271,7 @@ module mor1kx_icache
 		 if (!cpu_req_i) begin
 		    state <= IDLE;
 		 end else if (cpu_ack_o | cpu_req_edge) begin
-		    mem_adr <= cpu_adr_i;
+		    mem_adr <= pc_addr_i;
 		    state <= RESTART;
 		 end else begin
 		    mem_adr <= cpu_adr_prev;

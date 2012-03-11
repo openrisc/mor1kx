@@ -23,7 +23,6 @@ module mor1kx_fetch_fourstage
     input 				  rst,
 
     // interface to ibus
-    output [OPTION_OPERAND_WIDTH-1:0] 	  ibus_adr_o,
     output reg 				  ibus_req_o,
     input 				  ibus_err_i,
     input 				  ibus_ack_i,
@@ -85,7 +84,6 @@ module mor1kx_fetch_fourstage
    wire 			  branch_waitbus = (state == BRANCH_WAITBUS);
 
    assign bus_access_done =  ibus_ack_i | ibus_err_i;
-   assign ibus_adr_o = pc_addr;
    assign pc_addr_next = pc_addr + 4;
    assign branch_occur_edge = branch_occur_i & !branch_occur_r;
 

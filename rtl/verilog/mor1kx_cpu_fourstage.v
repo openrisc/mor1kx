@@ -170,7 +170,6 @@ module mor1kx_cpu_fourstage
    wire			flag_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			flag_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			ic_ack_o;		// From mor1kx_icache of mor1kx_icache.v
-   wire [OPTION_OPERAND_WIDTH-1:0] ic_adr_i;	// From mor1kx_fetch_fourstage of mor1kx_fetch_fourstage.v
    wire [OPTION_OPERAND_WIDTH-1:0] ic_dat_o;	// From mor1kx_icache of mor1kx_icache.v
    wire			ic_err_o;		// From mor1kx_icache of mor1kx_icache.v
    wire			ic_req_i;		// From mor1kx_fetch_fourstage of mor1kx_fetch_fourstage.v
@@ -209,7 +208,6 @@ module mor1kx_cpu_fourstage
    // End of automatics
 
    /* mor1kx_fetch_fourstage AUTO_TEMPLATE (
-    .ibus_adr_o				(ic_adr_i[OPTION_OPERAND_WIDTH-1:0]),
     .ibus_req_o				(ic_req_i),
     .padv_i				(padv_fetch_o),
     .branch_occur_i			(ctrl_branch_occur_o),
@@ -231,7 +229,6 @@ module mor1kx_cpu_fourstage
      mor1kx_fetch_fourstage
      (/*AUTOINST*/
       // Outputs
-      .ibus_adr_o			(ic_adr_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
       .ibus_req_o			(ic_req_i),		 // Templated
       .pc_decode_o			(pc_fetch_to_decode),	 // Templated
       .decode_insn_o			(insn_fetch_to_decode),	 // Templated
@@ -295,7 +292,6 @@ module mor1kx_cpu_fourstage
       .ic_enable			(1'b1/*spr_sr_o[`OR1K_SPR_SR_ICE]*/), // Templated
       .pc_addr_i			(pc_addr_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
       .pc_fetch_i			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .cpu_adr_i			(ic_adr_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
       .cpu_req_i			(ic_req_i),		 // Templated
       .ibus_err_i			(ibus_err_i),
       .ibus_ack_i			(ibus_ack_i),
