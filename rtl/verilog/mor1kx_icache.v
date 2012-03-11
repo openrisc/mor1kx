@@ -75,7 +75,6 @@ module mor1kx_icache
    reg 				      cpu_req_r;
    reg 				      cpu_ack;
    wire [31:0] 			      cpu_dat;
-   reg [31:0] 			      cpu_adr_prev;
 
    reg [31:0] 			      mem_adr;
    reg 				      mem_req;
@@ -216,13 +215,6 @@ module mor1kx_icache
        cpu_req_r <= cpu_req_i;
 
    /*
-    * Save the previous reqed address when acking
-    */
-   always @(posedge clk)
-     if ((cpu_ack_o & cpu_req_i) | cpu_req_edge | idle)
-       cpu_adr_prev <= pc_addr_i;
-
-   /*
     * Cache FSM
     */
    always @(posedge clk `OR_ASYNC_RST) begin
@@ -274,7 +266,7 @@ module mor1kx_icache
 		    mem_adr <= pc_addr_i;
 		    state <= RESTART;
 		 end else begin
-		    mem_adr <= cpu_adr_prev;
+		    mem_adr <= pc_fetch_i;
 		    state <= RESTART;
 		 end
 	      end
@@ -285,7 +277,7 @@ module mor1kx_icache
 	end
 
 	INVALIDATE: begin
-	   mem_adr <= cpu_adr_prev;
+	   mem_adr <= pc_fetch_i;
 	   state <= RESTART;
 	end
 
@@ -337,7 +329,7 @@ module mor1kx_icache
 	      end else begin
 		   way_we[0] = 1'b1;
 	      end
-	      if (refill_match & ic_enable & (cpu_adr_prev == mem_adr))
+	      if (refill_match & ic_enable & (pc_fetch_i == mem_adr))
 		 cpu_ack = 1'b1;
 
 	      if (refill_done) begin

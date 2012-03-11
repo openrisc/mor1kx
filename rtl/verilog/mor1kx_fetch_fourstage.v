@@ -169,7 +169,7 @@ module mor1kx_fetch_fourstage
 	     if (bus_access_done) begin
 		fetch_valid_o <= branch_fetch_valid;
 		pc_addr <= branch_dest_i;
-		pc_fetch <= pc_addr;
+		pc_fetch <= branch_dest_i;
 		state <= BRANCH;
 	     end
 	  end
