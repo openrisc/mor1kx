@@ -887,15 +887,15 @@ module mor1kx_ctrl_fourstage
 	 end // else: !if(OPTION_PIC_TRIGGER=="LEVEL")
 
 	 // PIC (un)mask register
+	 // Bottom two IRQs permanently unmasked
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
-	     spr_picmr <= 0;
+	     spr_picmr <= {30'd0, 2'b11};
 	   else if (spr_we & spr_addr==`OR1K_SPR_PICMR_ADDR)
-	     spr_picmr <= spr_write_dat;
+	     spr_picmr <= {spr_write_dat[31:2], 2'b11};
 	 
 	 
-	 // Bottom two IRQs permanently unmasked
-	 assign irq_unmasked = {spr_picmr[31:2],2'b11} & irq_i;
+	 assign irq_unmasked = spr_picmr & irq_i;
 	 
 	 assign except_pic = (|spr_picsr) & spr_sr[`OR1K_SPR_SR_IEE] & 
 			     !op_mtspr & !doing_rfe &
