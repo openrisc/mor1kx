@@ -261,6 +261,7 @@ module mor1kx_cpu_fourstage
     .ic_enable			(spr_sr_o[`OR1K_SPR_SR_ICE]),
     .pc_addr_i			(pc_addr_o[OPTION_OPERAND_WIDTH-1:0]),
     .pc_fetch_i			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
+    .padv_fetch_i		(padv_fetch_o),
     .cpu_adr_i			(ic_adr_i[OPTION_OPERAND_WIDTH-1:0]),
     .cpu_req_i			(ic_req_i),
     .spr_bus_addr_i		(spr_bus_addr_o[15:0]),
@@ -292,6 +293,7 @@ module mor1kx_cpu_fourstage
       .ic_enable			(1'b1/*spr_sr_o[`OR1K_SPR_SR_ICE]*/), // Templated
       .pc_addr_i			(pc_addr_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
       .pc_fetch_i			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .padv_fetch_i			(padv_fetch_o),
       .cpu_req_i			(ic_req_i),		 // Templated
       .ibus_err_i			(ibus_err_i),
       .ibus_ack_i			(ibus_ack_i),

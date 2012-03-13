@@ -19,6 +19,7 @@ module mor1kx_icache
 
     input [OPTION_OPERAND_WIDTH-1:0]  pc_addr_i,
     input [OPTION_OPERAND_WIDTH-1:0]  pc_fetch_i,
+    input 			      padv_fetch_i,
 
     // BUS Interface towards CPU
     output 			      cpu_err_o,
@@ -87,10 +88,11 @@ module mor1kx_icache
    reg				      invalidate_r;
 
    wire [OPTION_ICACHE_SET_WIDTH-1:0] tag_raddr;
-   wire [OPTION_ICACHE_SET_WIDTH-1:0] tag_waddr;
+   reg [OPTION_ICACHE_SET_WIDTH-1:0] tag_waddr;
    reg [TAG_WIDTH-1:0]		      tag_din;
    reg 				      tag_we;
    wire [TAG_INDEX_WIDTH-1:0] 	      tag_index;
+   wire [TAG_INDEX_WIDTH-1:0] 	      tag_windex;
    wire [TAG_WIDTH-1:0] 	      tag_dout;
 
    wire [WAY_WIDTH-3:0] 	      way_raddr[OPTION_ICACHE_WAYS-1:0];
@@ -115,12 +117,20 @@ module mor1kx_icache
    assign ibus_adr_o = (cache_req | refill) ? mem_adr : pc_addr_i;
    assign ibus_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
 
-   assign tag_raddr = (read | idle) ?
+   assign tag_raddr = (read | idle) & padv_fetch_i ?
 		      pc_addr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH] :
-		      mem_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
-   assign tag_waddr = mem_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+		      refill ?
+		      mem_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH] :
+		      pc_fetch_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+
+   always @(posedge clk)
+     if (invalidate_edge)
+       tag_waddr <= spr_bus_dat_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+     else
+       tag_waddr <= tag_raddr;
 
    assign tag_index = pc_fetch_i[OPTION_ICACHE_LIMIT_WIDTH-1:WAY_WIDTH];
+   assign tag_windex = mem_adr[OPTION_ICACHE_LIMIT_WIDTH-1:WAY_WIDTH];
 
    generate
       if (OPTION_ICACHE_WAYS > 2) begin
@@ -131,8 +141,9 @@ module mor1kx_icache
       end
 
       for (i = 0; i < OPTION_ICACHE_WAYS; i=i+1) begin : ways
-	 assign way_raddr[i] = (read | idle) ? pc_addr_i[WAY_WIDTH-1:2] :
-			       mem_adr[WAY_WIDTH-1:2];
+	 assign way_raddr[i] = (read | idle) & padv_fetch_i ?
+			       pc_addr_i[WAY_WIDTH-1:2] :
+			       pc_fetch_i[WAY_WIDTH-1:2];
 	 assign way_waddr[i] = mem_adr[WAY_WIDTH-1:2];
 	 assign way_din[i] = ibus_dat_i;
 	 /*
@@ -220,7 +231,7 @@ module mor1kx_icache
    always @(posedge clk `OR_ASYNC_RST) begin
       case (state)
 	IDLE: begin
-	   if (cpu_req_i & cache_req & ic_enable) begin
+	   if (padv_fetch_i & cache_req & ic_enable) begin
 	      state <= READ;
 	      mem_adr <= pc_addr_i;
 	      start_adr <= pc_addr_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
@@ -228,16 +239,17 @@ module mor1kx_icache
 	end
 
 	RESTART: begin
+	   mem_adr <= pc_fetch_i;
 	   state <= READ;
 	end
 
 	READ: begin
-	   if (cpu_req_i & cache_req & ic_enable) begin
+	   if (cache_req & ic_enable) begin
 	      if (hit) begin
-		mem_adr <= pc_addr_i;
-		start_adr <= pc_addr_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
-	      end else begin
-		 start_adr <= mem_adr[OPTION_ICACHE_BLOCK_WIDTH-1:0];
+		 state <= READ;
+	      end else if (padv_fetch_i) begin
+		 start_adr <= pc_fetch_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
+		 mem_adr <= pc_fetch_i;
 		 refill_match <= 1'b1;
 		 state <= REFILL;
 	      end
@@ -260,9 +272,7 @@ module mor1kx_icache
 	       * otherwise load the current address.
 	       */
 	      if (refill_done) begin
-		 if (!cpu_req_i) begin
-		    state <= IDLE;
-		 end else if (cpu_ack_o | cpu_req_edge) begin
+		 if (cpu_ack_o & padv_fetch_i) begin
 		    mem_adr <= pc_addr_i;
 		    state <= RESTART;
 		 end else begin
@@ -272,8 +282,8 @@ module mor1kx_icache
 	      end
 	   end
 	   /* prevent acking when no request */
-	   if (!cpu_req_i)
-	      refill_match <= 1'b0;
+//	   if (!padv_fetch_i)
+//	      refill_match <= 1'b0;
 	end
 
 	INVALIDATE: begin
@@ -285,10 +295,8 @@ module mor1kx_icache
 	  state <= IDLE;
       endcase
 
-      if (invalidate_edge) begin
-	 mem_adr <= spr_bus_dat_i;
+      if (invalidate_edge)
 	 state <= INVALIDATE;
-      end
 
       if (rst | ibus_err_i)
 	state <= IDLE;
@@ -337,16 +345,16 @@ module mor1kx_icache
 		    if (lru) begin // way 1
 		       tag_din[TAG_WAY_VALID*2] = 1'b1;
 		       tag_din[TAG_LRU] = 1'b0;
-		       tag_din[(2*TAG_WAY_WIDTH)-2:TAG_WAY_WIDTH] = tag_index;
+		       tag_din[(2*TAG_WAY_WIDTH)-2:TAG_WAY_WIDTH] = tag_windex;
 		    end else begin // way0
 		       tag_din[TAG_WAY_VALID] = 1'b1;
 		       tag_din[TAG_LRU] = 1'b1;
-		       tag_din[TAG_WAY_WIDTH-2:0] = tag_index;
+		       tag_din[TAG_WAY_WIDTH-2:0] = tag_windex;
 		    end
 		 end else begin
 		       tag_din[TAG_WAY_VALID] = 1'b1;
 		       tag_din[TAG_LRU] = 1'b1;
-		       tag_din[TAG_WAY_WIDTH-2:0] = tag_index;
+		       tag_din[TAG_WAY_WIDTH-2:0] = tag_windex;
 		 end
 
 		 tag_we = 1'b1;

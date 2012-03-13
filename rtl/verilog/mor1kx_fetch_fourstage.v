@@ -1,12 +1,8 @@
 /*
- * mor1kx fetch unit
+ * mor1kx fetch/address stage unit
  *
- * basically an interface to the ibus subsystem that can react to exception
- * and branch signals.
- *
- * maybe take notice of jump instructions - allow a bit of spec. fetch
- *
- * indicate ibus errors
+ * basically an interface to the ibus/icache subsystem that can react to
+ * exception and branch signals.
  *
  */
 
@@ -55,37 +51,37 @@ module mor1kx_fetch_fourstage
     output reg 				  fetch_branch_taken_o
    );
 
-
    // registers
    reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch;
    reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_addr;
    reg 					  branch_fetch_valid;
    reg 					  branch_occur_r;
+   reg 					  padv_addr;
 
-   wire [OPTION_OPERAND_WIDTH-1:0] 	  pc_addr_next;
    wire 				  bus_access_done;
    wire 				  branch_occur_edge;
-
-   // States
-   localparam INIT		= 4'd0;
-   localparam DU_RESTART	= 4'd1;
-   localparam LOAD_REQ		= 4'd2;
-   localparam ADVANCE		= 4'd3;
-   localparam STALL		= 4'd4;
-   localparam BRANCH_WAITBUS	= 4'd5;
-   localparam BRANCH		= 4'd6;
-   localparam BRANCH_DONE	= 4'd7;
-
-   reg [3:0] 			  state;
-   reg [3:0] 			  pre_stall_state;
-   wire 			  advance = (state == ADVANCE);
-   wire 			  stall = (state == STALL);
-   wire 			  load_req = (state == LOAD_REQ);
-   wire 			  branch_waitbus = (state == BRANCH_WAITBUS);
+   wire					  delay_slot;
+   wire					  kill_fetch;
+   wire					  stall_fetch_valid;
+   wire					  stall_adv;
 
    assign bus_access_done =  ibus_ack_i | ibus_err_i;
-   assign pc_addr_next = pc_addr + 4;
    assign branch_occur_edge = branch_occur_i & !branch_occur_r;
+
+   /*
+    * Detect when we are doing a delay slot,
+    * in fetch stage we do them on all branches,
+    * even on exceptions and rfe (will be discarded later)
+    */
+   assign delay_slot = branch_occur_i & fetch_valid_o;
+
+   assign kill_fetch = branch_occur_edge & delay_slot;
+
+   /* used to keep fetch_valid_o high during stall */
+   assign stall_fetch_valid = !padv_i & fetch_valid_o;
+
+   /* signal to determine if we should advance during a stall */
+   assign stall_adv = !padv_i & bus_access_done & !fetch_valid_o;
 
    assign pc_addr_o = pc_addr;
    assign pc_fetch_o = pc_fetch;
@@ -96,164 +92,60 @@ module mor1kx_fetch_fourstage
      else
        branch_occur_r <= branch_occur_i;
 
+   // calculate address stage pc
+   always @(*)
+      if (rst)
+	pc_addr = OPTION_RESET_PC;
+      else if (du_restart_i)
+	pc_addr = du_restart_pc_i;
+      else if (branch_occur_i & !fetch_branch_taken_o)
+	pc_addr = branch_dest_i;
+      else if (padv_addr)
+	pc_addr = pc_fetch + 4;
+      else
+	pc_addr = pc_fetch;
+
+   // address stage advance signal generation
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	pc_addr <= OPTION_RESET_PC;
-	state <= INIT;
-	pre_stall_state <= ADVANCE;
-	ibus_req_o <= 1'b0;
-     end else begin
-	ibus_req_o <= 1'b1;
+      if (rst)
+	padv_addr <= 1'b1;
+      else
+	padv_addr <= !stall_adv & !ibus_err_i & !du_restart_i;
+
+   // Register fetch pc from address stage
+   always @(posedge clk `OR_ASYNC_RST)
+      if (rst)
+	pc_fetch <= OPTION_RESET_PC;
+      else if (bus_access_done & padv_i | stall_adv | kill_fetch | du_restart_i)
+	pc_fetch <= pc_addr;
+
+   // fetch_branch_taken_o generation
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       fetch_branch_taken_o <= 1'b0;
+     else if (fetch_branch_taken_o)
+       fetch_branch_taken_o <= 1'b0;
+     else if ((branch_occur_i | delay_slot) & bus_access_done & padv_i)
+       fetch_branch_taken_o <= 1'b1;
+     else
+       fetch_branch_taken_o <= 1'b0;
+
+   // fetch_valid_o generation
+   always @(posedge clk `OR_ASYNC_RST)
+      if (rst)
 	fetch_valid_o <= 1'b0;
-	fetch_branch_taken_o <= 1'b0;
-	case (state)
-	  INIT: begin
-	     state <= LOAD_REQ;
-	  end
-
-	  DU_RESTART: begin
-	     /* wait out all bus accesses before proceeding */
-	     if (ibus_req_o | ibus_ack_i) begin
-		ibus_req_o <= 1'b0;
-	     end else begin
-		fetch_branch_taken_o <= branch_occur_i;
-		state <= LOAD_REQ;
-	     end
-	  end
-
-	  LOAD_REQ: begin
-	     if ((pre_stall_state == ADVANCE) ||
-		 (pre_stall_state == BRANCH_DONE))
-	       pc_addr <= pc_addr_next;
-	     else
-	       pc_addr <= branch_dest_i;
-
-	     pc_fetch <= pc_addr;
-	     state <= pre_stall_state;
-	  end
-
-	  ADVANCE: begin
-	     if (branch_occur_i) begin
-		if (bus_access_done) begin
-		   pc_addr <= branch_dest_i;
-		   pc_fetch <= pc_addr;
-		   fetch_valid_o <= ~fetch_valid_o;
-		   state <= BRANCH;
-		end else begin
-		   /*
-		    * keep track if the ongoing access
-		    * should be discarded or if it is valid
-		    */
-		   branch_fetch_valid <= ~fetch_valid_o;
-		   state <= BRANCH_WAITBUS;
-		end
-	     end else if (bus_access_done) begin
-		fetch_valid_o <= 1'b1;
-		pc_addr <= pc_addr_next;
-		pc_fetch <= pc_addr;
-	     end
-	  end
-
-	  STALL: begin
-	     if (!padv_i)
-	       fetch_valid_o <= fetch_valid_o;
-	     if (padv_i & !ibus_req_o) begin
-		pc_addr <= pc_fetch;
-		state <= LOAD_REQ;
-	     end else if (ibus_req_o & bus_access_done | !ibus_req_o) begin
-		ibus_req_o <= 1'b0;
-	     end
-	  end
-
-	  BRANCH_WAITBUS: begin
-	     if (bus_access_done) begin
-		fetch_valid_o <= branch_fetch_valid;
-		pc_addr <= branch_dest_i;
-		pc_fetch <= branch_dest_i;
-		state <= BRANCH;
-	     end
-	  end
-
-	  BRANCH: begin
-	     /*
-	      * check for a new incoming branch while branching,
-	      * for example an exception in delay slot
-	      */
-	     if (branch_occur_edge) begin
-		if (bus_access_done) begin
-		   pc_addr <= branch_dest_i;
-		   state <= BRANCH;
-		end else begin
-		   state <= BRANCH_WAITBUS;
-		end
-	     end else if (bus_access_done) begin
-		pc_addr <= pc_addr_next;
-		pc_fetch <= pc_addr;
-		fetch_branch_taken_o <= 1'b1;
-		state <= BRANCH_DONE;
-	     end
-	  end
-
-	  BRANCH_DONE: begin
-	     /*
-	      * check for a new incoming branch while branching,
-	      * for example an exception in delay slot
-	      */
-	     if (branch_occur_edge) begin
-		branch_fetch_valid <= 1'b0;
-		if (bus_access_done) begin
-		   pc_addr <= branch_dest_i;
-		   state <= BRANCH;
-		end else begin
-		   state <= BRANCH_WAITBUS;
-		end
-	     end else if (bus_access_done) begin
-		pc_addr <= pc_addr_next;
-		pc_fetch <= pc_addr;
-		fetch_valid_o <= 1'b1;
-		state <= ADVANCE;
-	     end
-	  end
-	endcase
-
-	/*
-	 * deassertion of padv_i overrides all other
-	 * state transitions. The current state is saved
-	 * and pc_addr and pc_fetch keep their values
-	 */
-	if (!padv_i & !stall & !load_req) begin
-	   if (ibus_req_o & bus_access_done)
-	     ibus_req_o <= 1'b0;
-	   pc_addr <= pc_addr;
-	   pc_fetch <= pc_fetch;
-	   fetch_valid_o <= fetch_valid_o;
-	   fetch_branch_taken_o <= 1'b0;
-	   pre_stall_state <= state;
-	   state <= STALL;
-	end
-
-	/*
-	 * a debug unit restart also overrides all other states
-	 * and resets the FSM
-	 */
-	if (du_restart_i) begin
-	   pc_addr <= du_restart_pc_i;
-	   ibus_req_o <= 1'b0;
-	   fetch_valid_o <= 1'b0;
-	   fetch_branch_taken_o <= 1'b0;
-	   pre_stall_state <= ADVANCE;
-	   state <= DU_RESTART;
-	end
-
-	if (pipeline_flush_i)
-	  fetch_valid_o <= 1'b0;
-     end
+      else if (kill_fetch | pipeline_flush_i | padv_i & !padv_addr)
+	fetch_valid_o <= 1'b0;
+      else if (bus_access_done | stall_fetch_valid)
+	fetch_valid_o <= 1'b1;
+      else
+	fetch_valid_o <= 1'b0;
 
    // Register instruction coming in
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        decode_insn_o <= 0;
-     else if (ibus_ack_i & padv_i & !stall)
+     else if (ibus_ack_i & padv_i | stall_adv)
        decode_insn_o <= ibus_dat_i;
      else if (ibus_err_i)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
@@ -262,7 +154,7 @@ module mor1kx_fetch_fourstage
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        pc_decode_o <= OPTION_RESET_PC;
-     else if (bus_access_done & padv_i & !stall)
+     else if (bus_access_done & padv_i | stall_adv)
        pc_decode_o <= pc_fetch;
 
    always @(posedge clk `OR_ASYNC_RST)
