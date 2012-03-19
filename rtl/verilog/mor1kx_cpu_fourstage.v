@@ -487,6 +487,7 @@ module mor1kx_cpu_fourstage
       input [OPTION_OPERAND_WIDTH-1:0] gpr_value;
       begin
 	 mor1kx_rf_fourstage.rfa.ram[gpr_num] = gpr_value;
+	 set_gpr = 1;
       end
    endfunction
 
