@@ -374,6 +374,7 @@ module mor1kx_cpu_fourstage
     .opc_insn_i			        (opc_insn_o),
     .op_lsu_load_i			(op_lsu_load_o),
     .op_lsu_store_i			(op_lsu_store_o),
+    .pipeline_flush_i			(pipeline_flush_o),
     ); */
    mor1kx_lsu_fourstage
      #(
@@ -403,7 +404,8 @@ module mor1kx_cpu_fourstage
       .op_lsu_store_i			(op_lsu_store_o),	 // Templated
       .dbus_err_i			(dbus_err_i),
       .dbus_ack_i			(dbus_ack_i),
-      .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
+      .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
+      .pipeline_flush_i			(pipeline_flush_o));	 // Templated
 
    
    /* mor1kx_wb_mux_fourstage AUTO_TEMPLATE (
