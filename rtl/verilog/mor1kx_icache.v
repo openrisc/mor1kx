@@ -87,8 +87,8 @@ module mor1kx_icache
    wire				      invalidate_edge;
    reg				      invalidate_r;
 
-   wire [OPTION_ICACHE_SET_WIDTH-1:0] tag_raddr;
-   reg [OPTION_ICACHE_SET_WIDTH-1:0] tag_waddr;
+   reg [OPTION_ICACHE_SET_WIDTH-1:0]  tag_raddr;
+   reg [OPTION_ICACHE_SET_WIDTH-1:0]  tag_waddr;
    reg [TAG_WIDTH-1:0]		      tag_din;
    reg 				      tag_we;
    wire [TAG_INDEX_WIDTH-1:0] 	      tag_index;
@@ -117,12 +117,6 @@ module mor1kx_icache
    assign ibus_adr_o = (cache_req | refill) ? mem_adr : pc_addr_i;
    assign ibus_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
 
-   assign tag_raddr = (read | idle) & padv_fetch_i ?
-		      pc_addr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH] :
-		      refill ?
-		      mem_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH] :
-		      pc_fetch_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
-
    always @(posedge clk)
      if (invalidate_edge)
        tag_waddr <= spr_bus_dat_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
@@ -141,7 +135,8 @@ module mor1kx_icache
       end
 
       for (i = 0; i < OPTION_ICACHE_WAYS; i=i+1) begin : ways
-	 assign way_raddr[i] = (read | idle) & padv_fetch_i ?
+	 assign way_raddr[i] = padv_fetch_i & (read | idle |
+			       refill & cpu_ack_o & ibus_ack_i & refill_done) ?
 			       pc_addr_i[WAY_WIDTH-1:2] :
 			       pc_fetch_i[WAY_WIDTH-1:2];
 	 assign way_waddr[i] = mem_adr[WAY_WIDTH-1:2];
@@ -247,6 +242,7 @@ module mor1kx_icache
 	   if (cache_req & ic_enable) begin
 	      if (hit) begin
 		 state <= READ;
+		 mem_adr <= pc_addr_i;
 	      end else if (padv_fetch_i) begin
 		 start_adr <= pc_fetch_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
 		 mem_adr <= pc_fetch_i;
@@ -267,19 +263,12 @@ module mor1kx_icache
 	      else
 		refill_match <= 1'b0;
 	      /*
-	       * done refilling, reload tag and cache memory with the
-	       * previous address in case this access was not a match,
-	       * otherwise load the current address.
+	       * done refilling, go back to READ
+	       * the correct address will be muxed onto
+	       * tag/cache memories
 	       */
-	      if (refill_done) begin
-		 if (cpu_ack_o & padv_fetch_i) begin
-		    mem_adr <= pc_addr_i;
-		    state <= RESTART;
-		 end else begin
-		    mem_adr <= pc_fetch_i;
-		    state <= RESTART;
-		 end
-	      end
+	      if (refill_done)
+		state <= READ;
 	   end
 	   /* prevent acking when no request */
 //	   if (!padv_fetch_i)
@@ -308,6 +297,10 @@ module mor1kx_icache
       tag_we = 1'b0;
       way_we = {(OPTION_ICACHE_WAYS){1'b0}};
       tag_din = tag_dout;
+      if (padv_fetch_i)
+	tag_raddr = pc_addr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+      else
+	tag_raddr = pc_fetch_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
 
       case (state)
 	READ: begin
@@ -326,8 +319,13 @@ module mor1kx_icache
 	   end
 	end
 
+	RESTART: begin
+	   tag_raddr = pc_fetch_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+	end
+
 	REFILL: begin
 	   mem_req = 1'b1;
+	   tag_raddr = mem_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
 	   if (ibus_ack_i) begin
 	      if (OPTION_ICACHE_WAYS == 2) begin
 		 if (lru)
@@ -341,6 +339,11 @@ module mor1kx_icache
 		 cpu_ack = 1'b1;
 
 	      if (refill_done) begin
+		 if (ibus_ack_i & cpu_ack_o & padv_fetch_i)
+		     tag_raddr = pc_addr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+		 else if (ibus_ack_i)
+		     tag_raddr = pc_fetch_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+
 		 if (OPTION_ICACHE_WAYS == 2) begin
 		    if (lru) begin // way 1
 		       tag_din[TAG_WAY_VALID*2] = 1'b1;
