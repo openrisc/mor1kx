@@ -21,56 +21,60 @@ module mor1kx_cpu_espresso
 
    input clk, rst;
 
-   parameter OPTION_OPERAND_WIDTH = 32;
+   parameter OPTION_OPERAND_WIDTH	= 32;
    
-   parameter FEATURE_DATACACHE = "NONE";
-   parameter OPTION_DCACHE_BLOCK_WIDTH = 5;
-   parameter OPTION_DCACHE_SET_WIDTH = 9;
-   parameter OPTION_DCACHE_WAYS = 2;
-   parameter FEATURE_DMMU = "NONE";
-   parameter FEATURE_INSTRUCTIONCACHE = "NONE";
-   parameter OPTION_ICACHE_BLOCK_WIDTH = 5;
-   parameter OPTION_ICACHE_SET_WIDTH = 9;
-   parameter OPTION_ICACHE_WAYS = 2;
-   parameter FEATURE_IMMU = "NONE";
-   parameter FEATURE_PIC = "ENABLED";
-   parameter FEATURE_TIMER = "ENABLED";
-   parameter FEATURE_DEBUGUNIT = "NONE";
-   parameter FEATURE_PERFCOUNTERS = "NONE";
-   parameter FEATURE_MAC = "NONE";
+   parameter FEATURE_DATACACHE		= "NONE";
+   parameter OPTION_DCACHE_BLOCK_WIDTH	= 5;
+   parameter OPTION_DCACHE_SET_WIDTH	= 9;
+   parameter OPTION_DCACHE_WAYS		= 2;
+   parameter FEATURE_DMMU		= "NONE";
+   parameter FEATURE_INSTRUCTIONCACHE	= "NONE";
+   parameter OPTION_ICACHE_BLOCK_WIDTH	= 5;
+   parameter OPTION_ICACHE_SET_WIDTH	= 9;
+   parameter OPTION_ICACHE_WAYS		= 2;
+   parameter FEATURE_IMMU		= "NONE";
+   parameter FEATURE_PIC		= "ENABLED";
+   parameter FEATURE_TIMER		= "ENABLED";
+   parameter FEATURE_DEBUGUNIT		= "NONE";
+   parameter FEATURE_PERFCOUNTERS	= "NONE";
+   parameter FEATURE_MAC		= "NONE";
 
-   parameter FEATURE_SYSCALL = "ENABLED";
-   parameter FEATURE_TRAP = "ENABLED";
-   parameter FEATURE_RANGE = "ENABLED";
+   parameter FEATURE_SYSCALL		= "ENABLED";
+   parameter FEATURE_TRAP		= "ENABLED";
+   parameter FEATURE_RANGE		= "ENABLED";
 
-   parameter OPTION_PIC_TRIGGER = "EDGE";
+   parameter OPTION_PIC_TRIGGER		= "EDGE";
 
-   parameter OPTION_RF_ADDR_WIDTH = 5;
-   parameter OPTION_RF_WORDS = 32;
-
-   parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
-				`OR1K_RESET_VECTOR,8'd0};
-
-   parameter FEATURE_MULTIPLIER = "THREESTAGE";
-   parameter FEATURE_DIVIDER = "NONE";
-
-   parameter FEATURE_ADDC = "NONE";
-   parameter FEATURE_SRA = "ENABLED";
-   parameter FEATURE_ROR = "NONE";
-   parameter FEATURE_EXT = "NONE";
-   parameter FEATURE_CMOV = "NONE";
-   parameter FEATURE_FFL1 = "NONE";
+   parameter FEATURE_DSX		= "NONE";
+   parameter FEATURE_FASTCONTEXTS	= "NONE";
+   parameter FEATURE_OVERFLOW		= "NONE";
    
-   parameter FEATURE_CUST1 = "NONE";
-   parameter FEATURE_CUST2 = "NONE";
-   parameter FEATURE_CUST3 = "NONE";
-   parameter FEATURE_CUST4 = "NONE";
-   parameter FEATURE_CUST5 = "NONE";
-   parameter FEATURE_CUST6 = "NONE";
-   parameter FEATURE_CUST7 = "NONE";
-   parameter FEATURE_CUST8 = "NONE";
+   parameter OPTION_RF_ADDR_WIDTH	= 5;
+   parameter OPTION_RF_WORDS		= 32;
+
+   parameter OPTION_RESET_PC		= {{(OPTION_OPERAND_WIDTH-13){1'b0}},
+					   `OR1K_RESET_VECTOR,8'd0};
+
+   parameter FEATURE_MULTIPLIER		= "THREESTAGE";
+   parameter FEATURE_DIVIDER		= "NONE";
+
+   parameter FEATURE_ADDC		= "NONE";
+   parameter FEATURE_SRA		= "ENABLED";
+   parameter FEATURE_ROR		= "NONE";
+   parameter FEATURE_EXT		= "NONE";
+   parameter FEATURE_CMOV		= "NONE";
+   parameter FEATURE_FFL1		= "NONE";
    
-   parameter OPTION_SHIFTER = "ENABLED";
+   parameter FEATURE_CUST1		= "NONE";
+   parameter FEATURE_CUST2		= "NONE";
+   parameter FEATURE_CUST3		= "NONE";
+   parameter FEATURE_CUST4		= "NONE";
+   parameter FEATURE_CUST5		= "NONE";
+   parameter FEATURE_CUST6		= "NONE";
+   parameter FEATURE_CUST7		= "NONE";
+   parameter FEATURE_CUST8		= "NONE";
+   
+   parameter OPTION_SHIFTER		= "ENABLED";
    
    // Instruction bus
    input ibus_err_i;
@@ -529,6 +533,9 @@ module mor1kx_cpu_espresso
        .FEATURE_PIC(FEATURE_PIC),
        .FEATURE_TIMER(FEATURE_TIMER),
        .OPTION_PIC_TRIGGER(OPTION_PIC_TRIGGER),
+       .FEATURE_DSX(FEATURE_DSX),
+       .FEATURE_FASTCONTEXTS(FEATURE_FASTCONTEXTS),
+       .FEATURE_OVERFLOW(FEATURE_OVERFLOW),
        .FEATURE_DATACACHE(FEATURE_DATACACHE),
        .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
        .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
