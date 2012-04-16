@@ -45,40 +45,40 @@ module mor1kx_ctrl_espresso
    spr_bus_ack_fpu_i, rf_wb_i
    );
 
-   parameter OPTION_OPERAND_WIDTH = 32;
-   parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
+   parameter OPTION_OPERAND_WIDTH	= 32;
+   parameter OPTION_RESET_PC		= {{(OPTION_OPERAND_WIDTH-13){1'b0}},
 				`OR1K_RESET_VECTOR,8'd0};
 
-   parameter FEATURE_SYSCALL = "ENABLED";
-   parameter FEATURE_TRAP = "ENABLED";
-   parameter FEATURE_RANGE = "ENABLED";
+   parameter FEATURE_SYSCALL		= "ENABLED";
+   parameter FEATURE_TRAP		= "ENABLED";
+   parameter FEATURE_RANGE		= "ENABLED";
 
-   parameter FEATURE_DATACACHE = "NONE";
-   parameter OPTION_DCACHE_BLOCK_WIDTH = 5;
-   parameter OPTION_DCACHE_SET_WIDTH = 9;
-   parameter OPTION_DCACHE_WAYS = 2;
-   parameter FEATURE_DMMU = "NONE";
-   parameter FEATURE_INSTRUCTIONCACHE = "NONE";
-   parameter OPTION_ICACHE_BLOCK_WIDTH = 5;
-   parameter OPTION_ICACHE_SET_WIDTH = 9;
-   parameter OPTION_ICACHE_WAYS = 2;
-   parameter FEATURE_IMMU = "NONE";
-   parameter FEATURE_PIC = "ENABLED";
-   parameter FEATURE_TIMER = "ENABLED";
-   parameter FEATURE_DEBUGUNIT = "NONE";
-   parameter FEATURE_PERFCOUNTERS = "NONE";
-   parameter FEATURE_PMU = "NONE";
-   parameter FEATURE_MAC = "NONE";
-   parameter FEATURE_FPU = "NONE";   
+   parameter FEATURE_DATACACHE		= "NONE";
+   parameter OPTION_DCACHE_BLOCK_WIDTH	= 5;
+   parameter OPTION_DCACHE_SET_WIDTH	= 9;
+   parameter OPTION_DCACHE_WAYS		= 2;
+   parameter FEATURE_DMMU		= "NONE";
+   parameter FEATURE_INSTRUCTIONCACHE	= "NONE";
+   parameter OPTION_ICACHE_BLOCK_WIDTH	= 5;
+   parameter OPTION_ICACHE_SET_WIDTH	= 9;
+   parameter OPTION_ICACHE_WAYS		= 2;
+   parameter FEATURE_IMMU		= "NONE";
+   parameter FEATURE_PIC		= "ENABLED";
+   parameter FEATURE_TIMER		= "ENABLED";
+   parameter FEATURE_DEBUGUNIT		= "NONE";
+   parameter FEATURE_PERFCOUNTERS	= "NONE";
+   parameter FEATURE_PMU		= "NONE";
+   parameter FEATURE_MAC		= "NONE";
+   parameter FEATURE_FPU		= "NONE";   
 
-   parameter OPTION_PIC_TRIGGER = "EDGE";
+   parameter OPTION_PIC_TRIGGER		= "EDGE";
 
-   parameter FEATURE_DSX ="NONE";
-   parameter FEATURE_FASTCONTEXTS = "NONE";
-   parameter FEATURE_OVERFLOW = "NONE";
+   parameter FEATURE_DSX		= "NONE";
+   parameter FEATURE_FASTCONTEXTS	= "NONE";
+   parameter FEATURE_OVERFLOW		= "NONE";
 
-   parameter SPR_SR_WIDTH = 16;
-   parameter SPR_SR_RESET_VALUE = 16'h8001;
+   parameter SPR_SR_WIDTH		= 16;
+   parameter SPR_SR_RESET_VALUE		= 16'h8001;
 
    input clk, rst;
 
@@ -653,7 +653,15 @@ module mor1kx_ctrl_espresso
 	       
 	       spr_sr[`OR1K_SPR_SR_EPH ] <= spr_write_dat[`OR1K_SPR_SR_EPH ];
 
-	    end
+	    end // if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) &&...
+
+	  /* Need to check for DSX being set on exception entry on execute_done
+	   as the delay slot information is gone after it goes high */
+	  if (FEATURE_DSX!="NONE")
+	    if (exception_r || exception_re)
+	      spr_sr[`OR1K_SPR_SR_DSX ] <= execute_delay_slot;
+
+
        end // if (execute_done)
    
    // Exception SR
