@@ -384,6 +384,7 @@ module mor1kx_cpu_fourstage
     .pc_execute_i			(pc_decode_to_execute),
     .rfa_i				(rfa_o),
     .rfb_i				(rfb_o),
+    .flag_i				(ctrl_flag_o),
     ); */
    mor1kx_execute_alu
      #(
@@ -427,7 +428,8 @@ module mor1kx_cpu_fourstage
       .immjbr_upper_i			(immjbr_upper_o),	 // Templated
       .pc_execute_i			(pc_decode_to_execute),	 // Templated
       .rfa_i				(rfa_o),		 // Templated
-      .rfb_i				(rfb_o));		 // Templated
+      .rfb_i				(rfb_o),		 // Templated
+      .flag_i				(ctrl_flag_o));		 // Templated
 
    
    /* mor1kx_lsu_fourstage AUTO_TEMPLATE (
