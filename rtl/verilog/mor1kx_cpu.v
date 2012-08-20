@@ -33,6 +33,7 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter OPTION_ICACHE_BLOCK_WIDTH	= 5;
    parameter OPTION_ICACHE_SET_WIDTH	= 9;
    parameter OPTION_ICACHE_WAYS		= 2;
+   parameter OPTION_ICACHE_LIMIT_WIDTH  = 32;   
    parameter FEATURE_IMMU		= "NONE";
    parameter FEATURE_PIC		= "ENABLED";
    parameter FEATURE_TIMER		= "ENABLED";
