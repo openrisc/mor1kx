@@ -269,7 +269,7 @@ module mor1kx_cpu(/*AUTOARG*/
         reg [`OR1K_INSN_WIDTH-1:0]          monitor_execute_insn_reg;
         always @(posedge clk)
           if (fourstage.mor1kx_cpu.mor1kx_decode.padv_i)
-            monitor_execute_insn_reg <= fourstage.mor1kx_cpu.mor1kx_decode.deco
+            monitor_execute_insn_reg <= fourstage.mor1kx_cpu.mor1kx_decode.decode_insn_i;
         
         assign monitor_execute_insn = monitor_execute_insn_reg;
 
