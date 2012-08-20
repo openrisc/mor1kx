@@ -1,0 +1,77 @@
+mor1kx IP core specification
+============================
+:doctype: book
+
+Introduction
+------------
+
+This document describes the mor1kx processor block and its various configurable
+components. The core is an implementation of an OpenRISC 1000 compliant 
+processor which is highly configurable and contains multiple pipeline 
+implementations along with a configurable set of peripherals such as caches, 
+timers, debug and bus interfaces. This documentation will contain a section 
+detailing each optional block such as pipeline, caches, bus interface etc. It 
+can outline as much implementation detail as it wants but should ultimately 
+provide information to users on how to program and use the peripheral, or what 
+to expect during execution of software on a particular configuration.
+
+
+OpenRISC Family
+~~~~~~~~~~~~~~~
+(((OpenRISC,Family)))
+OpenRISC 1000 is architecture for a family of free, open source RISC processor
+cores. As architecture, OpenRISC 1000 allows for a spectrum of chip and
+system implementations at a variety of price/performance points for a range of
+applications. It is a 32/64-bit load and store RISC architecture designed with
+emphasis on performance, simplicity, low power requirements, scalability and
+versatility. OpenRISC 1000 architecture targets medium and high performance
+networking, embedded, automotive and portable computer environments.
+
+mor1kx CPU
+~~~~~~~~~~
+
+The mor1kx implementation was developed in order to provide a better platform 
+for processor component development than previous implementations. The goal of 
+the implementation is to provide a greater level of flexibility in terms of 
+implementation trade-offs such as area and performance.
+
+The blocks within the core have been designed for maximum re-use within 
+different configurations. Based on this, different pipeline implementations are
+a major focus of the core. With this, the core should be very useful for 
+developers and users alike. For developers as a base for either 
+high-performance or low-overhead pipeline implementations based on re-usable 
+components eg. decode and ALU block. For users as a wider variety of 
+capabilities should be available to suit the processor's use case.
+
+Components
+----------
+
+Available Components
+~~~~~~~~~~~~~~~~~~~~
+
+At present the following pipeline implementations are available:
+- fourstage - 4 stage, single issue, debug unit, timers, PIC, ORBIS32 support
+- espresso - 2 stage, single issue, debug unit, timers, PIC, ORBIS32 support
+- cappuccino - 4 stage, single issue, tight cache coupling, debug unit, timers,
+               PIC, ORBIS32 support
+
+Peripherals:
+- instruction cache
+- data cache
+- Wisbone bus interface
+
+Peripherals
+===========
+
+This section will outline each component's options and function.
+
+fourstage pipeline
+------------------
+
+As the name suggests, a 4 stage pipeline, similar to the original OR1200 
+implementation.
+
+espresso pipeline
+-----------------
+
+The espresso pipeline essentially contains a fetch and the-rest stage.
