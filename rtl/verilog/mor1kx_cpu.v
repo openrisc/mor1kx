@@ -267,6 +267,12 @@ module mor1kx_cpu(/*AUTOARG*/
 	 assign monitor_spr_esr = {16'd0,fourstage.mor1kx_cpu.mor1kx_ctrl_fourstage.spr_esr};
 	 assign monitor_spr_epcr = fourstage.mor1kx_cpu.mor1kx_ctrl_fourstage.spr_epcr;
 	 assign monitor_spr_eear = fourstage.mor1kx_cpu.mor1kx_ctrl_fourstage.spr_eear;
+        reg [`OR1K_INSN_WIDTH-1:0]          monitor_execute_insn_reg;
+        always @(posedge clk)
+          if (fourstage.mor1kx_cpu.mor1kx_decode.padv_i)
+            monitor_execute_insn_reg <= fourstage.mor1kx_cpu.mor1kx_decode.deco
+        
+        assign monitor_execute_insn = monitor_execute_insn_reg;
 
 	 // synthesis translate_on
 
