@@ -6,10 +6,7 @@
  * 
  * TODO -
  * serial multiplier
- * serial dividier
- * serial shifter
- * 
- * */
+ */
 
 `include "mor1kx-defines.v"
 
@@ -20,7 +17,7 @@ module mor1kx_execute_alu
    // Inputs
    clk, rst, padv_i, opc_alu_i, opc_alu_secondary_i, imm16_i,
    opc_insn_i, decode_valid_i, op_jbr_i, op_jr_i, immjbr_upper_i,
-   pc_execute_i, rfa_i, rfb_i
+   pc_execute_i, rfa_i, rfb_i, flag_i
    );
 
    
@@ -69,7 +66,10 @@ module mor1kx_execute_alu
    
    input [OPTION_OPERAND_WIDTH-1:0] rfa_i;
    input [OPTION_OPERAND_WIDTH-1:0] rfb_i;
-   
+
+   // flag fed back from ctrl
+   input 			    flag_i;
+
    output  			     flag_set_o, 
 				     flag_clear_o;
    
@@ -122,6 +122,8 @@ module mor1kx_execute_alu
    wire 				  div_valid;
 
    wire [OPTION_OPERAND_WIDTH-1:0] 	  ffl1_result;
+
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  cmov_result;
    
    
    // First stage signals - detect which operands we should take
@@ -256,8 +258,7 @@ module mor1kx_execute_alu
 		* converted back to negative later on
 		*/
 	       if (opc_alu_i == `OR1K_ALU_OPC_DIV) begin
-		  if ((a[OPTION_OPERAND_WIDTH-1] & !b[OPTION_OPERAND_WIDTH-1]) |
-		      (!a[OPTION_OPERAND_WIDTH-1] & b[OPTION_OPERAND_WIDTH-1]))
+		  if (a[OPTION_OPERAND_WIDTH-1] ^ b[OPTION_OPERAND_WIDTH-1])
 		    div_neg <= 1'b1;
 
 		  if (a[OPTION_OPERAND_WIDTH-1])
@@ -266,7 +267,7 @@ module mor1kx_execute_alu
 		  if (b[OPTION_OPERAND_WIDTH-1])
 		    div_d <= ~b + 1;
 	       end
-	    end else begin
+	    end else if (!div_done) begin
 	       if (!div_sub[OPTION_OPERAND_WIDTH]) begin // div_sub >= 0
 		  div_r <= div_sub[OPTION_OPERAND_WIDTH-1:0];
 		  div_n <= {div_n[OPTION_OPERAND_WIDTH-2:0], 1'b1};
@@ -447,6 +448,13 @@ module mor1kx_execute_alu
       end
    endgenerate
 
+   // Conditional move
+   generate
+      if (FEATURE_CMOV=="ENABLED") begin
+	 assign cmov_result = flag_i ? a : b;
+      end
+   endgenerate
+
    // Comparison logic
    assign flag_set_o = flag_set & comp_op;
    assign flag_clear_o = !flag_set & comp_op;
@@ -509,6 +517,8 @@ module mor1kx_execute_alu
 	     alu_result = div_result;
 	   `OR1K_ALU_OPC_FFL1:
 	     alu_result = ffl1_result;
+	   `OR1K_ALU_OPC_CMOV:
+	     alu_result = cmov_result;
 	     default:
 	       alu_result = adder_result;
 	   endcase // case (opc_alu_i)

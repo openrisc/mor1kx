@@ -193,6 +193,7 @@ module mor1kx_ctrl_fourstage
    reg [SPR_SR_WIDTH-1:0] 	     spr_esr;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_epcr;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_eear;
+   reg [OPTION_OPERAND_WIDTH-1:0]    spr_evba;
    
    // Programmable Interrupt Control SPRs
    reg [31:0] 			     spr_picmr;
@@ -322,23 +323,31 @@ module mor1kx_ctrl_fourstage
 	      }
 	     )
 	 9'b1????????:
-	   exception_pc_addr <= {19'd0,`OR1K_BERR_VECTOR,8'd0};
+	   exception_pc_addr <= spr_evba |
+				{19'd0,`OR1K_BERR_VECTOR,8'd0};
 	 9'b01???????:
-	   exception_pc_addr <= {19'd0,`OR1K_ILLEGAL_VECTOR,8'd0};
+	   exception_pc_addr <= spr_evba |
+				{19'd0,`OR1K_ILLEGAL_VECTOR,8'd0};
 	 9'b001??????,
 	   9'b0001?????:
-	     exception_pc_addr <= {19'd0,`OR1K_ALIGN_VECTOR,8'd0};
+	     exception_pc_addr <= spr_evba |
+				  {19'd0,`OR1K_ALIGN_VECTOR,8'd0};
 	 9'b00001????:
-	   exception_pc_addr <= {19'd0,`OR1K_SYSCALL_VECTOR,8'd0};
+	   exception_pc_addr <= spr_evba |
+				{19'd0,`OR1K_SYSCALL_VECTOR,8'd0};
 	 9'b000001???:
-	   exception_pc_addr <= {19'd0,`OR1K_TRAP_VECTOR,8'd0};
+	   exception_pc_addr <= spr_evba |
+				{19'd0,`OR1K_TRAP_VECTOR,8'd0};
 	 9'b0000001??:
-	   exception_pc_addr <= {19'd0,`OR1K_BERR_VECTOR,8'd0};
+	   exception_pc_addr <= spr_evba |
+				{19'd0,`OR1K_BERR_VECTOR,8'd0};
 	 9'b00000001?:
-	   exception_pc_addr <= {19'd0,`OR1K_INT_VECTOR,8'd0};
+	   exception_pc_addr <= spr_evba |
+				{19'd0,`OR1K_INT_VECTOR,8'd0};
 	 //9'b000000001:
 	 default:
-	   exception_pc_addr <= {19'd0,`OR1K_TT_VECTOR,8'd0};
+	   exception_pc_addr <= spr_evba |
+				{19'd0,`OR1K_TT_VECTOR,8'd0};
        endcase // casex (...
    
    assign op_mtspr = ctrl_opc_insn_i==`OR1K_OPCODE_MTSPR;
@@ -611,7 +620,14 @@ module mor1kx_ctrl_fourstage
 
    // assign the NPC for SPR accesses
    assign spr_npc = du_npc_written ? du_spr_npc : pc_ctrl_i;
-   
+
+   // Exception Vector Address
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       spr_evba <= {OPTION_OPERAND_WIDTH{1'b0}};
+     else if (spr_we && spr_addr==`OR1K_SPR_EVBA_ADDR)
+       spr_evba <= {spr_write_dat[OPTION_OPERAND_WIDTH-1:13], 13'd0};
+
    // Remember when we're in a delay slot in execute stage.
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -628,8 +644,7 @@ module mor1kx_ctrl_fourstage
    // propegate through the execute stage in a single cycle, so in that case
    // we are
    // can proceed.
-     else if (execute_delay_slot & fetch_branch_taken_i & 
-	      (padv_decode_o | !execute_waiting_i))
+     else if (execute_delay_slot & padv_execute_o)
        execute_delay_slot <= 0;
    // Register if a branch occurred when we're about to clock through
    // the next inputs to the execute stage.
@@ -791,6 +806,8 @@ module mor1kx_ctrl_fourstage
        `OR1K_SPR_ESR0_ADDR:
 	 spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-SPR_SR_WIDTH){1'b0}},
 			       spr_esr};
+       `OR1K_SPR_EVBA_ADDR:
+	 spr_sys_group_read = spr_evba;
        default: begin
 	  /* GPR read */
 	  if (spr_addr >= `OR1K_SPR_GPR0_ADDR &&
@@ -870,15 +887,15 @@ module mor1kx_ctrl_fourstage
 	 end // else: !if(OPTION_PIC_TRIGGER=="LEVEL")
 
 	 // PIC (un)mask register
+	 // Bottom two IRQs permanently unmasked
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
-	     spr_picmr <= 0;
+	     spr_picmr <= {30'd0, 2'b11};
 	   else if (spr_we & spr_addr==`OR1K_SPR_PICMR_ADDR)
-	     spr_picmr <= spr_write_dat;
+	     spr_picmr <= {spr_write_dat[31:2], 2'b11};
 	 
 	 
-	 // Bottom two IRQs permanently unmasked
-	 assign irq_unmasked = {spr_picmr[31:2],2'b11} & irq_i;
+	 assign irq_unmasked = spr_picmr & irq_i;
 	 
 	 assign except_pic = (|spr_picsr) & spr_sr[`OR1K_SPR_SR_IEE] & 
 			     !op_mtspr & !doing_rfe &

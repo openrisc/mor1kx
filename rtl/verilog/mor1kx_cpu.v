@@ -11,11 +11,10 @@ module mor1kx_cpu(/*AUTOARG*/
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, dbus_err_i,
    dbus_ack_i, dbus_dat_i, irq_i, du_addr_i, du_stb_i, du_dat_i,
    du_we_i, du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i,
-   spr_bus_dat_ic_i, spr_bus_ack_ic_i, spr_bus_dat_dmmu_i,
-   spr_bus_ack_dmmu_i, spr_bus_dat_immu_i, spr_bus_ack_immu_i,
-   spr_bus_dat_mac_i, spr_bus_ack_mac_i, spr_bus_dat_pmu_i,
-   spr_bus_ack_pmu_i, spr_bus_dat_pcu_i, spr_bus_ack_pcu_i,
-   spr_bus_dat_fpu_i, spr_bus_ack_fpu_i
+   spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i, spr_bus_dat_immu_i,
+   spr_bus_ack_immu_i, spr_bus_dat_mac_i, spr_bus_ack_mac_i,
+   spr_bus_dat_pmu_i, spr_bus_ack_pmu_i, spr_bus_dat_pcu_i,
+   spr_bus_ack_pcu_i, spr_bus_dat_fpu_i, spr_bus_ack_fpu_i
    );
 
    
@@ -116,8 +115,8 @@ module mor1kx_cpu(/*AUTOARG*/
    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dc_i;
    input 			     spr_bus_ack_dc_i;   
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_ic_i;
-   input 			     spr_bus_ack_ic_i;   
+//SJK   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_ic_i;
+//SJK   input 			     spr_bus_ack_ic_i;   
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i;
    input 			     spr_bus_ack_dmmu_i;   
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i;
@@ -163,6 +162,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	     .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
 	     .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
 	     .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
+	     .OPTION_ICACHE_LIMIT_WIDTH(OPTION_ICACHE_LIMIT_WIDTH),
 	     .FEATURE_IMMU(FEATURE_IMMU),
 	     .FEATURE_PIC(FEATURE_PIC),
 	     .FEATURE_TIMER(FEATURE_TIMER),
@@ -232,8 +232,6 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .du_stall_i			(du_stall_i),
 	    .spr_bus_dat_dc_i		(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_dc_i		(spr_bus_ack_dc_i),
-	    .spr_bus_dat_ic_i		(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_ic_i		(spr_bus_ack_ic_i),
 	    .spr_bus_dat_dmmu_i		(spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_dmmu_i		(spr_bus_ack_dmmu_i),
 	    .spr_bus_dat_immu_i		(spr_bus_dat_immu_i[OPTION_OPERAND_WIDTH-1:0]),

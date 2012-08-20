@@ -75,7 +75,6 @@ module mor1kx_dcache
    wire				      idle;
    wire				      refill;
 
-   reg 				      cpu_req_r;
    reg [3:0]			      cpu_bsel_r;
    reg 				      cpu_ack;
    wire [31:0] 			      cpu_dat;
@@ -119,9 +118,9 @@ module mor1kx_dcache
    assign cpu_dat_o = (cache_req) ? cpu_dat : dc_dat_i;
    assign dc_adr_o = (cache_req | refill) ? mem_adr : cpu_adr_i;
    assign dc_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
-   assign dc_we_o = (cache_req) ? mem_we : cpu_we_i;
+   assign dc_we_o = (cache_req | refill) ? mem_we : cpu_we_i;
    assign dc_dat_o = cpu_dat_i;
-   assign dc_bsel_o = cpu_bsel_i;
+   assign dc_bsel_o = refill ? 4'b1111 : cpu_bsel_i;
 
    assign tag_raddr = idle ?
 		      cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH] :
@@ -238,8 +237,8 @@ module mor1kx_dcache
 	 // Load address to invalidate from SPR bus
 	 mem_adr <= spr_bus_dat_i;
       end else if (idle & !invalidating) begin
-	 start_adr <= cpu_adr_i[OPTION_DCACHE_BLOCK_WIDTH-1:0];
-	 mem_adr <= cpu_adr_i;
+	 start_adr <= {cpu_adr_i[OPTION_OPERAND_WIDTH-1:2], 2'b0};
+	 mem_adr <= {cpu_adr_i[OPTION_OPERAND_WIDTH-1:2], 2'b0};
 	 cpu_bsel_r <= cpu_bsel_i;
 	 /*
 	  * First req in refill will always be a match,
@@ -260,12 +259,6 @@ module mor1kx_dcache
 	 end
       end
    end
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       cpu_req_r <= 0;
-     else
-       cpu_req_r <= cpu_req_i;
 
    always @(*) begin
       next_state = state;
@@ -335,6 +328,7 @@ module mor1kx_dcache
 		    end
 		    if (OPTION_DCACHE_WAYS == 2) begin
 		       if (way_hit[1]) begin
+			  way_we[1] = 1'b1;
 			  tag_din[TAG_LRU] = 1'b0;
 		       end
 		    end
@@ -383,6 +377,8 @@ module mor1kx_dcache
 	      end
 	   end
 	end
+	default:
+	  next_state = IDLE;
       endcase
 
       // Lazy invalidation, invalidate everything that matches tag address

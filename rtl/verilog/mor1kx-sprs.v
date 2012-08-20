@@ -24,6 +24,7 @@
 `define OR1K_SPR_EEAR0_ADDR     {5'd0,11'd48}
 `define OR1K_SPR_ESR0_ADDR      {5'd0,11'd64}
 `define OR1K_SPR_GPR0_ADDR      {5'd0,11'd1024}
+`define OR1K_SPR_EVBA_ADDR      {5'd0,11'd1536}
 `define OR1K_SPR_DMMUCR_ADDR    {5'd1,11'd0}
 `define OR1K_SPR_DMMUPR_ADDR    {5'd1,11'd1}
 `define OR1K_SPR_DTLBEIR_ADDR   {5'd1,11'd2}

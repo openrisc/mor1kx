@@ -25,7 +25,7 @@ module mor1kx_lsu_fourstage
    // Inputs
    clk, rst, padv_execute_i, decode_valid_i, alu_result_i, rfb_i,
    opc_insn_i, op_lsu_load_i, op_lsu_store_i, dbus_err_i, dbus_ack_i,
-   dbus_dat_i
+   dbus_dat_i, pipeline_flush_i
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
@@ -60,6 +60,7 @@ module mor1kx_lsu_fourstage
    input 			     dbus_err_i;
    input 			     dbus_ack_i;
    input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i;
+   input 			     pipeline_flush_i;
 
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_aligned;  // comb.
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_extended; // comb.
@@ -96,7 +97,7 @@ module mor1kx_lsu_fourstage
 		       rfb_i;                         // l.sw
    
    assign dbus_req_o = (op_lsu_load_i | op_lsu_store_i) &
-		       !except_align & !access_done;
+		       !except_align & !access_done & !pipeline_flush_i;
    
    assign align_err_word = |dbus_adr_o[1:0];
    assign align_err_short = dbus_adr_o[0];
