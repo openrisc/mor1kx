@@ -29,7 +29,7 @@
 
 `include "mor1kx-defines.v"
 
-module mor1kx_ctrl_branch_fourstage
+module mor1kx_ctrl_branch_cappuccino
   (
    clk, rst,
    
@@ -135,4 +135,5 @@ module mor1kx_ctrl_branch_fourstage
    
    
    
-endmodule // mor1kx_ctrl_branch
+endmodule // mor1kx_ctrl_branch_cappuccino
+

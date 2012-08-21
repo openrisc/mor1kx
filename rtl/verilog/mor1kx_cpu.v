@@ -39,7 +39,7 @@ module mor1kx_cpu(/*AUTOARG*/
 
    parameter OPTION_OPERAND_WIDTH	= 32;
 
-   parameter OPTION_CPU			= "FOURSTAGE";
+   parameter OPTION_CPU			= "CAPPUCCINO";
    
    parameter FEATURE_DATACACHE		= "NONE";
    parameter OPTION_DCACHE_BLOCK_WIDTH	= 5;
@@ -167,8 +167,8 @@ module mor1kx_cpu(/*AUTOARG*/
 
    
    generate
-      if (OPTION_CPU=="FOURSTAGE") begin : fourstage
-	 mor1kx_cpu_fourstage
+      if (OPTION_CPU=="CAPPUCCINO") begin : cappuccino
+	 mor1kx_cpu_cappuccino
 	   #(
 	     .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
 	     .FEATURE_DATACACHE(FEATURE_DATACACHE),
@@ -271,22 +271,22 @@ module mor1kx_cpu(/*AUTOARG*/
 				monitor_flag_sr;
 	 assign monitor_clk = clk;
 
-	 assign monitor_decode_insn = fourstage.mor1kx_cpu.mor1kx_decode.decode_insn_i;
-	 assign monitor_decode_advance = fourstage.mor1kx_cpu.padv_decode_o;
-	 assign monitor_execute_advance = fourstage.mor1kx_cpu.padv_execute_o;
- 	 assign monitor_flag_set = fourstage.mor1kx_cpu.mor1kx_execute_ctrl_fourstage.flag_set_i;
-	 assign monitor_flag_clear = fourstage.mor1kx_cpu.mor1kx_execute_ctrl_fourstage.flag_clear_i;
-	 assign monitor_flag_sr = fourstage.mor1kx_cpu.mor1kx_ctrl_fourstage.ctrl_flag_o;
-	 assign monitor_spr_sr = {16'd0,fourstage.mor1kx_cpu.mor1kx_ctrl_fourstage.spr_sr[15:`OR1K_SPR_SR_F+1],fourstage.mor1kx_cpu.mor1kx_ctrl_fourstage.ctrl_flag_o,fourstage.mor1kx_cpu.mor1kx_ctrl_fourstage.spr_sr[`OR1K_SPR_SR_F-1:0]};
-	 assign monitor_execute_pc = fourstage.mor1kx_cpu.pc_decode_to_execute;
-	 assign monitor_rf_result_in = fourstage.mor1kx_cpu.mor1kx_rf_fourstage.result_i;
-	 assign monitor_spr_esr = {16'd0,fourstage.mor1kx_cpu.mor1kx_ctrl_fourstage.spr_esr};
-	 assign monitor_spr_epcr = fourstage.mor1kx_cpu.mor1kx_ctrl_fourstage.spr_epcr;
-	 assign monitor_spr_eear = fourstage.mor1kx_cpu.mor1kx_ctrl_fourstage.spr_eear;
+	 assign monitor_decode_insn = cappuccino.mor1kx_cpu.mor1kx_decode.decode_insn_i;
+	 assign monitor_decode_advance = cappuccino.mor1kx_cpu.padv_decode_o;
+	 assign monitor_execute_advance = cappuccino.mor1kx_cpu.padv_execute_o;
+ 	 assign monitor_flag_set = cappuccino.mor1kx_cpu.mor1kx_execute_ctrl_cappuccino.flag_set_i;
+	 assign monitor_flag_clear = cappuccino.mor1kx_cpu.mor1kx_execute_ctrl_cappuccino.flag_clear_i;
+	 assign monitor_flag_sr = cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.ctrl_flag_o;
+	 assign monitor_spr_sr = {16'd0,cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_sr[15:`OR1K_SPR_SR_F+1],cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.ctrl_flag_o,cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_sr[`OR1K_SPR_SR_F-1:0]};
+	 assign monitor_execute_pc = cappuccino.mor1kx_cpu.pc_decode_to_execute;
+	 assign monitor_rf_result_in = cappuccino.mor1kx_cpu.mor1kx_rf_cappuccino.result_i;
+	 assign monitor_spr_esr = {16'd0,cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_esr};
+	 assign monitor_spr_epcr = cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_epcr;
+	 assign monitor_spr_eear = cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_eear;
         reg [`OR1K_INSN_WIDTH-1:0]          monitor_execute_insn_reg;
         always @(posedge clk)
-          if (fourstage.mor1kx_cpu.mor1kx_decode.padv_i)
-            monitor_execute_insn_reg <= fourstage.mor1kx_cpu.mor1kx_decode.decode_insn_i;
+          if (cappuccino.mor1kx_cpu.mor1kx_decode.padv_i)
+            monitor_execute_insn_reg <= cappuccino.mor1kx_cpu.mor1kx_decode.decode_insn_i;
         
         assign monitor_execute_insn = monitor_execute_insn_reg;
 
@@ -419,7 +419,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	 
       end
 
-      if (OPTION_CPU!="FOURSTAGE" && OPTION_CPU!="ESPRESSO")
+      if (OPTION_CPU!="CAPPUCCINO" && OPTION_CPU!="ESPRESSO")
 	begin
 	   initial begin
 	      $display("Error: OPTION_CPU, %s, not valid", OPTION_CPU);

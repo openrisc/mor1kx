@@ -30,7 +30,7 @@ module mor1kx
 
    parameter OPTION_OPERAND_WIDTH	= 32;
 
-   parameter OPTION_CPU0		= "FOURSTAGE";
+   parameter OPTION_CPU0		= "CAPPUCCINO";
 
    parameter FEATURE_DATACACHE		= "NONE";
    parameter OPTION_DCACHE_BLOCK_WIDTH	= 5;

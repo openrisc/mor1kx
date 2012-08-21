@@ -16,7 +16,7 @@
 
 `include "mor1kx-defines.v"
 
-module mor1kx_wb_mux_fourstage
+module mor1kx_wb_mux_cappuccino
   (/*AUTOARG*/
    // Outputs
    rf_result_o,
@@ -47,7 +47,7 @@ module mor1kx_wb_mux_fourstage
 			op_jal_i ? pc_execute_i + 4 :
 			alu_result_i;
 
-endmodule // mor1kx_wb_mux_fourstage
+endmodule // mor1kx_wb_mux_cappuccino
 
 
    

@@ -16,7 +16,7 @@
 
 `include "mor1kx-defines.v"
 
-module mor1kx_execute_ctrl_fourstage
+module mor1kx_execute_ctrl_cappuccino
   (
    clk, rst,
 
@@ -242,6 +242,7 @@ module mor1kx_execute_ctrl_fourstage
      else if (padv_i)
        ctrl_opc_insn_o <= opc_insn_i;
    
-endmodule // mor1kx_execute_ctrl
+endmodule // mor1kx_execute_ctrl_cappuccino
+
 
    

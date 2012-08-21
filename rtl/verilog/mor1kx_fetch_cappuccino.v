@@ -17,7 +17,7 @@
 
 `include "mor1kx-defines.v"
 
-module mor1kx_fetch_fourstage
+module mor1kx_fetch_cappuccino
   #(
     parameter OPTION_OPERAND_WIDTH = 32,
     parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
@@ -176,4 +176,5 @@ module mor1kx_fetch_fourstage
      else if (decode_except_ibus_err_o & branch_occur_i)
        decode_except_ibus_err_o <= 0;
 
-endmodule // mor1kx_fetch
+endmodule // mor1kx_fetch_cappuccino
+

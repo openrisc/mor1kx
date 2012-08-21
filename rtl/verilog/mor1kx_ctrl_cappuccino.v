@@ -37,7 +37,7 @@
 
 `include "mor1kx-defines.v"
 
-module mor1kx_ctrl_fourstage
+module mor1kx_ctrl_cappuccino
   (/*AUTOARG*/
    // Outputs
    mfspr_dat_o, ctrl_mfspr_we_o, ctrl_flag_o, ctrl_branch_exception_o,
@@ -1375,4 +1375,5 @@ module mor1kx_ctrl_fourstage
    
    
    
-endmodule // mor1kx_ctrl
+endmodule // mor1kx_ctrl_cappuccino
+

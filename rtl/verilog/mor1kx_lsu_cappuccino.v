@@ -25,7 +25,7 @@
 
 `include "mor1kx-defines.v"
 
-module mor1kx_lsu_fourstage
+module mor1kx_lsu_cappuccino
   (/*AUTOARG*/
    // Outputs
    lsu_result_o, lsu_valid_o, lsu_except_dbus_o, lsu_except_align_o,
@@ -269,5 +269,5 @@ module mor1kx_lsu_fourstage
    
    assign lsu_result_o = access_done ? lsu_result_r : dbus_dat_extended;
 
-endmodule // mor1kx_lsu_fourstage
+endmodule // mor1kx_lsu_cappuccino
 

@@ -4,7 +4,7 @@
   of the OHDL was not distributed with this file, You 
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
-  Description: Register file for fourstage pipeline
+  Description: Register file for cappuccino pipeline
   
   Copyright (C) 2012 Authors
  
@@ -14,7 +14,7 @@
 
 `include "mor1kx-defines.v"
 
-module mor1kx_rf_fourstage
+module mor1kx_rf_cappuccino
   (
    clk, rst,
 
@@ -210,4 +210,5 @@ module mor1kx_rf_fourstage
       .wrda_i(result_i)
       );
 
-endmodule // mor1kx_execute_alu
+endmodule // mor1kx_rf_cappuccino
+
