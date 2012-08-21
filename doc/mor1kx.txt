@@ -15,6 +15,8 @@ can outline as much implementation detail as it wants but should ultimately
 provide information to users on how to program and use the peripheral, or what 
 to expect during execution of software on a particular configuration.
 
+Note: This documentation is far from complete. It is expected that the documentation
+will become more extensive over time.
 
 OpenRISC Family
 ~~~~~~~~~~~~~~~
@@ -50,10 +52,9 @@ Available Components
 ~~~~~~~~~~~~~~~~~~~~
 
 At present the following pipeline implementations are available:
-- fourstage - 4 stage, single issue, debug unit, timers, PIC, ORBIS32 support
+- cappuccino - 4 stage, single issue, debug unit, timers, PIC, tight cache 
+               coupling,ORBIS32 support
 - espresso - 2 stage, single issue, debug unit, timers, PIC, ORBIS32 support
-- cappuccino - 4 stage, single issue, tight cache coupling, debug unit, timers,
-               PIC, ORBIS32 support
 
 Peripherals:
 - instruction cache
@@ -65,13 +66,26 @@ Peripherals
 
 This section will outline each component's options and function.
 
-fourstage pipeline
+cappuccino pipeline
 ------------------
 
-As the name suggests, a 4 stage pipeline, similar to the original OR1200 
-implementation.
+A 4 stage pipeline, similar to the original OR1200 implementation.
+
+This pipeline is also known as the "fourstage" throughout the source.
+
+Caches supported, instruction cache not optional at present.
+
+It has a delay slot.
+
+No DSX bit in SR.
 
 espresso pipeline
 -----------------
 
 The espresso pipeline essentially contains a fetch and the-rest stage.
+
+No support for caches.
+
+It has a delay slot.
+
+Supports DSX bit in SR.
