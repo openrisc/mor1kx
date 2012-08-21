@@ -1,6 +1,15 @@
-/*
- * (C) Copyright 2011, Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
- */
+/******************************************************************************
+ This Source Code Form is subject to the terms of the
+ Open Hardware Description License, v. 1.0. If a copy
+ of the OHDL was not distributed with this file, You
+ can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+
+ Description: Instruction cache implementation
+
+ Copyright (C) 2012 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
+
+ ******************************************************************************/
+
 `include "mor1kx-defines.v"
 
 module mor1kx_icache
