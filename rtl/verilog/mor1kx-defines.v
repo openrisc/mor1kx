@@ -201,68 +201,6 @@
 //
 `include "mor1kx-sprs.v"
 
-//
-// Implementation options
-//
-
-`define MOR1KX_RADDR_WIDTH     5
-`define MOR1KX_RF_WORDS       32
-
-//`define MOR1KX_OPERAND_WIDTH 32
-
-
-//`define MOR1KX_IMPL_DC      /* Not usable */
-//`define MOR1KX_IMPL_IC      /* Not usable */
-//`define MOR1KX_IMPL_DMMU    /* Not usable */
-//`define MOR1KX_IMPL_IMMU    /* Not usable */
-`define MOR1KX_IMPL_TT
-`define MOR1KX_IMPL_PIC
-//`define MOR1KX_IMPL_DU      /* Not usable */
-//`define MOR1KX_IMPL_PCU     /* Not usable */
-//`define MOR1KX_IMPL_PMU     /* Not usable */
-//`define MOR1KX_IMPL_MAC     /* Not usable */
-
-/* Optional ALU instructions */
-//`define MOR1KX_IMPL_ADDIC   /* Not usable */
-// define MOR1KX_IMPL_ADDC    /* Not usable */
-`define MOR1KX_IMPL_MUL     /* Not usable */
-//`define MOR1KX_IMPL_DIV     /* Not usable */
-//`define MOR1KX_IMPL_EXT     /* Not usable */
-`define MOR1KX_IMPL_SRA
-//`define MOR1KX_IMPL_ROR
-//`define MOR1KX_IMPL_CMOV    /* Not usable */
-//`define MOR1KX_IMPL_FFL1    /* Not usable */
-
-//`define MOR1KX_IMPL_FPU    /* Not usable */
-
-`define MOR1KX_BARREL_SHIFTER
-
-/*
-`define MOR1KX_IMPL_SYSCALL
-`define MOR1KX_IMPL_TRAP
-`define MOR1KX_IMPL_RANGE
-*/
-
-//`define MOR1KX_IMPL_SR_CE   /* Not usable */
-//`define MOR1KX_IMPL_SR_CY   /* Not usable */
-//`define MOR1KX_IMPL_SR_OV   /* Not usable */
-//`define MOR1KX_IMPL_SR_DSX  /* Not usable */
-//`define MOR1KX_IMPL_SR_EPH  /* Not usable */
-
-
-/* Select if ALU has multiple inner stages (to reduce critical path) */
-`define MOR1KX_ALU_NOSTAGE
-//`define MOR1KX_ALU_1STAGE /* Not usable yet */
-
-/* Select multiplier implementation */
-//`define MOR1KX_MUL_NOSTAGE
-`define MOR1KX_MUL_3STAGE
-//`define MOR1KX_MUL_SERIAL
-
-/* Select interrupt trigger method */
-`define MOR1KX_PIC_EDGE_TRIGGERED
-//`define MOR1KX_PIC_LEVEL_TRIGGERED
-
 /* Exception addresses */
 `define OR1K_RESET_VECTOR    5'h01
 `define OR1K_BERR_VECTOR     5'h02
@@ -278,9 +216,6 @@
 `define OR1K_SYSCALL_VECTOR  5'h0c
 `define OR1K_FP_VECTOR       5'h0d
 `define OR1K_TRAP_VECTOR     5'h0e
-
-// Reset PC
-`define MOR1KX_RESET_PC {{(`MOR1KX_OPERAND_WIDTH-13){1'b0}},`OR1K_RESET_VECTOR,8'd0}
 
 // Whether we'll allow things using AYNC reset to have it:
 //`define OR_ASYNC_RST or posedge rst
