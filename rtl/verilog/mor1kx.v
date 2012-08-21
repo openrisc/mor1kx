@@ -1,6 +1,17 @@
-/*
- mor1kx processor top level
- */
+/* ****************************************************************************
+  This Source Code Form is subject to the terms of the 
+  Open Hardware Description License, v. 1.0. If a copy 
+  of the OHDL was not distributed with this file, You 
+  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+
+  Description: mor1kx processor top level
+  
+  Copyright (C) 2012 Authors
+ 
+  Author(s): Julius Baxter <juliusbaxter@gmail.com>
+             Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
+ 
+***************************************************************************** */
 
 `include "mor1kx-defines.v"
 

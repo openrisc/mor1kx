@@ -1,12 +1,19 @@
-/*
- * ALU
- * 
- * inputs are opcodes, the immediate field, operands from RF, instruction 
- * opcode
- * 
- * TODO -
- * serial multiplier
- */
+/* ****************************************************************************
+  This Source Code Form is subject to the terms of the 
+  Open Hardware Description License, v. 1.0. If a copy 
+  of the OHDL was not distributed with this file, You 
+  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+
+  Description: mor1kx execute stage ALU
+   
+  Inputs are opcodes, the immediate field, operands from RF, instruction 
+  opcode
+ 
+  Copyright (C) 2012 Authors
+ 
+  Author(s): Julius Baxter <juliusbaxter@gmail.com>
+ 
+***************************************************************************** */
 
 `include "mor1kx-defines.v"
 

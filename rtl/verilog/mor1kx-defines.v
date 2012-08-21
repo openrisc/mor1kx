@@ -1,7 +1,16 @@
-/*
- * mor1kx defines file
- * 
- * */
+/* ****************************************************************************
+  This Source Code Form is subject to the terms of the 
+  Open Hardware Description License, v. 1.0. If a copy 
+  of the OHDL was not distributed with this file, You 
+  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+
+  Description: mor1kx defines
+   
+  Copyright (C) 2012 Authors
+ 
+  Author(s): Julius Baxter <juliusbaxter@gmail.com>
+ 
+***************************************************************************** */
 
 /* ORBIS32 opcodes - top 6 bits */
 

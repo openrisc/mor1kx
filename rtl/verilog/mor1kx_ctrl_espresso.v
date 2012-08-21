@@ -1,22 +1,29 @@
+/* ****************************************************************************
+  This Source Code Form is subject to the terms of the 
+  Open Hardware Description License, v. 1.0. If a copy 
+  of the OHDL was not distributed with this file, You 
+  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
-/*
- * mor1k espresso pipeline control unit
- * 
- * inputs from execute stage
- * 
- * generate pipeline controls
- * 
- * manage SPRs
- * 
- * issue addresses for exceptions to fetch stage
- * control branches going to fetch stage
- * 
- * contains tick timer
- * 
- * contains PIC logic
- * 
- */
-
+  Description: mor1kx espresso pipeline control unit		  
+ 						  
+  inputs from execute stage			  
+ 						  
+  generate pipeline controls			  
+ 						  
+  manage SPRs					  
+ 						  
+  issue addresses for exceptions to fetch stage  
+  control branches going to fetch stage	  
+ 						  
+  contains tick timer				  
+ 						  
+  contains PIC logic                             
+   
+  Copyright (C) 2012 Authors
+ 
+  Author(s): Julius Baxter <juliusbaxter@gmail.com>
+ 
+***************************************************************************** */
 
 `include "mor1kx-defines.v"
 

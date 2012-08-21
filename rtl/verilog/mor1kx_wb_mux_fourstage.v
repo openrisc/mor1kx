@@ -1,12 +1,18 @@
-/*
- *
- * RF writeback mux 
- * 
- * Choose between ALU and LSU input.
- * 
- * All combinatorial
- * 
- */
+/* ****************************************************************************
+  This Source Code Form is subject to the terms of the 
+  Open Hardware Description License, v. 1.0. If a copy 
+  of the OHDL was not distributed with this file, You 
+  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+
+  Description: RF writeback mux 
+  
+  Choose between ALU and LSU input. All combinatorial
+ 
+  Copyright (C) 2012 Authors
+ 
+  Author(s): Julius Baxter <juliusbaxter@gmail.com>
+ 
+***************************************************************************** */
 
 `include "mor1kx-defines.v"
 
@@ -41,7 +47,8 @@ module mor1kx_wb_mux_fourstage
 			op_jal_i ? pc_execute_i + 4 :
 			alu_result_i;
 
-endmodule // mor1kx_wb_mux
+endmodule // mor1kx_wb_mux_fourstage
+
 
    
 		   

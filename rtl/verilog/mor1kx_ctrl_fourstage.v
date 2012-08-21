@@ -1,33 +1,39 @@
+/* ****************************************************************************
+  This Source Code Form is subject to the terms of the 
+  Open Hardware Description License, v. 1.0. If a copy 
+  of the OHDL was not distributed with this file, You 
+  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
-/*
- * mor1k control unit
- * 
- * inputs from execute stage
- * 
- * generate pipeline controls
- * 
- * manage SPRs
- * 
- * issue addresses for exceptions to fetch stage
- * control branches going to fetch stage
- * 
- * contains tick timer
- * 
- * contains PIC logic
- * 
- * 
- * l.mfspr implemented as follows:
- * We receieve an indication from the execute stage if it has a l.mfspr 
- * instruction. We take note of this and it causes a 1-cycle stall of
- * the fetch and decode stages. We still issue the asserted padv_execute so
- * we get the result from the ALU which will be the address of the SPR to write
- * into the register file. On the next cycle, with the SPR address known, the
- * data is output to the RF and the ctrl_mfspr_we_o is asserted ensuring this 
- * value is written into the RF. As we introduced a delay in the fetch/decode
- * logic, this should not clash with the next instruction to be executed.
- * 
- */
-
+  Description: mor1k control unit
+   
+  inputs from execute stage
+  
+  generate pipeline controls
+  
+  manage SPRs
+  
+  issue addresses for exceptions to fetch stage
+  control branches going to fetch stage
+  
+  contains tick timer
+  
+  contains PIC logic
+  
+  l.mfspr implemented as follows:
+  We receieve an indication from the execute stage if it has a l.mfspr 
+  instruction. We take note of this and it causes a 1-cycle stall of
+  the fetch and decode stages. We still issue the asserted padv_execute so
+  we get the result from the ALU which will be the address of the SPR to write
+  into the register file. On the next cycle, with the SPR address known, the
+  data is output to the RF and the ctrl_mfspr_we_o is asserted ensuring this 
+  value is written into the RF. As we introduced a delay in the fetch/decode
+  logic, this should not clash with the next instruction to be executed.
+   
+  Copyright (C) 2012 Authors
+ 
+  Author(s): Julius Baxter <juliusbaxter@gmail.com>
+ 
+***************************************************************************** */
 
 `include "mor1kx-defines.v"
 

@@ -1,19 +1,27 @@
-/*
- *
- * Data bus interface
- * 
- * All combinatorial outputs to pipeline
- * Dbus interface request signal out synchronous
- * 
- * 32-bit specific
- * 
- * TODO: posted accesses - if we're not currently doing another posted access
- * then immediately signal valid to not hold up the pipeline and in the case of
- * loads remember the register we were supposed to access, and monitor the 
- * pipeline for a read from that register, and then indicate we're waiting for
- * the read to come through before we can continue
- * 
- */ 
+/* ****************************************************************************
+  This Source Code Form is subject to the terms of the 
+  Open Hardware Description License, v. 1.0. If a copy 
+  of the OHDL was not distributed with this file, You 
+  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+
+  Description:  Data bus interface
+
+  All combinatorial outputs to pipeline
+  Dbus interface request signal out synchronous
+  
+  32-bit specific
+  
+  TODO: posted accesses - if we're not currently doing another posted access
+  then immediately signal valid to not hold up the pipeline and in the case of
+  loads remember the register we were supposed to access, and monitor the 
+  pipeline for a read from that register, and then indicate we're waiting for
+  the read to come through before we can continue
+ 
+  Copyright (C) 2012 Authors
+ 
+  Author(s): Julius Baxter <juliusbaxter@gmail.com>
+ 
+***************************************************************************** */
 
 `include "mor1kx-defines.v"
 
@@ -261,4 +269,5 @@ module mor1kx_lsu_fourstage
    
    assign lsu_result_o = access_done ? lsu_result_r : dbus_dat_extended;
 
-endmodule // mor1kx_lsu
+endmodule // mor1kx_lsu_fourstage
+

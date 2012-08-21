@@ -1,13 +1,18 @@
-/*
- *
- * Register file for espresso pipeline
- * 
- * 
- * We get addresses for A and B read directly in from the instruction bus
- * 
- * 
- */
+/* ****************************************************************************
+  This Source Code Form is subject to the terms of the 
+  Open Hardware Description License, v. 1.0. If a copy 
+  of the OHDL was not distributed with this file, You 
+  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
+  Description: Register file for espresso pipeline
+  
+  We get addresses for A and B read directly in from the instruction bus
+ 
+  Copyright (C) 2012 Authors
+ 
+  Author(s): Julius Baxter <juliusbaxter@gmail.com>
+ 
+***************************************************************************** */
 
 `include "mor1kx-defines.v"
 
