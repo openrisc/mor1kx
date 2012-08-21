@@ -1,0 +1,29 @@
+
+=pod
+
+=head1 I<< mor1kx >> - an OpenRISC processor IP core
+
+=head2 The Basics
+
+This repository contains an OpenRISC 1000 compliant processor IP core.
+
+It is written in Verilog HDL.
+
+This repository only contains the IP source code and some documentation. For
+a verification environment, please see other projects.
+
+=head2 Documentation
+
+The documentation is located in the doc/ directory.
+
+It is asciidoc format, and there's a makefile in there to build HTML or PDF. To
+build the HTML documentation, run the following in the doc/ directory:
+
+  make html
+
+=head2 License
+
+It is licensed under the Open Hardware Description License (OHDL). For
+details please see the LICENSE file or http://juliusbaxter.net/ohdl/
+
+=cut
