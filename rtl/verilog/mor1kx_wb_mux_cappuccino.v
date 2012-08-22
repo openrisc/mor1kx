@@ -44,7 +44,7 @@ module mor1kx_wb_mux_cappuccino
    assign rf_result_o = op_lsu_load_i ? lsu_result_i :
 			op_mfspr_i ? spr_i :
 			/* TODO - maybe eliminate this adder */
-			op_jal_i ? pc_execute_i + 4 :
+			op_jal_i ? pc_execute_i + 8 :
 			alu_result_i;
 
 endmodule // mor1kx_wb_mux_cappuccino
