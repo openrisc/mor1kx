@@ -1,17 +1,17 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
-  Description: RF writeback mux 
-  
+  Description: RF writeback mux
+
   Choose between ALU and LSU input. All combinatorial
- 
+
   Copyright (C) 2012 Authors
- 
+
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
+
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
@@ -26,7 +26,7 @@ module mor1kx_wb_mux_cappuccino
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
-   
+
    input clk, rst;
 
    input [OPTION_OPERAND_WIDTH-1:0] alu_result_i;
@@ -34,13 +34,13 @@ module mor1kx_wb_mux_cappuccino
    input [OPTION_OPERAND_WIDTH-1:0] pc_execute_i;
    input [OPTION_OPERAND_WIDTH-1:0] spr_i;
 
-   output [OPTION_OPERAND_WIDTH-1:0] rf_result_o;   
+   output [OPTION_OPERAND_WIDTH-1:0] rf_result_o;
 
    input 			      op_jal_i;
    input 			      op_lsu_load_i;
    input 			      op_mfspr_i;
 
-  
+
    assign rf_result_o = op_lsu_load_i ? lsu_result_i :
 			op_mfspr_i ? spr_i :
 			/* TODO - maybe eliminate this adder */
@@ -48,12 +48,3 @@ module mor1kx_wb_mux_cappuccino
 			alu_result_i;
 
 endmodule // mor1kx_wb_mux_cappuccino
-
-
-   
-		   
-   
-   
-				     
-
-  
