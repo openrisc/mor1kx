@@ -122,7 +122,8 @@ module mor1kx_execute_alu
    wire [OPTION_OPERAND_WIDTH-1:0] 	  xor_result;
 
    // Multiplier wires
-   wire [(OPTION_OPERAND_WIDTH*2)-1:0]	  mul_result;
+   wire 				  mul_op;   
+   wire [OPTION_OPERAND_WIDTH-1:0]	  mul_result;
    wire 				  mul_valid;
 
    wire [OPTION_OPERAND_WIDTH-1:0] 	  div_result;
@@ -175,19 +176,26 @@ module mor1kx_execute_alu
 					   {{OPTION_OPERAND_WIDTH-1{1'b0}},
 					    carry_in};
 
+   assign mul_op = opc_alu_i == `OR1K_ALU_OPC_MUL || 
+                   opc_alu_i == `OR1K_ALU_OPC_MULU;
+   
    generate
-      if (FEATURE_MULTIPLIER=="THREESTAGE") begin
-
-	 reg [(OPTION_OPERAND_WIDTH*2)-1:0] 	  mul_result0, mul_result1, mul_result2;
-	 reg [1:0] 				  mul_valid_shr;
+      if (FEATURE_MULTIPLIER=="THREESTAGE") begin : threestagemultiply
+	 // 32-bit multiplier with three registering stages to help with timing
+         reg [OPTION_OPERAND_WIDTH-1:0]           mul_opa, mul_opb, mul_result1, mul_result2;
+	 reg [2:0] 				  mul_valid_shr;
 
 	 always @(posedge clk)
 	   begin
-	      mul_result0 <= a * b;
-	      mul_result1 <= mul_result0;
-	      // Use enable for last stage.
-	      // TODO - check if this is better than registering inputs for synthesis.
-	      if (mul_valid_shr==2'b01)
+	      if (decode_valid_i && mul_op) 
+		begin
+		   mul_opa       <= a;
+		   mul_opb       <= b;
+		end
+
+              if (mul_valid_shr==3'b001)
+		mul_result1   <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
+	      if (mul_valid_shr==3'b010)
 		mul_result2 <= mul_result1;
 	   end
 	 
@@ -195,13 +203,13 @@ module mor1kx_execute_alu
 	 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
-	     mul_valid_shr <= 0;
+	     mul_valid_shr <= 3'b000;
 	   else if (decode_valid_i)
-	     mul_valid_shr <= 0;
+	     mul_valid_shr <= {2'b00, mul_op};
 	   else
-	     mul_valid_shr <= {mul_valid_shr[0],1'b1};
+	     mul_valid_shr <= {mul_valid_shr[1:0], 1'b0};
 	 
-	 assign mul_valid = mul_valid_shr[1] & !decode_valid_i;
+	 assign mul_valid = mul_valid_shr[2] & !decode_valid_i;
 
       end // if (FEATURE_MULTIPLIER=="THREESTAGE")
       else if (FEATURE_MULTIPLIER=="SIMULATION") begin
