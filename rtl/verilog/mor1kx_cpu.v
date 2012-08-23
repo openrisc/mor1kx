@@ -263,8 +263,9 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
 
-	 // synthesis translate_off
 	 
+	 // synthesis translate_off
+`ifndef SYNTHESIS	 
 
 	 assign monitor_flag =  monitor_flag_set ? 1 :
 			        monitor_flag_clear ? 0 : 
@@ -290,6 +291,7 @@ module mor1kx_cpu(/*AUTOARG*/
         
         assign monitor_execute_insn = monitor_execute_insn_reg;
 
+`endif
 	 // synthesis translate_on
 
 	 
@@ -392,6 +394,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
 
 	 // synthesis translate_off
+`ifndef SYNTHESIS	 
 	 assign monitor_flag =  monitor_flag_set ? 1 :
 			        monitor_flag_clear ? 0 : 
 				monitor_flag_sr;
@@ -413,7 +416,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	 assign monitor_spr_esr = {16'd0,espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_esr};
 	 assign monitor_spr_epcr = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_epcr;
 	 assign monitor_spr_eear = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_eear;
-
+`endif
 	 // synthesis translate_on
 
 	 
