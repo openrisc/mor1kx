@@ -184,9 +184,9 @@ module mor1kx
 	  .wbm_dat_o			(iwbm_dat_o),
 	  // Inputs
 	  .cpu_adr_i			(ibus_adr_o),
-	  .cpu_dat_i			(0),
+	  .cpu_dat_i			({OPTION_OPERAND_WIDTH{1'b0}}),
 	  .cpu_req_i			(ibus_req_o),
-	  .cpu_we_i			(0),
+	  .cpu_we_i			(1'b0),
 	  .cpu_bsel_i			(4'b1111),
 	  .wbm_err_i			(iwbm_err_i),
 	  .wbm_ack_i			(iwbm_ack_i),
@@ -215,10 +215,10 @@ module mor1kx
 		       .clk		(clk),
 		       .rst		(rst),
 		       .cpu_adr_i	(ibus_adr_o),		 // Templated
-		       .cpu_dat_i	(0),			 // Templated
+		       .cpu_dat_i	({OPTION_OPERAND_WIDTH{1'b0}}), // Templated
 		       .cpu_req_i	(ibus_req_o),		 // Templated
 		       .cpu_bsel_i	(4'b1111),		 // Templated
-		       .cpu_we_i	(0),			 // Templated
+		       .cpu_we_i	(1'b0),			 // Templated
 		       .wbm_err_i	(iwbm_err_i),		 // Templated
 		       .wbm_ack_i	(iwbm_ack_i),		 // Templated
 		       .wbm_dat_i	(iwbm_dat_i),		 // Templated
