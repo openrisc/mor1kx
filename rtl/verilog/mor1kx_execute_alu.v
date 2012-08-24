@@ -211,6 +211,49 @@ module mor1kx_execute_alu
 	 assign mul_valid = mul_valid_shr[2] & !decode_valid_i;
 
       end // if (FEATURE_MULTIPLIER=="THREESTAGE")
+      else if (FEATURE_MULTIPLIER=="SERIAL") begin : serialmultiply
+	 reg [(OPTION_OPERAND_WIDTH*2)-1:0]  mul_prod_r;
+	 reg [5:0]   serial_mul_cnt;   
+	 reg         mul_done;
+	 always @(posedge clk)
+	    if (rst) begin
+               mul_prod_r <=  64'h0000_0000_0000_0000;
+               serial_mul_cnt <= 6'd0;
+               mul_done <= 1'b0;
+	    end
+	    else if (|serial_mul_cnt) begin
+               serial_mul_cnt <= serial_mul_cnt - 6'd1;
+               
+	       if (mul_prod_r[0])
+		  mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH-1] 
+		     <= mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH] + a;
+               else
+		  mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH-1] 
+ 		     <= {1'b0,mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH]};
+               
+	       mul_prod_r[OPTION_OPERAND_WIDTH-2:0] <= mul_prod_r[OPTION_OPERAND_WIDTH-1:1];
+
+	       if (serial_mul_cnt==6'd1)
+		  mul_done <= 1'b1;
+               
+	    end
+	    else if (decode_valid_i && (opc_alu_i == `OR1K_ALU_OPC_MUL || 
+					opc_alu_i == `OR1K_ALU_OPC_MULU) && !mul_done) begin
+	       // Check if it's a signed multiply and operand b is negative, convert to positive
+               mul_prod_r <= (opc_alu_i == `OR1K_ALU_OPC_MUL) && b[OPTION_OPERAND_WIDTH-1] ? 
+			     ~b + {{OPTION_OPERAND_WIDTH-1{1'b0}},1'b1} : b;
+               mul_done <= 0;
+               serial_mul_cnt <= 6'b10_0000;
+	    end
+	    else if (decode_valid_i) begin
+               mul_done <= 1'b0;       
+	    end
+	 
+	 assign mul_valid  = mul_done;
+
+	 assign mul_result = mul_prod_r[OPTION_OPERAND_WIDTH-1:0];
+	 
+      end // if (FEATURE_MULTIPLIER=="SERIAL")
       else if (FEATURE_MULTIPLIER=="SIMULATION") begin
 	 // Simple multiplier result   
 	 assign mul_result = a * b;
