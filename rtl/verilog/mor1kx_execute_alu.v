@@ -195,8 +195,7 @@ module mor1kx_execute_alu
 
               if (mul_valid_shr==3'b001)
 		mul_result1   <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
-	      if (mul_valid_shr==3'b010)
-		mul_result2 <= mul_result1;
+	      mul_result2 <= mul_result1;
 	   end
 	 
 	 assign mul_result = mul_result2;
