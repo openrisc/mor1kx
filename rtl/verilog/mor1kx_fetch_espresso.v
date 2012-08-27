@@ -108,8 +108,7 @@ module mor1kx_fetch_espresso
    wire 				  taking_branch;
    wire					  jal_buffered;
    wire 				  retain_fetch_pc;
-   
-   
+
    assign taking_branch = branch_occur_i & padv_i;   
    
    assign bus_access_done =  (ibus_ack_i | ibus_err_i) & !(taking_branch);
@@ -126,7 +125,8 @@ module mor1kx_fetch_espresso
    // Early RF address fetch
    assign fetch_rfa_adr_o = insn_buffer[`OR1K_RA_SELECT];
    assign fetch_rfb_adr_o = insn_buffer[`OR1K_RB_SELECT];
-   assign jal_buffered = insn_buffer[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JALR |
+
+   assign jal_buffered = insn_buffer[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JALR ||
 			 insn_buffer[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JAL;
 
    assign retain_fetch_pc = jal_buffered & bus_access_done;
@@ -239,12 +239,6 @@ module mor1kx_fetch_espresso
      else if (fetch_req)
        decode_except_ibus_err_o <= ibus_err_i;
    
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       insn_buffer <= {`OR1K_OPCODE_NOP,26'd0};
-     else if (ibus_ack_i & (!execute_waiting_i | !next_insn_buffered))
-       insn_buffer <= ibus_dat_i;
-
    // Register rising edge on bus_access_done
     always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -268,6 +262,17 @@ module mor1kx_fetch_espresso
        next_insn_buffered <= ibus_ack_i & !branch_occur_i;
      else if (ibus_ack_i & execute_waiting_i)
        next_insn_buffered <= 1;
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       insn_buffer <= {`OR1K_OPCODE_NOP,26'd0};
+     else if (ibus_ack_i & (!execute_waiting_i | !next_insn_buffered) &
+	      // Don't buffer instruction after delay slot instruction
+	      // (usually we're receiving it as taking branch is asserted)
+	      // it could be another jump instruction and having it in
+	      // the insn_buffer has annoying side-effects.
+	      !taking_branch)
+       insn_buffer <= ibus_dat_i;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)       
