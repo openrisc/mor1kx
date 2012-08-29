@@ -15,8 +15,11 @@ can outline as much implementation detail as it wants but should ultimately
 provide information to users on how to program and use the peripheral, or what 
 to expect during execution of software on a particular configuration.
 
-Note: This documentation is far from complete. It is expected that the documentation
+.Document Status
+******************************************************************************
+This documentation is far from complete. It is expected that the documentation
 will become more extensive over time.
+******************************************************************************
 
 OpenRISC Family
 ~~~~~~~~~~~~~~~
@@ -45,33 +48,83 @@ high-performance or low-overhead pipeline implementations based on re-usable
 components eg. decode and ALU block. For users as a wider variety of 
 capabilities should be available to suit the processor's use case.
 
-Components
-----------
+Implementation Overview
+-----------------------
 
-Available Components
-~~~~~~~~~~~~~~~~~~~~
+The implementation is heavily modular, with each particular functional block
+of the design being contained within its own Verilog module or modules.
 
-At present the following pipeline implementations are available:
+The implementation configuration makes use of Verilog parameters. There should
+be no configuration performed with the use of Verilog defines.
+
+Hierarchy
+~~~~~~~~~
+
+The top few levels of hierarchy as as follows
+
+* mor1kx - Top-level, instantiatng bus interfaces, data cache and CPU top-level
+** mor1kx_dcache  - Data cache implementation
+** mor1kx_bus_if_xx - Bus interface, depending on desired bus standard
+** mor1kx_cpu - Pipeline implementation wrapper
+*** mor1kx_cpu_xx - Pipeline implementation, depending on configuration
+**** mor1kx_fetch_xx - Pipeline-implementation-dependent fetch stage
+**** mor1kx_decode - Generic decode stage
+**** mor1kx_execute_alu - Generic ALU for execute stage
+**** mor1kx_lsu_xx - Pipeline-implementation-dependent load/store unit
+**** mor1kx_wb_mux_xx - Pipeline-implementation-dependent writeback stage mux
+**** mor1kx_rf_xx - Pipeline-implementation-dependent register file
+**** mor1kx_ctrl_xx - Pipeline-implementation-dependent control stage, usually containing features such as tick timer, interrupts etc.
+
+The above hierarchy is not always the same for each pipeline implementation 
+(from _mor1kx_cpu_xx_ level down) but as a good indicator as to how the 
+existing pipeline implementations have been structured.
+
+Coding Style
+~~~~~~~~~~~~
+
+The coding style is a relatively simple Verilog style and should be adhered to
+for any future development. All of the following detail how the existing code
+base has been implemented, and it should be realtively easy to continue in that
+style, but if in doubt, the following details some of the rules:
+
+* module names should be prefixed with _mor1kx_ and be in lowercase and stored in a source file of the same name plus the standard verilog suffix, _.v_.
+* port names should have their direction abbreviation appended to the name
+** E.g the instruction bus address output should be ibus_adr_o
+** The only exceptions are the clock and reset ports, commonly referred to as _clk_ and _rst_ in the Verilog, and don't really require direction suffixes. The only exception is if a clock or reset generation module is outputting one of these, in which case it should have _o appended, otherwise for clock and reset inputs it can be inferred that they are inputs from the absence of _o.
+* As many port widths are usually reliant on paramters, the style of declaring the port names only in the module declaration statement, followed by the direction and width of each port should be adhered to. 
+** The Emacs Verilog auto-mode does it this way anyway, when the module is declared like _module mor1kx_xxx(/\*AUTOARG*/)_
+* Parameter names should be in UPPERCASE, with parameter values, if strings, also in uppercase.
+* Verilog reg and wire names should be named usefully, in lowercase, and make use of underscores in the name.
+* There should be no reason to alter the mor1kx-defines.v or mor1kx-sprs.v files unless it is expanding upon or fixing what is already there. _No new class of defines controlling implementation should be added_ (use parameters instead!) Those files are only for storing architectural information in Verilog format, which can then be used in the design.
+
+There has been heavy use of the Emacs Verilog mode auto-implement and wire
+features throughout the code. This is a useful tool and it would be useful to
+stick to using this for future pipeline implementations, to speed up the 
+tedious task of wiring up new blocks.
+
+CPU Components
+==============
+
+This section will outline each of the CPU component modules.
+
+CPU Pipeline Implementations
+----------------------------
+
+Available Implementations
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+At present the following pipeline implementations are available. These
+combine various of the components, outlined in a following section, to 
+implement the bulk of the processor.
+
 - cappuccino - 4 stage, single issue, debug unit, timers, PIC, tight cache 
                coupling,ORBIS32 support
 - espresso - 2 stage, single issue, debug unit, timers, PIC, ORBIS32 support
 
-Peripherals:
-- instruction cache
-- data cache
-- Wisbone bus interface
-
-Peripherals
-===========
-
-This section will outline each component's options and function.
-
-cappuccino pipeline
-------------------
+Cappuccino pipeline
+~~~~~~~~~~~~~~~~~~~
 
 A 4 stage pipeline, similar to the original OR1200 implementation.
-
-This pipeline is also known as the "fourstage" throughout the source.
 
 Caches supported, instruction cache not optional at present.
 
@@ -79,13 +132,276 @@ It has a delay slot.
 
 No DSX bit in SR.
 
-espresso pipeline
------------------
+Pipeline consists of the following modules:
 
-The espresso pipeline essentially contains a fetch and the-rest stage.
+* Fetch:
+** <<mor1kx_icache,mor1kx_icache>>
+** <<mor1kx_fetch_cappuccino,mor1kx_fetch_cappuccino>>
+* Decode
+** <<mor1kx_decode,mor1kx_decode>>
+* Execute/memory stage
+** <<mor1kx_execute_alu,mor1kx_execute_alu>>
+** <<mor1kx_lsu_cappuccino,mor1kx_lsu_cappuccino>>
+** <<mor1kx_wb_mux_cappuccino,mor1kx_wb_mux_cappuccino>>
+** <<mor1kx_rf_cappuccino,mor1kx_rf_cappuccino>>
+** <<mor1kx_execute_ctrl_cappuccino,mor1kx_execute_ctrl_cappuccino>>
+* Control stage
+** <<mor1kx_ctrl_cappuccino,mor1kx_ctrl_cappuccino>>
+** <<mor1kx_ctrl_branch_cappuccino,mor1kx_ctrl_branch_cappuccino>>
+
+The following sections outline the pipeline-specific modules
+
+[[mor1kx_ctrl_branch_cappuccino]]
+mor1kx_ctrl_branch_cappuccino
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This is the pipelines branch control unit, selecting the jump/branch address 
+and opcode input from execute stage, with flag input from control stage.
+Indication of whether a branch needs to be evaluated (based on flag) comes
+from the control stage.
+
+The block then outputs the appropriate indication of whether a branch is going
+to occur and the target address to the fetch stage.
+
+It is wholly combinatorial.
+
+[[mor1kx_ctrl_cappuccino]]
+mor1kx_ctrl_cappuccino
+^^^^^^^^^^^^^^^^^^^^^^
+
+This module contains a lot of the core functionality of the pipeline, such as:
+
+* SPRs (NPC, PPC, etc.) and accesses to them
+* PIC
+* Debug unit
+* Tick timer
+* Pipeline control signals
+** Advance/stall signaling to each pipeline stage
+** Exception handling
+
+It's in a big monolithic file but perhaps things like the PIC and tick timer
+could be split out and made genering among pipeline implementations.
+
+[[mor1kx_execute_ctrl_cappuccino]]
+mor1kx_execute_ctrl_cappuccino
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Determine the status of execute-stage units in play (ALU or LSU) and:
+
+* Determine when they're done
+* Control the write-enable to the register file for any result
+* Correctly propagate exception signals from either execute or earlier stages
+
+[[mor1kx_fetch_cappuccino]]
+mor1kx_fetch_cappuccino
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Fetch stage, tightly coupled with instruction cache.
+
+[[mor1kx_lsu_cappuccino]]
+mor1kx_lsu_cappuccino
+^^^^^^^^^^^^^^^^^^^^^
+
+Load/store unit.
+
+Performs accesses of the generic bus which may or may not be then going to
+a data cache, and finally out onto the bus via the selected bus interface.
+
+Is 32-bit specific.
+
+Combinatorial outputs to pipeline control logic to reduce latency, may 
+introduce long paths effecting timing, though.
+
+Handles sign extension if load/store requires it.
+Generates alignment exception, and handles bus error exception back to
+the mor1kx_execute_ctrl_cappuccino module.
+
+[[mor1kx_rf_cappuccino]]
+mor1kx_rf_cappuccino
+^^^^^^^^^^^^^^^^^^^^
+
+Register file for the pipeline. 2 lots of 32 general purpose registers (GPRs.)
+
+Handles forwarding from writeback to execute stage.
+
+Instantiates a RAM for each of the two register files (_mor1kx_rf_ram_ module.)
+
+[[mor1kx_wb_mux_cappuccino]]
+mor1kx_wb_mux_cappuccino
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Writeback stage mux. Inputs are ALU result, LSU result, SPR value for l.mfspr
+instruction. Generates link address for jump-and-link instructions.
+
+
+Espresso pipeline
+~~~~~~~~~~~~~~~~~
+
+The espresso pipeline essentially contains two stages: a fetch and "the-rest" 
+stages.
 
 No support for caches.
 
 It has a delay slot.
 
 Supports DSX bit in SR.
+
+Pipeline consists of the following modules:
+
+* Fetch:
+** <<mor1kx_fetch_espresso,mor1kx_fetch_espresso>>
+* Decode
+** <<mor1kx_decode,mor1kx_decode>>
+* Execute/memory stage
+** <<mor1kx_execute_alu,mor1kx_execute_alu>>
+** <<mor1kx_lsu_espresso,mor1kx_lsu_espresso>>
+** <<mor1kx_wb_mux_espresso,mor1kx_wb_mux_espresso>>
+** <<mor1kx_rf_espresso,mor1kx_rf_espresso>>
+* Control stage
+** <<mor1kx_ctrl_espresso,mor1kx_ctrl_espresso>>
+
+The following sections outline the pipeline-specific modules
+
+[[mor1kx_fetch_espresso]]
+mor1kx_fetch_espresso
+^^^^^^^^^^^^^^^^^^^^^
+
+This is the fetch stage for the espresso pipeline.
+
+It is tightly coupled with the control stage.
+
+The block attempts to stream in bursts from the bus interface.
+
+The block outputs register addresses for the next read from the RF.
+
+[[mor1kx_lsu_espresso]]
+mor1kx_lsu_espresso
+^^^^^^^^^^^^^^^^^^^
+
+A LSU specific to the espresso pipeline. Its features are similar to the
+<<mor1kx_lsu_cappuccino,mor1kx_lsu_cappuccino>> block.
+
+[[mor1kx_wb_mux_espresso]]
+mor1kx_wb_mux_espresso
+^^^^^^^^^^^^^^^^^^^^^^
+
+Writeback stage mux for the espresso pipeline. Similar to the 
+<<mor1kx_wb_mux_cappuccino,mor1kx_wb_mux_cappuccino>> block.
+
+[[mor1kx_rf_espresso]]
+mor1kx_rf_espresso
+^^^^^^^^^^^^^^^^^^
+
+Register file for the espresso pipeline. Simlar to the 
+<<mor1kx_rf_cappuccino,mor1kx_rf_cappuccino>> block.
+
+[[mor1kx_ctrl_espresso]]
+mor1kx_ctrl_espresso
+^^^^^^^^^^^^^^^^^^^^
+
+This module contains a lot of the core functionality of the pipeline, such as:
+
+* SPRs (NPC, PPC, etc.) and accesses to them
+* PIC
+* Debug unit
+* Tick timer
+* Pipeline control signals
+** Advance/stall signaling to each pipeline stage
+** Exception handling
+** Branch indication to fetch stage
+** Register file write enable
+
+Components
+----------
+
+[[mor1kx_bus_if_wb32]]
+mor1kx_bus_if_wb32
+~~~~~~~~~~~~~~~~~~
+
+This module is a Wishbone bus interface block and sits between the pipeline's
+fetch and load/store units and the Wishbone bus.
+
+It is Wishbone version B3 compliant and can perform burst reads.
+
+At present there are two configurations of the block, one is "classic" 
+configuration and the other is "B3 read bursting".
+
+The "classic" configuration performs all access as single cycle reads or 
+writes to the bus.
+
+The "B3 read bursting" mode will perform burst reads over the bus, but writes
+are still single cycle accesses. 
+
+[[mor1kx_cpu]]
+mor1kx_cpu
+~~~~~~~~~~
+
+The CPU pipeline wrapper layer. This selects the appropriate pipeline CPU 
+implementation toplevel.
+
+Additionally, some signals intended to be used as hooks for monitor modules are
+provided.
+
+[[mor1kx_dcache]]
+mor1kx_dcache
+~~~~~~~~~~~~~
+
+A data cache module.
+
+[[mor1kx_decode]]
+mor1kx_decode
+~~~~~~~~~~~~~
+
+This is a generic OR1K decode stage module, which can ideally be reused by each
+CPU implementation.
+
+The module can either register the its decode output or be wholly combinatorial.
+
+It generates ALU, LSU and control operation signals for the remainder of the pipeline
+units. Exceptions caused in this stage (ie, illegal instruction, system call etc.) or
+earlier (fetch stage exceptions like bus error) are also generated or passed through.
+
+[[mor1kx_execute_alu]]
+mor1kx_execute_alu
+~~~~~~~~~~~~~~~~~~
+
+This is a generic ALU implementation. It contains all of the integer arithmetic and
+logical operations which are supported in the ORBIS32 instruction set.
+
+The following features are optional. All can be disabled, or enabled with the 
+implementation options listed, if any:
+
+* Multiplier
+** Three stage, three cycle, full 32-bit parallel multiplier
+** Serial, 32-cycle serial multiplication implementation
+** Simulation, single cycle multiplication, not advisable for synthesis
+* Divider
+** Serial, 32-cycle serial division implementation
+** Simulation, single cycle division, not synthesisable
+* Shift-right-arithmetic
+* Rotate right
+* Shift instructions, logical shift left and right, and shift right arithmetic and rotate right can be chosen to be implemented in a single-cycle barrel shifter implementation or done serially to save implementation area.
+* Conditional move
+* Find first and last '1'
+
+The following is not yet supported:
+
+* Add with carry
+* Sign extension instructions
+
+The module also implements comparison logic for the set flag instructions.
+
+
+[[mor1kx_icache]]
+mor1kx_icache
+~~~~~~~~~~~~~
+
+[[mor1kx_rf_ram]]
+mor1kx_rf_ram
+~~~~~~~~~~~~~
+
+[[mor1kx_spram]]
+mor1kx_spram
+~~~~~~~~~~~~
+
+
