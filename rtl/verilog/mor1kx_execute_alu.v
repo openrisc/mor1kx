@@ -49,7 +49,7 @@ module mor1kx_execute_alu
    parameter FEATURE_CUST7 = "NONE";
    parameter FEATURE_CUST8 = "NONE";
 
-   parameter OPTION_SHIFTER = "ENABLED";
+   parameter OPTION_SHIFTER = "BARREL";
 
    input clk, rst;
 
