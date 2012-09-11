@@ -213,7 +213,8 @@ module mor1kx_execute_alu
            else if (decode_valid_i)
              mul_valid_shr <= {2'b00, mul_op};
            else
-             mul_valid_shr <= {mul_valid_shr[1:0], 1'b0};
+             mul_valid_shr <= mul_valid_shr[2] ? mul_valid_shr: 
+			      {mul_valid_shr[1:0], 1'b0};
          
          assign mul_valid = mul_valid_shr[2] & !decode_valid_i;
 
