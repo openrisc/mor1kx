@@ -421,8 +421,131 @@ module mor1kx_cpu(/*AUTOARG*/
 
 	 
       end
+      if (OPTION_CPU=="PRONTO_ESPRESSO") begin : prontoespresso
+	 mor1kx_cpu_prontoespresso
+	   #(
+	     .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+	     .FEATURE_DATACACHE(FEATURE_DATACACHE),
+	     .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
+	     .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
+	     .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
+	     .FEATURE_DMMU(FEATURE_DMMU),
+	     .FEATURE_INSTRUCTIONCACHE(FEATURE_INSTRUCTIONCACHE),
+	     .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
+	     .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
+	     .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
+	     .FEATURE_IMMU(FEATURE_IMMU),
+	     .FEATURE_PIC(FEATURE_PIC),
+	     .FEATURE_TIMER(FEATURE_TIMER),
+	     .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
+	     .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
+	     .FEATURE_MAC(FEATURE_MAC),
+	     .FEATURE_SYSCALL(FEATURE_SYSCALL),
+	     .FEATURE_TRAP(FEATURE_TRAP),
+	     .FEATURE_RANGE(FEATURE_RANGE),
+	     .OPTION_PIC_TRIGGER(OPTION_PIC_TRIGGER),
+	     .FEATURE_DSX(FEATURE_DSX),
+	     .FEATURE_FASTCONTEXTS(FEATURE_FASTCONTEXTS),
+	     .FEATURE_OVERFLOW(FEATURE_OVERFLOW),
+	     .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
+	     .OPTION_RF_WORDS(OPTION_RF_WORDS),
+	     .OPTION_RESET_PC(OPTION_RESET_PC),
+	     .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER),
+	     .FEATURE_DIVIDER(FEATURE_DIVIDER),
+	     .FEATURE_ADDC(FEATURE_ADDC),
+	     .FEATURE_SRA(FEATURE_SRA),
+	     .FEATURE_ROR(FEATURE_ROR),
+	     .FEATURE_EXT(FEATURE_EXT),
+	     .FEATURE_CMOV(FEATURE_CMOV),
+	     .FEATURE_FFL1(FEATURE_FFL1),
+	     .FEATURE_CUST1(FEATURE_CUST1),
+	     .FEATURE_CUST2(FEATURE_CUST2),
+	     .FEATURE_CUST3(FEATURE_CUST3),
+	     .FEATURE_CUST4(FEATURE_CUST4),
+	     .FEATURE_CUST5(FEATURE_CUST5),
+	     .FEATURE_CUST6(FEATURE_CUST6),
+	     .FEATURE_CUST7(FEATURE_CUST7),
+	     .FEATURE_CUST8(FEATURE_CUST8),
+	     .OPTION_SHIFTER(OPTION_SHIFTER)
+	     )
+	   mor1kx_cpu
+	   (/*AUTOINST*/
+	    // Outputs
+	    .ibus_adr_o			(ibus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
+	    .ibus_req_o			(ibus_req_o),
+	    .dbus_adr_o			(dbus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
+	    .dbus_dat_o			(dbus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
+	    .dbus_req_o			(dbus_req_o),
+	    .dbus_bsel_o		(dbus_bsel_o[3:0]),
+	    .dbus_we_o			(dbus_we_o),
+	    .du_dat_o			(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
+	    .du_ack_o			(du_ack_o),
+	    .du_stall_o			(du_stall_o),
+	    .spr_bus_addr_o		(spr_bus_addr_o[15:0]),
+	    .spr_bus_we_o		(spr_bus_we_o),
+	    .spr_bus_stb_o		(spr_bus_stb_o),
+	    .spr_bus_dat_o		(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
+	    .spr_sr_o			(spr_sr_o[15:0]),
+	    // Inputs
+	    .clk			(clk),
+	    .rst			(rst),
+	    .ibus_err_i			(ibus_err_i),
+	    .ibus_ack_i			(ibus_ack_i),
+	    .ibus_dat_i			(ibus_dat_i[`OR1K_INSN_WIDTH-1:0]),
+	    .dbus_err_i			(dbus_err_i),
+	    .dbus_ack_i			(dbus_ack_i),
+	    .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .irq_i			(irq_i[31:0]),
+	    .du_addr_i			(du_addr_i[15:0]),
+	    .du_stb_i			(du_stb_i),
+	    .du_dat_i			(du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .du_we_i			(du_we_i),
+	    .du_stall_i			(du_stall_i),
+	    .spr_bus_dat_dc_i		(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .spr_bus_ack_dc_i		(spr_bus_ack_dc_i),
+	    .spr_bus_dat_ic_i		({OPTION_OPERAND_WIDTH{1'b0}}),
+	    .spr_bus_ack_ic_i		(1'b0),
+	    .spr_bus_dat_dmmu_i		(spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .spr_bus_ack_dmmu_i		(spr_bus_ack_dmmu_i),
+	    .spr_bus_dat_immu_i		(spr_bus_dat_immu_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .spr_bus_ack_immu_i		(spr_bus_ack_immu_i),
+	    .spr_bus_dat_mac_i		(spr_bus_dat_mac_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .spr_bus_ack_mac_i		(spr_bus_ack_mac_i),
+	    .spr_bus_dat_pmu_i		(spr_bus_dat_pmu_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .spr_bus_ack_pmu_i		(spr_bus_ack_pmu_i),
+	    .spr_bus_dat_pcu_i		(spr_bus_dat_pcu_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
+	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
 
-      if (OPTION_CPU!="CAPPUCCINO" && OPTION_CPU!="ESPRESSO")
+	 // synthesis translate_off
+`ifndef SYNTHESIS	 
+	 assign monitor_flag =  monitor_flag_set ? 1 :
+			        monitor_flag_clear ? 0 : 
+				monitor_flag_sr;
+	 assign monitor_clk = clk;
+	 wire 				 cpu_fetch_branched;
+	 assign cpu_fetch_branched = !prontoespresso.mor1kx_cpu.mor1kx_fetch_prontoespresso.branch_occur_i &
+				     !prontoespresso.mor1kx_cpu.mor1kx_fetch_prontoespresso.bus_access_done &
+				     !prontoespresso.mor1kx_cpu.mor1kx_fetch_prontoespresso.bus_access_done_r;
+	 assign monitor_execute_insn = prontoespresso.mor1kx_cpu.mor1kx_fetch_prontoespresso.decode_insn_o;
+	 assign monitor_execute_advance = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.execute_done;
+ 	 assign monitor_flag_set = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.ctrl_flag_set_i;
+	 assign monitor_flag_clear = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.ctrl_flag_clear_i;
+	 assign monitor_flag_sr = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.flag;
+	 assign monitor_spr_sr = {16'd0,prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_sr[15:`OR1K_SPR_SR_F+1],prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.flag,prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_sr[`OR1K_SPR_SR_F-1:0]};
+	 assign monitor_execute_pc = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_ppc;
+	 assign monitor_rf_result_in = prontoespresso.mor1kx_cpu.mor1kx_rf_espresso.result_i;
+	 assign monitor_spr_esr = {16'd0,prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_esr};
+	 assign monitor_spr_epcr = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_epcr;
+	 assign monitor_spr_eear = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_eear;
+`endif
+	 // synthesis translate_on
+
+	 
+      end
+
+      if (OPTION_CPU!="CAPPUCCINO" && OPTION_CPU!="ESPRESSO" && OPTION_CPU!="PRONTO_ESPRESSO")
 	begin
 	   initial begin
 	      $display("Error: OPTION_CPU, %s, not valid", OPTION_CPU);
