@@ -457,7 +457,7 @@ module mor1kx_ctrl_prontoespresso
      else
        // Note: turned padv_fetch_o here into (padv_fetch_o & !ctrl_branch_occur) for
        // pronto version. This may have implications for exeception handling
-       execute_go <= (padv_fetch_o & !ctrl_branch_occur) | execute_waiting | 
+       execute_go <= (padv_fetch_o & !(ctrl_branch_occur | op_rfe)) | execute_waiting | 
                      (stepping & next_fetch_done_i);
 
    assign execute_done = execute_go & !execute_waiting;
@@ -680,17 +680,16 @@ module mor1kx_ctrl_prontoespresso
      else if (exception_re & !(rfete & op_rfe))
        begin
           if (except_ibus_err_i)
-            spr_epcr <= spr_ppc-4;
+            spr_epcr <= spr_ppc;
           else if (except_syscall_i)
             // EPCR after syscall is address of next not executed insn.
             spr_epcr <= spr_npc;
           else if (except_ticktimer | except_pic)
-            spr_epcr <= /*execute_delay_slot ? spr_ppc-4 :*/
-			/*check if delayed or not */ spr_ppc+4;
+            spr_epcr <= ctrl_branch_occur ? spr_ppc : spr_npc;
           else if (execute_stage_exceptions | decode_stage_exceptions)
-            spr_epcr <= /*execute_delay_slot ? spr_ppc-4 : */spr_ppc;
+            spr_epcr <= spr_ppc;
           else
-            spr_epcr <= /*execute_delay_slot ? spr_ppc-4 : */spr_ppc;
+            spr_epcr <= spr_ppc;
        end
      else if (spr_we && spr_addr==`OR1K_SPR_EPCR0_ADDR)
        spr_epcr <= spr_write_dat;
@@ -728,7 +727,7 @@ module mor1kx_ctrl_prontoespresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_ppc <= OPTION_RESET_PC;
-     else if (padv_fetch_o | (stepping & next_fetch_done_i))
+     else if ((padv_fetch_o | (stepping & next_fetch_done_i)) & !ctrl_branch_occur)
        spr_ppc <= spr_npc; // PC we've got in execute stage (about to finish)
 
    assign spr_npc_o = spr_npc;

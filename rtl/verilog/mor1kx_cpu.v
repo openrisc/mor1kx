@@ -524,10 +524,6 @@ module mor1kx_cpu(/*AUTOARG*/
 			        monitor_flag_clear ? 0 : 
 				monitor_flag_sr;
 	 assign monitor_clk = clk;
-	 wire 				 cpu_fetch_branched;
-	 assign cpu_fetch_branched = !prontoespresso.mor1kx_cpu.mor1kx_fetch_prontoespresso.branch_occur_i &
-				     !prontoespresso.mor1kx_cpu.mor1kx_fetch_prontoespresso.bus_access_done &
-				     !prontoespresso.mor1kx_cpu.mor1kx_fetch_prontoespresso.bus_access_done_r;
 	 assign monitor_execute_insn = prontoespresso.mor1kx_cpu.mor1kx_fetch_prontoespresso.decode_insn_o;
 	 assign monitor_execute_advance = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.execute_done;
  	 assign monitor_flag_set = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.ctrl_flag_set_i;

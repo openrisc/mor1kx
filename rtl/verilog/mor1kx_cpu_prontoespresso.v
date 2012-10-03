@@ -441,7 +441,7 @@ module mor1kx_cpu_prontoespresso
     .op_lsu_load_i			(op_lsu_load_o),
     .ppc_i 			        (spr_ppc_o),
     .op_mfspr_i			        (op_mfspr_o),
-    .pc_fetch_next_i                    (pc_fetch_next_o),
+    .pc_fetch_next_i                    (spr_npc_o),
     ); */
    mor1kx_wb_mux_espresso
      #(
@@ -457,7 +457,7 @@ module mor1kx_cpu_prontoespresso
       .alu_result_i			(alu_result_o),		 // Templated
       .lsu_result_i			(lsu_result_o),		 // Templated
       .ppc_i				(spr_ppc_o),		 // Templated
-      .pc_fetch_next_i			(pc_fetch_next_o),	 // Templated
+      .pc_fetch_next_i			(spr_npc_o),		 // Templated
       .spr_i				(mfspr_dat_o),		 // Templated
       .op_jal_i				(op_jal_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
