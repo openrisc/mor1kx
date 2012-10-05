@@ -224,7 +224,8 @@ module mor1kx_execute_alu
          reg [5:0]   serial_mul_cnt;   
          reg         mul_done;
 	 wire [OPTION_OPERAND_WIDTH-1:0] mul_a, mul_b;
-
+	 
+	 // Check if it's a signed multiply and operand b is negative, convert to positive
 	 assign mul_a = mul_op_signed & a[OPTION_OPERAND_WIDTH-1] ?
 					  ~a + 1 : a;
 	 assign mul_b = mul_op_signed & b[OPTION_OPERAND_WIDTH-1] ?
@@ -252,8 +253,7 @@ module mor1kx_execute_alu
                   mul_done <= 1'b1;
                
             end
-            else if (decode_valid_i && mul_op && !mul_done) begin
-               // Check if it's a signed multiply and operand b is negative, convert to positive
+            else if (decode_valid_i && mul_op/* && !mul_done*/) begin               
                mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH] <= 32'd0;
                mul_prod_r[OPTION_OPERAND_WIDTH-1:0] <= mul_b;
                mul_done <= 0;
@@ -263,7 +263,7 @@ module mor1kx_execute_alu
                mul_done <= 1'b0;       
             end
          
-         assign mul_valid  = mul_done;
+         assign mul_valid  = mul_done & !decode_valid_i;
 
          assign mul_result = mul_op_signed ? ((a[OPTION_OPERAND_WIDTH-1] ^ 
                                                b[OPTION_OPERAND_WIDTH-1]) ?
