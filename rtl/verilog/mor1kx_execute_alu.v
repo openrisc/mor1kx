@@ -187,7 +187,9 @@ module mor1kx_execute_alu
                           opc_insn_i == `OR1K_OPCODE_MULI;
    
    generate
+      /* verilator lint_off WIDTH */
       if (FEATURE_MULTIPLIER=="THREESTAGE") begin : threestagemultiply
+	 /* verilator lint_on WIDTH */
          // 32-bit multiplier with three registering stages to help with timing
          reg [OPTION_OPERAND_WIDTH-1:0]           mul_opa, mul_opb, mul_result1, mul_result2;
          reg [2:0]                                mul_valid_shr;
@@ -273,6 +275,7 @@ module mor1kx_execute_alu
 
 
 	 // synthesis translate_off
+	 `ifndef verilator
 	 always @(posedge mul_valid)
 	   begin
 	      @(posedge clk);
@@ -283,6 +286,7 @@ module mor1kx_execute_alu
 		$display("a=%08h b=%08h, mul_result=%08h, expected %08h",a, b, mul_result, ((a*b) & {OPTION_OPERAND_WIDTH{1'b1}}));
 	     end
 	   end
+	 `endif
          // synthesis translate_on
 	 
       end // if (FEATURE_MULTIPLIER=="SERIAL")
@@ -322,9 +326,11 @@ module mor1kx_execute_alu
          /* Cycle counter */
          always @(posedge clk `OR_ASYNC_RST)
            if (rst)
+	     /* verilator lint_off WIDTH */
              div_count <= OPTION_OPERAND_WIDTH-1;
            else if (decode_valid_i)
              div_count <= OPTION_OPERAND_WIDTH-1;
+	    /* verilator lint_on WIDTH */
            else
              div_count <= div_count - 1;
 
@@ -446,10 +452,11 @@ module mor1kx_execute_alu
                       opc_insn_i == `OR1K_OPCODE_SHRTI) ;
 
    generate
+      /* verilator lint_off WIDTH */
       if (OPTION_SHIFTER=="BARREL" &&
           FEATURE_SRA=="ENABLED" &&
           FEATURE_ROR=="ENABLED") begin : full_barrel_shifter
-         
+         /* verilator lint_on WIDTH */
          assign shift_valid = 1;
          assign shift_result = 
                                (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
@@ -464,9 +471,11 @@ module mor1kx_execute_alu
                                //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
                                a >> b[4:0];
       end // if (OPTION_SHIFTER=="ENABLED" &&...
+      /* verilator lint_off WIDTH */
       else if (OPTION_SHIFTER=="BARREL" &&
                FEATURE_SRA=="ENABLED" &&
                FEATURE_ROR!="ENABLED") begin : bull_barrel_shifter_no_ror
+	 /* verilator lint_on WIDTH */
          assign shift_valid = 1;
          assign shift_result = 
                                (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
@@ -478,9 +487,11 @@ module mor1kx_execute_alu
                                //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
                                a >> b[4:0];
       end // if (OPTION_SHIFTER=="ENABLED" &&...
+      /* verilator lint_off WIDTH */
       else if (OPTION_SHIFTER=="BARREL" &&
                FEATURE_SRA!="ENABLED" &&
                FEATURE_ROR!="ENABLED") begin : bull_barrel_shifter_no_ror_sra
+	 /* verilator lint_on WIDTH */
          assign shift_valid = 1;
          assign shift_result = 
                                (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?

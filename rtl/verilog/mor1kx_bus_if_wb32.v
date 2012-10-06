@@ -58,7 +58,9 @@ module mor1kx_bus_if_wb32
      $display("%m: Wishbone bus IF is %s",BUS_IF_TYPE);
    
    generate
+      /* verilator lint_off WIDTH */
       if (BUS_IF_TYPE=="B3_READ_BURSTING") begin : b3_read_bursting
+	 /* verilator lint_on WIDTH */
 
 	 // Burst until the incoming address is not what it should be
 	 wire 			      finish_burst;
