@@ -117,9 +117,10 @@ At present the following pipeline implementations are available. These
 combine various of the components, outlined in a following section, to 
 implement the bulk of the processor.
 
-- cappuccino - 4 stage, single issue, debug unit, timers, PIC, tight cache 
+- cappuccino - 4 stage, single issue, delay slot, debug unit, timers, PIC, tight cache 
                coupling,ORBIS32 support
-- espresso - 2 stage, single issue, debug unit, timers, PIC, ORBIS32 support
+- espresso - 2 stage, single issue, delay slot, debug unit, timers, PIC, ORBIS32 support
+- pronto espresso - 2 stage, single issue, no delay slot, debug unit, timers, PIC, ORBIS32 support
 
 Cappuccino pipeline
 ~~~~~~~~~~~~~~~~~~~
@@ -129,8 +130,6 @@ A 4 stage pipeline, similar to the original OR1200 implementation.
 Caches supported, instruction cache not optional at present.
 
 It has a delay slot.
-
-No DSX bit in SR.
 
 Pipeline consists of the following modules:
 
@@ -238,7 +237,9 @@ Espresso pipeline
 ~~~~~~~~~~~~~~~~~
 
 The espresso pipeline essentially contains two stages: a fetch and "the-rest" 
-stages.
+stages. There is no registering in the decode stage, so the register outputting
+the fetched instruction from the fetch stage is what is used for the remainder
+of that instruction's processing.
 
 No support for caches.
 
@@ -310,6 +311,66 @@ This module contains a lot of the core functionality of the pipeline, such as:
 ** Exception handling
 ** Branch indication to fetch stage
 ** Register file write enable
+
+
+Pronto Espresso pipeline
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The pronto espresso pipeline essentially contains two stages: a fetch and "the-rest" 
+stages. It is based on the Espresso pipeline, but does not have a delay slot on jumps
+and branches. As such, it reuses a lot of Espresso's pipeline.
+
+No support for caches.
+
+It has _no_ delay slot.
+
+Pipeline consists of the following modules:
+
+* Fetch:
+** <<mor1kx_fetch_prontoespresso,mor1kx_fetch_prontoespresso>>
+* Decode
+** <<mor1kx_decode,mor1kx_decode>>
+* Execute/memory stage
+** <<mor1kx_execute_alu,mor1kx_execute_alu>>
+** <<mor1kx_lsu_espresso,mor1kx_lsu_espresso>>
+** <<mor1kx_wb_mux_espresso,mor1kx_wb_mux_espresso>>
+** <<mor1kx_rf_espresso,mor1kx_rf_espresso>>
+* Control stage
+** <<mor1kx_ctrl_prontoespresso,mor1kx_ctrl_prontoespresso>>
+
+The following sections outline the pipeline-specific modules
+
+[[mor1kx_fetch_prontoespresso]]
+mor1kx_fetch_prontoespresso
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This is the fetch stage for the pronto espresso pipeline
+
+It is tightly coupled with the control stage.
+
+The block attempts to stream in bursts from the bus interface.
+
+The block outputs register addresses for the next read from the RF.
+
+It takes into account that the pipeline does not support a delay slot on jumps/branches.
+
+[[mor1kx_ctrl_prontoespresso]]
+mor1kx_ctrl_prontoespresso
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This module contains a lot of the core functionality of the pipeline, such as:
+
+* SPRs (NPC, PPC, etc.) and accesses to them
+* PIC
+* Debug unit
+* Tick timer
+* Pipeline control signals
+** Advance/stall signaling to each pipeline stage
+** Exception handling
+** Branch indication to fetch stage
+** Register file write enable
+
+It is based on the espresso pipeline, however is modified in such a way as to make sure it doesn't have a delay slot on branches.
 
 Components
 ----------
