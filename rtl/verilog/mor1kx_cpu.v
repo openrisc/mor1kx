@@ -167,7 +167,9 @@ module mor1kx_cpu(/*AUTOARG*/
 
    
    generate
+      /* verilator lint_off WIDTH */
       if (OPTION_CPU=="CAPPUCCINO") begin : cappuccino
+	 /* verilator lint_on WIDTH */
 	 mor1kx_cpu_cappuccino
 	   #(
 	     .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
@@ -295,8 +297,10 @@ module mor1kx_cpu(/*AUTOARG*/
 	 // synthesis translate_on
 
 	 
-      end
+      end // block: cappuccino
+      /* verilator lint_off WIDTH */
       if (OPTION_CPU=="ESPRESSO") begin : espresso
+	 /* verilator lint_on WIDTH */
 	 mor1kx_cpu_espresso
 	   #(
 	     .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
@@ -420,8 +424,10 @@ module mor1kx_cpu(/*AUTOARG*/
 	 // synthesis translate_on
 
 	 
-      end
+      end // block: espresso
+      /* verilator lint_off WIDTH */
       if (OPTION_CPU=="PRONTO_ESPRESSO") begin : prontoespresso
+	 /* verilator lint_on WIDTH */
 	 mor1kx_cpu_prontoespresso
 	   #(
 	     .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
@@ -540,8 +546,10 @@ module mor1kx_cpu(/*AUTOARG*/
 
 	 
       end
-
-      if (OPTION_CPU!="CAPPUCCINO" && OPTION_CPU!="ESPRESSO" && OPTION_CPU!="PRONTO_ESPRESSO")
+      /* verilator lint_off WIDTH */
+      if (OPTION_CPU!="CAPPUCCINO" && OPTION_CPU!="ESPRESSO" && 
+	  OPTION_CPU!="PRONTO_ESPRESSO")
+	/* verilator lint_on WIDTH */
 	begin
 	   initial begin
 	      $display("Error: OPTION_CPU, %s, not valid", OPTION_CPU);
