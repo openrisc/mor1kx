@@ -735,7 +735,8 @@ module mor1kx_cpu_cappuccino
        .FEATURE_MAC(FEATURE_MAC),
        .FEATURE_SYSCALL(FEATURE_SYSCALL),
        .FEATURE_TRAP(FEATURE_TRAP),
-       .FEATURE_RANGE(FEATURE_RANGE)
+       .FEATURE_RANGE(FEATURE_RANGE),
+       .FEATURE_DSX(FEATURE_DSX)
        )
      mor1kx_ctrl_cappuccino 
      (/*AUTOINST*/

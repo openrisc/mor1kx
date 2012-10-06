@@ -510,6 +510,8 @@ module mor1kx_ctrl_cappuccino
 	    spr_sr[`OR1K_SPR_SR_DME ] <= 1'b0;
 	  if (FEATURE_IMMU!="NONE")
 	    spr_sr[`OR1K_SPR_SR_IME ] <= 1'b0;
+          if (FEATURE_DSX!="NONE")
+	    spr_sr[`OR1K_SPR_SR_DSX ] <= ctrl_delay_slot;
        end
      else if (padv_ctrl)
        begin
@@ -554,10 +556,10 @@ module mor1kx_ctrl_cappuccino
 		 spr_sr[`OR1K_SPR_SR_DSX ] <= spr_write_dat[`OR1K_SPR_SR_DSX ];
 	       
 	       spr_sr[`OR1K_SPR_SR_EPH ] <= spr_write_dat[`OR1K_SPR_SR_EPH ];
-
 	    end
 	  else if (op_rfe)
 	    spr_sr <= spr_esr;
+	  
        end // if (padv_ctrl)
    
    // Exception SR
