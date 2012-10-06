@@ -73,7 +73,7 @@ module mor1kx
    parameter FEATURE_SRA		= "ENABLED";
    parameter FEATURE_ROR		= "NONE";
    parameter FEATURE_EXT		= "NONE";
-   parameter FEATURE_CMOV		= "NONE";
+   parameter FEATURE_CMOV		= "ENABLED";
    parameter FEATURE_FFL1		= "ENABLED";
    
    parameter FEATURE_CUST1		= "NONE";
