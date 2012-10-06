@@ -39,17 +39,17 @@ module mor1kx_ctrl_prontoespresso
    ctrl_branch_occur_o, rf_we_o,
    // Inputs
    clk, rst, ctrl_alu_result_i, ctrl_rfb_i, ctrl_flag_set_i,
-   ctrl_flag_clear_i, ctrl_opc_insn_i, pc_fetch_i, fetch_advancing_i,
-   except_ibus_err_i, except_illegal_i, except_syscall_i,
-   except_dbus_i, except_trap_i, except_align_i, next_fetch_done_i,
-   alu_valid_i, lsu_valid_i, op_alu_i, op_lsu_load_i, op_lsu_store_i,
-   op_jr_i, op_jbr_i, irq_i, du_addr_i, du_stb_i, du_dat_i, du_we_i,
-   du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i, spr_bus_dat_ic_i,
-   spr_bus_ack_ic_i, spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i,
-   spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
-   spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
-   spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
-   spr_bus_ack_fpu_i, rf_wb_i
+   ctrl_flag_clear_i, ctrl_opc_insn_i, pc_fetch_i, pc_fetch_next_i,
+   fetch_advancing_i, except_ibus_err_i, except_illegal_i,
+   except_syscall_i, except_dbus_i, except_trap_i, except_align_i,
+   next_fetch_done_i, alu_valid_i, lsu_valid_i, op_alu_i,
+   op_lsu_load_i, op_lsu_store_i, op_jr_i, op_jbr_i, irq_i, du_addr_i,
+   du_stb_i, du_dat_i, du_we_i, du_stall_i, spr_bus_dat_dc_i,
+   spr_bus_ack_dc_i, spr_bus_dat_ic_i, spr_bus_ack_ic_i,
+   spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i, spr_bus_dat_immu_i,
+   spr_bus_ack_immu_i, spr_bus_dat_mac_i, spr_bus_ack_mac_i,
+   spr_bus_dat_pmu_i, spr_bus_ack_pmu_i, spr_bus_dat_pcu_i,
+   spr_bus_ack_pcu_i, spr_bus_dat_fpu_i, spr_bus_ack_fpu_i, rf_wb_i
    );
 
    parameter OPTION_OPERAND_WIDTH       = 32;
@@ -104,6 +104,7 @@ module mor1kx_ctrl_prontoespresso
    
    // PC of execute stage (NPC)
    input [OPTION_OPERAND_WIDTH-1:0] pc_fetch_i;
+   input [OPTION_OPERAND_WIDTH-1:0] pc_fetch_next_i;
    input                            fetch_advancing_i;
    
    
@@ -288,7 +289,6 @@ module mor1kx_ctrl_prontoespresso
    wire                              du_restart_from_stall;
    wire [1:0]                        pstep;
    wire                              stepping;
-   wire                              stepped_into_delay_slot;
    wire                              du_npc_write;
    reg                               du_npc_written;
    reg [OPTION_OPERAND_WIDTH-1:0]    du_spr_npc;
@@ -715,9 +715,15 @@ module mor1kx_ctrl_prontoespresso
      else if (du_restart_o)
        spr_npc <= du_restart_pc_o;
      else if (stepping & next_fetch_done_i)
-       spr_npc <= /*execute_delay_slot ? last_branch_target_pc : */pc_fetch_i;
+       // At the time next_fetch_done_i goes high, pc_fetch_i holds
+       // the next PC to be fetched, so this is essentially the NPC
+       // This saves an adder!
+       spr_npc <= pc_fetch_i;
      else if (stepping & exception_r)
        spr_npc <= exception_pc_addr;
+     else if (stepping & execute_done & ctrl_branch_occur)
+       // The case where we stepped into a jump
+       spr_npc <= ctrl_branch_target_o;
      else if (fetch_advance)
        // PC we're now executing
        spr_npc <= fetch_take_exception_branch_o ? exception_pc_addr : 
@@ -1247,9 +1253,7 @@ module mor1kx_ctrl_prontoespresso
              stepped_into_rfe <= op_rfe;
          
          assign du_restart_pc_o = du_npc_written ? du_spr_npc :
-                                  stepped_into_rfe ? spr_epcr :
-                                  stepped_into_delay_slot ?
-                                  last_branch_target_pc : spr_npc;
+                                  stepped_into_rfe ? spr_epcr : spr_npc;
 
          assign du_restart_o = du_restart_from_stall;
          
@@ -1277,8 +1281,6 @@ module mor1kx_ctrl_prontoespresso
            else if (!stepping & execute_done)
              branch_step <= {branch_step[0], /*execute_delay_slot*/ 1'b0};
 
-         assign stepped_into_delay_slot = branch_step[1];
-         
          /* Signals for waveform debuging */
          wire [31:0] spr_read_data_group_0;
          assign spr_read_data_group_0 = spr_internal_read_dat[0];
@@ -1352,7 +1354,6 @@ module mor1kx_ctrl_prontoespresso
            assign du_restart_pc_o = 0;
            assign stepping = 0;
            assign du_npc_write = 0;        
-           assign stepped_into_delay_slot = 0;
            assign du_dat_o = 0;
            assign du_restart_from_stall = 0;
            assign spr_access_ack[6] = 0;

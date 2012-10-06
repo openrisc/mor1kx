@@ -129,7 +129,7 @@ module mor1kx_fetch_prontoespresso
    assign jal_buffered = insn_buffer[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JALR ||
 			 insn_buffer[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JAL;
 
-   assign retain_fetch_pc = jal_buffered & bus_access_done;
+   assign retain_fetch_pc = jal_buffered & bus_access_done & !stepping_i;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -217,6 +217,8 @@ module mor1kx_fetch_prontoespresso
      else if (fetch_take_exception_branch_i | (du_stall_i & !execute_waiting_i))
        // Put a NOP in the pipeline when starting exception - remove any state
        // which may be causing the exception
+       // Also, when starting a stall, remove the instruction in the
+       // pipeline.
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
      else if (padv_i & branch_occur_r)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
@@ -227,6 +229,8 @@ module mor1kx_fetch_prontoespresso
 			)
 	      )
        decode_insn_o <= branch_occur_re ? {`OR1K_OPCODE_NOP,26'd0} : insn_buffer;
+     else if (stepping_i & bus_access_done_re_r)
+       decode_insn_o <= insn_buffer;
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)

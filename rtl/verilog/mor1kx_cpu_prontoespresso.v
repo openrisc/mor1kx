@@ -519,7 +519,8 @@ module mor1kx_cpu_prontoespresso
     .ctrl_flag_set_i		(flag_set_o),
     .ctrl_flag_clear_i		(flag_clear_o),
     .pc_ctrl_i			(),
-    .pc_fetch_i 		(pc_fetch_o),    
+    .pc_fetch_i 		(pc_fetch_o),
+    .pc_fetch_next_i 		(pc_fetch_next_o),
     .ctrl_opc_insn_i		(opc_insn_o),
     .ctrl_branch_target_i	(ctrl_branch_target_o),
     .op_alu_i			(op_alu_o),	 
@@ -607,6 +608,7 @@ module mor1kx_cpu_prontoespresso
 	.ctrl_flag_clear_i		(flag_clear_o),		 // Templated
 	.ctrl_opc_insn_i		(opc_insn_o),		 // Templated
 	.pc_fetch_i			(pc_fetch_o),		 // Templated
+	.pc_fetch_next_i		(pc_fetch_next_o),	 // Templated
 	.fetch_advancing_i		(fetch_advancing_o),	 // Templated
 	.except_ibus_err_i		(execute_except_ibus_err_o), // Templated
 	.except_illegal_i		(execute_except_illegal_o), // Templated
