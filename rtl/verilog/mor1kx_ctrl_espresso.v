@@ -30,7 +30,7 @@
 module mor1kx_ctrl_espresso
   (/*AUTOARG*/
    // Outputs
-   spr_npc_o, spr_ppc_o, mfspr_dat_o, ctrl_mfspr_we_o,
+   flag_o, spr_npc_o, spr_ppc_o, mfspr_dat_o, ctrl_mfspr_we_o,
    pipeline_flush_o, padv_fetch_o, padv_decode_o, padv_execute_o,
    fetch_take_exception_branch_o, exception_taken_o,
    execute_waiting_o, stepping_o, du_dat_o, du_ack_o, du_stall_o,
@@ -96,7 +96,8 @@ module mor1kx_ctrl_espresso
    input [OPTION_OPERAND_WIDTH-1:0] ctrl_rfb_i;
    
    input                            ctrl_flag_set_i, ctrl_flag_clear_i;
-   
+   output                           flag_o;
+ 			    
    output [OPTION_OPERAND_WIDTH-1:0] spr_npc_o;
    output [OPTION_OPERAND_WIDTH-1:0] spr_ppc_o;
 
@@ -485,6 +486,8 @@ module mor1kx_ctrl_espresso
      else if (execute_done)
        flag <= ctrl_flag_clear_i ? 0 :
                ctrl_flag_set_i ? 1 : flag;
+
+   assign flag_o = flag;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
