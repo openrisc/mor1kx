@@ -268,6 +268,8 @@ module mor1kx_fetch_prontoespresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        insn_buffer <= {`OR1K_OPCODE_NOP,26'd0};
+     else if (taking_branch)
+       insn_buffer <= {`OR1K_OPCODE_NOP,26'd0}; // Nullify anythign we have bufferred
      else if (ibus_ack_i & (!execute_waiting_i | !next_insn_buffered) &
 	      // Don't buffer instruction after delay slot instruction
 	      // (usually we're receiving it as taking branch is asserted)
@@ -284,5 +286,6 @@ module mor1kx_fetch_prontoespresso
      else if (ibus_err_i)
        wait_for_exception_after_ibus_err <= 1;
    
-endmodule // mor1kx_fetch_espresso
+endmodule // mor1kx_fetch_prontoespresso
+
 
