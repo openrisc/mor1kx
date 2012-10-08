@@ -224,9 +224,6 @@ module mor1kx_ctrl_prontoespresso
    
    reg                               exception_taken;
    
-   reg [OPTION_OPERAND_WIDTH-1:0]    last_branch_insn_pc;
-   reg [OPTION_OPERAND_WIDTH-1:0]    last_branch_target_pc;
-
    reg                               take_exception;
    reg                               exception_r;
    
@@ -467,10 +464,8 @@ module mor1kx_ctrl_prontoespresso
                           (op_lsu_load_i | op_lsu_store_i) ? 
                           lsu_valid_i : 1'b1;
 
-
    assign execute_waiting = !execute_valid & !waiting_for_fetch;
    assign execute_waiting_o = execute_waiting;
-   
    
    assign padv_execute_o = execute_done;
 
@@ -491,7 +486,6 @@ module mor1kx_ctrl_prontoespresso
                ctrl_flag_set_i ? 1 : flag;
 
    assign flag_o = flag;
-   
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -531,18 +525,6 @@ module mor1kx_ctrl_prontoespresso
 
    assign exception_taken_o = exception_taken;
    
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       last_branch_insn_pc <= 0;
-     else if (fetch_advance & ctrl_branch_occur)
-       last_branch_insn_pc <= spr_ppc;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       last_branch_target_pc <= 0;
-     else if (execute_done & ctrl_branch_occur & stepping)
-       last_branch_target_pc <= ctrl_branch_target_o;
-
    // Used to gate execute stage's advance signal in the case where a LSU op has
    // finished before the next instruction has been fetched. Typically this
    // occurs when not using icache and doing lots of memory accesses.
@@ -553,7 +535,6 @@ module mor1kx_ctrl_prontoespresso
        waiting_for_fetch <= 0;
      else if (!execute_waiting & execute_waiting_r & !next_fetch_done_i)
        waiting_for_fetch <= 1;
-
 
    assign doing_rfe = ((execute_done & op_rfe) | doing_rfe_r) & 
                       !deassert_doing_rfe;
@@ -641,14 +622,6 @@ module mor1kx_ctrl_prontoespresso
 
             end // if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) &&...
 
-          /* Need to check for DSX being set on exception entry on execute_done
-           as the delay slot information is gone after it goes high */
-	  /* NO DSX support in pipelines without delay slot
-          if (FEATURE_DSX!="NONE")
-            if (exception_r || exception_re)
-              spr_sr[`OR1K_SPR_SR_DSX ] <= execute_delay_slot;
-	   */
-
        end // if (execute_done)
    
    // Exception SR
@@ -724,10 +697,11 @@ module mor1kx_ctrl_prontoespresso
      else if (stepping & execute_done & ctrl_branch_occur)
        // The case where we stepped into a jump
        spr_npc <= ctrl_branch_target_o;
-     else if (fetch_advance)
+     else if ((fetch_advance & exception) | padv_fetch_o )
        // PC we're now executing
-       spr_npc <= fetch_take_exception_branch_o ? exception_pc_addr : 
-                  ctrl_branch_occur ? ctrl_branch_target_o : pc_fetch_i; 
+       spr_npc <= (fetch_take_exception_branch_o | (fetch_advance & exception)) ? 
+		  exception_pc_addr : ctrl_branch_occur ? 
+		  ctrl_branch_target_o : pc_fetch_i; 
 
    // Previous PC (PPC)
    always @(posedge clk `OR_ASYNC_RST)
@@ -738,24 +712,7 @@ module mor1kx_ctrl_prontoespresso
 
    assign spr_npc_o = spr_npc;
    assign spr_ppc_o = spr_ppc;
-   
-   // Remember when we're in a delay slot in execute stage.
-   /*
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-        execute_delay_slot <= 0;
-     else if (execute_done)
-       execute_delay_slot <= execute_delay_slot ? 0 : 
-                             ctrl_branch_occur;
-    */
-   /*
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       delay_slot_rf_we_done <= 0;
-     else
-       delay_slot_rf_we_done <= rf_we_o & execute_delay_slot;
-   */
-   
+     
    wire [31:0] spr_vr;
    wire [31:0] spr_upr;
    wire [31:0] spr_cpucfgr;
@@ -1458,7 +1415,54 @@ module mor1kx_ctrl_prontoespresso
       end
    endgenerate
 
-   
-   
+   parameter FEATURE_INBUILT_CHECKERS = "NONE";
+   generate
+      if (FEATURE_INBUILT_CHECKERS != "NONE") begin : execute_checker
+
+	 reg [OPTION_OPERAND_WIDTH-1:0] last_execute_pc;
+	 reg 				just_branched = 1;
+	 integer 			insns = 0;
+	 
+
+	 // A monitor to do a rudimentary check of the processor's PC 
+	 // progression
+	 always @(negedge clk) begin
+	    if (execute_done) begin
+	       
+	       // First instruction of an exception vector, ie.
+	       // 0x100, 0x200, 0x300 ... 0x2000
+	       if (~|spr_ppc[31:14] && ~|spr_ppc[7:0])
+		 just_branched = 1;
+
+	       if (!just_branched && spr_ppc != (last_execute_pc+4) && 
+		   (insns > 2))
+		 begin
+		    #5;
+		    $display("CPU didn't execute in correct order");
+		    $display("went: %08h, %08h",last_execute_pc, spr_ppc);
+		    $finish();
+		 end
+	       
+	       insns = insns + 1;
+	       last_execute_pc = spr_ppc;
+	       
+	       case (ctrl_opc_insn_i)
+		 `OR1K_OPCODE_J,
+		 `OR1K_OPCODE_JAL,
+		 `OR1K_OPCODE_JALR,
+		 `OR1K_OPCODE_JR,
+		 `OR1K_OPCODE_BNF,
+		 `OR1K_OPCODE_BF,
+		 `OR1K_OPCODE_RFE,
+		 `OR1K_OPCODE_SYSTRAPSYNC:
+		   just_branched = 1;
+		 default:
+		   just_branched = 0;
+	       endcase // case (`EXECUTE_STAGE_INSN[`OR1K_OPCODE_POS])
+	       
+	    end
+	 end // always @ (posedge `CPU_clk)
+      end
+   endgenerate
    
 endmodule // mor1kx_ctrl
