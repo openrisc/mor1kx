@@ -697,7 +697,8 @@ module mor1kx_ctrl_prontoespresso
      else if (stepping & execute_done & ctrl_branch_occur)
        // The case where we stepped into a jump
        spr_npc <= ctrl_branch_target_o;
-     else if ((fetch_advance & exception) | padv_fetch_o )
+     else if (((fetch_advance & exception)|fetch_take_exception_branch_o)  | 
+	      padv_fetch_o )
        // PC we're now executing
        spr_npc <= (fetch_take_exception_branch_o | (fetch_advance & exception)) ? 
 		  exception_pc_addr : ctrl_branch_occur ? 
@@ -1415,7 +1416,8 @@ module mor1kx_ctrl_prontoespresso
       end
    endgenerate
 
-   parameter FEATURE_INBUILT_CHECKERS = "NONE";
+   // synthesis translate_off
+   parameter FEATURE_INBUILT_CHECKERS = "ENABLED";
    generate
       if (FEATURE_INBUILT_CHECKERS != "NONE") begin : execute_checker
 
@@ -1437,7 +1439,9 @@ module mor1kx_ctrl_prontoespresso
 	       if (!just_branched && spr_ppc != (last_execute_pc+4) && 
 		   (insns > 2))
 		 begin
+		    /* verilator lint_off STMTDLY */
 		    #5;
+		    /* verilator lint_on STMTDLY */
 		    $display("CPU didn't execute in correct order");
 		    $display("went: %08h, %08h",last_execute_pc, spr_ppc);
 		    $finish();
@@ -1464,5 +1468,6 @@ module mor1kx_ctrl_prontoespresso
 	 end // always @ (posedge `CPU_clk)
       end
    endgenerate
+   // synthesis translate_on
    
 endmodule // mor1kx_ctrl
