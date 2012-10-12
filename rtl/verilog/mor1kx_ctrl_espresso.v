@@ -231,6 +231,7 @@ module mor1kx_ctrl_espresso
    reg [OPTION_OPERAND_WIDTH-1:0]    exception_pc_addr;
    
    reg                               waiting_for_fetch;
+   reg                               branched_and_waiting_for_fetch;
    
    reg                               doing_rfe_r;
    wire                              doing_rfe;
@@ -550,6 +551,17 @@ module mor1kx_ctrl_espresso
      else if (!execute_waiting & execute_waiting_r & !next_fetch_done_i)
        waiting_for_fetch <= 1;
 
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       branched_and_waiting_for_fetch <= 0;
+     else if (exception_re)
+       branched_and_waiting_for_fetch <= 0;
+     else if (padv_fetch_o & ctrl_branch_occur_o)
+       branched_and_waiting_for_fetch <= 1;
+     else if (branched_and_waiting_for_fetch)
+       branched_and_waiting_for_fetch <= !next_fetch_done_i;
+   
+   
 
    assign doing_rfe = ((execute_done & op_rfe) | doing_rfe_r) & 
                       !deassert_doing_rfe;
@@ -680,8 +692,8 @@ module mor1kx_ctrl_espresso
             // EPCR after syscall is address of next not executed insn.
             spr_epcr <= spr_npc;
           else if (except_ticktimer | except_pic)
-            spr_epcr <= execute_delay_slot ? spr_ppc-4 :
-			/*check if delayed or not */ spr_ppc+4;
+            spr_epcr <= branched_and_waiting_for_fetch ? spr_npc :
+			execute_delay_slot ? spr_ppc-4 : spr_ppc+4;
           else if (execute_stage_exceptions | decode_stage_exceptions)
             spr_epcr <= execute_delay_slot ? spr_ppc-4 : spr_ppc;
           else
