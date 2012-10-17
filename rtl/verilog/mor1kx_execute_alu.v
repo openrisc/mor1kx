@@ -195,6 +195,9 @@ module mor1kx_execute_alu
          reg [2:0]                                mul_valid_shr;
 
          always @(posedge clk)
+	   if (rst)
+	     mul_result1 <= {OPTION_OPERAND_WIDTH{1'b0}};
+	   else
            begin
               if (decode_valid_i && mul_op) 
                 begin
