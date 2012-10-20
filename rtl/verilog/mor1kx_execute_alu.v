@@ -400,33 +400,50 @@ module mor1kx_execute_alu
       end
    endgenerate
 
+   wire ffl1_valid;
    generate
-      if (FEATURE_FFL1=="ENABLED") begin
-         assign ffl1_result = (opc_alu_secondary_i[2]) ? 
-              
-                              (a[31] ? 32 : a[30] ? 31 : a[29] ? 30 : 
-                               a[28] ? 29 : a[27] ? 28 : a[26] ? 27 : 
-                               a[25] ? 26 : a[24] ? 25 : a[23] ? 24 : 
-                               a[22] ? 23 : a[21] ? 22 : a[20] ? 21 : 
-                               a[19] ? 20 : a[18] ? 19 : a[17] ? 18 : 
-                               a[16] ? 17 : a[15] ? 16 : a[14] ? 15 : 
-                               a[13] ? 14 : a[12] ? 13 : a[11] ? 12 : 
-                               a[10] ? 11 : a[9] ? 10 : a[8] ? 9 : 
-                               a[7] ? 8 : a[6] ? 7 : a[5] ? 6 : a[4] ? 5 : 
-                               a[3] ? 4 : a[2] ? 3 : a[1] ? 2 : a[0] ? 1 : 0 ) :
-                              (a[0] ? 1 : a[1] ? 2 : a[2] ? 3 : a[3] ? 4 : 
-                               a[4] ? 5 : a[5] ? 6 : a[6] ? 7 : a[7] ? 8 : 
-                               a[8] ? 9 : a[9] ? 10 : a[10] ? 11 : a[11] ? 12 :
-                               a[12] ? 13 : a[13] ? 14 : a[14] ? 15 : 
-                               a[15] ? 16 : a[16] ? 17 : a[17] ? 18 : 
-                               a[18] ? 19 : a[19] ? 20 : a[20] ? 21 : 
-                               a[21] ? 22 : a[22] ? 23 : a[23] ? 24 : 
-                               a[24] ? 25 : a[25] ? 26 : a[26] ? 27 : 
-                               a[27] ? 28 : a[28] ? 29 : a[29] ? 30 : 
-                               a[30] ? 31 : a[31] ? 32 : 0);
+      if (FEATURE_FFL1!="NONE") begin
+	 wire [OPTION_OPERAND_WIDTH-1:0] ffl1_result_wire;
+	 assign ffl1_result_wire = (opc_alu_secondary_i[2]) ?
+				   (a[31] ? 32 : a[30] ? 31 : a[29] ? 30 :
+				    a[28] ? 29 : a[27] ? 28 : a[26] ? 27 :
+				    a[25] ? 26 : a[24] ? 25 : a[23] ? 24 :
+				    a[22] ? 23 : a[21] ? 22 : a[20] ? 21 :
+				    a[19] ? 20 : a[18] ? 19 : a[17] ? 18 :
+				    a[16] ? 17 : a[15] ? 16 : a[14] ? 15 :
+				    a[13] ? 14 : a[12] ? 13 : a[11] ? 12 :
+				    a[10] ? 11 : a[9] ? 10 : a[8] ? 9 :
+				    a[7] ? 8 : a[6] ? 7 : a[5] ? 6 : a[4] ? 5 :
+				    a[3] ? 4 : a[2] ? 3 : a[1] ? 2 : a[0] ? 1 : 0 ) :
+				   (a[0] ? 1 : a[1] ? 2 : a[2] ? 3 : a[3] ? 4 :
+				    a[4] ? 5 : a[5] ? 6 : a[6] ? 7 : a[7] ? 8 :
+				    a[8] ? 9 : a[9] ? 10 : a[10] ? 11 : a[11] ? 12 :
+				    a[12] ? 13 : a[13] ? 14 : a[14] ? 15 :
+				    a[15] ? 16 : a[16] ? 17 : a[17] ? 18 :
+				    a[18] ? 19 : a[19] ? 20 : a[20] ? 21 :
+				    a[21] ? 22 : a[22] ? 23 : a[23] ? 24 :
+				    a[24] ? 25 : a[25] ? 26 : a[26] ? 27 :
+				    a[27] ? 28 : a[28] ? 29 : a[29] ? 30 :
+				    a[30] ? 31 : a[31] ? 32 : 0);
+	 generate
+	    if (FEATURE_FFL1=="REGISTERED") begin
+	       reg [OPTION_OPERAND_WIDTH-1:0] ffl1_result_r;
+
+	       assign ffl1_valid = !decode_valid_i;
+	       assign ffl1_result = ffl1_result_r;
+
+	       always @(posedge clk)
+		 if (decode_valid_i)
+		   ffl1_result_r = ffl1_result_wire;
+	    end else begin
+	       assign ffl1_result = ffl1_result_wire;
+	       assign ffl1_valid = 1'b1;
+	    end
+	 endgenerate
       end
       else begin
-         assign ffl1_result = adder_result;
+	 assign ffl1_result = adder_result;
+	 assign ffl1_valid = alu_result_valid;
       end
    endgenerate
 
@@ -680,6 +697,9 @@ module mor1kx_execute_alu
            `OR1K_ALU_OPC_DIV,
              `OR1K_ALU_OPC_DIVU:
                alu_valid = div_valid;
+
+           `OR1K_ALU_OPC_FFL1:
+             alu_valid = ffl1_valid;
 
            `OR1K_ALU_OPC_SHRT:
              alu_valid = shift_valid;
