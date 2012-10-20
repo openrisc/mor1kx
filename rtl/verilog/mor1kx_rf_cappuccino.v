@@ -87,13 +87,8 @@ module mor1kx_rf_cappuccino
 
    wire 			      rfa_o_use_last;
    wire 			      rfb_o_use_last;
-   reg 				      rfa_o_using_last;
-   reg 				      rfb_o_using_last;
 
    reg 				      padv_decode_r;
-
-   wire 			      no_wb_yet;
-   reg 				      waiting_for_wb;
 
    wire 			      rfa_rden;
    wire 			      rfb_rden;
@@ -114,8 +109,6 @@ module mor1kx_rf_cappuccino
    assign rfb_rden = padv_decode_i;
 
    assign rf_wren = !write_mask_i & execute_rf_we_i;
-
-   assign no_wb_yet = (waiting_for_wb | (padv_decode_r & rf_wb_i)) & !rf_wren;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
@@ -147,31 +140,6 @@ module mor1kx_rf_cappuccino
        padv_decode_r <= 0;
      else
        padv_decode_r <= padv_decode_i;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	rfa_o_using_last <= 0;
-	rfb_o_using_last <= 0;
-     end
-     else begin
-	if (!rfa_o_using_last)
-	  rfa_o_using_last <= rfa_o_use_last & !rfa_rden;
-	else if (rfa_rden)
-	  rfa_o_using_last <= 0;
-
-	if (!rfb_o_using_last)
-	  rfb_o_using_last <= rfb_o_use_last & !rfb_rden;
-	else if (rfb_rden)
-	  rfb_o_using_last <= 0;
-     end
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-	waiting_for_wb <= 0;
-     else if (execute_rf_we_i)
-       waiting_for_wb <= 0;
-     else if (!waiting_for_wb & padv_decode_r & rf_wb_i)
-       waiting_for_wb <= 1;
 
    mor1kx_rf_ram
      #(
