@@ -165,21 +165,23 @@ module mor1kx_cpu_prontoespresso
    wire			execute_except_syscall_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_trap_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			execute_waiting_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
-   wire			fetch_advancing_o;	// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
+   wire			fetch_ready_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
+   wire			fetch_rf_re_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa_adr_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
    wire			fetch_take_exception_branch_o;// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
+   wire [OPTION_OPERAND_WIDTH-1:0] fetched_pc_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
    wire			flag_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			flag_o;			// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			flag_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire [`OR1K_IMM_WIDTH-1:0] imm16_o;		// From mor1kx_decode of mor1kx_decode.v
    wire [9:0]		immjbr_upper_o;		// From mor1kx_decode of mor1kx_decode.v
+   wire [OPTION_OPERAND_WIDTH-1:0] link_addr_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			lsu_except_align_o;	// From mor1kx_lsu_espresso of mor1kx_lsu_espresso.v
    wire			lsu_except_dbus_o;	// From mor1kx_lsu_espresso of mor1kx_lsu_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] lsu_result_o;// From mor1kx_lsu_espresso of mor1kx_lsu_espresso.v
    wire			lsu_valid_o;		// From mor1kx_lsu_espresso of mor1kx_lsu_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
-   wire			next_fetch_done_o;	// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
    wire			op_alu_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_jal_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_jbr_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -221,6 +223,9 @@ module mor1kx_cpu_prontoespresso
     .fetch_take_exception_branch_i      (fetch_take_exception_branch_o),
     .execute_waiting_i                  (execute_waiting_o),
     .stepping_i                         (stepping_o),
+    .flag_i				(flag_o),
+    .flag_clear_i			(flag_clear_o),
+    .flag_set_i			        (flag_set_o),
     ); */
    mor1kx_fetch_prontoespresso
      #(
@@ -234,13 +239,14 @@ module mor1kx_cpu_prontoespresso
       .ibus_adr_o			(ibus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
       .ibus_req_o			(ibus_req_o),
       .decode_insn_o			(insn_fetch_to_decode),	 // Templated
-      .next_fetch_done_o		(next_fetch_done_o),
+      .fetched_pc_o			(fetched_pc_o[OPTION_OPERAND_WIDTH-1:0]),
+      .fetch_ready_o			(fetch_ready_o),
       .fetch_rfa_adr_o			(fetch_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .fetch_rfb_adr_o			(fetch_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .fetch_rf_re_o			(fetch_rf_re_o),
       .pc_fetch_o			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
       .pc_fetch_next_o			(pc_fetch_next_o[OPTION_OPERAND_WIDTH-1:0]),
       .decode_except_ibus_err_o		(decode_except_ibus_err_o),
-      .fetch_advancing_o		(fetch_advancing_o),
       // Inputs
       .clk				(clk),
       .rst				(rst),
@@ -255,7 +261,10 @@ module mor1kx_cpu_prontoespresso
       .fetch_take_exception_branch_i	(fetch_take_exception_branch_o), // Templated
       .execute_waiting_i		(execute_waiting_o),	 // Templated
       .du_stall_i			(du_stall_i),
-      .stepping_i			(stepping_o));		 // Templated
+      .stepping_i			(stepping_o),		 // Templated
+      .flag_i				(flag_o),		 // Templated
+      .flag_clear_i			(flag_clear_o),		 // Templated
+      .flag_set_i			(flag_set_o));		 // Templated
 
    /* mor1kx_decode AUTO_TEMPLATE (
     .padv_i				(padv_decode_o),
@@ -397,7 +406,7 @@ module mor1kx_cpu_prontoespresso
     .exception_taken_i                  (exception_taken_o),
     .du_restart_i                       (du_restart_o),
     .stepping_i                         (stepping_o),
-    .next_fetch_done_i                  (next_fetch_done_o),
+    .next_fetch_done_i                  (fetch_ready_o),
     ); */
    mor1kx_lsu_espresso
      #(
@@ -427,7 +436,7 @@ module mor1kx_cpu_prontoespresso
       .exception_taken_i		(exception_taken_o),	 // Templated
       .du_restart_i			(du_restart_o),		 // Templated
       .stepping_i			(stepping_o),		 // Templated
-      .next_fetch_done_i		(next_fetch_done_o),	 // Templated
+      .next_fetch_done_i		(fetch_ready_o),	 // Templated
       .dbus_err_i			(dbus_err_i),
       .dbus_ack_i			(dbus_ack_i),
       .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
@@ -441,7 +450,7 @@ module mor1kx_cpu_prontoespresso
     .op_lsu_load_i			(op_lsu_load_o),
     .ppc_i 			        (spr_ppc_o),
     .op_mfspr_i			        (op_mfspr_o),
-    .pc_fetch_next_i                    (spr_npc_o),
+    .pc_fetch_next_i                    (link_addr_o),
     ); */
    mor1kx_wb_mux_espresso
      #(
@@ -457,7 +466,7 @@ module mor1kx_cpu_prontoespresso
       .alu_result_i			(alu_result_o),		 // Templated
       .lsu_result_i			(lsu_result_o),		 // Templated
       .ppc_i				(spr_ppc_o),		 // Templated
-      .pc_fetch_next_i			(spr_npc_o),		 // Templated
+      .pc_fetch_next_i			(link_addr_o),		 // Templated
       .spr_i				(mfspr_dat_o),		 // Templated
       .op_jal_i				(op_jal_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
@@ -466,7 +475,7 @@ module mor1kx_cpu_prontoespresso
    
    /* mor1kx_rf_espresso AUTO_TEMPLATE (
     .rf_we_i    			(rf_we_o),
-    .rf_re_i    			(fetch_advancing_o),
+    .rf_re_i    			(fetch_rf_re_o),
     .rfd_adr_i  			(rfd_adr_o),
     .rfa_adr_i  			(fetch_rfa_adr_o),
     .rfb_adr_i  			(fetch_rfb_adr_o),
@@ -490,7 +499,7 @@ module mor1kx_cpu_prontoespresso
       .rfa_adr_i			(fetch_rfa_adr_o),	 // Templated
       .rfb_adr_i			(fetch_rfb_adr_o),	 // Templated
       .rf_we_i				(rf_we_o),		 // Templated
-      .rf_re_i				(fetch_advancing_o),	 // Templated
+      .rf_re_i				(fetch_rf_re_o),	 // Templated
       .result_i				(rf_result_o));		 // Templated
 
    	 
@@ -536,12 +545,12 @@ module mor1kx_cpu_prontoespresso
     .except_dbus_i		(lsu_except_dbus_o),
     .except_trap_i		(execute_except_trap_o),
     .except_align_i		(lsu_except_align_o),
-    .next_fetch_done_i		(next_fetch_done_o),
+    .fetch_ready_i		(fetch_ready_o),
     .execute_valid_i		(execute_valid_o),
     .execute_waiting_i		(execute_waiting_o),
     .fetch_branch_taken_i	(fetch_branch_taken_o),
+    .fetch_ppc_i                (fetched_pc_o),
     .rf_wb_i			(rf_wb_o),
-    .fetch_advancing_i          (fetch_advancing_o),
     ); */
    mor1kx_ctrl_prontoespresso
      #(
@@ -575,6 +584,7 @@ module mor1kx_cpu_prontoespresso
 	// Outputs
 	.spr_npc_o			(spr_npc_o[OPTION_OPERAND_WIDTH-1:0]),
 	.spr_ppc_o			(spr_ppc_o[OPTION_OPERAND_WIDTH-1:0]),
+	.link_addr_o			(link_addr_o[OPTION_OPERAND_WIDTH-1:0]),
 	.mfspr_dat_o			(mfspr_dat_o[OPTION_OPERAND_WIDTH-1:0]),
 	.ctrl_mfspr_we_o		(ctrl_mfspr_we_o),
 	.flag_o				(flag_o),
@@ -607,16 +617,16 @@ module mor1kx_cpu_prontoespresso
 	.ctrl_flag_set_i		(flag_set_o),		 // Templated
 	.ctrl_flag_clear_i		(flag_clear_o),		 // Templated
 	.ctrl_opc_insn_i		(opc_insn_o),		 // Templated
+	.fetch_ppc_i			(fetched_pc_o),		 // Templated
 	.pc_fetch_i			(pc_fetch_o),		 // Templated
 	.pc_fetch_next_i		(pc_fetch_next_o),	 // Templated
-	.fetch_advancing_i		(fetch_advancing_o),	 // Templated
 	.except_ibus_err_i		(execute_except_ibus_err_o), // Templated
 	.except_illegal_i		(execute_except_illegal_o), // Templated
 	.except_syscall_i		(execute_except_syscall_o), // Templated
 	.except_dbus_i			(lsu_except_dbus_o),	 // Templated
 	.except_trap_i			(execute_except_trap_o), // Templated
 	.except_align_i			(lsu_except_align_o),	 // Templated
-	.next_fetch_done_i		(next_fetch_done_o),	 // Templated
+	.fetch_ready_i			(fetch_ready_o),	 // Templated
 	.alu_valid_i			(alu_valid_o),		 // Templated
 	.lsu_valid_i			(lsu_valid_o),		 // Templated
 	.op_alu_i			(op_alu_o),		 // Templated

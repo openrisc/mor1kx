@@ -30,31 +30,31 @@
 module mor1kx_ctrl_prontoespresso
   (/*AUTOARG*/
    // Outputs
-   spr_npc_o, spr_ppc_o, mfspr_dat_o, ctrl_mfspr_we_o, flag_o,
-   pipeline_flush_o, padv_fetch_o, padv_decode_o, padv_execute_o,
-   fetch_take_exception_branch_o, exception_taken_o,
+   spr_npc_o, spr_ppc_o, link_addr_o, mfspr_dat_o, ctrl_mfspr_we_o,
+   flag_o, pipeline_flush_o, padv_fetch_o, padv_decode_o,
+   padv_execute_o, fetch_take_exception_branch_o, exception_taken_o,
    execute_waiting_o, stepping_o, du_dat_o, du_ack_o, du_stall_o,
    du_restart_pc_o, du_restart_o, spr_bus_addr_o, spr_bus_we_o,
    spr_bus_stb_o, spr_bus_dat_o, spr_sr_o, ctrl_branch_target_o,
    ctrl_branch_occur_o, rf_we_o,
    // Inputs
    clk, rst, ctrl_alu_result_i, ctrl_rfb_i, ctrl_flag_set_i,
-   ctrl_flag_clear_i, ctrl_opc_insn_i, pc_fetch_i, pc_fetch_next_i,
-   fetch_advancing_i, except_ibus_err_i, except_illegal_i,
+   ctrl_flag_clear_i, ctrl_opc_insn_i, fetch_ppc_i, pc_fetch_i,
+   pc_fetch_next_i, except_ibus_err_i, except_illegal_i,
    except_syscall_i, except_dbus_i, except_trap_i, except_align_i,
-   next_fetch_done_i, alu_valid_i, lsu_valid_i, op_alu_i,
-   op_lsu_load_i, op_lsu_store_i, op_jr_i, op_jbr_i, irq_i, du_addr_i,
-   du_stb_i, du_dat_i, du_we_i, du_stall_i, spr_bus_dat_dc_i,
-   spr_bus_ack_dc_i, spr_bus_dat_ic_i, spr_bus_ack_ic_i,
-   spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i, spr_bus_dat_immu_i,
-   spr_bus_ack_immu_i, spr_bus_dat_mac_i, spr_bus_ack_mac_i,
-   spr_bus_dat_pmu_i, spr_bus_ack_pmu_i, spr_bus_dat_pcu_i,
-   spr_bus_ack_pcu_i, spr_bus_dat_fpu_i, spr_bus_ack_fpu_i, rf_wb_i
+   fetch_ready_i, alu_valid_i, lsu_valid_i, op_alu_i, op_lsu_load_i,
+   op_lsu_store_i, op_jr_i, op_jbr_i, irq_i, du_addr_i, du_stb_i,
+   du_dat_i, du_we_i, du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i,
+   spr_bus_dat_ic_i, spr_bus_ack_ic_i, spr_bus_dat_dmmu_i,
+   spr_bus_ack_dmmu_i, spr_bus_dat_immu_i, spr_bus_ack_immu_i,
+   spr_bus_dat_mac_i, spr_bus_ack_mac_i, spr_bus_dat_pmu_i,
+   spr_bus_ack_pmu_i, spr_bus_dat_pcu_i, spr_bus_ack_pcu_i,
+   spr_bus_dat_fpu_i, spr_bus_ack_fpu_i, rf_wb_i
    );
 
    parameter OPTION_OPERAND_WIDTH       = 32;
    parameter OPTION_RESET_PC            = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
-                                `OR1K_RESET_VECTOR,8'd0};
+					   `OR1K_RESET_VECTOR,8'd0};
 
    parameter FEATURE_SYSCALL            = "ENABLED";
    parameter FEATURE_TRAP               = "ENABLED";
@@ -100,13 +100,18 @@ module mor1kx_ctrl_prontoespresso
    output [OPTION_OPERAND_WIDTH-1:0] spr_npc_o;
    output [OPTION_OPERAND_WIDTH-1:0] spr_ppc_o;
 
+   // Link address, to writeback stage
+   output [OPTION_OPERAND_WIDTH-1:0] link_addr_o;
+
    input [`OR1K_OPCODE_WIDTH-1:0]   ctrl_opc_insn_i;
    
-   // PC of execute stage (NPC)
+   // PCs from the fetch stage
+   // PC of the instruction from fetch stage
+   input [OPTION_OPERAND_WIDTH-1:0] fetch_ppc_i;
+   // PC on the bus right now
    input [OPTION_OPERAND_WIDTH-1:0] pc_fetch_i;
+   // Next PC to go on the bus
    input [OPTION_OPERAND_WIDTH-1:0] pc_fetch_next_i;
-   input                            fetch_advancing_i;
-   
    
    // Exception inputs, registered on output of execute stage
    input                            except_ibus_err_i, 
@@ -115,7 +120,7 @@ module mor1kx_ctrl_prontoespresso
                                     except_trap_i, except_align_i;
    
    // Inputs from two units that can stall proceedings
-   input                            next_fetch_done_i;
+   input                            fetch_ready_i;
    
    input                            alu_valid_i, lsu_valid_i;
    
@@ -210,9 +215,7 @@ module mor1kx_ctrl_prontoespresso
 
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_npc;
-/*   reg                               execute_delay_slot;
-   reg                               delay_slot_rf_we_done;
-  */ 
+
    output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o;
 
    reg                               execute_go;
@@ -412,15 +415,15 @@ module mor1kx_ctrl_prontoespresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        waiting_for_except_fetch <= 0;
-     else if (waiting_for_except_fetch & next_fetch_done_i)
+     else if (waiting_for_except_fetch & fetch_ready_i)
        waiting_for_except_fetch <= 0;
      else if (fetch_take_exception_branch_o)
        waiting_for_except_fetch <= 1;
 
-   assign fetch_advance = (next_fetch_done_i | except_ibus_err_i) & 
+   assign fetch_advance = (fetch_ready_i | except_ibus_err_i) & 
                           !execute_waiting & !cpu_stall &
                           (!stepping | 
-                           (stepping & pstep[0] & !next_fetch_done_i));
+                           (stepping & pstep[0] & !fetch_ready_i));
 
    assign padv_fetch_o = fetch_advance & !exception_pending & !doing_rfe_r & 
                          !cpu_stall;
@@ -455,7 +458,7 @@ module mor1kx_ctrl_prontoespresso
        // Note: turned padv_fetch_o here into (padv_fetch_o & !ctrl_branch_occur) for
        // pronto version. This may have implications for exeception handling
        execute_go <= (padv_fetch_o & !(ctrl_branch_occur | op_rfe)) | execute_waiting | 
-                     (stepping & next_fetch_done_i);
+                     (stepping & fetch_ready_i);
 
    assign execute_done = execute_go & !execute_waiting;
 
@@ -531,9 +534,9 @@ module mor1kx_ctrl_prontoespresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        waiting_for_fetch <= 0;
-     else if (next_fetch_done_i)
+     else if (fetch_ready_i)
        waiting_for_fetch <= 0;
-     else if (!execute_waiting & execute_waiting_r & !next_fetch_done_i)
+     else if (!execute_waiting & execute_waiting_r & !fetch_ready_i)
        waiting_for_fetch <= 1;
 
    assign doing_rfe = ((execute_done & op_rfe) | doing_rfe_r) & 
@@ -674,7 +677,7 @@ module mor1kx_ctrl_prontoespresso
      else if (exception_re)
        begin
           if (except_ibus_err_i)
-            spr_eear <= pc_fetch_i;
+            spr_eear <= fetch_ppc_i;
           else
             spr_eear <= ctrl_alu_result_i;
        end
@@ -687,11 +690,12 @@ module mor1kx_ctrl_prontoespresso
        spr_npc <= rfete ? exception_pc_addr : spr_epcr;
      else if (du_restart_o)
        spr_npc <= du_restart_pc_o;
-     else if (stepping & next_fetch_done_i)
-       // At the time next_fetch_done_i goes high, pc_fetch_i holds
+     else if (stepping & fetch_ready_i)
+       // At the time fetch_ready_i goes high, pc_fetch_next_i holds
        // the next PC to be fetched, so this is essentially the NPC
        // This saves an adder!
-       spr_npc <= pc_fetch_i;
+       // TODO - revisit this!
+       spr_npc <= pc_fetch_next_i;
      else if (stepping & exception_r)
        spr_npc <= exception_pc_addr;
      else if (stepping & execute_done & ctrl_branch_occur)
@@ -700,19 +704,30 @@ module mor1kx_ctrl_prontoespresso
      else if (((fetch_advance & exception)|fetch_take_exception_branch_o)  | 
 	      padv_fetch_o )
        // PC we're now executing
-       spr_npc <= (fetch_take_exception_branch_o | (fetch_advance & exception)) ? 
+       spr_npc <= (fetch_take_exception_branch_o |(fetch_advance & exception)) ?
 		  exception_pc_addr : ctrl_branch_occur ? 
-		  ctrl_branch_target_o : pc_fetch_i; 
+		  ctrl_branch_target_o : pc_fetch_next_i; 
 
    // Previous PC (PPC)
+   /*
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_ppc <= OPTION_RESET_PC;
-     else if ((padv_fetch_o | (stepping & next_fetch_done_i)) & !ctrl_branch_occur)
+     else if ((padv_fetch_o | (stepping & fetch_ready_i)) & !ctrl_branch_occur)
        spr_ppc <= spr_npc; // PC we've got in execute stage (about to finish)
-
+    */
+   always @*
+     spr_ppc = fetch_ppc_i;
+   
    assign spr_npc_o = spr_npc;
    assign spr_ppc_o = spr_ppc;
+
+   // This is for the writeback stage, when we have l.jal[r] instructions.
+   // Annoyingly, we can't rely on the link address being
+   // available without a dedicated bit of logic to calculate it,
+   // so do so here.
+   assign link_addr_o = spr_ppc + 4;
+   
      
    wire [31:0] spr_vr;
    wire [31:0] spr_upr;
@@ -1224,7 +1239,7 @@ module mor1kx_ctrl_prontoespresso
              pstep_r <= 0;
            else if (du_restart_from_stall & stepping)
              pstep_r <= 2'd1;
-           else if ((pstep[0] & next_fetch_done_i) |
+           else if ((pstep[0] & fetch_ready_i) |
                     /* decode is always single cycle */
                     (pstep[1] & execute_done))
              pstep_r <= {pstep_r[0],1'b0};
