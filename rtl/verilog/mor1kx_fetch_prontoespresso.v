@@ -26,7 +26,7 @@ module mor1kx_fetch_prontoespresso
    // Outputs
    ibus_adr_o, ibus_req_o, decode_insn_o, fetched_pc_o, fetch_ready_o,
    fetch_rfa_adr_o, fetch_rfb_adr_o, fetch_rf_re_o, pc_fetch_o,
-   pc_fetch_next_o, decode_except_ibus_err_o,
+   pc_fetch_next_o, decode_except_ibus_err_o, fetch_sleep_o,
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, padv_i,
    branch_occur_i, branch_dest_i, du_restart_i, du_restart_pc_i,
@@ -95,6 +95,9 @@ module mor1kx_fetch_prontoespresso
    // instruction ibus error indication out
    output reg 				  decode_except_ibus_err_o;
 
+   // fetch sleep mode enabled (due to jump-to-self instruction
+   output 				  fetch_sleep_o;
+
    // Registers
    reg [OPTION_OPERAND_WIDTH-1:0] 	  pc;
    reg 					  fetch_req;
@@ -105,15 +108,15 @@ module mor1kx_fetch_prontoespresso
    reg 					  padv_r;
    reg 					  took_branch;
    reg 					  execute_waiting_r;
-   
+   reg 					  sleep;
    
    // Wires
    wire [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch_next;
    wire [OPTION_OPERAND_WIDTH-1:0] 	  pc_plus_four;
    wire [OPTION_OPERAND_WIDTH-1:0] 	  early_pc_next;
    wire 				  padv_deasserted;
-   
    wire [`OR1K_OPCODE_WIDTH-1:0] 	  next_insn_opcode;
+   wire 				  will_go_to_sleep;
    
    assign pc_plus_four		= pc + 4;
 
@@ -142,6 +145,11 @@ module mor1kx_fetch_prontoespresso
 			    ibus_dat_i[`OR1K_JUMPBRANCH_IMMEDIATE_SELECT],
 			    2'b00} + pc);
 
+   assign will_go_to_sleep = have_early_pc_next & 
+			     (early_pc_next == pc);
+
+   assign fetch_sleep_o = sleep;
+      
    // The pipeline advance signal deasserted for the instruction
    // we just put out, and we're still attempting to fetch. This should
    // result in a deassert cycle on the request signal out to the bus.
@@ -210,6 +218,8 @@ module mor1kx_fetch_prontoespresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
+     else if (sleep)
+       decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
      else if (ibus_ack_i & padv_i & !padv_deasserted)
        decode_insn_o <= ibus_dat_i;
      else if (branch_occur_i & padv_i)
@@ -224,6 +234,8 @@ module mor1kx_fetch_prontoespresso
      if (rst)
        fetch_req <= 1'b1;
      else if (ibus_err_i)
+       fetch_req <= 1'b0;
+     else if (sleep)
        fetch_req <= 1'b0;
      else if (next_insn_will_branch)
        fetch_req <= 1'b0;
@@ -244,6 +256,8 @@ module mor1kx_fetch_prontoespresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        jump_insn_in_decode <= 0;
+     else if (sleep)
+       jump_insn_in_decode <= 0;
      else if (!jump_insn_in_decode & next_insn_will_branch & ibus_ack_i)
        jump_insn_in_decode <= 1;
      else
@@ -251,6 +265,8 @@ module mor1kx_fetch_prontoespresso
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
+       took_early_calc_pc <= 0;
+     else if (sleep)
        took_early_calc_pc <= 0;
      else if (next_insn_will_branch & have_early_pc_next & padv_i)
        took_early_calc_pc <= 1;
@@ -273,6 +289,16 @@ module mor1kx_fetch_prontoespresso
        decode_except_ibus_err_o <= 0;
      else if (fetch_req)
        decode_except_ibus_err_o <= ibus_err_i;
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       sleep <= 1'b0;
+     else if (fetch_take_exception_branch_i)
+       sleep <= 1'b0;
+     else if (will_go_to_sleep)
+       sleep <= 1'b1;
+   
+   
    
 endmodule // mor1kx_fetch_prontoespresso
 

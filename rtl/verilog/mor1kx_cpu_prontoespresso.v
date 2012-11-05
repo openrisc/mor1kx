@@ -169,6 +169,7 @@ module mor1kx_cpu_prontoespresso
    wire			fetch_rf_re_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa_adr_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
+   wire			fetch_sleep_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
    wire			fetch_take_exception_branch_o;// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] fetched_pc_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
    wire			flag_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
@@ -247,6 +248,7 @@ module mor1kx_cpu_prontoespresso
       .pc_fetch_o			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
       .pc_fetch_next_o			(pc_fetch_next_o[OPTION_OPERAND_WIDTH-1:0]),
       .decode_except_ibus_err_o		(decode_except_ibus_err_o),
+      .fetch_sleep_o			(fetch_sleep_o),
       // Inputs
       .clk				(clk),
       .rst				(rst),
@@ -550,6 +552,7 @@ module mor1kx_cpu_prontoespresso
     .execute_waiting_i		(execute_waiting_o),
     .fetch_branch_taken_i	(fetch_branch_taken_o),
     .fetch_ppc_i                (fetched_pc_o),
+    .fetch_sleep_i              (fetch_sleep_o),
     .rf_wb_i			(rf_wb_o),
     ); */
    mor1kx_ctrl_prontoespresso
@@ -620,6 +623,7 @@ module mor1kx_cpu_prontoespresso
 	.fetch_ppc_i			(fetched_pc_o),		 // Templated
 	.pc_fetch_i			(pc_fetch_o),		 // Templated
 	.pc_fetch_next_i		(pc_fetch_next_o),	 // Templated
+	.fetch_sleep_i			(fetch_sleep_o),	 // Templated
 	.except_ibus_err_i		(execute_except_ibus_err_o), // Templated
 	.except_illegal_i		(execute_except_illegal_o), // Templated
 	.except_syscall_i		(execute_except_syscall_o), // Templated

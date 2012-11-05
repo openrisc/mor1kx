@@ -40,16 +40,16 @@ module mor1kx_ctrl_prontoespresso
    // Inputs
    clk, rst, ctrl_alu_result_i, ctrl_rfb_i, ctrl_flag_set_i,
    ctrl_flag_clear_i, ctrl_opc_insn_i, fetch_ppc_i, pc_fetch_i,
-   pc_fetch_next_i, except_ibus_err_i, except_illegal_i,
-   except_syscall_i, except_dbus_i, except_trap_i, except_align_i,
-   fetch_ready_i, alu_valid_i, lsu_valid_i, op_alu_i, op_lsu_load_i,
-   op_lsu_store_i, op_jr_i, op_jbr_i, irq_i, du_addr_i, du_stb_i,
-   du_dat_i, du_we_i, du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i,
-   spr_bus_dat_ic_i, spr_bus_ack_ic_i, spr_bus_dat_dmmu_i,
-   spr_bus_ack_dmmu_i, spr_bus_dat_immu_i, spr_bus_ack_immu_i,
-   spr_bus_dat_mac_i, spr_bus_ack_mac_i, spr_bus_dat_pmu_i,
-   spr_bus_ack_pmu_i, spr_bus_dat_pcu_i, spr_bus_ack_pcu_i,
-   spr_bus_dat_fpu_i, spr_bus_ack_fpu_i, rf_wb_i
+   pc_fetch_next_i, fetch_sleep_i, except_ibus_err_i,
+   except_illegal_i, except_syscall_i, except_dbus_i, except_trap_i,
+   except_align_i, fetch_ready_i, alu_valid_i, lsu_valid_i, op_alu_i,
+   op_lsu_load_i, op_lsu_store_i, op_jr_i, op_jbr_i, irq_i, du_addr_i,
+   du_stb_i, du_dat_i, du_we_i, du_stall_i, spr_bus_dat_dc_i,
+   spr_bus_ack_dc_i, spr_bus_dat_ic_i, spr_bus_ack_ic_i,
+   spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i, spr_bus_dat_immu_i,
+   spr_bus_ack_immu_i, spr_bus_dat_mac_i, spr_bus_ack_mac_i,
+   spr_bus_dat_pmu_i, spr_bus_ack_pmu_i, spr_bus_dat_pcu_i,
+   spr_bus_ack_pcu_i, spr_bus_dat_fpu_i, spr_bus_ack_fpu_i, rf_wb_i
    );
 
    parameter OPTION_OPERAND_WIDTH       = 32;
@@ -103,32 +103,37 @@ module mor1kx_ctrl_prontoespresso
    // Link address, to writeback stage
    output [OPTION_OPERAND_WIDTH-1:0] link_addr_o;
 
-   input [`OR1K_OPCODE_WIDTH-1:0]   ctrl_opc_insn_i;
+   input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i;
    
    // PCs from the fetch stage
    // PC of the instruction from fetch stage
-   input [OPTION_OPERAND_WIDTH-1:0] fetch_ppc_i;
+   input [OPTION_OPERAND_WIDTH-1:0]  fetch_ppc_i;
    // PC on the bus right now
-   input [OPTION_OPERAND_WIDTH-1:0] pc_fetch_i;
+   input [OPTION_OPERAND_WIDTH-1:0]  pc_fetch_i;
    // Next PC to go on the bus
-   input [OPTION_OPERAND_WIDTH-1:0] pc_fetch_next_i;
+   input [OPTION_OPERAND_WIDTH-1:0]  pc_fetch_next_i;
+
+   // Input from fetch stage, indicating it's "sleeping", or not fetching
+   // anymore.
+   input 			     fetch_sleep_i;
+   
    
    // Exception inputs, registered on output of execute stage
-   input                            except_ibus_err_i, 
-                                    except_illegal_i, 
-                                    except_syscall_i, except_dbus_i, 
-                                    except_trap_i, except_align_i;
+   input 			     except_ibus_err_i, 
+                                     except_illegal_i, 
+                                     except_syscall_i, except_dbus_i, 
+                                     except_trap_i, except_align_i;
    
    // Inputs from two units that can stall proceedings
-   input                            fetch_ready_i;
+   input 			     fetch_ready_i;
    
-   input                            alu_valid_i, lsu_valid_i;
+   input 			     alu_valid_i, lsu_valid_i;
    
-   input                            op_alu_i, op_lsu_load_i, op_lsu_store_i;
-   input                            op_jr_i, op_jbr_i;
+   input 			     op_alu_i, op_lsu_load_i, op_lsu_store_i;
+   input 			     op_jr_i, op_jbr_i;
 
    // External IRQ lines in
-   input [31:0]                     irq_i;
+   input [31:0] 		     irq_i;
    
    // SPR data out
    output [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o;
@@ -138,13 +143,11 @@ module mor1kx_ctrl_prontoespresso
    
    // Flag out to branch control, combinatorial
    output 			     flag_o;
-   
-   reg                               flag;
-   
+
    // Branch indicator from control unit (l.rfe/exception)
    wire                              ctrl_branch_exception;
    // PC out to fetch stage for l.rfe, exceptions
-   wire [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc;
+   wire [OPTION_OPERAND_WIDTH-1:0]   ctrl_branch_except_pc;
    
    // Clear instructions from decode and fetch stage
    output                            pipeline_flush_o;
@@ -164,7 +167,7 @@ module mor1kx_ctrl_prontoespresso
    output                            stepping_o;
    
    // Debug bus
-   input [15:0]                      du_addr_i;
+   input [15:0] 		     du_addr_i;
    input                             du_stb_i;
    input [OPTION_OPERAND_WIDTH-1:0]  du_dat_i;
    input                             du_we_i;
@@ -177,7 +180,7 @@ module mor1kx_ctrl_prontoespresso
    output                            du_restart_o;
    
    // SPR accesses to external units (cache, mmu, etc.)
-   output [15:0]                     spr_bus_addr_o;
+   output [15:0] 		     spr_bus_addr_o;
    output                            spr_bus_we_o;
    output                            spr_bus_stb_o;
    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
@@ -197,21 +200,22 @@ module mor1kx_ctrl_prontoespresso
    input                             spr_bus_ack_pcu_i;   
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i;
    input                             spr_bus_ack_fpu_i;   
-   output [15:0]             spr_sr_o;
+   output [15:0] 		     spr_sr_o;
    
    // Internal signals
-   reg [SPR_SR_WIDTH-1:0]            spr_sr;
-   reg [SPR_SR_WIDTH-1:0]            spr_esr;
+   reg 				     flag;
+   reg [SPR_SR_WIDTH-1:0] 	     spr_sr;
+   reg [SPR_SR_WIDTH-1:0] 	     spr_esr;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_epcr;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_eear;
    
    // Programmable Interrupt Control SPRs
-   reg [31:0]                        spr_picmr;
-   reg [31:0]                        spr_picsr;
+   reg [31:0] 			     spr_picmr;
+   reg [31:0] 			     spr_picsr;
    
    // Tick Timer SPRs
-   reg [31:0]                        spr_ttmr;
-   reg [31:0]                        spr_ttcr;
+   reg [31:0] 			     spr_ttmr;
+   reg [31:0] 			     spr_ttcr;
 
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_npc;
@@ -245,7 +249,7 @@ module mor1kx_ctrl_prontoespresso
 
    wire                              exception_re;
 
-   wire [31:0]                       irq_unmasked;
+   wire [31:0] 			     irq_unmasked;
 
    wire                              except_ticktimer;
    wire                              except_pic;
@@ -254,7 +258,7 @@ module mor1kx_ctrl_prontoespresso
    wire                              except_pic_nonsrmasked;
    
    
-   wire [15:0]                       spr_addr;
+   wire [15:0] 			     spr_addr;
    
    wire                              op_mtspr;
    wire                              op_mfspr;
@@ -278,16 +282,16 @@ module mor1kx_ctrl_prontoespresso
    wire                              rfete;
    
    /* Debug SPRs */
-   reg [31:0]                        spr_dmr1;
-   reg [31:0]                        spr_dmr2;
-   reg [31:0]                        spr_dsr;
-   reg [31:0]                        spr_drr;
+   reg [31:0] 			     spr_dmr1;
+   reg [31:0] 			     spr_dmr2;
+   reg [31:0] 			     spr_dsr;
+   reg [31:0] 			     spr_drr;
    
    /* DU internal control signals */
    wire                              du_access;
    wire                              cpu_stall;
    wire                              du_restart_from_stall;
-   wire [1:0]                        pstep;
+   wire [1:0] 			     pstep;
    wire                              stepping;
    wire                              du_npc_write;
    reg                               du_npc_written;
@@ -295,12 +299,12 @@ module mor1kx_ctrl_prontoespresso
    
    /* Wires for SPR management */
    wire                              spr_group_present;
-   wire [3:0]                        spr_group;
+   wire [3:0] 			     spr_group;
    wire                              spr_we;
    wire                              spr_read;
    wire [OPTION_OPERAND_WIDTH-1:0]   spr_write_dat;
-   wire [11:0]                       spr_access_ack;
-   wire [31:0]                       spr_internal_read_dat [0:12];
+   wire [11:0] 			     spr_access_ack;
+   wire [31:0] 			     spr_internal_read_dat [0:12];
    wire                              spr_read_access;
    wire                              spr_write_access;
    wire                              spr_bus_access;
@@ -433,7 +437,7 @@ module mor1kx_ctrl_prontoespresso
        take_exception <= 0;
      else
        take_exception <= (exception_pending | exception_r | doing_rfe_r) & 
-                         (fetch_advance |
+                         ((fetch_advance | fetch_sleep_i) |
                           // Cause exception to always be 'taken' if stepping
                           (stepping & execute_done)
                           ) &
