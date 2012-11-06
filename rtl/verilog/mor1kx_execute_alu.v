@@ -1,18 +1,18 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
   Description: mor1kx execute stage ALU
-   
-  Inputs are opcodes, the immediate field, operands from RF, instruction 
+
+  Inputs are opcodes, the immediate field, operands from RF, instruction
   opcode
- 
-  Copyright (C) 2012 Authors
- 
+
+   Copyright (C) 2012 Authors
+
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
+
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
@@ -27,9 +27,9 @@ module mor1kx_execute_alu
    pc_execute_i, rfa_i, rfb_i, flag_i
    );
 
-   
+
    parameter OPTION_OPERAND_WIDTH = 32;
-   
+
    parameter FEATURE_MULTIPLIER = "THREESTAGE";
    parameter FEATURE_DIVIDER = "NONE";
 
@@ -39,7 +39,7 @@ module mor1kx_execute_alu
    parameter FEATURE_EXT = "NONE";
    parameter FEATURE_CMOV = "NONE";
    parameter FEATURE_FFL1 = "NONE";
-   
+
    parameter FEATURE_CUST1 = "NONE";
    parameter FEATURE_CUST2 = "NONE";
    parameter FEATURE_CUST3 = "NONE";
@@ -55,64 +55,64 @@ module mor1kx_execute_alu
 
    // pipeline control signal in
    input padv_i;
-   
+
    // inputs to ALU
    input [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_i;
    input [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_secondary_i;
-   
+
    input [`OR1K_IMM_WIDTH-1:0]    imm16_i;
-   
+
    input [`OR1K_OPCODE_WIDTH-1:0] opc_insn_i;
 
    input                          decode_valid_i;
-   
+
 
    input                          op_jbr_i, op_jr_i;
    input [9:0]                    immjbr_upper_i;
    input [OPTION_OPERAND_WIDTH-1:0] pc_execute_i;
-   
+
    input [OPTION_OPERAND_WIDTH-1:0] rfa_i;
    input [OPTION_OPERAND_WIDTH-1:0] rfb_i;
 
    // flag fed back from ctrl
    input                            flag_i;
 
-   output                            flag_set_o, 
+   output                            flag_set_o,
                                      flag_clear_o;
-   
+
    output [OPTION_OPERAND_WIDTH-1:0] alu_result_o;
    output                            alu_valid_o;
 
    reg                                   alu_valid; /* combinatorial */
-   
-   
+
+
    wire                                   comp_op;
-   
+
    wire [OPTION_OPERAND_WIDTH-1:0]        a;
    wire [OPTION_OPERAND_WIDTH-1:0]        b;
-   
+
    // Adder & comparator wires
    wire [OPTION_OPERAND_WIDTH-1:0]        adder_result;
    wire                                   adder_carryout;
-   
+
    wire [OPTION_OPERAND_WIDTH-1:0]        b_neg;
    wire [OPTION_OPERAND_WIDTH-1:0]        b_mux;
    wire                                   carry_in;
-   
+
    wire                                   a_eq_b;
    wire                                   a_lt_b;
    wire                                   adder_do_sub;
-   
+
    // Shifter wires
    wire [`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0] opc_alu_shr;
    wire                                   shift_op;
    wire [OPTION_OPERAND_WIDTH-1:0]        shift_result;
-   wire                                   shift_valid;   
+   wire                                   shift_valid;
 
    wire                                   alu_result_valid;
    reg [OPTION_OPERAND_WIDTH-1:0]         alu_result;  // comb.
-   
-   
+
+
    // Comparison wires
    reg                                    flag_set; // comb.
 
@@ -133,38 +133,38 @@ module mor1kx_execute_alu
    wire [OPTION_OPERAND_WIDTH-1:0]        ffl1_result;
 
    wire [OPTION_OPERAND_WIDTH-1:0]        cmov_result;
-   
-   
+
+
    // First stage signals - detect which operands we should take
    wire                                   operandb_sext_imm;
    wire                                   operandb_zext_imm;
 
-   assign operandb_sext_imm = ((opc_insn_i[5:4] == 2'b10) & 
+   assign operandb_sext_imm = ((opc_insn_i[5:4] == 2'b10) &
                              ~(opc_insn_i==`OR1K_OPCODE_ORI) &
                              ~(opc_insn_i==`OR1K_OPCODE_ANDI)) |
                              (opc_insn_i==`OR1K_OPCODE_SW) |
                              (opc_insn_i==`OR1K_OPCODE_SH) |
                              (opc_insn_i==`OR1K_OPCODE_SB);
-   
-   assign operandb_zext_imm = ((opc_insn_i[5:4] == 2'b10) & 
+
+   assign operandb_zext_imm = ((opc_insn_i[5:4] == 2'b10) &
                               ((opc_insn_i==`OR1K_OPCODE_ORI) |
                                (opc_insn_i==`OR1K_OPCODE_ANDI))) |
                              (opc_insn_i==`OR1K_OPCODE_MTSPR);
-                             
+
    assign a = (op_jbr_i | op_jr_i) ? pc_execute_i : rfa_i;
    assign b = operandb_sext_imm ? {{16{imm16_i[15]}},imm16_i[15:0]} :
               operandb_zext_imm ? {{16{1'b0}},imm16_i[15:0]} :
               (opc_insn_i==`OR1K_OPCODE_MOVHI) ? {imm16_i,16'd0} :
               op_jbr_i ? {{4{immjbr_upper_i[9]}},immjbr_upper_i,imm16_i,2'b00} :
               rfb_i ;
-   
+
    assign comp_op = opc_insn_i==`OR1K_OPCODE_SF ||
                     opc_insn_i==`OR1K_OPCODE_SFIMM;
 
    assign opc_alu_shr = opc_alu_secondary_i[`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0];
-   
+
    // Subtract when comparing to check if equal
-   assign adder_do_sub = (opc_insn_i==`OR1K_OPCODE_ALU & 
+   assign adder_do_sub = (opc_insn_i==`OR1K_OPCODE_ALU &
                           opc_alu_i==`OR1K_ALU_OPC_SUB) |
                          comp_op;
 
@@ -173,19 +173,19 @@ module mor1kx_execute_alu
    assign carry_in = adder_do_sub;
    assign b_mux = adder_do_sub ? b_neg : b;
    // Adder
-   assign {adder_carryout, adder_result} = a + b_mux + 
+   assign {adder_carryout, adder_result} = a + b_mux +
                                            {{OPTION_OPERAND_WIDTH-1{1'b0}},
                                             carry_in};
 
-   assign mul_op = (opc_insn_i==`OR1K_OPCODE_ALU && 
+   assign mul_op = (opc_insn_i==`OR1K_OPCODE_ALU &&
                     (opc_alu_i == `OR1K_ALU_OPC_MUL ||
                      opc_alu_i == `OR1K_ALU_OPC_MULU)) ||
                    opc_insn_i == `OR1K_OPCODE_MULI;
 
-   assign mul_op_signed = (opc_insn_i==`OR1K_OPCODE_ALU && 
+   assign mul_op_signed = (opc_insn_i==`OR1K_OPCODE_ALU &&
                            opc_alu_i == `OR1K_ALU_OPC_MUL) ||
                           opc_insn_i == `OR1K_OPCODE_MULI;
-   
+
    generate
       /* verilator lint_off WIDTH */
       if (FEATURE_MULTIPLIER=="THREESTAGE") begin : threestagemultiply
@@ -199,7 +199,7 @@ module mor1kx_execute_alu
 	     mul_result1 <= {OPTION_OPERAND_WIDTH{1'b0}};
 	   else
            begin
-              if (decode_valid_i && mul_op) 
+              if (decode_valid_i && mul_op)
                 begin
                    mul_opa       <= a;
                    mul_opb       <= b;
@@ -209,33 +209,33 @@ module mor1kx_execute_alu
                 mul_result1   <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
               mul_result2 <= mul_result1;
            end
-         
+
          assign mul_result = mul_result2;
-         
+
          always @(posedge clk `OR_ASYNC_RST)
            if (rst)
              mul_valid_shr <= 3'b000;
            else if (decode_valid_i)
              mul_valid_shr <= {2'b00, mul_op};
            else
-             mul_valid_shr <= mul_valid_shr[2] ? mul_valid_shr: 
+             mul_valid_shr <= mul_valid_shr[2] ? mul_valid_shr:
 			      {mul_valid_shr[1:0], 1'b0};
-         
+
          assign mul_valid = mul_valid_shr[2] & !decode_valid_i;
 
       end // if (FEATURE_MULTIPLIER=="THREESTAGE")
       else if (FEATURE_MULTIPLIER=="SERIAL") begin : serialmultiply
          reg [(OPTION_OPERAND_WIDTH*2)-1:0]  mul_prod_r;
-         reg [5:0]   serial_mul_cnt;   
+         reg [5:0]   serial_mul_cnt;
          reg         mul_done;
 	 wire [OPTION_OPERAND_WIDTH-1:0] mul_a, mul_b;
-	 
+
 	 // Check if it's a signed multiply and operand b is negative, convert to positive
 	 assign mul_a = mul_op_signed & a[OPTION_OPERAND_WIDTH-1] ?
 					  ~a + 1 : a;
 	 assign mul_b = mul_op_signed & b[OPTION_OPERAND_WIDTH-1] ?
 					  ~b + 1 : b;
-	 
+
          always @(posedge clk)
             if (rst) begin
                mul_prod_r <=  64'h0000_0000_0000_0000;
@@ -244,36 +244,36 @@ module mor1kx_execute_alu
             end
             else if (|serial_mul_cnt) begin
                serial_mul_cnt <= serial_mul_cnt - 6'd1;
-               
+
                if (mul_prod_r[0])
-                  mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH-1] 
+                  mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH-1]
                      <= mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH] + mul_a;
                else
-                  mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH-1] 
+                  mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH-1]
                      <= {1'b0,mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH]};
-               
+
                mul_prod_r[OPTION_OPERAND_WIDTH-2:0] <= mul_prod_r[OPTION_OPERAND_WIDTH-1:1];
 
                if (serial_mul_cnt==6'd1)
                   mul_done <= 1'b1;
-               
+
             end
-            else if (decode_valid_i && mul_op/* && !mul_done*/) begin               
+            else if (decode_valid_i && mul_op/* && !mul_done*/) begin
                mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH] <= 32'd0;
                mul_prod_r[OPTION_OPERAND_WIDTH-1:0] <= mul_b;
                mul_done <= 0;
                serial_mul_cnt <= 6'b10_0000;
             end
             else if (decode_valid_i) begin
-               mul_done <= 1'b0;       
+               mul_done <= 1'b0;
             end
-         
+
          assign mul_valid  = mul_done & !decode_valid_i;
 
-         assign mul_result = mul_op_signed ? ((a[OPTION_OPERAND_WIDTH-1] ^ 
+         assign mul_result = mul_op_signed ? ((a[OPTION_OPERAND_WIDTH-1] ^
                                                b[OPTION_OPERAND_WIDTH-1]) ?
                              ~mul_prod_r[OPTION_OPERAND_WIDTH-1:0] + 1 :
-                             mul_prod_r[OPTION_OPERAND_WIDTH-1:0]) : 
+                             mul_prod_r[OPTION_OPERAND_WIDTH-1:0]) :
                              mul_prod_r[OPTION_OPERAND_WIDTH-1:0];
 
 
@@ -282,7 +282,7 @@ module mor1kx_execute_alu
 	 always @(posedge mul_valid)
 	   begin
 	      @(posedge clk);
-	      
+
 	   if (((a*b) & {OPTION_OPERAND_WIDTH{1'b1}}) != mul_result)
 	     begin
 		$display("%t incorrect serial multiply result at pc %08h", $time, pc_execute_i);
@@ -291,10 +291,10 @@ module mor1kx_execute_alu
 	   end
 	 `endif
          // synthesis translate_on
-	 
+
       end // if (FEATURE_MULTIPLIER=="SERIAL")
       else if (FEATURE_MULTIPLIER=="SIMULATION") begin
-         // Simple multiplier result   
+         // Simple multiplier result
          assign mul_result = a * b;
          assign mul_valid = 1;
       end
@@ -450,12 +450,12 @@ module mor1kx_execute_alu
    // Adder result is zero if equal
    assign a_eq_b = !(|adder_result);
    assign a_lt_b = opc_alu_secondary_i[3] ? // Signed compare
-                   ((a[OPTION_OPERAND_WIDTH-1] & 
+                   ((a[OPTION_OPERAND_WIDTH-1] &
                      !b[OPTION_OPERAND_WIDTH-1]) |
-                    (!a[OPTION_OPERAND_WIDTH-1] & 
+                    (!a[OPTION_OPERAND_WIDTH-1] &
                      !b[OPTION_OPERAND_WIDTH-1] &
                      adder_result[OPTION_OPERAND_WIDTH-1]) |
-                    (a[OPTION_OPERAND_WIDTH-1] & 
+                    (a[OPTION_OPERAND_WIDTH-1] &
                      b[OPTION_OPERAND_WIDTH-1] &
                      adder_result[OPTION_OPERAND_WIDTH-1])) :
                    (a < b);
@@ -466,9 +466,8 @@ module mor1kx_execute_alu
                    // and check that a >>> b
                    !(a[OPTION_OPERAND_WIDTH-1] & !b[OPTION_OPERAND_WIDTH-1]);
    */
-                    
-   
-   assign shift_op = (opc_alu_i == `OR1K_ALU_OPC_SHRT || 
+
+   assign shift_op = (opc_alu_i == `OR1K_ALU_OPC_SHRT ||
                       opc_insn_i == `OR1K_OPCODE_SHRTI) ;
 
    generate
@@ -478,7 +477,7 @@ module mor1kx_execute_alu
           FEATURE_ROR=="ENABLED") begin : full_barrel_shifter
          /* verilator lint_on WIDTH */
          assign shift_valid = 1;
-         assign shift_result = 
+         assign shift_result =
                                (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
                                ({32{a[OPTION_OPERAND_WIDTH-1]}} <<
                                 (/*7'd*/OPTION_OPERAND_WIDTH-{2'b0,b[4:0]})) |
@@ -497,7 +496,7 @@ module mor1kx_execute_alu
                FEATURE_ROR!="ENABLED") begin : bull_barrel_shifter_no_ror
 	 /* verilator lint_on WIDTH */
          assign shift_valid = 1;
-         assign shift_result = 
+         assign shift_result =
                                (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
                                ({32{a[OPTION_OPERAND_WIDTH-1]}} <<
                                 (/*7'd*/OPTION_OPERAND_WIDTH-{2'b0,b[4:0]})) |
@@ -513,7 +512,7 @@ module mor1kx_execute_alu
                FEATURE_ROR!="ENABLED") begin : bull_barrel_shifter_no_ror_sra
 	 /* verilator lint_on WIDTH */
          assign shift_valid = 1;
-         assign shift_result = 
+         assign shift_result =
                                (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?
                                a << b[4:0] :
                                //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
@@ -529,7 +528,7 @@ module mor1kx_execute_alu
              shift_go <= 0;
            else if (decode_valid_i)
              shift_go <= shift_op;
-         
+
          always @(posedge clk `OR_ASYNC_RST)
            if (rst) begin
               shift_cnt <= 0;
@@ -548,14 +547,14 @@ module mor1kx_execute_alu
               else if (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_ROR)
                 shift_result_r <= {shift_result_r[0]
                                    ,shift_result_r[OPTION_OPERAND_WIDTH-1:1]};
-              
+
               else if (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA)
                 shift_result_r <= {a[OPTION_OPERAND_WIDTH-1],
                                    shift_result_r[OPTION_OPERAND_WIDTH-1:1]};
            end // if (shift_go && !(shift_cnt==b[4:0]))
 
          assign shift_valid = (shift_cnt==b[4:0]) & shift_go & !decode_valid_i;
-         
+
          assign shift_result = shift_result_r;
 
       end // if (OPTION_SHIFTER=="SERIAL")
@@ -564,7 +563,7 @@ module mor1kx_execute_alu
             $display("%m: Error - chosen shifter implementation (%s) not available",
                      OPTION_SHIFTER);
             $finish;
-         
+
       end
    endgenerate
 
@@ -580,7 +579,7 @@ module mor1kx_execute_alu
    assign flag_clear_o = !flag_set & comp_op;
 
    // Combinatorial block
-   always @*    
+   always @*
      case(opc_alu_secondary_i)
        `OR1K_COMP_OPC_EQ:
          flag_set = a_eq_b;
@@ -601,8 +600,8 @@ module mor1kx_execute_alu
        default:
          flag_set = 0;
      endcase // case (opc_alu_secondary_i)
-   
-   
+
+
    // Logic operations
    assign and_result = a & b;
    assign or_result = a | b;
@@ -614,13 +613,13 @@ module mor1kx_execute_alu
      case(opc_insn_i)
        `OR1K_OPCODE_ALU:
          case(opc_alu_i)
-/*         
+/*
            `OR1K_ALU_OPC_ADDC,
            `OR1K_ALU_OPC_ADD:
              alu_result = adder_result;
            `OR1K_ALU_OPC_SUB:
              alu_result = adder_result;
-*/ 
+*/
            `OR1K_ALU_OPC_AND:
              alu_result = and_result;
            `OR1K_ALU_OPC_OR:
@@ -681,7 +680,7 @@ module mor1kx_execute_alu
          // Default out is b - for jump reg instructions
          alu_result = b;
        endcase // case (opc_insn_i)
-   
+
    assign alu_result_valid = 1'b1; // ALU (adder, logic ops) always ready
    assign alu_result_o = alu_result;
 
@@ -703,27 +702,21 @@ module mor1kx_execute_alu
 
            `OR1K_ALU_OPC_SHRT:
              alu_valid = shift_valid;
- 
+
            default:
              alu_valid = alu_result_valid;
          endcase // case (opc_alu_i)
 
        `OR1K_OPCODE_MULI:
          alu_valid = mul_valid;
-       
+
        `OR1K_OPCODE_SHRTI:
          alu_valid = shift_valid;
        default:
          alu_valid = alu_result_valid;
      endcase // case (opc_insn_i)
-   
-   
+
+
    assign alu_valid_o = alu_valid;
 
 endmodule // mor1kx_execute_alu
-        
-
-
-   
-   
-   
