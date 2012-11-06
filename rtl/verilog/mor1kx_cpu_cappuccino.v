@@ -272,7 +272,7 @@ module mor1kx_cpu_cappuccino
     .spr_bus_dat_o		(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]),
     .spr_bus_ack_o		(spr_bus_ack_ic_i),
     // Inputs
-    .ic_enable			(1'b1),
+    .ic_enable			(spr_sr_o[`OR1K_SPR_SR_ICE]),
     .pc_addr_i			(pc_addr_o[OPTION_OPERAND_WIDTH-1:0]),
     .pc_fetch_i			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
     .padv_fetch_i		(padv_fetch_o),
@@ -285,6 +285,7 @@ module mor1kx_cpu_cappuccino
 
    mor1kx_icache
      #(
+       .FEATURE_INSTRUCTIONCACHE(FEATURE_INSTRUCTIONCACHE),
        .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
        .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
        .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
@@ -303,7 +304,7 @@ module mor1kx_cpu_cappuccino
       // Inputs
       .clk				(clk),
       .rst				(rst),
-      .ic_enable			(1'b1),			 // Templated
+      .ic_enable			(spr_sr_o[`OR1K_SPR_SR_ICE]), // Templated
       .pc_addr_i			(pc_addr_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
       .pc_fetch_i			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
       .padv_fetch_i			(padv_fetch_o),		 // Templated

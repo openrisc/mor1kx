@@ -14,6 +14,7 @@
 
 module mor1kx_icache
   #(
+    parameter FEATURE_INSTRUCTIONCACHE = "NONE",
     parameter OPTION_OPERAND_WIDTH = 32,
     parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
     parameter OPTION_ICACHE_SET_WIDTH = 9,
@@ -53,11 +54,12 @@ module mor1kx_icache
     );
 
    // States
-   localparam IDLE		= 5'b00001;
-   localparam RESTART		= 5'b00010;
-   localparam READ		= 5'b00100;
-   localparam REFILL		= 5'b01000;
-   localparam INVALIDATE	= 5'b10000;
+   localparam IDLE		= 6'b000001;
+   localparam RESTART		= 6'b000010;
+   localparam READ		= 6'b000100;
+   localparam REFILL		= 6'b001000;
+   localparam INVALIDATE	= 6'b010000;
+   localparam BYPASS		= 6'b100000;
 
    // Address space in bytes for a way
    localparam WAY_WIDTH = OPTION_ICACHE_BLOCK_WIDTH + OPTION_ICACHE_SET_WIDTH;
@@ -76,13 +78,16 @@ module mor1kx_icache
    reg 				      ic_enabled;
 
    // FSM state signals
-   reg [4:0] 			      state;
+   reg [5:0] 			      state;
    wire				      idle;
    wire				      read;
    wire				      refill;
+   wire				      bypass;
 
    reg 				      cpu_ack;
    wire [31:0] 			      cpu_dat;
+
+   reg 				      bypass_req;
 
    reg [31:0] 			      mem_adr;
    reg 				      mem_req;
@@ -116,12 +121,14 @@ module mor1kx_icache
 
    genvar 			      i;
 
+   wire 			      cache_present;
 
-   // Bypass cache when not enabled and when invalidating
+   assign cache_present = (FEATURE_INSTRUCTIONCACHE != "NONE");
+
    assign cpu_err_o = ibus_err_i;
-   assign cpu_ack_o = (cache_req | refill) ? cpu_ack : ibus_ack_i;
+   assign cpu_ack_o = (cache_req | refill | bypass) ? cpu_ack : ibus_ack_i;
    assign cpu_dat_o = (cache_req) ? cpu_dat : ibus_dat_i;
-   assign ibus_adr_o = (cache_req | refill) ? mem_adr : pc_addr_i;
+   assign ibus_adr_o = (cache_req | refill | bypass) ? mem_adr : pc_addr_i;
    assign ibus_req_o = mem_req;
 
    always @(posedge clk)
@@ -162,9 +169,9 @@ module mor1kx_icache
 
    generate
       if (OPTION_ICACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
-	 assign cache_req = ic_enabled;
+	 assign cache_req = ic_enabled & cache_present;
       end else if (OPTION_ICACHE_LIMIT_WIDTH < OPTION_OPERAND_WIDTH) begin
-	 assign cache_req = ic_enabled &
+	 assign cache_req = ic_enabled & cache_present &
 			   (pc_addr_i[OPTION_OPERAND_WIDTH-1:
 				      OPTION_ICACHE_LIMIT_WIDTH] == 0);
       end else begin
@@ -196,6 +203,7 @@ module mor1kx_icache
    assign idle = (state == IDLE);
    assign refill = (state == REFILL);
    assign read = (state == READ);
+   assign bypass = (state == BYPASS);
 
    /*
     * SPR bus interface
@@ -217,8 +225,8 @@ module mor1kx_icache
     */
     always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       ic_enabled <= 1; /*SJK*/
-     else if (ic_enable & (ibus_ack_i | !cpu_req_i))
+       ic_enabled <= 0;
+     else if (ic_enable & ibus_ack_i)
        ic_enabled <= 1;
      else if (!ic_enable & idle)
        ic_enabled <= 0;
@@ -229,10 +237,15 @@ module mor1kx_icache
    always @(posedge clk `OR_ASYNC_RST) begin
       case (state)
 	IDLE: begin
+	   bypass_req <= 1'b0;
 	   if (padv_fetch_i & cache_req & ic_enable) begin
 	      state <= READ;
 	      mem_adr <= pc_addr_i;
 	      start_adr <= pc_addr_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
+	   end else if (padv_fetch_i) begin
+	      mem_adr <= pc_fetch_i;
+	      bypass_req <= 1'b1;
+	      state <= BYPASS;
 	   end
 	end
 
@@ -281,6 +294,23 @@ module mor1kx_icache
 	INVALIDATE: begin
 	   mem_adr <= pc_fetch_i;
 	   state <= RESTART;
+	end
+
+	BYPASS: begin
+	   if (ibus_ack_i) begin
+	      if (padv_fetch_i) begin
+		 bypass_req <= 1'b1;
+		 mem_adr <= pc_addr_i;
+	      end else begin
+		 bypass_req <= 1'b0;
+	      end
+	      if (cache_present & ic_enable)
+		state <= RESTART;
+	   end else begin
+	      if (padv_fetch_i)
+		bypass_req <= 1'b1;
+	      mem_adr <= pc_fetch_i;
+	   end
 	end
 
 	default:
@@ -373,6 +403,13 @@ module mor1kx_icache
 	   tag_din = 0;
 	   tag_we = 1'b1;
 	end
+
+	BYPASS: begin
+	   if (ibus_ack_i & (pc_fetch_i == mem_adr))
+	     cpu_ack = 1'b1;
+	   mem_req = bypass_req;
+	end
+
       endcase
    end
 
