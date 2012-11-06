@@ -29,7 +29,6 @@ module mor1kx_fetch_cappuccino
     input 				  rst,
 
     // interface to ibus
-    output reg 				  ibus_req_o,
     input 				  ibus_err_i,
     input 				  ibus_ack_i,
     input [`OR1K_INSN_WIDTH-1:0] 	  ibus_dat_i,

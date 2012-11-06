@@ -34,7 +34,6 @@ module mor1kx_icache
     output 			      cpu_err_o,
     output 			      cpu_ack_o,
     output [31:0] 		      cpu_dat_o,
-    input 			      cpu_req_i,
 
     // BUS Interface towards MEM
     input 			      ibus_err_i,
@@ -82,7 +81,6 @@ module mor1kx_icache
    wire				      read;
    wire				      refill;
 
-   reg 				      cpu_req_r;
    reg 				      cpu_ack;
    wire [31:0] 			      cpu_dat;
 
@@ -124,7 +122,7 @@ module mor1kx_icache
    assign cpu_ack_o = (cache_req | refill) ? cpu_ack : ibus_ack_i;
    assign cpu_dat_o = (cache_req) ? cpu_dat : ibus_dat_i;
    assign ibus_adr_o = (cache_req | refill) ? mem_adr : pc_addr_i;
-   assign ibus_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
+   assign ibus_req_o = mem_req;
 
    always @(posedge clk)
      if (invalidate_edge)
@@ -224,10 +222,6 @@ module mor1kx_icache
        ic_enabled <= 1;
      else if (!ic_enable & idle)
        ic_enabled <= 0;
-
-   wire cpu_req_edge = cpu_req_i & !cpu_req_r;
-   always @(posedge clk)
-       cpu_req_r <= cpu_req_i;
 
    /*
     * Cache FSM

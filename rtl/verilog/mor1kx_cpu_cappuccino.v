@@ -189,7 +189,6 @@ module mor1kx_cpu_cappuccino
    wire			ic_ack_o;		// From mor1kx_icache of mor1kx_icache.v
    wire [OPTION_OPERAND_WIDTH-1:0] ic_dat_o;	// From mor1kx_icache of mor1kx_icache.v
    wire			ic_err_o;		// From mor1kx_icache of mor1kx_icache.v
-   wire			ic_req_i;		// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire [`OR1K_IMM_WIDTH-1:0] imm16_o;		// From mor1kx_decode of mor1kx_decode.v
    wire [9:0]		immjbr_upper_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			lsu_except_align_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
@@ -225,7 +224,6 @@ module mor1kx_cpu_cappuccino
    // End of automatics
 
    /* mor1kx_fetch_cappuccino AUTO_TEMPLATE (
-    .ibus_req_o				(ic_req_i),
     .padv_i				(padv_fetch_o),
     .branch_occur_i			(ctrl_branch_occur_o),
     .branch_dest_i			(ctrl_branch_target_o),
@@ -246,7 +244,6 @@ module mor1kx_cpu_cappuccino
      mor1kx_fetch_cappuccino
      (/*AUTOINST*/
       // Outputs
-      .ibus_req_o			(ic_req_i),		 // Templated
       .pc_decode_o			(pc_fetch_to_decode),	 // Templated
       .decode_insn_o			(insn_fetch_to_decode),	 // Templated
       .fetch_valid_o			(fetch_valid_o),
@@ -280,7 +277,6 @@ module mor1kx_cpu_cappuccino
     .pc_fetch_i			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
     .padv_fetch_i		(padv_fetch_o),
     .cpu_adr_i			(ic_adr_i[OPTION_OPERAND_WIDTH-1:0]),
-    .cpu_req_i			(ic_req_i),
     .spr_bus_addr_i		(spr_bus_addr_o[15:0]),
     .spr_bus_we_i		(spr_bus_we_o),
     .spr_bus_stb_i		(spr_bus_stb_o),
@@ -311,7 +307,6 @@ module mor1kx_cpu_cappuccino
       .pc_addr_i			(pc_addr_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
       .pc_fetch_i			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
       .padv_fetch_i			(padv_fetch_o),		 // Templated
-      .cpu_req_i			(ic_req_i),		 // Templated
       .ibus_err_i			(ibus_err_i),
       .ibus_ack_i			(ibus_ack_i),
       .ibus_dat_i			(ibus_dat_i[31:0]),
