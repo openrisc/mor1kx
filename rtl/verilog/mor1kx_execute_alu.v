@@ -425,21 +425,20 @@ module mor1kx_execute_alu
 				    a[24] ? 25 : a[25] ? 26 : a[26] ? 27 :
 				    a[27] ? 28 : a[28] ? 29 : a[29] ? 30 :
 				    a[30] ? 31 : a[31] ? 32 : 0);
-	 generate
-	    if (FEATURE_FFL1=="REGISTERED") begin
-	       reg [OPTION_OPERAND_WIDTH-1:0] ffl1_result_r;
 
-	       assign ffl1_valid = !decode_valid_i;
-	       assign ffl1_result = ffl1_result_r;
+	 if (FEATURE_FFL1=="REGISTERED") begin
+	    reg [OPTION_OPERAND_WIDTH-1:0] ffl1_result_r;
 
-	       always @(posedge clk)
-		 if (decode_valid_i)
-		   ffl1_result_r = ffl1_result_wire;
-	    end else begin
-	       assign ffl1_result = ffl1_result_wire;
-	       assign ffl1_valid = 1'b1;
-	    end
-	 endgenerate
+	    assign ffl1_valid = !decode_valid_i;
+	    assign ffl1_result = ffl1_result_r;
+
+	    always @(posedge clk)
+	      if (decode_valid_i)
+		ffl1_result_r = ffl1_result_wire;
+	 end else begin
+	    assign ffl1_result = ffl1_result_wire;
+	    assign ffl1_valid = 1'b1;
+	 end
       end
       else begin
 	 assign ffl1_result = adder_result;
