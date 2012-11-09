@@ -85,7 +85,6 @@ module mor1kx_icache
    wire				      bypass;
 
    reg 				      cpu_ack;
-   wire [31:0] 			      cpu_dat;
 
    reg 				      bypass_req;
 
@@ -126,9 +125,8 @@ module mor1kx_icache
    assign cache_present = (FEATURE_INSTRUCTIONCACHE != "NONE");
 
    assign cpu_err_o = ibus_err_i;
-   assign cpu_ack_o = (cache_req | refill | bypass) ? cpu_ack : ibus_ack_i;
-   assign cpu_dat_o = (cache_req) ? cpu_dat : ibus_dat_i;
-   assign ibus_adr_o = (cache_req | refill | bypass) ? mem_adr : pc_addr_i;
+   assign cpu_ack_o = cpu_ack;
+   assign ibus_adr_o = mem_adr;
    assign ibus_req_o = mem_req;
 
    always @(posedge clk)
@@ -184,10 +182,10 @@ module mor1kx_icache
 
    generate
       if (OPTION_ICACHE_WAYS == 2) begin
-	 assign cpu_dat = refill ? ibus_dat_i :
-			  way_hit[0] ? way_dout[0] : way_dout[1];
+	 assign cpu_dat_o = (refill | bypass) ? ibus_dat_i :
+			    way_hit[0] ? way_dout[0] : way_dout[1];
       end else begin
-	 assign cpu_dat = refill ? ibus_dat_i : way_dout[0];
+	 assign cpu_dat_o = (refill | bypass) ? ibus_dat_i : way_dout[0];
       end
    endgenerate
 
