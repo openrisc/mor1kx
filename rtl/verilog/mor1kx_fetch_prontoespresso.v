@@ -110,6 +110,7 @@ module mor1kx_fetch_prontoespresso
    reg 					  execute_waiting_r;
    reg 					  sleep;
    
+   
    // Wires
    wire [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch_next;
    wire [OPTION_OPERAND_WIDTH-1:0] 	  pc_plus_four;
@@ -124,7 +125,17 @@ module mor1kx_fetch_prontoespresso
 				  early_pc_next : pc_plus_four;
    
    assign ibus_adr_o		= pc;
-   assign ibus_req_o		= fetch_req & !fetch_take_exception_branch_i;
+   assign ibus_req_o		= fetch_req & !fetch_take_exception_branch_i
+				  // This is needed in the case that:
+				  // 1. a burst just finished and ack in went low because of this
+				  // 2. the instruction we just ACKed is a multicycle insn so the 
+				  //    execute_waiting_i goes high, but the bus interface will have
+				  //    already put out the request onto the bus. It causes a bug
+				  //    if we deassert the req from here 1 cycle later, so put this
+				  //    signal into the assign logic so that the first cycle of it
+				  //    causes req to go low, after which fetch_req is deasserted
+				  //    and should handle it
+				  & !(execute_waiting_i & fetch_req);
 
    assign fetch_ready_o		= ibus_ack_i | jump_insn_in_decode;
 
