@@ -403,18 +403,15 @@ module mor1kx_cpu(/*AUTOARG*/
 			        monitor_flag_clear ? 0 : 
 				monitor_flag_sr;
 	 assign monitor_clk = clk;
-	 wire 				 cpu_fetch_branched;
-	 assign cpu_fetch_branched = !espresso.mor1kx_cpu.mor1kx_fetch_espresso.branch_occur_i &
-				     !espresso.mor1kx_cpu.mor1kx_fetch_espresso.bus_access_done &
-				     !espresso.mor1kx_cpu.mor1kx_fetch_espresso.bus_access_done_r;
-//	 assign monitor_decode_insn = espresso.mor1kx_cpu.mor1kx_fetch_espresso.insn_buffer;
-//	 assign monitor_decode_advance = espresso.mor1kx_cpu.padv_fetch_o & !cpu_fetch_branched;
 	 assign monitor_execute_insn = espresso.mor1kx_cpu.mor1kx_fetch_espresso.decode_insn_o;
 	 assign monitor_execute_advance = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.execute_done;
  	 assign monitor_flag_set = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.ctrl_flag_set_i;
 	 assign monitor_flag_clear = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.ctrl_flag_clear_i;
 	 assign monitor_flag_sr = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.flag;
-	 assign monitor_spr_sr = {16'd0,espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_sr[15:`OR1K_SPR_SR_F+1],espresso.mor1kx_cpu.mor1kx_ctrl_espresso.flag,espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_sr[`OR1K_SPR_SR_F-1:0]};
+	 assign monitor_spr_sr = {16'd0,espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_sr[15:`OR1K_SPR_SR_F+1],
+				  // Use the locally calculated flag value
+				  monitor_flag,
+				  espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_sr[`OR1K_SPR_SR_F-1:0]};
 	 assign monitor_execute_pc = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_ppc;
 	 assign monitor_rf_result_in = espresso.mor1kx_cpu.mor1kx_rf_espresso.result_i;
 	 assign monitor_spr_esr = {16'd0,espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_esr};
@@ -535,7 +532,10 @@ module mor1kx_cpu(/*AUTOARG*/
  	 assign monitor_flag_set = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.ctrl_flag_set_i;
 	 assign monitor_flag_clear = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.ctrl_flag_clear_i;
 	 assign monitor_flag_sr = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.flag;
-	 assign monitor_spr_sr = {16'd0,prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_sr[15:`OR1K_SPR_SR_F+1],prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.flag,prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_sr[`OR1K_SPR_SR_F-1:0]};
+	 assign monitor_spr_sr = {16'd0,prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_sr[15:`OR1K_SPR_SR_F+1],
+				  // Use the locally calculated flag value
+				  monitor_flag,
+				  prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_sr[`OR1K_SPR_SR_F-1:0]};
 	 assign monitor_execute_pc = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_ppc;
 	 assign monitor_rf_result_in = prontoespresso.mor1kx_cpu.mor1kx_rf_espresso.result_i;
 	 assign monitor_spr_esr = {16'd0,prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_esr};
