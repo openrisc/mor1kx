@@ -145,7 +145,7 @@ module mor1kx_fetch_prontoespresso
    // Register file control
    assign fetch_rfa_adr_o	= ibus_dat_i[`OR1K_RA_SELECT];
    assign fetch_rfb_adr_o	= ibus_dat_i[`OR1K_RB_SELECT];
-   assign fetch_rf_re_o		= ibus_ack_i & padv_i;
+   assign fetch_rf_re_o		= ibus_ack_i & (padv_i | stepping_i);
 
    // Pick out opcode of next instruction to go to decode stage
    assign next_insn_opcode      = ibus_dat_i[`OR1K_OPCODE_SELECT];
@@ -212,7 +212,7 @@ module mor1kx_fetch_prontoespresso
 	  pc		<= OPTION_RESET_PC;
 	  fetched_pc_o	<= OPTION_RESET_PC;
        end
-     else if (ibus_ack_i & padv_i)
+     else if (ibus_ack_i & (padv_i | stepping_i))
        begin
 	  pc		<= pc_fetch_next_o;
 	  fetched_pc_o	<= pc;
@@ -221,17 +221,25 @@ module mor1kx_fetch_prontoespresso
        begin
 	  pc		<= branch_dest_i;
        end
-     else if (fetch_take_exception_branch_i)
+     else if (fetch_take_exception_branch_i & !du_stall_i)
        begin
 	  pc		<= branch_dest_i;
+       end
+     else if (du_restart_i)
+       begin
+	  pc		<= du_restart_pc_i;
+       end
+     else if (fetch_take_exception_branch_i & du_stall_i)
+       begin
+	  pc		<= du_restart_pc_i;
        end
        
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
-     else if (sleep)
+     else if (sleep | du_stall_i)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
-     else if (ibus_ack_i & padv_i & !padv_deasserted)
+     else if (ibus_ack_i & (padv_i | stepping_i) & !padv_deasserted)
        decode_insn_o <= ibus_dat_i;
      else if (branch_occur_i & padv_i)
        /* We've just taken a branch, put a nop
@@ -244,6 +252,11 @@ module mor1kx_fetch_prontoespresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        fetch_req <= 1'b1;
+     else if (fetch_req & stepping_i & ibus_ack_i)
+       // Deassert on ack
+       fetch_req <= 1'b0;
+     else if (!fetch_req & du_stall_i)
+       fetch_req <= 1'b0;
      else if (ibus_err_i)
        fetch_req <= 1'b0;
      else if (sleep)
@@ -308,8 +321,6 @@ module mor1kx_fetch_prontoespresso
        sleep <= 1'b0;
      else if (will_go_to_sleep)
        sleep <= 1'b1;
-   
-   
    
 endmodule // mor1kx_fetch_prontoespresso
 

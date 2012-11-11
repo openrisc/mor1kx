@@ -295,7 +295,6 @@ module mor1kx_ctrl_prontoespresso
    wire                              stepping;
    wire                              du_npc_write;
    reg                               du_npc_written;
-   reg [OPTION_OPERAND_WIDTH-1:0]    du_spr_npc;
    
    /* Wires for SPR management */
    wire                              spr_group_present;
@@ -323,7 +322,7 @@ module mor1kx_ctrl_prontoespresso
    assign exception = exception_pending;
    
    assign fetch_take_exception_branch_o =  (take_exception | op_rfe) & 
-                                           !stepping;
+                                           !stepping | du_npc_write;
    
    assign execute_stage_exceptions = except_dbus_i | except_align_i;
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
@@ -459,10 +458,11 @@ module mor1kx_ctrl_prontoespresso
      if (rst)
        execute_go <= 0;
      else
-       // Note: turned padv_fetch_o here into (padv_fetch_o & !ctrl_branch_occur) for
-       // pronto version. This may have implications for exeception handling
-       execute_go <= (padv_fetch_o & !(ctrl_branch_occur | op_rfe)) | execute_waiting | 
-                     (stepping & fetch_ready_i);
+       // Note: turned padv_fetch_o here into (padv_fetch_o & 
+       // !ctrl_branch_occur) for pronto version. This may have implications 
+       // for exeception handling.
+       execute_go <= (padv_fetch_o & !(ctrl_branch_occur | op_rfe)) | 
+		     execute_waiting | (stepping & fetch_ready_i);
 
    assign execute_done = execute_go & !execute_waiting;
 
@@ -694,11 +694,9 @@ module mor1kx_ctrl_prontoespresso
        spr_npc <= rfete ? exception_pc_addr : spr_epcr;
      else if (du_restart_o)
        spr_npc <= du_restart_pc_o;
+     else if (stepping & ctrl_branch_occur)
+       spr_npc <= ctrl_branch_target_o;
      else if (stepping & fetch_ready_i)
-       // At the time fetch_ready_i goes high, pc_fetch_next_i holds
-       // the next PC to be fetched, so this is essentially the NPC
-       // This saves an adder!
-       // TODO - revisit this!
        spr_npc <= pc_fetch_next_i;
      else if (stepping & exception_r)
        spr_npc <= exception_pc_addr;
@@ -713,13 +711,6 @@ module mor1kx_ctrl_prontoespresso
 		  ctrl_branch_target_o : pc_fetch_next_i; 
 
    // Previous PC (PPC)
-   /*
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       spr_ppc <= OPTION_RESET_PC;
-     else if ((padv_fetch_o | (stepping & fetch_ready_i)) & !ctrl_branch_occur)
-       spr_ppc <= spr_npc; // PC we've got in execute stage (about to finish)
-    */
    always @*
      spr_ppc = fetch_ppc_i;
    
@@ -1188,7 +1179,9 @@ module mor1kx_ctrl_prontoespresso
          
          /* goes out to the debug interface and comes back 1 cycle later
           via du_stall_i */
-         assign du_stall_o = (stepping & execute_done);
+         assign du_stall_o = (stepping & execute_done) 
+	   // || l.trap stalls on correct state in debug reg - TODO!;
+	   ;
          
          /* Pulse to indicate we're restarting after a stall */
          assign du_restart_from_stall = du_stall_r & !du_stall_i;
@@ -1209,12 +1202,6 @@ module mor1kx_ctrl_prontoespresso
          
          always @(posedge clk `OR_ASYNC_RST)
            if (rst)
-             du_spr_npc <= 0;
-           else if (du_npc_write)
-             du_spr_npc <= du_dat_i;
-
-         always @(posedge clk `OR_ASYNC_RST)
-           if (rst)
              stepped_into_exception <= 0;
            else if (du_restart_from_stall)
              stepped_into_exception <= 0;
@@ -1229,7 +1216,7 @@ module mor1kx_ctrl_prontoespresso
            else if (stepping & execute_done)
              stepped_into_rfe <= op_rfe;
          
-         assign du_restart_pc_o = du_npc_written ? du_spr_npc :
+         assign du_restart_pc_o = du_npc_write ? du_dat_i :
                                   stepped_into_rfe ? spr_epcr : spr_npc;
 
          assign du_restart_o = du_restart_from_stall;
@@ -1448,7 +1435,7 @@ module mor1kx_ctrl_prontoespresso
 	 // A monitor to do a rudimentary check of the processor's PC 
 	 // progression
 	 always @(negedge clk) begin
-	    if (execute_done) begin
+	    if (execute_done & !stepping) begin
 	       
 	       // First instruction of an exception vector, ie.
 	       // 0x100, 0x200, 0x300 ... 0x2000
