@@ -31,6 +31,7 @@ module mor1kx_lsu_espresso
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
+   parameter OPTION_REGISTERED_IO = "NO";
    
    input clk, rst;
 
@@ -75,10 +76,14 @@ module mor1kx_lsu_espresso
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_adr_r;
 
    reg [3:0] 			     dbus_bsel;
+
+   reg 				     dbus_err_r;
    
    reg 				     access_done;
 
    reg [OPTION_OPERAND_WIDTH-1:0]    lsu_result_r;
+
+   reg 				     op_lsu;
    
    wire 			     align_err_word;
    wire 			     align_err_short;
@@ -95,24 +100,21 @@ module mor1kx_lsu_espresso
 
    reg 				     except_dbus;
    reg 				     execute_go;
-   wire 			     lsu_go;
 
-   assign dbus_adr_o = execute_go ? alu_result_i : dbus_adr_r;
    assign dbus_dat_o = (opc_insn_i[1:0]==2'b10) ?        // l.sb
 		       {rfb_i[7:0],rfb_i[7:0],rfb_i[7:0],rfb_i[7:0]} :
 		       (opc_insn_i[1:0]==2'b11) ?        // l.sh
 		       {rfb_i[15:0],rfb_i[15:0]} :
 		       rfb_i;                         // l.sw
    
-   assign dbus_req_o = (op_lsu_load_i | op_lsu_store_i) &
-		       !except_align & !access_done;
-   
+
+
    assign align_err_word = |dbus_adr_o[1:0];
    assign align_err_short = dbus_adr_o[0];
    
 
-   assign lsu_valid_o = dbus_ack_i | dbus_err_i | access_done;
-   assign lsu_except_dbus_o = dbus_err_i | except_dbus;
+   assign lsu_valid_o = dbus_ack_i | dbus_err_r| access_done;
+   assign lsu_except_dbus_o = dbus_err_r | except_dbus;
 
    assign load_align_err = ((opc_insn_i==`OR1K_OPCODE_LWZ |
 			     opc_insn_i==`OR1K_OPCODE_LWS) & align_err_word) |
@@ -122,13 +124,8 @@ module mor1kx_lsu_espresso
    assign store_align_err = (opc_insn_i==`OR1K_OPCODE_SW & align_err_word) |
 			    (opc_insn_i==`OR1K_OPCODE_SH & align_err_short);
 
-   assign except_align = (op_lsu_load_i & load_align_err) |
-			 (op_lsu_store_i & store_align_err) ;
-
    assign lsu_except_align_o = except_align_r;
 
-   assign lsu_go = execute_go & (op_lsu_load_i | op_lsu_store_i);
-      
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        execute_go <= 0;
@@ -140,7 +137,7 @@ module mor1kx_lsu_espresso
        access_done <= 0;
      else if (padv_fetch_i | du_restart_i)
        access_done <= 0;
-     else if (dbus_ack_i | dbus_err_i | lsu_except_align_o)
+     else if (dbus_ack_i | dbus_err_r | lsu_except_align_o)
        access_done <= 1;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -156,7 +153,7 @@ module mor1kx_lsu_espresso
        except_dbus <= 0;
      else if (exception_taken_i)
        except_dbus <= 0;
-     else if (dbus_err_i)
+     else if (dbus_err_r)
        except_dbus <= 1;
 
    // Need to register address due to behavior of RF when source register is
@@ -275,6 +272,49 @@ module mor1kx_lsu_espresso
    always @(posedge clk)
      if (dbus_ack_i & op_lsu_load_i)
        lsu_result_r <= dbus_dat_extended;
+
+   // Break up paths of signals which are usually pretty long
+   generate
+      if (OPTION_REGISTERED_IO!="NO")
+	begin : registered_io
+
+	   assign dbus_adr_o = dbus_adr_r;
+	   
+	   always @(posedge clk)
+	     begin
+		dbus_err_r <= dbus_err_i;
+		op_lsu <=  op_lsu_load_i | op_lsu_store_i;
+	     end
+
+	   // Make sure padv_i isn't high because we'll be registering the 
+	   // fact that this cycle is an LSU op while it is
+	   assign dbus_req_o = !execute_go & op_lsu & 
+			       !(except_align | except_align_r) & 
+			       !access_done;
+
+	   assign except_align = op_lsu & ((op_lsu_load_i & load_align_err) |
+					   (op_lsu_store_i & store_align_err)) &
+				 !execute_go;
+	   
+	end
+      else
+	begin : nonregistered_io
+
+	   assign dbus_adr_o = execute_go ? alu_result_i : dbus_adr_r;
+	   
+	   always @*
+	     begin
+		dbus_err_r = dbus_err_i;
+		op_lsu =  op_lsu_load_i | op_lsu_store_i;
+	     end
+
+	   assign dbus_req_o = op_lsu & !except_align & !access_done;
+
+	   assign except_align = op_lsu & ((op_lsu_load_i & load_align_err) |
+					   (op_lsu_store_i & store_align_err));
+	   
+	end
+   endgenerate
    
    assign lsu_result_o = access_done ? lsu_result_r : dbus_dat_extended;
 
