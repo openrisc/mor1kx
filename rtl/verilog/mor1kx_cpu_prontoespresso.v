@@ -510,7 +510,12 @@ module mor1kx_cpu_prontoespresso
       // verilator public
       input [4:0] 		   gpr_num;
       begin
-	 get_gpr = mor1kx_rf_espresso.rfa.ram[gpr_num];
+	 // If we're writing, the value won't be in the GPR yet, so snoop
+	 // it off the result in line.
+	 if (rf_we_o)
+	   get_gpr = rf_result_o;
+	 else
+	   get_gpr = mor1kx_rf_espresso.rfa.ram[gpr_num];
       end
    endfunction //
    
