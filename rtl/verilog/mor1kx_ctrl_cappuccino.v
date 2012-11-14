@@ -4,7 +4,7 @@
   of the OHDL was not distributed with this file, You 
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
-  Description: mor1k control unit
+  Description: mor1kx control unit
    
   inputs from execute stage
   
@@ -202,12 +202,12 @@ module mor1kx_ctrl_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_evba;
    
    // Programmable Interrupt Control SPRs
-   reg [31:0] 			     spr_picmr;
-   reg [31:0] 			     spr_picsr;
+   wire [31:0] 			     spr_picmr;
+   wire [31:0] 			     spr_picsr;
    
    // Tick Timer SPRs
-   reg [31:0] 			     spr_ttmr;
-   reg [31:0] 			     spr_ttcr;
+   wire [31:0] 			     spr_ttmr;
+   wire [31:0] 			     spr_ttcr;
    
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
    wire [OPTION_OPERAND_WIDTH-1:0]   spr_npc;
@@ -242,8 +242,6 @@ module mor1kx_ctrl_cappuccino
    wire 			     decode_stage_exceptions;
 
    wire 			     exception_re;
-
-   wire [31:0] 			     irq_unmasked;
 
    wire 			     except_ticktimer;
    wire 			     except_pic;
@@ -840,70 +838,36 @@ module mor1kx_ctrl_cappuccino
    
    // PIC SPR control
    generate
-      genvar   irqline;
-      if (FEATURE_PIC !="NONE") begin : pic
-	 
-	 if (OPTION_PIC_TRIGGER=="EDGE") begin
-	    for(irqline=0;irqline<32;irqline=irqline+1)
-	      begin: picgenerate
-		 // PIC status register
-		 always @(posedge clk `OR_ASYNC_RST)
-		   if (rst)
-		     spr_picsr[irqline] <= 0;
-		   // Clear
-		   else if (spr_we & spr_addr==`OR1K_SPR_PICSR_ADDR)
-		     spr_picsr[irqline] <= spr_write_dat[irqline] ? 0 : 
-					      spr_picsr[irqline];
-		   // Set
-		   else if (!spr_picsr[irqline] & irq_unmasked[irqline])
-		     spr_picsr[irqline] <= 1;
-	      end // block: picgenerate
-	    
-	 end // if (OPTION_PIC_TRIGGER=="EDGE")
-	 else if (OPTION_PIC_TRIGGER=="LEVEL") begin
-	    for(irqline=0;irqline<32;irqline=irqline+1)
-	      begin: picsrlevelgenerate
-		 
-		 // PIC status register
-		 always @(posedge clk `OR_ASYNC_RST)
-		   spr_picsr[irqline] <= irq_unmasked[irqline];
-	      end
-	    
-	 end // if (OPTION_PIC_TRIGGER=="LEVEL")
-	 else if (OPTION_PIC_TRIGGER=="LATCHED_LEVEL") begin
-	    for(irqline=0;irqline<32;irqline=irqline+1)
-	      begin: piclatchedlevelgenerate
-		 // PIC status register
-		 always @(posedge clk `OR_ASYNC_RST)
-		   if (rst)
-		     spr_picsr[irqline] <= 0;
-		   else if (spr_we & spr_addr==`OR1K_SPR_PICSR_ADDR)
-		     spr_picsr[irqline] <= irq_unmasked[irqline] | 
-					      spr_write_dat[irqline];
-		   else 
-		     spr_picsr[irqline] <= spr_picsr[irqline] | 
-					   irq_unmasked[irqline];
-	      end // block: picgenerate
-	    
-	 end // if (OPTION_PIC_TRIGGER=="EDGE")	 
-	 else begin
-	    initial begin
-	       $display("Error - invalid PIC level detection option %s",
-			OPTION_PIC_TRIGGER);
-	       $finish;
-	    end
-	 end // else: !if(OPTION_PIC_TRIGGER=="LEVEL")
 
-	 // PIC (un)mask register
-	 // Bottom two IRQs permanently unmasked
-	 always @(posedge clk `OR_ASYNC_RST)
-	   if (rst)
-	     spr_picmr <= {30'd0, 2'b11};
-	   else if (spr_we & spr_addr==`OR1K_SPR_PICMR_ADDR)
-	     spr_picmr <= {spr_write_dat[31:2], 2'b11};
-	 
-	 
-	 assign irq_unmasked = spr_picmr & irq_i;
+      if (FEATURE_PIC !="NONE") begin : pic
+
+	 /* mor1kx_pic AUTO_TEMPLATE (
+	  .spr_picsr_o		(spr_picsr),
+	  .spr_picmr_o		(spr_picmr),
+	  .spr_bus_ack		(spr_access_ack[9]),
+	  .spr_dat_o		(spr_internal_read_dat[9]),
+	  // Inputs
+	  .spr_we_i		(spr_we),
+	  .spr_addr_i		(spr_addr),
+	  .spr_dat_i		(spr_write_dat),
+	  );*/
+	 mor1kx_pic
+	  #(.OPTION_PIC_TRIGGER(OPTION_PIC_TRIGGER))
+	 mor1kx_pic
+	   (/*AUTOINST*/
+	    // Outputs
+	    .spr_picmr_o		(spr_picmr),	 // Templated
+	    .spr_picsr_o		(spr_picsr),	 // Templated
+	    .spr_bus_ack		(spr_access_ack[9]), // Templated
+	    .spr_dat_o		(spr_internal_read_dat[9]), // Templated
+	    // Inputs
+	    .clk			(clk),
+	    .rst			(rst),
+	    .irq_i			(irq_i[31:0]),
+	    .spr_we_i		(spr_we),	 // Templated
+	    .spr_addr_i		(spr_addr),	 // Templated
+	    .spr_dat_i		(spr_write_dat)); // Templated
+	 	 
 	 
 	 assign except_pic = (|spr_picsr) & spr_sr[`OR1K_SPR_SR_IEE] & 
 			     !op_mtspr & !doing_rfe &
@@ -912,25 +876,13 @@ module mor1kx_ctrl_cappuccino
 			     !ctrl_branch_occur_i &
 			     // Stops issues with PC when branching
 			     !execute_delay_slot;
-
-	 /* always single cycle access */
-	 assign spr_access_ack[9] = 1;
-	 assign spr_internal_read_dat[9] =  (spr_addr==`OR1K_SPR_PICSR_ADDR) ?
-					    spr_picsr :
-					    (spr_addr==`OR1K_SPR_PICMR_ADDR) ?
-					    spr_picmr : 0;
-	 
       end
       else begin
 	 assign except_pic = 0;
-	 
-	 always @(posedge clk) begin
-	    spr_picsr = 0;
-	    spr_picmr = 0;
-	 end
-
+	 assign spr_picsr = 0;
+	 assign spr_picmr = 0;
 	 assign spr_access_ack[9] = 0;
-	 
+	 assign spr_internal_read_dat[9] = 0;
       end // else: !if(FEATURE_PIC !="NONE")
    endgenerate
    
@@ -938,34 +890,30 @@ module mor1kx_ctrl_cappuccino
    generate
       if (FEATURE_TIMER!="NONE") begin : tt
 	 
-	 // Timer SPR control   
-	 always @(posedge clk `OR_ASYNC_RST)
-	   if (rst)
-	     spr_ttmr <= 0;
-	   else if (spr_we && spr_addr==`OR1K_SPR_TTMR_ADDR)
-	     spr_ttmr <= spr_write_dat[31:0];
-	   else if ((spr_ttmr[27:0]==spr_ttcr[27:0]) & spr_ttmr[29])
-	     spr_ttmr[28] <= 1; // Generate interrupt
+	 /* mor1kx_ticktimer AUTO_TEMPLATE (
+	  .spr_ttmr_o		(spr_ttmr),
+	  .spr_ttcr_o		(spr_ttcr),
+	  .spr_bus_ack		(spr_access_ack[10]),
+	  .spr_dat_o		(spr_internal_read_dat[10]),
+	  // Inputs
+	  .spr_we_i		(spr_we),
+	  .spr_addr_i		(spr_addr),
+	  .spr_dat_i		(spr_write_dat),
+	  );*/
+	 mor1kx_ticktimer mor1kx_ticktimer
+			 (/*AUTOINST*/
+			  // Outputs
+			  .spr_ttmr_o		(spr_ttmr),	 // Templated
+			  .spr_ttcr_o		(spr_ttcr),	 // Templated
+			  .spr_bus_ack		(spr_access_ack[10]), // Templated
+			  .spr_dat_o		(spr_internal_read_dat[10]), // Templated
+			  // Inputs
+			  .clk			(clk),
+			  .rst			(rst),
+			  .spr_we_i		(spr_we),	 // Templated
+			  .spr_addr_i		(spr_addr),	 // Templated
+			  .spr_dat_i		(spr_write_dat)); // Templated
 	 
-	 always @(posedge clk `OR_ASYNC_RST)
-	   if (rst)
-	     spr_ttcr <= 0;
-	   else if (spr_we && spr_addr==`OR1K_SPR_TTCR_ADDR)
-	     spr_ttcr <= spr_write_dat[31:0];
-	   else if (spr_ttmr[27:0]==spr_ttcr[27:0])
-	     begin
-		case(spr_ttmr[31:30])
-		  2'b01: // Restart
-		    spr_ttcr <= 0;
-		  2'b11: // Continuous
-		    spr_ttcr <= spr_ttcr + 1;
-		  default: // Stop, or disabled
-		    spr_ttcr <= spr_ttcr;
-		endcase // case (spr_ttmr[31:30])
-	     end // if (spr_ttmr[27:0]==spr_ttcr[27:0])
-	   else if (|spr_ttmr[31:30])
-	     spr_ttcr <= spr_ttcr + 1;
-
 	 assign except_ticktimer = spr_ttmr[28] & spr_sr[`OR1K_SPR_SR_TEE] & 
 				   !op_mtspr & !doing_rfe &
 				   // Stops back-to-back branch addresses to 
@@ -974,25 +922,13 @@ module mor1kx_ctrl_cappuccino
 				   // Stops issues with PC when branching
 				   !execute_delay_slot;
 
-	 /* SPR bus reads */
-	 /* always single cycle access */
-	 assign spr_access_ack[10] = 1;
-	 assign spr_internal_read_dat[10] =  (spr_addr==`OR1K_SPR_TTCR_ADDR) ?
-					     spr_ttcr :
-					     (spr_addr==`OR1K_SPR_TTMR_ADDR) ?
-					     spr_ttmr : 0;
-	 
       end // if (FEATURE_TIMER!="NONE")
       else begin
-	 
 	 assign except_ticktimer = 0;
-	 
-	 always @(posedge clk) begin
-	    spr_ttmr <= 0;
-	    spr_ttcr <= 0;
-	 end
-
+	 assign spr_ttmr = 0;
+	 assign spr_ttcr = 0;
 	 assign spr_access_ack[10] = 0;
+	 assign spr_internal_read_dat[10] = 0;
 	 
       end // else: !if(FEATURE_TIMER!="NONE")
    endgenerate
