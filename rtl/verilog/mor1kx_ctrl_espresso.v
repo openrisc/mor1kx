@@ -203,8 +203,8 @@ module mor1kx_ctrl_espresso
    wire [31:0] 			     spr_picsr;
    
    // Tick Timer SPRs
-   reg [31:0]                        spr_ttmr;
-   reg [31:0]                        spr_ttcr;
+   wire [31:0]                        spr_ttmr;
+   wire [31:0]                        spr_ttcr;
 
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_npc;
@@ -978,66 +978,49 @@ module mor1kx_ctrl_espresso
    
    generate
       if (FEATURE_TIMER!="NONE") begin : tt
-         
-         // Timer SPR control   
-         always @(posedge clk `OR_ASYNC_RST)
-           if (rst)
-             spr_ttmr <= 0;
-           else if (spr_we && spr_addr==`OR1K_SPR_TTMR_ADDR)
-             spr_ttmr <= spr_write_dat[31:0];
-           else if ((spr_ttmr[27:0]==spr_ttcr[27:0]) & spr_ttmr[29])
-             spr_ttmr[28] <= 1; // Generate interrupt
-         
-         always @(posedge clk `OR_ASYNC_RST)
-           if (rst)
-             spr_ttcr <= 0;
-           else if (spr_we && spr_addr==`OR1K_SPR_TTCR_ADDR)
-             spr_ttcr <= spr_write_dat[31:0];
-           else if (spr_ttmr[27:0]==spr_ttcr[27:0])
-             begin
-                case(spr_ttmr[31:30])
-                  2'b01: // Restart
-                    spr_ttcr <= 0;
-                  2'b11: // Continuous
-                    spr_ttcr <= spr_ttcr + 1;
-                  default: // Stop, or disabled
-                    spr_ttcr <= spr_ttcr;
-                endcase // case (spr_ttmr[31:30])
-             end // if (spr_ttmr[27:0]==spr_ttcr[27:0])
-           else if (|spr_ttmr[31:30])
-             spr_ttcr <= spr_ttcr + 1;
+	 
+	 /* mor1kx_ticktimer AUTO_TEMPLATE (
+	  .spr_ttmr_o		(spr_ttmr),
+	  .spr_ttcr_o		(spr_ttcr),
+	  .spr_bus_ack		(spr_access_ack[10]),
+	  .spr_dat_o		(spr_internal_read_dat[10]),
+	  // Inputs
+	  .spr_we_i		(spr_we),
+	  .spr_addr_i		(spr_addr),
+	  .spr_dat_i		(spr_write_dat),
+	  );*/
+	 mor1kx_ticktimer mor1kx_ticktimer
+			 (/*AUTOINST*/
+			  // Outputs
+			  .spr_ttmr_o		(spr_ttmr),	 // Templated
+			  .spr_ttcr_o		(spr_ttcr),	 // Templated
+			  .spr_bus_ack		(spr_access_ack[10]), // Templated
+			  .spr_dat_o		(spr_internal_read_dat[10]), // Templated
+			  // Inputs
+			  .clk			(clk),
+			  .rst			(rst),
+			  .spr_we_i		(spr_we),	 // Templated
+			  .spr_addr_i		(spr_addr),	 // Templated
+			  .spr_dat_i		(spr_write_dat)); // Templated
 
          assign except_ticktimer_nonsrmasked = spr_ttmr[28] &
                                    !op_mtspr & 
                                    // Stops back-to-back branch addresses to 
-                                   // fetch  stage.
+                                   // fetch stage.
                                    !ctrl_branch_occur &
                                    // Stops issues with PC when branching
                                    !execute_delay_slot;
          
          assign except_ticktimer = except_ticktimer_nonsrmasked & 
                                    spr_sr[`OR1K_SPR_SR_TEE] & !doing_rfe;
-
-         /* SPR bus reads */
-         /* always single cycle access */
-         assign spr_access_ack[10] = 1;
-         assign spr_internal_read_dat[10] =  (spr_addr==`OR1K_SPR_TTCR_ADDR) ?
-                                             spr_ttcr :
-                                             (spr_addr==`OR1K_SPR_TTMR_ADDR) ?
-                                             spr_ttmr : 0;
-         
       end // if (FEATURE_TIMER!="NONE")
       else begin
-         
-         assign except_ticktimer = 0;
-         
-         always @(posedge clk) begin
-            spr_ttmr <= 0;
-            spr_ttcr <= 0;
-         end
-
-         assign spr_access_ack[10] = 0;
-         
+	 assign except_ticktimer_nonsrmasked = 0;
+	 assign except_ticktimer = 0;
+	 assign spr_ttmr = 0;
+	 assign spr_ttcr = 0;
+	 assign spr_access_ack[10] = 0;
+	 assign spr_internal_read_dat[10] = 0;
       end // else: !if(FEATURE_TIMER!="NONE")
    endgenerate
 
