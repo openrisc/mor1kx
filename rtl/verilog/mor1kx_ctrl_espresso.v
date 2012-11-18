@@ -199,8 +199,8 @@ module mor1kx_ctrl_espresso
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_eear;
    
    // Programmable Interrupt Control SPRs
-   reg [31:0]                        spr_picmr;
-   reg [31:0]                        spr_picsr;
+   wire [31:0] 			     spr_picmr;
+   wire [31:0] 			     spr_picsr;
    
    // Tick Timer SPRs
    reg [31:0]                        spr_ttmr;
@@ -243,8 +243,6 @@ module mor1kx_ctrl_espresso
    wire                              decode_stage_exceptions;
 
    wire                              exception_re;
-
-   wire [31:0]                       irq_unmasked;
 
    wire                              except_ticktimer;
    wire                              except_pic;
@@ -927,70 +925,35 @@ module mor1kx_ctrl_espresso
    
    // PIC SPR control
    generate
-      genvar   irqline;
       if (FEATURE_PIC !="NONE") begin : pic
-         
-         if (OPTION_PIC_TRIGGER=="EDGE") begin
-            for(irqline=0;irqline<32;irqline=irqline+1)
-              begin: picgenerate
-                 // PIC status register
-                 always @(posedge clk `OR_ASYNC_RST)
-                   if (rst)
-                     spr_picsr[irqline] <= 0;
-                   // Clear
-                   else if (spr_we & spr_addr==`OR1K_SPR_PICSR_ADDR)
-                     spr_picsr[irqline] <= spr_write_dat[irqline] ? 0 : 
-                                              spr_picsr[irqline];
-                   // Set
-                   else if (!spr_picsr[irqline] & irq_unmasked[irqline])
-                     spr_picsr[irqline] <= 1;
-              end // block: picgenerate
-            
-         end // if (OPTION_PIC_TRIGGER=="EDGE")
-         else if (OPTION_PIC_TRIGGER=="LEVEL") begin
-            for(irqline=0;irqline<32;irqline=irqline+1)
-              begin: picsrlevelgenerate
-                 
-                 // PIC status register
-                 always @(posedge clk `OR_ASYNC_RST)
-                   spr_picsr[irqline] <= irq_unmasked[irqline];
-              end
-            
-         end // if (OPTION_PIC_TRIGGER=="LEVEL")
-         else if (OPTION_PIC_TRIGGER=="LATCHED_LEVEL") begin
-            for(irqline=0;irqline<32;irqline=irqline+1)
-              begin: piclatchedlevelgenerate
-                 // PIC status register
-                 always @(posedge clk `OR_ASYNC_RST)
-                   if (rst)
-                     spr_picsr[irqline] <= 0;
-                   else if (spr_we & spr_addr==`OR1K_SPR_PICSR_ADDR)
-                     spr_picsr[irqline] <= irq_unmasked[irqline] | 
-                                              spr_write_dat[irqline];
-                   else 
-                     spr_picsr[irqline] <= spr_picsr[irqline] | 
-                                           irq_unmasked[irqline];
-              end // block: picgenerate
-            
-         end // if (OPTION_PIC_TRIGGER=="EDGE")  
-         else begin
-            initial begin
-               $display("Error - invalid PIC level detection option %s",
-                        OPTION_PIC_TRIGGER);
-               $finish;
-            end
-         end // else: !if(OPTION_PIC_TRIGGER=="LEVEL")
 
-         // PIC (un)mask register
-         always @(posedge clk `OR_ASYNC_RST)
-           if (rst)
-             spr_picmr <= 0;
-           else if (spr_we & spr_addr==`OR1K_SPR_PICMR_ADDR)
-             spr_picmr <= spr_write_dat;
-         
-         
-         // Bottom two IRQs permanently unmasked
-         assign irq_unmasked = {spr_picmr[31:2],2'b11} & irq_i;
+	 /* mor1kx_pic AUTO_TEMPLATE (
+	  .spr_picsr_o		(spr_picsr),
+	  .spr_picmr_o		(spr_picmr),
+	  .spr_bus_ack		(spr_access_ack[9]),
+	  .spr_dat_o		(spr_internal_read_dat[9]),
+	  // Inputs
+	  .spr_we_i		(spr_we),
+	  .spr_addr_i		(spr_addr),
+	  .spr_dat_i		(spr_write_dat),
+	  );*/
+	 mor1kx_pic
+	  #(.OPTION_PIC_TRIGGER(OPTION_PIC_TRIGGER))
+	 mor1kx_pic
+	   (/*AUTOINST*/
+	    // Outputs
+	    .spr_picmr_o		(spr_picmr),		 // Templated
+	    .spr_picsr_o		(spr_picsr),		 // Templated
+	    .spr_bus_ack		(spr_access_ack[9]),	 // Templated
+	    .spr_dat_o			(spr_internal_read_dat[9]), // Templated
+	    // Inputs
+	    .clk			(clk),
+	    .rst			(rst),
+	    .irq_i			(irq_i[31:0]),
+	    .spr_we_i			(spr_we),		 // Templated
+	    .spr_addr_i			(spr_addr),		 // Templated
+	    .spr_dat_i			(spr_write_dat));	 // Templated
+
          assign except_pic_nonsrmasked = (|spr_picsr) &  
                              !op_mtspr & 
                              // Stops back-to-back branch addresses going to 
@@ -998,27 +961,17 @@ module mor1kx_ctrl_espresso
                              !ctrl_branch_occur &
                              // Stops issues with PC when branching
                              !execute_delay_slot;
+         
          assign except_pic = spr_sr[`OR1K_SPR_SR_IEE] & except_pic_nonsrmasked &
                              !doing_rfe;
-
-         /* always single cycle access */
-         assign spr_access_ack[9] = 1;
-         assign spr_internal_read_dat[9] =  (spr_addr==`OR1K_SPR_PICSR_ADDR) ?
-                                            spr_picsr :
-                                            (spr_addr==`OR1K_SPR_PICMR_ADDR) ?
-                                            spr_picmr : 0;
-         
       end
       else begin
-         assign except_pic = 0;
-         
-         always @(posedge clk) begin
-            spr_picsr = 0;
-            spr_picmr = 0;
-         end
-
-         assign spr_access_ack[9] = 0;
-         
+	 assign except_pic_nonsrmasked = 0;
+	 assign except_pic = 0;
+	 assign spr_picsr = 0;
+	 assign spr_picmr = 0;
+	 assign spr_access_ack[9] = 0;
+	 assign spr_internal_read_dat[9] = 0;
       end // else: !if(FEATURE_PIC !="NONE")
    endgenerate
    
@@ -1466,4 +1419,5 @@ module mor1kx_ctrl_espresso
    
    
    
-endmodule // mor1kx_ctrl
+endmodule // mor1kx_ctrl_espresso
+
