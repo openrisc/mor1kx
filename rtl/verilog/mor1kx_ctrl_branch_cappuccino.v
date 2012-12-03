@@ -25,62 +25,38 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_ctrl_branch_cappuccino
-  (
-   clk, rst,
+  #(
+    parameter OPTION_OPERAND_WIDTH = 32
+    )
+   (
+    input 			      clk,
+    input 			      rst,
 
-   // ALU result from execute stage - target of l.bf/l.bnf/l.j/l.jal
-   ex_alu_result_i,
-   // Operand B from RF for l.jr/l.jalr
-   ex_rfb_i,
+    // ALU result from execute stage - target of l.bf/l.bnf/l.j/l.jal
+    input [OPTION_OPERAND_WIDTH-1:0]  ex_alu_result_i,
 
-   // Signals indicating jump/branch
-   op_jbr_i,
-   op_jr_i,
+    // Operand B from RF for l.jr/l.jalr
+    input [OPTION_OPERAND_WIDTH-1:0]  ex_rfb_i,
 
-   // Execute stage's instruction opcode in
-   execute_opc_insn_i,
+    // Signals indicating jump/branch
+    input 			      op_jbr_i,
+    input 			      op_jr_i,
 
-   // Inputs from control unit - flag, branch indicator, dest PC
-   ctrl_flag_i,
-   ctrl_branch_exception_i,
-   ctrl_branch_except_pc_i,
+    // Execute stage's instruction opcode in
+    input [`OR1K_OPCODE_WIDTH-1:0]    execute_opc_insn_i,
 
-   // Input from execute_ctrl stage, indicating of branch from register
-   // is unaligned
-   execute_except_ibus_align_i,
-   ctrl_except_ibus_align_i,
+    // Inputs from control unit - flag, branch indicator, dest PC
+    input 			      ctrl_flag_i,
 
-   ctrl_branch_occur_o,
-   ctrl_branch_target_o
-   );
+    input 			      ctrl_branch_exception_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_branch_except_pc_i,
 
-   parameter OPTION_OPERAND_WIDTH = 32;
+    input 			      execute_except_ibus_align_i,
+    input 			      ctrl_except_ibus_align_i,
 
-   input clk, rst;
-
-   // ALU result from execute stage - target of l.bf/l.bnf/l.j/l.jal
-   input [OPTION_OPERAND_WIDTH-1:0] ex_alu_result_i;
-
-   // Operand B from RF for l.jr/l.jalr
-   input [OPTION_OPERAND_WIDTH-1:0] ex_rfb_i;
-
-   // Signals indicating jump/branch
-   input 			     op_jbr_i, op_jr_i;
-
-   // Execute stage's instruction opcode in
-   input [`OR1K_OPCODE_WIDTH-1:0]    execute_opc_insn_i;
-
-   // Inputs from control unit - flag, branch indicator, dest PC
-   input 			     ctrl_flag_i;
-
-   input 			     ctrl_branch_exception_i;
-   input [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc_i;
-
-   input 			     execute_except_ibus_align_i;
-   input 			     ctrl_except_ibus_align_i;
-
-   output 			     ctrl_branch_occur_o;
-   output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o;
+    output 			      ctrl_branch_occur_o,
+    output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o
+    );
 
    reg 				     ctrl_branch_occur_r;
    reg [OPTION_OPERAND_WIDTH-1:0]    ctrl_branch_target_r;
