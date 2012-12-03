@@ -26,49 +26,43 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_lsu_cappuccino
-  (/*AUTOARG*/
-   // Outputs
-   lsu_result_o, lsu_valid_o, lsu_except_dbus_o, lsu_except_align_o,
-   dbus_adr_o, dbus_req_o, dbus_dat_o, dbus_bsel_o, dbus_we_o,
-   // Inputs
-   clk, rst, padv_execute_i, decode_valid_i, alu_result_i, rfb_i,
-   opc_insn_i, op_lsu_load_i, op_lsu_store_i, dbus_err_i, dbus_ack_i,
-   dbus_dat_i, pipeline_flush_i
-   );
+  #(
+    parameter OPTION_OPERAND_WIDTH = 32
+    )
+   (
+    input 			      clk,
+    input 			      rst,
 
-   parameter OPTION_OPERAND_WIDTH = 32;
+    input 			      padv_execute_i,
+    input 			      decode_valid_i,
+    // calculated address from ALU
+    input [OPTION_OPERAND_WIDTH-1:0]  alu_result_i,
 
-   input clk, rst;
+    // register file B in (store operand)
+    input [OPTION_OPERAND_WIDTH-1:0]  rfb_i,
+    // insn opcode, indicating what's going on
+    input [`OR1K_OPCODE_WIDTH-1:0]    opc_insn_i,
+    // from decode stage regs, indicate if load or store
+    input 			      op_lsu_load_i,
+    input 			      op_lsu_store_i,
 
-   input padv_execute_i;
-   input decode_valid_i;
-   // calculated address from ALU
-   input [OPTION_OPERAND_WIDTH-1:0] alu_result_i;
+    output [OPTION_OPERAND_WIDTH-1:0] lsu_result_o,
+    output 			      lsu_valid_o,
+    // exception output
+    output 			      lsu_except_dbus_o,
+    output 			      lsu_except_align_o,
 
-   // register file B in (store operand)
-   input [OPTION_OPERAND_WIDTH-1:0] rfb_i;
-   // insn opcode, indicating what's going on
-   input [`OR1K_OPCODE_WIDTH-1:0]   opc_insn_i;
-   // from decode stage regs, indicate if load or store
-   input 			    op_lsu_load_i;
-   input 			    op_lsu_store_i;
-
-   output [OPTION_OPERAND_WIDTH-1:0] lsu_result_o;
-   output 			     lsu_valid_o;
-   // exception output
-   output 			     lsu_except_dbus_o;
-   output 			     lsu_except_align_o;
-
-   // interface to data bus
-   output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o;
-   output 			     dbus_req_o;
-   output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o;
-   output [3:0] 		     dbus_bsel_o;
-   output 			     dbus_we_o;
-   input 			     dbus_err_i;
-   input 			     dbus_ack_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i;
-   input 			     pipeline_flush_i;
+    // interface to data bus
+    output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
+    output 			      dbus_req_o,
+    output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
+    output [3:0] 		      dbus_bsel_o,
+    output 			      dbus_we_o,
+    input 			      dbus_err_i,
+    input 			      dbus_ack_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
+    input 			      pipeline_flush_i
+    );
 
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_aligned;  // comb.
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_extended; // comb.
