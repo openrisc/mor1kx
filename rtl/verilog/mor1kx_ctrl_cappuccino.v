@@ -1,241 +1,227 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
   Description: mor1kx control unit
-   
+
   inputs from execute stage
-  
+
   generate pipeline controls
-  
+
   manage SPRs
-  
+
   issue addresses for exceptions to fetch stage
   control branches going to fetch stage
-  
+
   contains tick timer
-  
+
   contains PIC logic
-  
+
   l.mfspr implemented as follows:
-  We receieve an indication from the execute stage if it has a l.mfspr 
+  We receieve an indication from the execute stage if it has a l.mfspr
   instruction. We take note of this and it causes a 1-cycle stall of
   the fetch and decode stages. We still issue the asserted padv_execute so
   we get the result from the ALU which will be the address of the SPR to write
   into the register file. On the next cycle, with the SPR address known, the
-  data is output to the RF and the ctrl_mfspr_we_o is asserted ensuring this 
+  data is output to the RF and the ctrl_mfspr_we_o is asserted ensuring this
   value is written into the RF. As we introduced a delay in the fetch/decode
   logic, this should not clash with the next instruction to be executed.
-   
+
   Copyright (C) 2012 Authors
- 
+
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
+
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
 
 module mor1kx_ctrl_cappuccino
-  (/*AUTOARG*/
-   // Outputs
-   mfspr_dat_o, ctrl_mfspr_we_o, ctrl_flag_o, ctrl_branch_exception_o,
-   ctrl_branch_except_pc_o, pipeline_flush_o, padv_fetch_o,
-   padv_decode_o, padv_execute_o, du_dat_o, du_ack_o, du_stall_o,
-   du_restart_pc_o, du_restart_o, spr_bus_addr_o, spr_bus_we_o,
-   spr_bus_stb_o, spr_bus_dat_o, spr_sr_o,
-   // Inputs
-   clk, rst, ctrl_alu_result_i, ctrl_rfb_i, ctrl_flag_set_i,
-   ctrl_flag_clear_i, pc_ctrl_i, ctrl_opc_insn_i, ctrl_branch_occur_i,
-   ctrl_branch_target_i, pc_execute_i, execute_opc_insn_i,
-   except_ibus_err_i, except_ibus_align_i, except_illegal_i,
-   except_syscall_i, except_dbus_i, except_trap_i, except_align_i,
-   fetch_valid_i, decode_valid_i, execute_valid_i, execute_waiting_i,
-   fetch_branch_taken_i, irq_i, du_addr_i, du_stb_i, du_dat_i,
-   du_we_i, du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i,
-   spr_bus_dat_ic_i, spr_bus_ack_ic_i, spr_bus_dat_dmmu_i,
-   spr_bus_ack_dmmu_i, spr_bus_dat_immu_i, spr_bus_ack_immu_i,
-   spr_bus_dat_mac_i, spr_bus_ack_mac_i, spr_bus_dat_pmu_i,
-   spr_bus_ack_pmu_i, spr_bus_dat_pcu_i, spr_bus_ack_pcu_i,
-   spr_bus_dat_fpu_i, spr_bus_ack_fpu_i
-   );
+  #(
+    parameter OPTION_OPERAND_WIDTH = 32,
+    parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
+				 `OR1K_RESET_VECTOR,8'd0},
 
-   parameter OPTION_OPERAND_WIDTH = 32;
-   parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
-				`OR1K_RESET_VECTOR,8'd0};
+    parameter FEATURE_SYSCALL = "ENABLED",
+    parameter FEATURE_TRAP = "ENABLED",
+    parameter FEATURE_RANGE = "ENABLED",
 
-   parameter FEATURE_SYSCALL = "ENABLED";
-   parameter FEATURE_TRAP = "ENABLED";
-   parameter FEATURE_RANGE = "ENABLED";
+    parameter FEATURE_DATACACHE = "NONE",
+    parameter OPTION_DCACHE_BLOCK_WIDTH = 5,
+    parameter OPTION_DCACHE_SET_WIDTH = 9,
+    parameter OPTION_DCACHE_WAYS = 2,
+    parameter FEATURE_DMMU = "NONE",
+    parameter FEATURE_INSTRUCTIONCACHE = "NONE",
+    parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
+    parameter OPTION_ICACHE_SET_WIDTH = 9,
+    parameter OPTION_ICACHE_WAYS = 2,
+    parameter FEATURE_IMMU = "NONE",
+    parameter FEATURE_PIC = "ENABLED",
+    parameter FEATURE_TIMER = "ENABLED",
+    parameter FEATURE_DEBUGUNIT = "NONE",
+    parameter FEATURE_PERFCOUNTERS = "NONE",
+    parameter FEATURE_PMU = "NONE",
+    parameter FEATURE_MAC = "NONE",
+    parameter FEATURE_FPU = "NONE",
 
-   parameter FEATURE_DATACACHE = "NONE";
-   parameter OPTION_DCACHE_BLOCK_WIDTH = 5;
-   parameter OPTION_DCACHE_SET_WIDTH = 9;
-   parameter OPTION_DCACHE_WAYS = 2;
-   parameter FEATURE_DMMU = "NONE";
-   parameter FEATURE_INSTRUCTIONCACHE = "NONE";
-   parameter OPTION_ICACHE_BLOCK_WIDTH = 5;
-   parameter OPTION_ICACHE_SET_WIDTH = 9;
-   parameter OPTION_ICACHE_WAYS = 2;
-   parameter FEATURE_IMMU = "NONE";
-   parameter FEATURE_PIC = "ENABLED";
-   parameter FEATURE_TIMER = "ENABLED";
-   parameter FEATURE_DEBUGUNIT = "NONE";
-   parameter FEATURE_PERFCOUNTERS = "NONE";
-   parameter FEATURE_PMU = "NONE";
-   parameter FEATURE_MAC = "NONE";
-   parameter FEATURE_FPU = "NONE";   
+    parameter OPTION_PIC_TRIGGER = "EDGE",
 
-   parameter OPTION_PIC_TRIGGER = "EDGE";
+    parameter FEATURE_DSX ="NONE",
+    parameter FEATURE_FASTCONTEXTS = "NONE",
+    parameter FEATURE_OVERFLOW = "NONE",
 
-   parameter FEATURE_DSX ="NONE";
-   parameter FEATURE_FASTCONTEXTS = "NONE";
-   parameter FEATURE_OVERFLOW = "NONE";
+    parameter SPR_SR_WIDTH = 16,
+    parameter SPR_SR_RESET_VALUE = 16'h8001
+    )
+   (
+    input 			      clk,
+    input 			      rst,
 
-   parameter SPR_SR_WIDTH = 16;
-   parameter SPR_SR_RESET_VALUE = 16'h8001;
+    // ALU result - either jump target, SPR address
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_alu_result_i,
 
-   input clk, rst;
+    // Operand B from RF might be jump address, might be value for SPR
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_rfb_i,
 
-   // ALU result - either jump target, SPR address
-   input [OPTION_OPERAND_WIDTH-1:0] ctrl_alu_result_i;
-   
-   // Operand B from RF might be jump address, might be value for SPR
-   input [OPTION_OPERAND_WIDTH-1:0] ctrl_rfb_i;
-   
-   input 			    ctrl_flag_set_i, ctrl_flag_clear_i;
-   
-   input [OPTION_OPERAND_WIDTH-1:0] pc_ctrl_i;
+    input 			      ctrl_flag_set_i,
+    input 			      ctrl_flag_clear_i,
 
-   input [`OR1K_OPCODE_WIDTH-1:0]   ctrl_opc_insn_i;
-   
-   // Indicate if branch will be taken based on instruction currently in
-   // execute stage. Combinatorially generated, uses signals from both
-   // execute and ctrl stage.
-   input 			    ctrl_branch_occur_i;
-   input [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_i;
+    input [OPTION_OPERAND_WIDTH-1:0]  pc_ctrl_i,
 
-   // PC of execute stage (NPC)
-   input [OPTION_OPERAND_WIDTH-1:0] pc_execute_i;
-   // Opcode of execute stage instruction
-   input [`OR1K_OPCODE_WIDTH-1:0]   execute_opc_insn_i;
-   
-   // Exception inputs, registered on output of execute stage
-   input 			    except_ibus_err_i, except_ibus_align_i, 
-				    except_illegal_i, 
-				    except_syscall_i, except_dbus_i, 
-				    except_trap_i, except_align_i;
-   
-   // Inputs from two units that can stall proceedings
-   input 			    fetch_valid_i,   decode_valid_i,
-				    execute_valid_i;
-   input 			    execute_waiting_i;
-   
-   input 			    fetch_branch_taken_i;
+    input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i,
 
-   // External IRQ lines in
-   input [31:0] 		    irq_i;
-   
-   // SPR data out
-   output [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o;
-   
-   // WE to RF for l.mfspr
-   output 			     ctrl_mfspr_we_o;
-   
-   // Flag out to branch control, combinatorial
-   output 			     ctrl_flag_o;
-   
-   // Branch indicator from control unit (l.rfe/exception)
-   output 			     ctrl_branch_exception_o;
-   // PC out to fetch stage for l.rfe, exceptions
-   output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc_o;
-   
-   // Clear instructions from decode and fetch stage
-   output 			     pipeline_flush_o;
-   
-   output 			     padv_fetch_o;
-   output 			     padv_decode_o;
-   output 			     padv_execute_o;
-   
-   // Debug bus
-   input [15:0] 		     du_addr_i;
-   input 			     du_stb_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  du_dat_i;
-   input 			     du_we_i;
-   output [OPTION_OPERAND_WIDTH-1:0] du_dat_o;
-   output 			     du_ack_o;
-   // Stall control from debug interface
-   input 			     du_stall_i;
-   output 			     du_stall_o;
-   output [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;
-   output 			     du_restart_o;
-   
-   // SPR accesses to external units (cache, mmu, etc.)
-   output [15:0] 		     spr_bus_addr_o;
-   output 			     spr_bus_we_o;
-   output 			     spr_bus_stb_o;
-   output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dc_i;
-   input 			     spr_bus_ack_dc_i;   
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_ic_i;
-   input 			     spr_bus_ack_ic_i;   
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i;
-   input 			     spr_bus_ack_dmmu_i;   
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i;
-   input 			     spr_bus_ack_immu_i;   
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_mac_i;
-   input 			     spr_bus_ack_mac_i;   
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pmu_i;
-   input 			     spr_bus_ack_pmu_i;   
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pcu_i;
-   input 			     spr_bus_ack_pcu_i;   
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i;
-   input 			     spr_bus_ack_fpu_i;   
-   output [15:0] 	     spr_sr_o;
-   
+    // Indicate if branch will be taken based on instruction currently in
+    // execute stage. Combinatorially generated, uses signals from both
+    // execute and ctrl stage.
+    input 			      ctrl_branch_occur_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_branch_target_i,
+
+    // PC of execute stage (NPC)
+    input [OPTION_OPERAND_WIDTH-1:0]  pc_execute_i,
+    // Opcode of execute stage instruction
+    input [`OR1K_OPCODE_WIDTH-1:0]    execute_opc_insn_i,
+
+    // Exception inputs, registered on output of execute stage
+    input 			      except_ibus_err_i,
+    input 			      except_ibus_align_i,
+    input 			      except_illegal_i,
+    input 			      except_syscall_i,
+    input 			      except_dbus_i,
+				      except_trap_i,
+    input 			      except_align_i,
+
+    // Inputs from two units that can stall proceedings
+    input 			      fetch_valid_i,
+    input 			      decode_valid_i,
+    input 			      execute_valid_i,
+    input 			      execute_waiting_i,
+
+    input 			      fetch_branch_taken_i,
+
+    // External IRQ lines in
+    input [31:0] 		      irq_i,
+
+    // SPR data out
+    output [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o,
+
+    // WE to RF for l.mfspr
+    output 			      ctrl_mfspr_we_o,
+
+    // Flag out to branch control, combinatorial
+    output 			      ctrl_flag_o,
+
+    // Branch indicator from control unit (l.rfe/exception)
+    output 			      ctrl_branch_exception_o,
+    // PC out to fetch stage for l.rfe, exceptions
+    output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc_o,
+
+    // Clear instructions from decode and fetch stage
+    output 			      pipeline_flush_o,
+
+    output 			      padv_fetch_o,
+    output 			      padv_decode_o,
+    output 			      padv_execute_o,
+
+    // Debug bus
+    input [15:0] 		      du_addr_i,
+    input 			      du_stb_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  du_dat_i,
+    input 			      du_we_i,
+    output [OPTION_OPERAND_WIDTH-1:0] du_dat_o,
+    output 			      du_ack_o,
+    // Stall control from debug interface
+    input 			      du_stall_i,
+    output 			      du_stall_o,
+    output [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o,
+    output 			      du_restart_o,
+
+    // SPR accesses to external units (cache, mmu, etc.)
+    output [15:0] 		      spr_bus_addr_o,
+    output 			      spr_bus_we_o,
+    output 			      spr_bus_stb_o,
+    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dc_i,
+    input 			      spr_bus_ack_dc_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_ic_i,
+    input 			      spr_bus_ack_ic_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i,
+    input 			      spr_bus_ack_dmmu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i,
+    input 			      spr_bus_ack_immu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_mac_i,
+    input 			      spr_bus_ack_mac_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pmu_i,
+    input 			      spr_bus_ack_pmu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pcu_i,
+    input 			      spr_bus_ack_pcu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i,
+    input 			      spr_bus_ack_fpu_i,
+    output [15:0] 		      spr_sr_o
+    );
+
    // Internal signals
    reg [SPR_SR_WIDTH-1:0] 	     spr_sr;
    reg [SPR_SR_WIDTH-1:0] 	     spr_esr;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_epcr;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_eear;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_evba;
-   
+
    // Programmable Interrupt Control SPRs
    wire [31:0] 			     spr_picmr;
    wire [31:0] 			     spr_picsr;
-   
+
    // Tick Timer SPRs
    wire [31:0] 			     spr_ttmr;
    wire [31:0] 			     spr_ttcr;
-   
+
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
    wire [OPTION_OPERAND_WIDTH-1:0]   spr_npc;
    reg 				     execute_delay_slot;
    reg 				     ctrl_delay_slot;
-   
+
    reg 				     mfspr_delay, mfspr_done;
-   
+
    reg 				     execute_waiting_r;
-   
+
    reg 				     decode_execute_halt;
-   
+
    reg 				     exception_taken;
-   
+
    reg [OPTION_OPERAND_WIDTH-1:0]    last_branch_insn_pc;
    reg [OPTION_OPERAND_WIDTH-1:0]    last_branch_target_pc;
    reg 				     padv_ctrl;
-   
+
    reg 				     exception_r;
-   
+
    reg [OPTION_OPERAND_WIDTH-1:0]    exception_pc_addr;
-   
+
    reg 				     waiting_for_fetch;
-   
+
    reg 				     doing_rfe_r;
    wire 			     doing_rfe;
    wire 			     deassert_doing_rfe;
-   
+
    wire 			     exception, exception_pending;
 
    wire 			     execute_stage_exceptions;
@@ -245,10 +231,10 @@ module mor1kx_ctrl_cappuccino
 
    wire 			     except_ticktimer;
    wire 			     except_pic;
-   
-   
+
+
    wire [15:0] 			     spr_addr;
-   
+
    wire 			     op_mtspr;
    wire 			     op_mfspr;
    wire 			     op_rfe;
@@ -265,7 +251,7 @@ module mor1kx_ctrl_cappuccino
    reg [31:0] 			     spr_dmr2;
    reg [31:0] 			     spr_dsr;
    reg [31:0] 			     spr_drr;
-   
+
    /* DU internal control signals */
    wire 			     du_access;
    wire 			     cpu_stall;
@@ -276,7 +262,7 @@ module mor1kx_ctrl_cappuccino
    wire 			     du_npc_write;
    reg 				     du_npc_written;
    reg [OPTION_OPERAND_WIDTH-1:0]    du_spr_npc;
-   
+
    /* Wires for SPR management */
    wire 			     spr_group_present;
    wire [3:0] 			     spr_group;
@@ -304,24 +290,24 @@ module mor1kx_ctrl_cappuccino
 
    assign  b = ctrl_rfb_i;
 
-   assign ctrl_branch_exception_o = (exception_r | (op_rfe | doing_rfe)) & 
+   assign ctrl_branch_exception_o = (exception_r | (op_rfe | doing_rfe)) &
 				    !exception_taken;
-   assign exception_pending = (except_ibus_err_i | except_ibus_align_i | 
+   assign exception_pending = (except_ibus_err_i | except_ibus_align_i |
 		       except_illegal_i | except_syscall_i |
 		       except_dbus_i | except_align_i | except_ticktimer |
 			       except_pic | except_trap_i );
-      
+
    assign exception = exception_pending & padv_ctrl;
 
    assign execute_stage_exceptions = except_dbus_i | except_align_i;
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
 
    assign exception_re = exception & !exception_r & !exception_taken;
-   
+
    assign deassert_decode_execute_halt = fetch_branch_taken_i &
 					 decode_execute_halt;
-   
-   assign ctrl_branch_except_pc_o = (op_rfe | doing_rfe) ? spr_epcr : 
+
+   assign ctrl_branch_except_pc_o = (op_rfe | doing_rfe) ? spr_epcr :
 				    exception_pc_addr;
 
    always @(posedge clk)
@@ -365,7 +351,7 @@ module mor1kx_ctrl_cappuccino
 	   exception_pc_addr <= spr_evba |
 				{19'd0,`OR1K_TT_VECTOR,8'd0};
        endcase // casex (...
-   
+
    assign op_mtspr = ctrl_opc_insn_i==`OR1K_OPCODE_MTSPR;
    assign op_mfspr = ctrl_opc_insn_i==`OR1K_OPCODE_MFSPR;
    assign execute_op_mfspr = execute_opc_insn_i==`OR1K_OPCODE_MFSPR;
@@ -376,14 +362,14 @@ module mor1kx_ctrl_cappuccino
    assign padv_fetch_o = !execute_waiting_i & !wait_mfspr & !cpu_stall
 			 & (!stepping | (stepping & pstep[0] & !fetch_valid_i));
 
-   assign padv_decode_o = fetch_valid_i & !execute_waiting_i & 
+   assign padv_decode_o = fetch_valid_i & !execute_waiting_i &
 			  !wait_mfspr & !decode_execute_halt & !cpu_stall
 			  & (!stepping | (stepping & pstep[1]));
-   
+
    assign padv_execute_o = ((decode_valid_i & !execute_waiting_i &
 			     /* Stop fetch before exception branch continuing */
 			     !(exception_r & fetch_branch_taken_i)) |
-			    (!execute_waiting_i & execute_waiting_r & 
+			    (!execute_waiting_i & execute_waiting_r &
 			     fetch_valid_i) |
 			    // Case where execute became ready before fetch
 			    // after delay in execute stage
@@ -391,7 +377,7 @@ module mor1kx_ctrl_cappuccino
 			   // Not exceptions occurring
 			   !decode_execute_halt & !exception_re & !op_rfe
 			   & !cpu_stall & (!stepping | (stepping & pstep[2]));
-   
+
    assign spr_addr = du_access ? du_addr_i : ctrl_alu_result_i[15:0];
    assign ctrl_mfspr_we_o = mfspr_delay;
 
@@ -410,7 +396,7 @@ module mor1kx_ctrl_cappuccino
        padv_ctrl <= 0;
      else
        padv_ctrl <= padv_execute_o;
-   
+
    // Generate delay if necessary, when we have mtspr followed by mfspr
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -454,7 +440,7 @@ module mor1kx_ctrl_cappuccino
        exception_r <= 0;
      else if (exception & !exception_r)
        exception_r <= 1;
-   
+
    // Signal to indicate that the incoming exception or l.rfe has been taken
    // and we're waiting for it to propagate through the pipeline.
    always @(posedge clk `OR_ASYNC_RST)
@@ -464,7 +450,7 @@ module mor1kx_ctrl_cappuccino
        exception_taken <= 0;
      else if (exception_r & fetch_branch_taken_i)
        exception_taken <= 1;
-   
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        last_branch_insn_pc <= 0;
@@ -489,11 +475,11 @@ module mor1kx_ctrl_cappuccino
        waiting_for_fetch <= 1;
 
 
-   assign doing_rfe = ((padv_ctrl & op_rfe) | doing_rfe_r) & 
+   assign doing_rfe = ((padv_ctrl & op_rfe) | doing_rfe_r) &
 		      !deassert_doing_rfe;
 
    assign deassert_doing_rfe = fetch_branch_taken_i & doing_rfe_r;
-   
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        doing_rfe_r <= 0;
@@ -501,7 +487,7 @@ module mor1kx_ctrl_cappuccino
        doing_rfe_r <= 0;
      else if (padv_ctrl)
        doing_rfe_r <= op_rfe;
-   
+
    assign spr_sr_o = spr_sr;
 
    // Supervision register
@@ -529,7 +515,7 @@ module mor1kx_ctrl_cappuccino
 	    spr_sr[`OR1K_SPR_SR_F   ] <= 1'b1;
 	  else if (ctrl_flag_clear_i)
 	    spr_sr[`OR1K_SPR_SR_F   ] <= 1'b0;
-	  else if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) && 
+	  else if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) &&
 		   spr_addr==`OR1K_SPR_SR_ADDR)
 	    begin
 	       spr_sr[`OR1K_SPR_SR_SM  ] <= spr_write_dat[`OR1K_SPR_SR_SM  ];
@@ -539,39 +525,39 @@ module mor1kx_ctrl_cappuccino
 
 	       if (FEATURE_PIC!="NONE")
 		 spr_sr[`OR1K_SPR_SR_IEE ] <= spr_write_dat[`OR1K_SPR_SR_IEE ];
-	       
+
 	       if (FEATURE_DATACACHE!="NONE")
 		 spr_sr[`OR1K_SPR_SR_DCE ] <= spr_write_dat[`OR1K_SPR_SR_DCE ];
-	       
+
 	       if (FEATURE_INSTRUCTIONCACHE!="NONE")
 		 spr_sr[`OR1K_SPR_SR_ICE ] <= spr_write_dat[`OR1K_SPR_SR_ICE ];
 
 	       if (FEATURE_DMMU!="NONE")
 		 spr_sr[`OR1K_SPR_SR_DME ] <= spr_write_dat[`OR1K_SPR_SR_DME ];
-	       
+
 	       if (FEATURE_IMMU!="NONE")
 		 spr_sr[`OR1K_SPR_SR_IME ] <= spr_write_dat[`OR1K_SPR_SR_IME ];
-	       
+
 	       if (FEATURE_FASTCONTEXTS!="NONE")
 		 spr_sr[`OR1K_SPR_SR_CE  ] <= spr_write_dat[`OR1K_SPR_SR_CE  ];
-	       
+
 	       spr_sr[`OR1K_SPR_SR_CY  ] <= spr_write_dat[`OR1K_SPR_SR_CY  ];
-	       
+
 	       if (FEATURE_OVERFLOW!="NONE") begin
 		  spr_sr[`OR1K_SPR_SR_OV  ] <= spr_write_dat[`OR1K_SPR_SR_OV  ];
 		  spr_sr[`OR1K_SPR_SR_OVE ] <= spr_write_dat[`OR1K_SPR_SR_OVE ];
 	       end
-	       
+
 	       if (FEATURE_DSX!="NONE")
 		 spr_sr[`OR1K_SPR_SR_DSX ] <= spr_write_dat[`OR1K_SPR_SR_DSX ];
-	       
+
 	       spr_sr[`OR1K_SPR_SR_EPH ] <= spr_write_dat[`OR1K_SPR_SR_EPH ];
 	    end
 	  else if (op_rfe)
 	    spr_sr <= spr_esr;
-	  
+
        end // if (padv_ctrl)
-   
+
    // Exception SR
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -579,7 +565,7 @@ module mor1kx_ctrl_cappuccino
      else if (/*padv_ctrl & exception*/ exception_re)
        begin
 	  spr_esr <= spr_sr;
-	  /* 
+	  /*
 	   A bit odd, but if we had a l.sf instruction on an exception rising
 	   edge, EPCR will point to the insn past the l.sf but the flag will
 	   not have been saved to the SR properly. So we must put it in here
@@ -593,7 +579,7 @@ module mor1kx_ctrl_cappuccino
        end
      else if (spr_we & spr_addr==`OR1K_SPR_ESR0_ADDR)
        spr_esr <= spr_write_dat[SPR_SR_WIDTH-1:0];
-   
+
    // Exception PC
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -605,7 +591,7 @@ module mor1kx_ctrl_cappuccino
 	  else if (except_syscall_i | except_ticktimer | except_pic)
 	    // TODO - eliminate this adder by getting PC from pipeline stages
 	    spr_epcr <= ctrl_delay_slot ? last_branch_target_pc :
-			/* 
+			/*
 			execute_delay_slot ? last_branch_insn_pc :
 			 */
 			pc_ctrl_i + 4;
@@ -616,8 +602,8 @@ module mor1kx_ctrl_cappuccino
        end
      else if (spr_we && spr_addr==`OR1K_SPR_EPCR0_ADDR)
        spr_epcr <= spr_write_dat;
-   
-   // Exception Effective Address 
+
+   // Exception Effective Address
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_eear <= {OPTION_OPERAND_WIDTH{1'b0}};
@@ -667,16 +653,16 @@ module mor1kx_ctrl_cappuccino
    // Register if a branch occurred when we're about to clock through
    // the next inputs to the execute stage.
      else if (padv_decode_o)
-       execute_delay_slot <= ctrl_branch_occur_i & !ctrl_delay_slot & 
+       execute_delay_slot <= ctrl_branch_occur_i & !ctrl_delay_slot &
 			     !(doing_rfe | op_rfe);
 
-   
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        ctrl_delay_slot <= 0;
      else if (padv_execute_o)
        ctrl_delay_slot <= execute_delay_slot;
-   
+
    mor1kx_cfgrs
      #(.FEATURE_PIC			(FEATURE_PIC),
        .FEATURE_TIMER			(FEATURE_TIMER),
@@ -714,7 +700,7 @@ module mor1kx_ctrl_cappuccino
       .spr_dcfgr			(spr_dcfgr[31:0]),
       .spr_pccfgr			(spr_pccfgr[31:0]),
       .spr_fpcsr			(spr_fpcsr[31:0]));
-   
+
    // System group (0) SPR data out
    always @*
      case(spr_addr)
@@ -738,10 +724,10 @@ module mor1kx_ctrl_cappuccino
 	 spr_sys_group_read = spr_pccfgr;
        `OR1K_SPR_NPC_ADDR:
 	 spr_sys_group_read = spr_npc;
-       `OR1K_SPR_SR_ADDR: 
+       `OR1K_SPR_SR_ADDR:
 	 spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-SPR_SR_WIDTH){1'b0}},
 			       spr_sr};
-       
+
        `OR1K_SPR_PPC_ADDR:
 	 spr_sys_group_read = spr_ppc;
        `OR1K_SPR_FPCSR_ADDR:
@@ -771,12 +757,11 @@ module mor1kx_ctrl_cappuccino
    /* System group ack generation */
    /* TODO - might be delay for register file reads! */
    assign spr_access_ack[0] = 1;
-   
 
-   
+
    /* Generate data to the register file for mfspr operations */
    assign mfspr_dat_o = spr_internal_read_dat[spr_addr[14:11]];
-   
+
    // PIC SPR control
    generate
 
@@ -808,11 +793,11 @@ module mor1kx_ctrl_cappuccino
 	    .spr_we_i			(spr_we),		 // Templated
 	    .spr_addr_i			(spr_addr),		 // Templated
 	    .spr_dat_i			(spr_write_dat));	 // Templated
-	 	 
-	 
-	 assign except_pic = (|spr_picsr) & spr_sr[`OR1K_SPR_SR_IEE] & 
+
+
+	 assign except_pic = (|spr_picsr) & spr_sr[`OR1K_SPR_SR_IEE] &
 			     !op_mtspr & !doing_rfe &
-			     // Stops back-to-back branch addresses going to 
+			     // Stops back-to-back branch addresses going to
 			     // fetch stage
 			     !ctrl_branch_occur_i &
 			     // Stops issues with PC when branching
@@ -826,11 +811,11 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_internal_read_dat[9] = 0;
       end // else: !if(FEATURE_PIC !="NONE")
    endgenerate
-   
-   
+
+
    generate
       if (FEATURE_TIMER!="NONE") begin : tt
-	 
+
 	 /* mor1kx_ticktimer AUTO_TEMPLATE (
 	  .spr_ttmr_o		(spr_ttmr),
 	  .spr_ttcr_o		(spr_ttcr),
@@ -854,10 +839,10 @@ module mor1kx_ctrl_cappuccino
 			  .spr_we_i		(spr_we),	 // Templated
 			  .spr_addr_i		(spr_addr),	 // Templated
 			  .spr_dat_i		(spr_write_dat)); // Templated
-	 
-	 assign except_ticktimer = spr_ttmr[28] & spr_sr[`OR1K_SPR_SR_TEE] & 
+
+	 assign except_ticktimer = spr_ttmr[28] & spr_sr[`OR1K_SPR_SR_TEE] &
 				   !op_mtspr & !doing_rfe &
-				   // Stops back-to-back branch addresses to 
+				   // Stops back-to-back branch addresses to
 				   // fetch  stage.
 				   !ctrl_branch_occur_i &
 				   // Stops issues with PC when branching
@@ -870,7 +855,6 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_ttcr = 0;
 	 assign spr_access_ack[10] = 0;
 	 assign spr_internal_read_dat[10] = 0;
-	 
       end // else: !if(FEATURE_TIMER!="NONE")
    endgenerate
 
@@ -879,14 +863,14 @@ module mor1kx_ctrl_cappuccino
    assign spr_read_access = (op_mfspr | (du_access & !du_we_i));
    assign spr_write_access = (op_mtspr | (du_access & du_we_i));
 
-   assign spr_write_dat = du_access ? du_dat_i : b;   
+   assign spr_write_dat = du_access ? du_dat_i : b;
    assign spr_we = spr_write_access & spr_group_present;
    assign spr_read = spr_read_access & spr_group_present;
 
    /* A bus out to other units that live outside of the control unit */
    assign spr_bus_addr_o = spr_addr;
    assign spr_bus_we_o = spr_write_access & spr_group_present & spr_bus_access;
-   assign spr_bus_stb_o = (spr_read_access | spr_write_access) & 
+   assign spr_bus_stb_o = (spr_read_access | spr_write_access) &
 			  spr_group_present & spr_bus_access;
    assign spr_bus_dat_o = spr_write_dat;
 
@@ -894,19 +878,19 @@ module mor1kx_ctrl_cappuccino
    assign spr_group_present = (// System group
 			       (spr_addr[15:11]==5'h00) ||
 			       // DMMU
-			       (spr_addr[15:11]==5'h01 && 
+			       (spr_addr[15:11]==5'h01 &&
 				FEATURE_DMMU!="NONE") ||
 			       // IMMU
-			       (spr_addr[15:11]==5'h02 && 
+			       (spr_addr[15:11]==5'h02 &&
 				FEATURE_IMMU!="NONE") ||
 			       // Data cache
-			       (spr_addr[15:11]==5'h03 && 
+			       (spr_addr[15:11]==5'h03 &&
 				FEATURE_DATACACHE!="NONE") ||
 			       // Instruction cache
-			       (spr_addr[15:11]==5'h04 && 
+			       (spr_addr[15:11]==5'h04 &&
 				FEATURE_INSTRUCTIONCACHE!= "NONE") ||
 			       // MAC unit
-			       (spr_addr[15:11]==5'h05 && 
+			       (spr_addr[15:11]==5'h05 &&
 				FEATURE_MAC!="NONE") ||
 			       // Debug unit
 			       (spr_addr[15:11]==5'h06 &&
@@ -928,13 +912,13 @@ module mor1kx_ctrl_cappuccino
 				FEATURE_FPU!="NONE")
 			       );
 
-   /* Generate a SPR group signal - generate invalid if the group is not 
+   /* Generate a SPR group signal - generate invalid if the group is not
     present in the design */
    assign spr_group = (spr_group_present) ? spr_addr[14:11] : 4'd12;
 
    /* Default group when a selected one is not present - it reads as zero */
    assign spr_internal_read_dat[12] = 0;
-   
+
    /* Is a SPR bus access needed, or is the requested SPR in this file? */
    assign spr_bus_access = /* Any of the units we don't have in this file */
 			   /* System group */
@@ -945,21 +929,21 @@ module mor1kx_ctrl_cappuccino
 			     spr_addr[15:11]==5'h09 ||
 			     /* Tick Group */
 			     spr_addr[15:11]==5'h0a);
-   
+
    generate
       if (FEATURE_DEBUGUNIT!="NONE") begin : du
-	 
+
 	 reg [OPTION_OPERAND_WIDTH-1:0] du_read_dat;
-	 
+
 	 reg 				du_ack;
 	 reg 				du_stall_r;
 	 reg [3:0] 			pstep_r;
 	 reg [1:0] 			branch_step;
 	 reg 				stepped_into_exception;
 	 reg 				stepped_into_rfe;
-	 
+
 	 assign du_access = du_stb_i;
-	 
+
 	 // Generate ack back to the debug interface bus
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
@@ -974,9 +958,9 @@ module mor1kx_ctrl_cappuccino
 		/* actual access occurred */
 		du_ack <= 1;
 	   end
-	 
+
 	 assign du_ack_o = du_ack;
-	 
+
 	 /* Data back to the debug bus */
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
@@ -991,13 +975,13 @@ module mor1kx_ctrl_cappuccino
 	  Why? Potentially an instruction like l.mfspr from an external unit
 	  hasn't completed fully, gets interrupted, and it's assumed it's
 	  completed, but actually hasn't. */
-	 assign cpu_stall = du_stall_i | du_restart_from_stall;	 	 
-	 
+	 assign cpu_stall = du_stall_i | du_restart_from_stall;
+
 	 /* goes out to the debug interface and comes back 1 cycle later
 	  via du_stall_i */
 	 assign du_stall_o = /* execute stage */
 			     (stepping & padv_ctrl);
-	 
+
 	 /* Pulse to indicate we're restarting after a stall */
 	 assign du_restart_from_stall = du_stall_r & !du_stall_i;
 
@@ -1014,7 +998,7 @@ module mor1kx_ctrl_cappuccino
 	     du_npc_written <= 0;
 	   else if (du_npc_write)
 	     du_npc_written <= 1;
-	 
+
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
 	     du_spr_npc <= 0;
@@ -1028,7 +1012,7 @@ module mor1kx_ctrl_cappuccino
 	     stepped_into_exception <= 0;
 	   else if (stepping & padv_ctrl)
 	     stepped_into_exception <= exception;
-	 
+
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
 	     stepped_into_rfe <= 0;
@@ -1036,16 +1020,16 @@ module mor1kx_ctrl_cappuccino
 	     stepped_into_rfe <= 0;
 	   else if (stepping & padv_ctrl)
 	     stepped_into_rfe <= op_rfe;
-	 
+
 	 assign du_restart_pc_o = du_npc_written ? du_spr_npc :
 				  stepped_into_rfe ? spr_epcr :
 				  stepped_into_delay_slot ?
-				  last_branch_target_pc : 
-				  stepped_into_exception ? exception_pc_addr : 
+				  last_branch_target_pc :
+				  stepped_into_exception ? exception_pc_addr :
 				  pc_ctrl_i + 4;
 
 	 assign du_restart_o = du_restart_from_stall;
-	 
+
 	 /* Indicate when we're stepping */
 	 assign stepping = spr_dmr1[`OR1K_SPR_DMR1_ST] &
 			   spr_dsr[`OR1K_SPR_DSR_TE];
@@ -1057,10 +1041,10 @@ module mor1kx_ctrl_cappuccino
 	     pstep_r <= 4'h1;
 	   else if ((pstep[0] & fetch_valid_i) |
 		    /* decode is always single cycle */
-		    (pstep[1] & padv_decode_o) | 
+		    (pstep[1] & padv_decode_o) |
 		    (pstep[2] & execute_valid_i))
 	     pstep_r <= {pstep_r[2:0],1'b0};
-	 
+
 	 assign pstep = pstep_r;
 
 	 always @(posedge clk `OR_ASYNC_RST)
@@ -1072,7 +1056,7 @@ module mor1kx_ctrl_cappuccino
 	     branch_step <= {branch_step[0], execute_delay_slot};
 
 	 assign stepped_into_delay_slot = branch_step[1];
-	 
+
 	 /* Signals for waveform debuging */
 	 wire [31:0] spr_read_data_group_0;
 	 assign spr_read_data_group_0 = spr_internal_read_dat[0];
@@ -1094,8 +1078,8 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_read_data_group_8 = spr_internal_read_dat[8];
 	 wire [31:0] spr_read_data_group_9;
 	 assign spr_read_data_group_9 = spr_internal_read_dat[9];
-	 
-	 
+
+
 	 /* always single cycle access */
 	 assign spr_access_ack[6] = 1;
 	 assign spr_internal_read_dat[6] = (spr_addr==`OR1K_SPR_DMR1_ADDR) ?
@@ -1145,7 +1129,7 @@ module mor1kx_ctrl_cappuccino
 	   assign du_restart_o = 0;
 	   assign du_restart_pc_o = 0;
 	   assign stepping = 0;
-	   assign du_npc_write = 0;	   
+	   assign du_npc_write = 0;
 	   assign stepped_into_delay_slot = 0;
 	   assign du_dat_o = 0;
 	   assign du_restart_from_stall = 0;
@@ -1192,7 +1176,7 @@ module mor1kx_ctrl_cappuccino
       end
       else begin
 	 assign spr_access_ack[3] = 0;
-	 assign spr_internal_read_dat[3] = 0;	 
+	 assign spr_internal_read_dat[3] = 0;
       end
    endgenerate
 
@@ -1217,7 +1201,7 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_internal_read_dat[5] = 0;
       end
    endgenerate
-   
+
    generate
       if (FEATURE_PERFCOUNTERS!="NONE") begin : perfcounters_ctrl
 	 assign spr_access_ack[7] = spr_bus_ack_pcu_i;
@@ -1251,8 +1235,4 @@ module mor1kx_ctrl_cappuccino
       end
    endgenerate
 
-   
-   
-   
 endmodule // mor1kx_ctrl_cappuccino
-
