@@ -1,26 +1,26 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
   Description:  Data bus interface
 
   All combinatorial outputs to pipeline
   Dbus interface request signal out synchronous
-  
+
   32-bit specific
-  
+
   TODO: posted accesses - if we're not currently doing another posted access
   then immediately signal valid to not hold up the pipeline and in the case of
-  loads remember the register we were supposed to access, and monitor the 
+  loads remember the register we were supposed to access, and monitor the
   pipeline for a read from that register, and then indicate we're waiting for
   the read to come through before we can continue
- 
+
   Copyright (C) 2012 Authors
- 
+
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
+
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
@@ -37,7 +37,7 @@ module mor1kx_lsu_cappuccino
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
-   
+
    input clk, rst;
 
    input padv_execute_i;
@@ -58,7 +58,7 @@ module mor1kx_lsu_cappuccino
    // exception output
    output 			     lsu_except_dbus_o;
    output 			     lsu_except_align_o;
-   
+
    // interface to data bus
    output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o;
    output 			     dbus_req_o;
@@ -77,11 +77,11 @@ module mor1kx_lsu_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_adr_r;
 
    reg [3:0] 			     dbus_bsel;
-   
+
    reg 				     access_done;
 
    reg [OPTION_OPERAND_WIDTH-1:0]    lsu_result_r;
-   
+
    wire 			     align_err_word;
    wire 			     align_err_short;
 
@@ -103,13 +103,13 @@ module mor1kx_lsu_cappuccino
 		       (opc_insn_i[1:0]==2'b11) ?        // l.sh
 		       {rfb_i[15:0],rfb_i[15:0]} :
 		       rfb_i;                         // l.sw
-   
+
    assign dbus_req_o = (op_lsu_load_i | op_lsu_store_i) &
 		       !except_align & !access_done & !pipeline_flush_i;
-   
+
    assign align_err_word = |dbus_adr_o[1:0];
    assign align_err_short = dbus_adr_o[0];
-   
+
 
    assign lsu_valid_o = dbus_ack_i | dbus_err_i | access_done;
    assign lsu_except_dbus_o = dbus_err_i | except_dbus;
@@ -118,7 +118,7 @@ module mor1kx_lsu_cappuccino
 			     opc_insn_i==`OR1K_OPCODE_LWS) & align_err_word) |
 			   ((opc_insn_i==`OR1K_OPCODE_LHZ |
 			     opc_insn_i==`OR1K_OPCODE_LHS) & align_err_short);
-   
+
    assign store_align_err = (opc_insn_i==`OR1K_OPCODE_SW & align_err_word) |
 			    (opc_insn_i==`OR1K_OPCODE_SH & align_err_short);
 
@@ -162,7 +162,7 @@ module mor1kx_lsu_cappuccino
        dbus_adr_r <= 0;
      else if (decode_valid_i & (op_lsu_load_i | op_lsu_store_i))
        dbus_adr_r <= alu_result_i;
-   
+
    // Big endian bus mapping
    always @*
      if (op_lsu_load_i) begin
@@ -218,8 +218,8 @@ module mor1kx_lsu_cappuccino
      else
        dbus_bsel = 4'b0000;
 
-   assign dbus_bsel_o = dbus_bsel;   
-   
+   assign dbus_bsel_o = dbus_bsel;
+
    assign dbus_we_o =  op_lsu_store_i;
 
    // Select part of read word
@@ -236,7 +236,7 @@ module mor1kx_lsu_cappuccino
        2'b11:
 	 dbus_dat_aligned = {dbus_dat_i[7:0],24'd0};
      endcase // case (dbus_adr_r[1:0])
-   
+
    // Do appropriate extension
    always @*
      case(opc_insn_i[0])// zero or sign-extended
@@ -266,8 +266,7 @@ module mor1kx_lsu_cappuccino
    always @(posedge clk)
      if (dbus_ack_i & op_lsu_load_i)
        lsu_result_r <= dbus_dat_extended;
-   
+
    assign lsu_result_o = access_done ? lsu_result_r : dbus_dat_extended;
 
 endmodule // mor1kx_lsu_cappuccino
-
