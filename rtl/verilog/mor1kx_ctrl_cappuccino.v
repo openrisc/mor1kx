@@ -38,161 +38,147 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_ctrl_cappuccino
-  (/*AUTOARG*/
-   // Outputs
-   mfspr_dat_o, ctrl_mfspr_we_o, ctrl_flag_o, ctrl_branch_exception_o,
-   ctrl_branch_except_pc_o, pipeline_flush_o, padv_fetch_o,
-   padv_decode_o, padv_execute_o, du_dat_o, du_ack_o, du_stall_o,
-   du_restart_pc_o, du_restart_o, spr_bus_addr_o, spr_bus_we_o,
-   spr_bus_stb_o, spr_bus_dat_o, spr_sr_o,
-   // Inputs
-   clk, rst, ctrl_alu_result_i, ctrl_rfb_i, ctrl_flag_set_i,
-   ctrl_flag_clear_i, pc_ctrl_i, ctrl_opc_insn_i, ctrl_branch_occur_i,
-   ctrl_branch_target_i, pc_execute_i, execute_opc_insn_i,
-   except_ibus_err_i, except_ibus_align_i, except_illegal_i,
-   except_syscall_i, except_dbus_i, except_trap_i, except_align_i,
-   fetch_valid_i, decode_valid_i, execute_valid_i, execute_waiting_i,
-   fetch_branch_taken_i, irq_i, du_addr_i, du_stb_i, du_dat_i,
-   du_we_i, du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i,
-   spr_bus_dat_ic_i, spr_bus_ack_ic_i, spr_bus_dat_dmmu_i,
-   spr_bus_ack_dmmu_i, spr_bus_dat_immu_i, spr_bus_ack_immu_i,
-   spr_bus_dat_mac_i, spr_bus_ack_mac_i, spr_bus_dat_pmu_i,
-   spr_bus_ack_pmu_i, spr_bus_dat_pcu_i, spr_bus_ack_pcu_i,
-   spr_bus_dat_fpu_i, spr_bus_ack_fpu_i
-   );
+  #(
+    parameter OPTION_OPERAND_WIDTH = 32,
+    parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
+				 `OR1K_RESET_VECTOR,8'd0},
 
-   parameter OPTION_OPERAND_WIDTH = 32;
-   parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
-				`OR1K_RESET_VECTOR,8'd0};
+    parameter FEATURE_SYSCALL = "ENABLED",
+    parameter FEATURE_TRAP = "ENABLED",
+    parameter FEATURE_RANGE = "ENABLED",
 
-   parameter FEATURE_SYSCALL = "ENABLED";
-   parameter FEATURE_TRAP = "ENABLED";
-   parameter FEATURE_RANGE = "ENABLED";
+    parameter FEATURE_DATACACHE = "NONE",
+    parameter OPTION_DCACHE_BLOCK_WIDTH = 5,
+    parameter OPTION_DCACHE_SET_WIDTH = 9,
+    parameter OPTION_DCACHE_WAYS = 2,
+    parameter FEATURE_DMMU = "NONE",
+    parameter FEATURE_INSTRUCTIONCACHE = "NONE",
+    parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
+    parameter OPTION_ICACHE_SET_WIDTH = 9,
+    parameter OPTION_ICACHE_WAYS = 2,
+    parameter FEATURE_IMMU = "NONE",
+    parameter FEATURE_PIC = "ENABLED",
+    parameter FEATURE_TIMER = "ENABLED",
+    parameter FEATURE_DEBUGUNIT = "NONE",
+    parameter FEATURE_PERFCOUNTERS = "NONE",
+    parameter FEATURE_PMU = "NONE",
+    parameter FEATURE_MAC = "NONE",
+    parameter FEATURE_FPU = "NONE",
 
-   parameter FEATURE_DATACACHE = "NONE";
-   parameter OPTION_DCACHE_BLOCK_WIDTH = 5;
-   parameter OPTION_DCACHE_SET_WIDTH = 9;
-   parameter OPTION_DCACHE_WAYS = 2;
-   parameter FEATURE_DMMU = "NONE";
-   parameter FEATURE_INSTRUCTIONCACHE = "NONE";
-   parameter OPTION_ICACHE_BLOCK_WIDTH = 5;
-   parameter OPTION_ICACHE_SET_WIDTH = 9;
-   parameter OPTION_ICACHE_WAYS = 2;
-   parameter FEATURE_IMMU = "NONE";
-   parameter FEATURE_PIC = "ENABLED";
-   parameter FEATURE_TIMER = "ENABLED";
-   parameter FEATURE_DEBUGUNIT = "NONE";
-   parameter FEATURE_PERFCOUNTERS = "NONE";
-   parameter FEATURE_PMU = "NONE";
-   parameter FEATURE_MAC = "NONE";
-   parameter FEATURE_FPU = "NONE";
+    parameter OPTION_PIC_TRIGGER = "EDGE",
 
-   parameter OPTION_PIC_TRIGGER = "EDGE";
+    parameter FEATURE_DSX ="NONE",
+    parameter FEATURE_FASTCONTEXTS = "NONE",
+    parameter FEATURE_OVERFLOW = "NONE",
 
-   parameter FEATURE_DSX ="NONE";
-   parameter FEATURE_FASTCONTEXTS = "NONE";
-   parameter FEATURE_OVERFLOW = "NONE";
+    parameter SPR_SR_WIDTH = 16,
+    parameter SPR_SR_RESET_VALUE = 16'h8001
+    )
+   (
+    input 			      clk,
+    input 			      rst,
 
-   parameter SPR_SR_WIDTH = 16;
-   parameter SPR_SR_RESET_VALUE = 16'h8001;
+    // ALU result - either jump target, SPR address
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_alu_result_i,
 
-   input clk, rst;
+    // Operand B from RF might be jump address, might be value for SPR
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_rfb_i,
 
-   // ALU result - either jump target, SPR address
-   input [OPTION_OPERAND_WIDTH-1:0] ctrl_alu_result_i;
+    input 			      ctrl_flag_set_i,
+    input 			      ctrl_flag_clear_i,
 
-   // Operand B from RF might be jump address, might be value for SPR
-   input [OPTION_OPERAND_WIDTH-1:0] ctrl_rfb_i;
+    input [OPTION_OPERAND_WIDTH-1:0]  pc_ctrl_i,
 
-   input 			    ctrl_flag_set_i, ctrl_flag_clear_i;
+    input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i,
 
-   input [OPTION_OPERAND_WIDTH-1:0] pc_ctrl_i;
+    // Indicate if branch will be taken based on instruction currently in
+    // execute stage. Combinatorially generated, uses signals from both
+    // execute and ctrl stage.
+    input 			      ctrl_branch_occur_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_branch_target_i,
 
-   input [`OR1K_OPCODE_WIDTH-1:0]   ctrl_opc_insn_i;
+    // PC of execute stage (NPC)
+    input [OPTION_OPERAND_WIDTH-1:0]  pc_execute_i,
+    // Opcode of execute stage instruction
+    input [`OR1K_OPCODE_WIDTH-1:0]    execute_opc_insn_i,
 
-   // Indicate if branch will be taken based on instruction currently in
-   // execute stage. Combinatorially generated, uses signals from both
-   // execute and ctrl stage.
-   input 			    ctrl_branch_occur_i;
-   input [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_i;
+    // Exception inputs, registered on output of execute stage
+    input 			      except_ibus_err_i,
+    input 			      except_ibus_align_i,
+    input 			      except_illegal_i,
+    input 			      except_syscall_i,
+    input 			      except_dbus_i,
+				      except_trap_i,
+    input 			      except_align_i,
 
-   // PC of execute stage (NPC)
-   input [OPTION_OPERAND_WIDTH-1:0] pc_execute_i;
-   // Opcode of execute stage instruction
-   input [`OR1K_OPCODE_WIDTH-1:0]   execute_opc_insn_i;
+    // Inputs from two units that can stall proceedings
+    input 			      fetch_valid_i,
+    input 			      decode_valid_i,
+    input 			      execute_valid_i,
+    input 			      execute_waiting_i,
 
-   // Exception inputs, registered on output of execute stage
-   input 			    except_ibus_err_i, except_ibus_align_i,
-				    except_illegal_i,
-				    except_syscall_i, except_dbus_i,
-				    except_trap_i, except_align_i;
+    input 			      fetch_branch_taken_i,
 
-   // Inputs from two units that can stall proceedings
-   input 			    fetch_valid_i,   decode_valid_i,
-				    execute_valid_i;
-   input 			    execute_waiting_i;
+    // External IRQ lines in
+    input [31:0] 		      irq_i,
 
-   input 			    fetch_branch_taken_i;
+    // SPR data out
+    output [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o,
 
-   // External IRQ lines in
-   input [31:0] 		    irq_i;
+    // WE to RF for l.mfspr
+    output 			      ctrl_mfspr_we_o,
 
-   // SPR data out
-   output [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o;
+    // Flag out to branch control, combinatorial
+    output 			      ctrl_flag_o,
 
-   // WE to RF for l.mfspr
-   output 			     ctrl_mfspr_we_o;
+    // Branch indicator from control unit (l.rfe/exception)
+    output 			      ctrl_branch_exception_o,
+    // PC out to fetch stage for l.rfe, exceptions
+    output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc_o,
 
-   // Flag out to branch control, combinatorial
-   output 			     ctrl_flag_o;
+    // Clear instructions from decode and fetch stage
+    output 			      pipeline_flush_o,
 
-   // Branch indicator from control unit (l.rfe/exception)
-   output 			     ctrl_branch_exception_o;
-   // PC out to fetch stage for l.rfe, exceptions
-   output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc_o;
+    output 			      padv_fetch_o,
+    output 			      padv_decode_o,
+    output 			      padv_execute_o,
 
-   // Clear instructions from decode and fetch stage
-   output 			     pipeline_flush_o;
+    // Debug bus
+    input [15:0] 		      du_addr_i,
+    input 			      du_stb_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  du_dat_i,
+    input 			      du_we_i,
+    output [OPTION_OPERAND_WIDTH-1:0] du_dat_o,
+    output 			      du_ack_o,
+    // Stall control from debug interface
+    input 			      du_stall_i,
+    output 			      du_stall_o,
+    output [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o,
+    output 			      du_restart_o,
 
-   output 			     padv_fetch_o;
-   output 			     padv_decode_o;
-   output 			     padv_execute_o;
-
-   // Debug bus
-   input [15:0] 		     du_addr_i;
-   input 			     du_stb_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  du_dat_i;
-   input 			     du_we_i;
-   output [OPTION_OPERAND_WIDTH-1:0] du_dat_o;
-   output 			     du_ack_o;
-   // Stall control from debug interface
-   input 			     du_stall_i;
-   output 			     du_stall_o;
-   output [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;
-   output 			     du_restart_o;
-
-   // SPR accesses to external units (cache, mmu, etc.)
-   output [15:0] 		     spr_bus_addr_o;
-   output 			     spr_bus_we_o;
-   output 			     spr_bus_stb_o;
-   output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dc_i;
-   input 			     spr_bus_ack_dc_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_ic_i;
-   input 			     spr_bus_ack_ic_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i;
-   input 			     spr_bus_ack_dmmu_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i;
-   input 			     spr_bus_ack_immu_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_mac_i;
-   input 			     spr_bus_ack_mac_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pmu_i;
-   input 			     spr_bus_ack_pmu_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pcu_i;
-   input 			     spr_bus_ack_pcu_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i;
-   input 			     spr_bus_ack_fpu_i;
-   output [15:0] 	     spr_sr_o;
+    // SPR accesses to external units (cache, mmu, etc.)
+    output [15:0] 		      spr_bus_addr_o,
+    output 			      spr_bus_we_o,
+    output 			      spr_bus_stb_o,
+    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dc_i,
+    input 			      spr_bus_ack_dc_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_ic_i,
+    input 			      spr_bus_ack_ic_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i,
+    input 			      spr_bus_ack_dmmu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i,
+    input 			      spr_bus_ack_immu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_mac_i,
+    input 			      spr_bus_ack_mac_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pmu_i,
+    input 			      spr_bus_ack_pmu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pcu_i,
+    input 			      spr_bus_ack_pcu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i,
+    input 			      spr_bus_ack_fpu_i,
+    output [15:0] 		      spr_sr_o
+    );
 
    // Internal signals
    reg [SPR_SR_WIDTH-1:0] 	     spr_sr;
