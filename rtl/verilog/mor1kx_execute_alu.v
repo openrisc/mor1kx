@@ -18,70 +18,65 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_execute_alu
-  (/*AUTOARG*/
-   // Outputs
-   flag_set_o, flag_clear_o, alu_result_o, alu_valid_o,
-   // Inputs
-   clk, rst, padv_i, opc_alu_i, opc_alu_secondary_i, imm16_i,
-   opc_insn_i, decode_valid_i, op_jbr_i, op_jr_i, immjbr_upper_i,
-   pc_execute_i, rfa_i, rfb_i, flag_i
-   );
+  #(
+    parameter OPTION_OPERAND_WIDTH = 32,
+
+    parameter FEATURE_MULTIPLIER = "THREESTAGE",
+    parameter FEATURE_DIVIDER = "NONE",
+
+    parameter FEATURE_ADDC = "NONE",
+    parameter FEATURE_SRA = "ENABLED",
+    parameter FEATURE_ROR = "NONE",
+    parameter FEATURE_EXT = "NONE",
+    parameter FEATURE_CMOV = "NONE",
+    parameter FEATURE_FFL1 = "NONE",
+
+    parameter FEATURE_CUST1 = "NONE",
+    parameter FEATURE_CUST2 = "NONE",
+    parameter FEATURE_CUST3 = "NONE",
+    parameter FEATURE_CUST4 = "NONE",
+    parameter FEATURE_CUST5 = "NONE",
+    parameter FEATURE_CUST6 = "NONE",
+    parameter FEATURE_CUST7 = "NONE",
+    parameter FEATURE_CUST8 = "NONE",
+
+    parameter OPTION_SHIFTER = "BARREL"
+    )
+   (
+    input 			      clk,
+    input 			      rst,
+
+    // pipeline control signal in
+    input 			      padv_i,
+
+    // inputs to ALU
+    input [`OR1K_ALU_OPC_WIDTH-1:0]   opc_alu_i,
+    input [`OR1K_ALU_OPC_WIDTH-1:0]   opc_alu_secondary_i,
+
+    input [`OR1K_IMM_WIDTH-1:0]       imm16_i,
+
+    input [`OR1K_OPCODE_WIDTH-1:0]    opc_insn_i,
+
+    input 			      decode_valid_i,
 
 
-   parameter OPTION_OPERAND_WIDTH = 32;
+    input 			      op_jbr_i,
+    input 			      op_jr_i,
+    input [9:0] 		      immjbr_upper_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  pc_execute_i,
 
-   parameter FEATURE_MULTIPLIER = "THREESTAGE";
-   parameter FEATURE_DIVIDER = "NONE";
+    input [OPTION_OPERAND_WIDTH-1:0]  rfa_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  rfb_i,
 
-   parameter FEATURE_ADDC = "NONE";
-   parameter FEATURE_SRA = "ENABLED";
-   parameter FEATURE_ROR = "NONE";
-   parameter FEATURE_EXT = "NONE";
-   parameter FEATURE_CMOV = "NONE";
-   parameter FEATURE_FFL1 = "NONE";
+    // flag fed back from ctrl
+    input 			      flag_i,
 
-   parameter FEATURE_CUST1 = "NONE";
-   parameter FEATURE_CUST2 = "NONE";
-   parameter FEATURE_CUST3 = "NONE";
-   parameter FEATURE_CUST4 = "NONE";
-   parameter FEATURE_CUST5 = "NONE";
-   parameter FEATURE_CUST6 = "NONE";
-   parameter FEATURE_CUST7 = "NONE";
-   parameter FEATURE_CUST8 = "NONE";
+    output 			      flag_set_o,
+    output 			      flag_clear_o,
 
-   parameter OPTION_SHIFTER = "BARREL";
-
-   input clk, rst;
-
-   // pipeline control signal in
-   input padv_i;
-
-   // inputs to ALU
-   input [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_i;
-   input [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_secondary_i;
-
-   input [`OR1K_IMM_WIDTH-1:0]    imm16_i;
-
-   input [`OR1K_OPCODE_WIDTH-1:0] opc_insn_i;
-
-   input                          decode_valid_i;
-
-
-   input                          op_jbr_i, op_jr_i;
-   input [9:0]                    immjbr_upper_i;
-   input [OPTION_OPERAND_WIDTH-1:0] pc_execute_i;
-
-   input [OPTION_OPERAND_WIDTH-1:0] rfa_i;
-   input [OPTION_OPERAND_WIDTH-1:0] rfb_i;
-
-   // flag fed back from ctrl
-   input                            flag_i;
-
-   output                            flag_set_o,
-                                     flag_clear_o;
-
-   output [OPTION_OPERAND_WIDTH-1:0] alu_result_o;
-   output                            alu_valid_o;
+    output [OPTION_OPERAND_WIDTH-1:0] alu_result_o,
+    output 			      alu_valid_o
+    );
 
    reg                                   alu_valid; /* combinatorial */
 

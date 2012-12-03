@@ -15,62 +15,38 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_rf_cappuccino
-  (
-   clk, rst,
+  #(
+    parameter OPTION_RF_ADDR_WIDTH = 5,
+    parameter OPTION_RF_WORDS = 32,
 
-   // pipeline control signal in
-   padv_execute_i,
+    parameter OPTION_OPERAND_WIDTH = 32
+    )
+   (
+    input 			      clk,
+    input 			      rst,
 
-   padv_decode_i,
+    // pipeline control signal in
+    input 			      padv_execute_i,
 
-   // GPR addresses from decode stage
-   rfa_adr_i, rfb_adr_i, rfd_adr_i,
+    input 			      padv_decode_i,
 
-   // Writeback indication from decode stage
-   rf_wb_i,
-   // WE strobe from execute control stage
-   execute_rf_we_i,
+    // GPR numbers from decode stage
+    input [OPTION_RF_ADDR_WIDTH-1:0]  rfd_adr_i,
+    input [OPTION_RF_ADDR_WIDTH-1:0]  rfa_adr_i,
+    input [OPTION_RF_ADDR_WIDTH-1:0]  rfb_adr_i,
 
+    // Decode stage indicating writeback expected
+    input 			      rf_wb_i,
+    // Execute stage asserting write back
+    input 			      execute_rf_we_i,
 
-   // In from input MUX
-   result_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  result_i,
 
-   // Write mask
-   write_mask_i,
+    input 			      write_mask_i,
 
-   // RF operands out
-   rfa_o, rfb_o
-
-   );
-
-   parameter OPTION_RF_ADDR_WIDTH = 5;
-   parameter OPTION_RF_WORDS = 32;
-
-   parameter OPTION_OPERAND_WIDTH = 32;
-
-   input clk, rst;
-
-   // pipeline control signal in
-   input padv_execute_i;
-
-   input padv_decode_i;
-
-   // GPR numbers from decode stage
-   input [OPTION_RF_ADDR_WIDTH-1:0]      rfd_adr_i;
-   input [OPTION_RF_ADDR_WIDTH-1:0]      rfa_adr_i;
-   input [OPTION_RF_ADDR_WIDTH-1:0]      rfb_adr_i;
-
-   // Decode stage indicating writeback expected
-   input 				rf_wb_i;
-   // Execute stage asserting write back
-   input 				execute_rf_we_i;
-
-   input [OPTION_OPERAND_WIDTH-1:0]  result_i;
-
-   input 			      write_mask_i;
-
-   output [OPTION_OPERAND_WIDTH-1:0] rfa_o;
-   output [OPTION_OPERAND_WIDTH-1:0] rfb_o;
+    output [OPTION_OPERAND_WIDTH-1:0] rfa_o,
+    output [OPTION_OPERAND_WIDTH-1:0] rfb_o
+    );
 
    wire [OPTION_OPERAND_WIDTH-1:0]   rfa_o_mux;
    wire [OPTION_OPERAND_WIDTH-1:0]   rfb_o_mux;
