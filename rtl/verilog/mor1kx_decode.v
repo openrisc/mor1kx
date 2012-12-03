@@ -22,148 +22,106 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_decode
-  (
-   clk, rst,
+  #(
+    parameter OPTION_OPERAND_WIDTH = 32,
+    parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
+				 `OR1K_RESET_VECTOR,8'd0},
+    parameter OPTION_RF_ADDR_WIDTH = 5,
 
-   // pipeline control signal in
-   padv_i,
+    parameter FEATURE_SYSCALL = "ENABLED",
+    parameter FEATURE_TRAP = "ENABLED",
+    parameter FEATURE_RANGE = "ENABLED",
+    parameter FEATURE_MAC = "NONE",
+    parameter FEATURE_MULTIPLIER = "PARALLEL",
+    parameter FEATURE_DIVIDER = "NONE",
 
-   // input from fetch stage
-   pc_decode_i, decode_insn_i,
+    parameter FEATURE_ADDC = "NONE",
+    parameter FEATURE_SRA = "ENABLED",
+    parameter FEATURE_ROR = "NONE",
+    parameter FEATURE_EXT = "NONE",
+    parameter FEATURE_CMOV = "NONE",
+    parameter FEATURE_FFL1 = "NONE",
 
-   // input from control stage
-   pipeline_flush_i,
+    parameter FEATURE_CUST1 = "NONE",
+    parameter FEATURE_CUST2 = "NONE",
+    parameter FEATURE_CUST3 = "NONE",
+    parameter FEATURE_CUST4 = "NONE",
+    parameter FEATURE_CUST5 = "NONE",
+    parameter FEATURE_CUST6 = "NONE",
+    parameter FEATURE_CUST7 = "NONE",
+    parameter FEATURE_CUST8 = "NONE",
 
-   // outputs to ALU
-   opc_alu_o, opc_alu_secondary_o, imm16_o, immjbr_upper_o,
+    parameter REGISTERED_DECODE = "ENABLED"
+    )
+   (
+    input 				  clk,
+    input 				  rst,
 
-   // GPR numbers
-   rfd_adr_o, rfa_adr_o, rfb_adr_o,
+    // pipeline control signal in
+    input 				  padv_i,
 
-   // register file writeback enable
-   rf_wb_o,
+    // input from fetch stage
+    input [OPTION_OPERAND_WIDTH-1:0] 	  pc_decode_i,
+    input [`OR1K_INSN_WIDTH-1:0] 	  decode_insn_i,
 
-   // jump or branch op against immediate
-   op_jbr_o,
-   op_jr_o,
-   op_jal_o,
+    input 				  pipeline_flush_i,
 
-   // indicate if we're an ALU operation
-   op_alu_o,
+    //outputs to ALU
+    output reg [`OR1K_ALU_OPC_WIDTH-1:0]  opc_alu_o,
+    output reg [`OR1K_ALU_OPC_WIDTH-1:0]  opc_alu_secondary_o,
 
-   // inidicate if is LSU load or store
-   op_lsu_load_o, op_lsu_store_o,
+    output reg [`OR1K_IMM_WIDTH-1:0] 	  imm16_o,
 
-   // indicate it's a mfspr operation
-   op_mfspr_o,
+    // Upper 10 bits of immediate for jumps and branches
+    output reg [9:0] 			  immjbr_upper_o,
 
-   // exceptions in
-   decode_except_ibus_err_i,
+    // GPR numbers
+    output [OPTION_RF_ADDR_WIDTH-1:0] 	  rfd_adr_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0] 	  rfa_adr_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0] 	  rfb_adr_o,
 
-   // exception output -
-   execute_except_ibus_err_o,
-   execute_except_illegal_o, execute_except_syscall_o, execute_except_trap_o,
+    output reg 				  rf_wb_o,
 
-   // output is valid, signal
-   pc_execute_o, decode_valid_o,
+    output reg 				  op_jbr_o,
+    output reg 				  op_jr_o,
+    output reg 				  op_jal_o,
 
-   // insn opcode, indicating what's going on
-   opc_insn_o
-   );
+    output reg 				  op_alu_o,
 
-   parameter OPTION_OPERAND_WIDTH = 32;
-   parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
-				`OR1K_RESET_VECTOR,8'd0};
-   parameter OPTION_RF_ADDR_WIDTH = 5;
+    output reg 				  op_lsu_load_o,
+    output reg 				  op_lsu_store_o,
 
-   parameter FEATURE_SYSCALL = "ENABLED";
-   parameter FEATURE_TRAP = "ENABLED";
-   parameter FEATURE_RANGE = "ENABLED";
-   parameter FEATURE_MAC = "NONE";
-   parameter FEATURE_MULTIPLIER = "PARALLEL";
-   parameter FEATURE_DIVIDER = "NONE";
+    output reg 				  op_mfspr_o,
 
-   parameter FEATURE_ADDC = "NONE";
-   parameter FEATURE_SRA = "ENABLED";
-   parameter FEATURE_ROR = "NONE";
-   parameter FEATURE_EXT = "NONE";
-   parameter FEATURE_CMOV = "NONE";
-   parameter FEATURE_FFL1 = "NONE";
+    // exceptions in
+    input 				  decode_except_ibus_err_i,
 
-   parameter FEATURE_CUST1 = "NONE";
-   parameter FEATURE_CUST2 = "NONE";
-   parameter FEATURE_CUST3 = "NONE";
-   parameter FEATURE_CUST4 = "NONE";
-   parameter FEATURE_CUST5 = "NONE";
-   parameter FEATURE_CUST6 = "NONE";
-   parameter FEATURE_CUST7 = "NONE";
-   parameter FEATURE_CUST8 = "NONE";
+    // exception output -
+    output reg 				  execute_except_ibus_err_o,
+    output reg 				  execute_except_illegal_o,
+    output reg 				  execute_except_syscall_o,
+    output reg 				  execute_except_trap_o,
 
-   parameter REGISTERED_DECODE = "ENABLED";
+    // output is valid, signal
+    output reg [OPTION_OPERAND_WIDTH-1:0] pc_execute_o,
 
-   input clk, rst;
+    output reg 				  decode_valid_o,
 
-   // pipeline control signal in
-   input padv_i;
+    output reg [`OR1K_OPCODE_WIDTH-1:0]   opc_insn_o
+    );
 
-   // input from fetch stage
-   input [OPTION_OPERAND_WIDTH-1:0] pc_decode_i;
-   input [`OR1K_INSN_WIDTH-1:0]     decode_insn_i;
-
-   input 			    pipeline_flush_i;
-
-   //outputs to ALU
-   output reg [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_o;
    wire [`OR1K_ALU_OPC_WIDTH-1:0] 	opc_alu;
-   output reg [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_secondary_o;
    wire [`OR1K_ALU_OPC_WIDTH-1:0] 	opc_alu_secondary;
 
-   output reg [`OR1K_IMM_WIDTH-1:0] 	imm16_o;
    wire [`OR1K_IMM_WIDTH-1:0] 		imm16;
-
-   // Upper 10 bits of immediate for jumps and branches
-   output reg [9:0] 			immjbr_upper_o;
    wire [9:0] 				immjbr_upper;
 
-   // GPR numbers
-   output [OPTION_RF_ADDR_WIDTH-1:0] 	rfd_adr_o;
-   output [OPTION_RF_ADDR_WIDTH-1:0] 	rfa_adr_o;
-   output [OPTION_RF_ADDR_WIDTH-1:0] 	rfb_adr_o;
-
-   output reg 				rf_wb_o;
-
-   output reg 				op_jbr_o;
-   output reg 				op_jr_o;
-   output reg 				op_jal_o;
-
-   output reg 				op_alu_o;
-
-   output reg 				op_lsu_load_o, op_lsu_store_o;
-
-   output reg 				op_mfspr_o;
-
-   // exceptions in
-   input 				decode_except_ibus_err_i;
-
-   // exception output -
-   output reg 				execute_except_ibus_err_o,
-					execute_except_illegal_o,
-					execute_except_syscall_o,
-					execute_except_trap_o;
    reg 					execute_except_illegal;
-
    wire 				execute_except_ibus_err,
 					execute_except_syscall,
 					execute_except_trap;
 
-   // output is valid, signal
-   output reg [OPTION_OPERAND_WIDTH-1:0] pc_execute_o;
    wire [OPTION_OPERAND_WIDTH-1:0] 	 pc_execute;
-
-   output reg 				 decode_valid_o;
-
-
-   output reg [`OR1K_OPCODE_WIDTH-1:0] 	 opc_insn_o;
    wire [`OR1K_OPCODE_WIDTH-1:0] 	 opc_insn;
 
 
