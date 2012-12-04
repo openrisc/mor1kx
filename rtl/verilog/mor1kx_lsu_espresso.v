@@ -25,7 +25,7 @@ module mor1kx_lsu_espresso
    lsu_result_o, lsu_valid_o, lsu_except_dbus_o, lsu_except_align_o,
    dbus_adr_o, dbus_req_o, dbus_dat_o, dbus_bsel_o, dbus_we_o,
    // Inputs
-   clk, rst, padv_fetch_i, alu_result_i, rfb_i, opc_insn_i,
+   clk, rst, padv_fetch_i, lsu_adr_i, rfb_i, opc_insn_i,
    op_lsu_load_i, op_lsu_store_i, exception_taken_i, du_restart_i,
    stepping_i, next_fetch_done_i, dbus_err_i, dbus_ack_i, dbus_dat_i
    );
@@ -37,7 +37,7 @@ module mor1kx_lsu_espresso
 
    input padv_fetch_i;
    // calculated address from ALU
-   input [OPTION_OPERAND_WIDTH-1:0] alu_result_i;
+   input [OPTION_OPERAND_WIDTH-1:0] lsu_adr_i;
 
    // register file B in (store operand)
    input [OPTION_OPERAND_WIDTH-1:0] rfb_i;
@@ -166,7 +166,7 @@ module mor1kx_lsu_espresso
      if (rst)
        dbus_adr_r <= 0;
      else if (execute_go & (op_lsu_load_i | op_lsu_store_i))
-       dbus_adr_r <= alu_result_i;
+       dbus_adr_r <= lsu_adr_i;
 
    // Big endian bus mapping
    always @*
@@ -300,7 +300,7 @@ module mor1kx_lsu_espresso
       else
 	begin : nonregistered_io
 
-	   assign dbus_adr_o = execute_go ? alu_result_i : dbus_adr_r;
+	   assign dbus_adr_o = execute_go ? lsu_adr_i : dbus_adr_r;
 
 	   always @*
 	     begin

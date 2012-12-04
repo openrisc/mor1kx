@@ -446,7 +446,7 @@ module mor1kx_cpu_cappuccino
    /* mor1kx_lsu_cappuccino AUTO_TEMPLATE (
     .padv_execute_i			(padv_execute_o),
     .decode_valid_i			(decode_valid_o),
-    .alu_result_i			(alu_result_o),
+    .lsu_adr_i				(alu_result_o),
     .rfb_i				(rfb_o),
     .opc_insn_i			        (opc_insn_o),
     .op_lsu_load_i			(op_lsu_load_o),
@@ -474,7 +474,7 @@ module mor1kx_cpu_cappuccino
       .rst				(rst),
       .padv_execute_i			(padv_execute_o),	 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
-      .alu_result_i			(alu_result_o),		 // Templated
+      .lsu_adr_i			(alu_result_o),		 // Templated
       .rfb_i				(rfb_o),		 // Templated
       .opc_insn_i			(opc_insn_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
