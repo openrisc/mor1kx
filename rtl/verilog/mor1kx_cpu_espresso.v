@@ -391,7 +391,7 @@ module mor1kx_cpu_espresso
    
    /* mor1kx_lsu_espresso AUTO_TEMPLATE (
     .padv_fetch_i			(padv_fetch_o),
-    .lsu_adr_i				(alu_result_o),
+    .lsu_adr_i				(adder_result_o),
     .rfb_i				(rfb_o),
     .opc_insn_i			        (opc_insn_o),
     .op_lsu_load_i			(op_lsu_load_o),
@@ -421,7 +421,7 @@ module mor1kx_cpu_espresso
       .clk				(clk),
       .rst				(rst),
       .padv_fetch_i			(padv_fetch_o),		 // Templated
-      .lsu_adr_i			(alu_result_o),		 // Templated
+      .lsu_adr_i			(adder_result_o),	 // Templated
       .rfb_i				(rfb_o),		 // Templated
       .opc_insn_i			(opc_insn_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
