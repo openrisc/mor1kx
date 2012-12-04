@@ -1,15 +1,15 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
   Description: "Cappuccino" pipeline CPU module
-  
+
   Copyright (C) 2012 Authors
- 
-  Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
+
+   Author(s): Julius Baxter <juliusbaxter@gmail.com>
+
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
@@ -34,7 +34,7 @@ module mor1kx_cpu_cappuccino
    input clk, rst;
 
    parameter OPTION_OPERAND_WIDTH = 32;
-   
+
    parameter FEATURE_DATACACHE = "NONE";
    parameter OPTION_DCACHE_BLOCK_WIDTH = 5;
    parameter OPTION_DCACHE_SET_WIDTH = 9;
@@ -77,7 +77,7 @@ module mor1kx_cpu_cappuccino
    parameter FEATURE_EXT = "NONE";
    parameter FEATURE_CMOV = "NONE";
    parameter FEATURE_FFL1 = "NONE";
-   
+
    parameter FEATURE_CUST1 = "NONE";
    parameter FEATURE_CUST2 = "NONE";
    parameter FEATURE_CUST3 = "NONE";
@@ -86,9 +86,9 @@ module mor1kx_cpu_cappuccino
    parameter FEATURE_CUST6 = "NONE";
    parameter FEATURE_CUST7 = "NONE";
    parameter FEATURE_CUST8 = "NONE";
-   
+
    parameter OPTION_SHIFTER = "ENABLED";
-   
+
    // Instruction bus
    input ibus_err_i;
    input ibus_ack_i;
@@ -105,10 +105,10 @@ module mor1kx_cpu_cappuccino
    output 			     dbus_req_o;
    output [3:0] 		     dbus_bsel_o;
    output 			     dbus_we_o;
-   
+
    // Interrupts
    input [31:0] 		     irq_i;
-   
+
    // Debug interface
    input [15:0] 		     du_addr_i;
    input 			     du_stb_i;
@@ -126,30 +126,29 @@ module mor1kx_cpu_cappuccino
    output 			     spr_bus_stb_o;
    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dc_i;
-   input 			     spr_bus_ack_dc_i;   
-//SJK   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_ic_i;
-//SJK   input 			     spr_bus_ack_ic_i;   
+   input 			     spr_bus_ack_dc_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i;
-   input 			     spr_bus_ack_dmmu_i;   
+   input 			     spr_bus_ack_dmmu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i;
-   input 			     spr_bus_ack_immu_i;   
+   input 			     spr_bus_ack_immu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_mac_i;
-   input 			     spr_bus_ack_mac_i;   
+   input 			     spr_bus_ack_mac_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pmu_i;
-   input 			     spr_bus_ack_pmu_i;   
+   input 			     spr_bus_ack_pmu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pcu_i;
-   input 			     spr_bus_ack_pcu_i;   
+   input 			     spr_bus_ack_pcu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i;
-   input 			     spr_bus_ack_fpu_i;   
+   input 			     spr_bus_ack_fpu_i;
    output [15:0] 		     spr_sr_o;
 
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_fetch_to_decode;
    wire [`OR1K_INSN_WIDTH-1:0] 	     insn_fetch_to_decode;
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_decode_to_execute;
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_execute_to_ctrl;
-   
+
    /*AUTOWIRE*/
    // Beginning of automatic wires (for undeclared instantiated-module outputs)
+   wire [OPTION_OPERAND_WIDTH-1:0] adder_result_o;// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire [OPTION_OPERAND_WIDTH-1:0] alu_result_o;// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			alu_valid_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_alu_result_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
@@ -350,7 +349,7 @@ module mor1kx_cpu_cappuccino
        .FEATURE_CUST7(FEATURE_CUST7),
        .FEATURE_CUST8(FEATURE_CUST8)
        )
-     mor1kx_decode 
+     mor1kx_decode
      (/*AUTOINST*/
       // Outputs
       .opc_alu_o			(opc_alu_o[`OR1K_ALU_OPC_WIDTH-1:0]),
@@ -383,9 +382,9 @@ module mor1kx_cpu_cappuccino
       .decode_insn_i			(insn_fetch_to_decode),	 // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
       .decode_except_ibus_err_i		(decode_except_ibus_err_o)); // Templated
-   
+
    /* mor1kx_execute_alu AUTO_TEMPLATE (
-    .padv_i				(padv_execute_o),    
+    .padv_i				(padv_execute_o),
     .opc_alu_i			        (opc_alu_o),
     .opc_alu_secondary_i		(opc_alu_secondary_o),
     .imm16_i				(imm16_o),
@@ -420,13 +419,14 @@ module mor1kx_cpu_cappuccino
        .FEATURE_CUST8(FEATURE_CUST8),
        .OPTION_SHIFTER(OPTION_SHIFTER)
        )
-     mor1kx_execute_alu 
+     mor1kx_execute_alu
      (/*AUTOINST*/
       // Outputs
       .flag_set_o			(flag_set_o),
       .flag_clear_o			(flag_clear_o),
       .alu_result_o			(alu_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .alu_valid_o			(alu_valid_o),
+      .adder_result_o			(adder_result_o[OPTION_OPERAND_WIDTH-1:0]),
       // Inputs
       .clk				(clk),
       .rst				(rst),
@@ -444,11 +444,11 @@ module mor1kx_cpu_cappuccino
       .rfb_i				(rfb_o),		 // Templated
       .flag_i				(ctrl_flag_o));		 // Templated
 
-   
+
    /* mor1kx_lsu_cappuccino AUTO_TEMPLATE (
     .padv_execute_i			(padv_execute_o),
     .decode_valid_i			(decode_valid_o),
-    .alu_result_i			(alu_result_o),
+    .lsu_adr_i				(adder_result_o),
     .rfb_i				(rfb_o),
     .opc_insn_i			        (opc_insn_o),
     .op_lsu_load_i			(op_lsu_load_o),
@@ -459,7 +459,7 @@ module mor1kx_cpu_cappuccino
      #(
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
        )
-     mor1kx_lsu_cappuccino 
+     mor1kx_lsu_cappuccino
      (/*AUTOINST*/
       // Outputs
       .lsu_result_o			(lsu_result_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -476,7 +476,7 @@ module mor1kx_cpu_cappuccino
       .rst				(rst),
       .padv_execute_i			(padv_execute_o),	 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
-      .alu_result_i			(alu_result_o),		 // Templated
+      .lsu_adr_i			(adder_result_o),	 // Templated
       .rfb_i				(rfb_o),		 // Templated
       .opc_insn_i			(opc_insn_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
@@ -486,12 +486,12 @@ module mor1kx_cpu_cappuccino
       .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
       .pipeline_flush_i			(pipeline_flush_o));	 // Templated
 
-   
+
    /* mor1kx_wb_mux_cappuccino AUTO_TEMPLATE (
     .alu_result_i			(alu_result_o),
     .lsu_result_i			(lsu_result_o),
     .spr_i				(mfspr_dat_o),
-    .op_jal_i				(op_jal_o),    
+    .op_jal_i				(op_jal_o),
     .op_lsu_load_i			(op_lsu_load_o),
     .pc_execute_i			(pc_decode_to_execute),
     .op_mfspr_i			        (op_mfspr_o),
@@ -500,7 +500,7 @@ module mor1kx_cpu_cappuccino
      #(
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
        )
-     mor1kx_wb_mux_cappuccino 
+     mor1kx_wb_mux_cappuccino
      (/*AUTOINST*/
       // Outputs
       .rf_result_o			(rf_result_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -514,8 +514,8 @@ module mor1kx_cpu_cappuccino
       .op_jal_i				(op_jal_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
       .op_mfspr_i			(op_mfspr_o));		 // Templated
-   
-   
+
+
    /* mor1kx_rf_cappuccino AUTO_TEMPLATE (
     .padv_execute_i			(padv_execute_o),
     .padv_decode_i			(padv_decode_o),
@@ -533,7 +533,7 @@ module mor1kx_cpu_cappuccino
        .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
        .OPTION_RF_WORDS(OPTION_RF_WORDS)
        )
-     mor1kx_rf_cappuccino 
+     mor1kx_rf_cappuccino
      (/*AUTOINST*/
       // Outputs
       .rfa_o				(rfa_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -551,7 +551,7 @@ module mor1kx_cpu_cappuccino
       .result_i				(rf_result_o),		 // Templated
       .write_mask_i			(1'b0));			 // Templated
 
-   	 
+
    /* Debug signals required for the debug monitor */
    function [OPTION_OPERAND_WIDTH-1:0] get_gpr;
       // verilator public
@@ -560,8 +560,8 @@ module mor1kx_cpu_cappuccino
 	 get_gpr = mor1kx_rf_cappuccino.rfa.ram[gpr_num];
       end
    endfunction //
-   
-   
+
+
    function set_gpr;
       // verilator public
       input [4:0] gpr_num;
@@ -572,9 +572,9 @@ module mor1kx_cpu_cappuccino
       end
    endfunction
 
-   
+
    /* mor1kx_execute_ctrl_cappuccino AUTO_TEMPLATE (
-    .padv_i				(padv_execute_o),    
+    .padv_i				(padv_execute_o),
     .opc_insn_i 			(opc_insn_o),
     .execute_except_ibus_err_i		(execute_except_ibus_err_o),
     .execute_except_illegal_i		(execute_except_illegal_o),
@@ -603,7 +603,7 @@ module mor1kx_cpu_cappuccino
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
        .OPTION_RESET_PC(OPTION_RESET_PC)
        )
-     mor1kx_execute_ctrl_cappuccino 
+     mor1kx_execute_ctrl_cappuccino
      (/*AUTOINST*/
       // Outputs
       .execute_rf_we_o			(execute_rf_we_o),
@@ -683,15 +683,15 @@ module mor1kx_cpu_cappuccino
       .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o), // Templated
       .execute_except_ibus_align_i	(execute_except_ibus_align_o), // Templated
       .ctrl_except_ibus_align_i		(ctrl_except_ibus_align_o)); // Templated
-   
 
-   /* mor1kx_ctrl_cappuccino AUTO_TEMPLATE (   
+
+   /* mor1kx_ctrl_cappuccino AUTO_TEMPLATE (
     .ctrl_alu_result_i		(ctrl_alu_result_o),
     .ctrl_rfb_i			(ctrl_rfb_o),
     .ctrl_flag_set_i		(ctrl_flag_set_o),
     .ctrl_flag_clear_i		(ctrl_flag_clear_o),
     .pc_ctrl_i			(pc_execute_to_ctrl),
-    .pc_execute_i		(pc_decode_to_execute),    
+    .pc_execute_i		(pc_decode_to_execute),
     .ctrl_opc_insn_i		(ctrl_opc_insn_o),
     .ctrl_branch_occur_i	(ctrl_branch_occur_o),
     .ctrl_branch_target_i	(ctrl_branch_target_o),
@@ -706,7 +706,7 @@ module mor1kx_cpu_cappuccino
     .decode_valid_i		(decode_valid_o),
     .execute_valid_i		(execute_valid_o),
     .execute_waiting_i		(execute_waiting_o),
-    .execute_opc_insn_i		(opc_insn_o),    
+    .execute_opc_insn_i		(opc_insn_o),
     .fetch_branch_taken_i	(fetch_branch_taken_o),
     ) */
    mor1kx_ctrl_cappuccino
@@ -734,7 +734,7 @@ module mor1kx_cpu_cappuccino
        .FEATURE_RANGE(FEATURE_RANGE),
        .FEATURE_DSX(FEATURE_DSX)
        )
-     mor1kx_ctrl_cappuccino 
+     mor1kx_ctrl_cappuccino
      (/*AUTOINST*/
       // Outputs
       .mfspr_dat_o			(mfspr_dat_o[OPTION_OPERAND_WIDTH-1:0]),

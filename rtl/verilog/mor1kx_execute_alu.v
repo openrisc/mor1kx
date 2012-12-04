@@ -75,7 +75,8 @@ module mor1kx_execute_alu
     output 			      flag_clear_o,
 
     output [OPTION_OPERAND_WIDTH-1:0] alu_result_o,
-    output 			      alu_valid_o
+    output 			      alu_valid_o,
+    output [OPTION_OPERAND_WIDTH-1:0] adder_result_o
     );
 
    reg                                   alu_valid; /* combinatorial */
@@ -180,6 +181,8 @@ module mor1kx_execute_alu
    assign mul_op_signed = (opc_insn_i==`OR1K_OPCODE_ALU &&
                            opc_alu_i == `OR1K_ALU_OPC_MUL) ||
                           opc_insn_i == `OR1K_OPCODE_MULI;
+
+   assign adder_result_o = adder_result;
 
    generate
       /* verilator lint_off WIDTH */
