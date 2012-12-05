@@ -36,7 +36,7 @@ module mor1kx_lsu_cappuccino
     input 			      padv_execute_i,
     input 			      decode_valid_i,
     // calculated address from ALU
-    input [OPTION_OPERAND_WIDTH-1:0]  alu_result_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  lsu_adr_i,
 
     // register file B in (store operand)
     input [OPTION_OPERAND_WIDTH-1:0]  rfb_i,
@@ -91,7 +91,7 @@ module mor1kx_lsu_cappuccino
 
    reg 				     except_dbus;
 
-   assign dbus_adr_o = decode_valid_i ? alu_result_i : dbus_adr_r;
+   assign dbus_adr_o = decode_valid_i ? lsu_adr_i : dbus_adr_r;
    assign dbus_dat_o = (opc_insn_i[1:0]==2'b10) ?        // l.sb
 		       {rfb_i[7:0],rfb_i[7:0],rfb_i[7:0],rfb_i[7:0]} :
 		       (opc_insn_i[1:0]==2'b11) ?        // l.sh
@@ -155,7 +155,7 @@ module mor1kx_lsu_cappuccino
      if (rst)
        dbus_adr_r <= 0;
      else if (decode_valid_i & (op_lsu_load_i | op_lsu_store_i))
-       dbus_adr_r <= alu_result_i;
+       dbus_adr_r <= lsu_adr_i;
 
    // Big endian bus mapping
    always @*
