@@ -108,7 +108,7 @@ module mor1kx_ctrl_cappuccino
     input 			      except_illegal_i,
     input 			      except_syscall_i,
     input 			      except_dbus_i,
-				      except_trap_i,
+    input 			      except_trap_i,
     input 			      except_align_i,
 
     // Inputs from two units that can stall proceedings
