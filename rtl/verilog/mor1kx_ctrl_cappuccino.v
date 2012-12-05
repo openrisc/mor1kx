@@ -451,10 +451,15 @@ module mor1kx_ctrl_cappuccino
      else if (exception_r & fetch_branch_taken_i)
        exception_taken <= 1;
 
+   wire exec_branch_insn = execute_opc_insn_i <  `OR1K_OPCODE_NOP  |
+			   execute_opc_insn_i == `OR1K_OPCODE_JR   |
+			   execute_opc_insn_i == `OR1K_OPCODE_JALR |
+			   execute_opc_insn_i == `OR1K_OPCODE_JAL;
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        last_branch_insn_pc <= 0;
-     else if (padv_execute_o & ctrl_branch_occur_i)
+     else if (padv_execute_o & exec_branch_insn)
        last_branch_insn_pc <= pc_execute_i;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -462,6 +467,8 @@ module mor1kx_ctrl_cappuccino
        last_branch_target_pc <= 0;
      else if (padv_execute_o & ctrl_branch_occur_i)
        last_branch_target_pc <= ctrl_branch_target_i;
+     else if (padv_execute_o & exec_branch_insn)
+       last_branch_target_pc <= pc_execute_i + 8; // TODO: use pc_fetch_i
 
    // Used to gate execute stage's advance signal in the case where a LSU op has
    // finished before the next instruction has been fetched. Typically this
@@ -591,14 +598,10 @@ module mor1kx_ctrl_cappuccino
 	  else if (except_syscall_i | except_ticktimer | except_pic)
 	    // TODO - eliminate this adder by getting PC from pipeline stages
 	    spr_epcr <= ctrl_delay_slot ? last_branch_target_pc :
-			/*
-			execute_delay_slot ? last_branch_insn_pc :
-			 */
+			execute_delay_slot ? pc_ctrl_i:
 			pc_ctrl_i + 4;
-	  else if (execute_stage_exceptions | decode_stage_exceptions)
-	    spr_epcr <= ctrl_delay_slot ? spr_ppc : pc_ctrl_i;
 	  else
-	    spr_epcr <= execute_delay_slot ? spr_ppc : pc_ctrl_i;
+	    spr_epcr <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i;
        end
      else if (spr_we && spr_addr==`OR1K_SPR_EPCR0_ADDR)
        spr_epcr <= spr_write_dat;
@@ -636,26 +639,8 @@ module mor1kx_ctrl_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        execute_delay_slot <= 0;
-   // Considerations:
-   // Have to wait until it looks like the exception is starting to progress
-   // through the pipeline.
-   // A bit tricky, because in a delay slot, and we're a LSU op, we must
-   // wait, and it's likely the instruction fetch for the branch target we
-   // won't be going to just yet will pulse and we have to make sure don't
-   // drop this signal until the LSU op as finished, and the fetch has been
-   // done.
-   // In the case of a l.trap or illegal instruction in delay slot, it will
-   // propegate through the execute stage in a single cycle, so in that case
-   // we are
-   // can proceed.
-     else if (execute_delay_slot & padv_execute_o)
-       execute_delay_slot <= 0;
-   // Register if a branch occurred when we're about to clock through
-   // the next inputs to the execute stage.
-     else if (padv_decode_o)
-       execute_delay_slot <= ctrl_branch_occur_i & !ctrl_delay_slot &
-			     !(doing_rfe | op_rfe);
-
+     else if (padv_execute_o)
+       execute_delay_slot <= exec_branch_insn;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -799,7 +784,7 @@ module mor1kx_ctrl_cappuccino
 			     !op_mtspr & !doing_rfe &
 			     // Stops back-to-back branch addresses going to
 			     // fetch stage
-			     !ctrl_branch_occur_i &
+			     !exec_branch_insn &
 			     // Stops issues with PC when branching
 			     !execute_delay_slot;
       end
@@ -844,7 +829,7 @@ module mor1kx_ctrl_cappuccino
 				   !op_mtspr & !doing_rfe &
 				   // Stops back-to-back branch addresses to
 				   // fetch  stage.
-				   !ctrl_branch_occur_i &
+				   !exec_branch_insn &
 				   // Stops issues with PC when branching
 				   !execute_delay_slot;
 
