@@ -261,6 +261,11 @@ module mor1kx_cpu_espresso
    /* mor1kx_decode AUTO_TEMPLATE (
     .padv_i				(padv_decode_o),
     .decode_insn_i			(insn_fetch_to_decode),
+    .flag_i				(spr_sr_o[`OR1K_SPR_SR_F]),
+    .flag_set_i				(flag_set_o),
+    .flag_clear_i			(flag_clear_o),
+    .decode_branch_o			(),
+    .decode_branch_target_o		(),
     .decode_except_ibus_err_i		(decode_except_ibus_err_o),
     .pipeline_flush_i			(pipeline_flush_o),
     .pc_execute_o                       (),
@@ -311,6 +316,8 @@ module mor1kx_cpu_espresso
       .op_lsu_load_o			(op_lsu_load_o),
       .op_lsu_store_o			(op_lsu_store_o),
       .op_mfspr_o			(op_mfspr_o),
+      .decode_branch_o			(),			 // Templated
+      .decode_branch_target_o		(),			 // Templated
       .execute_except_ibus_err_o	(execute_except_ibus_err_o),
       .execute_except_illegal_o		(execute_except_illegal_o),
       .execute_except_syscall_o		(execute_except_syscall_o),
@@ -324,6 +331,9 @@ module mor1kx_cpu_espresso
       .padv_i				(padv_decode_o),	 // Templated
       .pc_decode_i			(),			 // Templated
       .decode_insn_i			(insn_fetch_to_decode),	 // Templated
+      .flag_i				(spr_sr_o[`OR1K_SPR_SR_F]), // Templated
+      .flag_set_i			(flag_set_o),		 // Templated
+      .flag_clear_i			(flag_clear_o),		 // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
       .decode_except_ibus_err_i		(decode_except_ibus_err_o)); // Templated
    
