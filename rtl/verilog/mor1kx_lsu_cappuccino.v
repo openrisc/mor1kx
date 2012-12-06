@@ -87,7 +87,6 @@ module mor1kx_lsu_cappuccino
 
 
    wire 			     except_align;
-   reg 				     except_align_r;
 
    reg 				     except_dbus;
 
@@ -105,7 +104,7 @@ module mor1kx_lsu_cappuccino
    assign align_err_short = dbus_adr_o[0];
 
 
-   assign lsu_valid_o = dbus_ack_i | dbus_err_i | access_done;
+   assign lsu_valid_o = dbus_ack_i | access_done;
    assign lsu_except_dbus_o = dbus_err_i | except_dbus;
 
    assign load_align_err = ((opc_insn_i==`OR1K_OPCODE_LWZ |
@@ -119,28 +118,20 @@ module mor1kx_lsu_cappuccino
    assign except_align = (op_lsu_load_i & load_align_err) |
 			 (op_lsu_store_i & store_align_err) ;
 
-   assign lsu_except_align_o = except_align_r;
+   assign lsu_except_align_o = except_align;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        access_done <= 0;
      else if (padv_execute_i)
        access_done <= 0;
-     else if (dbus_ack_i | dbus_err_i | lsu_except_align_o)
+     else if (dbus_ack_i)
        access_done <= 1;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       except_align_r <= 0;
-     else if (padv_execute_i)
-       except_align_r <= 0;
-     else
-       except_align_r <= except_align;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
        except_dbus <= 0;
-     else if (padv_execute_i)
+     else if (padv_execute_i | pipeline_flush_i)
        except_dbus <= 0;
      else if (dbus_err_i)
        except_dbus <= 1;

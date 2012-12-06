@@ -150,12 +150,14 @@ module mor1kx_execute_ctrl_cappuccino
 	ctrl_except_dbus_o <= 0;
 	ctrl_except_align_o <= 0;
      end
-     else if (padv_i) begin
-	ctrl_except_ibus_err_o <= execute_except_ibus_err_i;
-	ctrl_except_ibus_align_o <= execute_except_ibus_align_o;
-	ctrl_except_illegal_o <= execute_except_illegal_i;
-	ctrl_except_syscall_o <= execute_except_syscall_i;
-	ctrl_except_trap_o <= execute_except_trap_i;
+     else begin
+	if (padv_i) begin
+	   ctrl_except_ibus_err_o <= execute_except_ibus_err_i;
+	   ctrl_except_ibus_align_o <= execute_except_ibus_align_o;
+	   ctrl_except_illegal_o <= execute_except_illegal_i;
+	   ctrl_except_syscall_o <= execute_except_syscall_i;
+	   ctrl_except_trap_o <= execute_except_trap_i;
+	end
 	ctrl_except_dbus_o <= lsu_except_dbus_i;
 	ctrl_except_align_o <= lsu_except_align_i;
      end

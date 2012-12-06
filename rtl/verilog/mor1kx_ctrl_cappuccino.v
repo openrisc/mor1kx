@@ -224,7 +224,7 @@ module mor1kx_ctrl_cappuccino
 
    wire 			     exception, exception_pending;
 
-   wire 			     execute_stage_exceptions;
+   reg 				     execute_stage_exceptions;
    wire 			     decode_stage_exceptions;
 
    wire 			     exception_re;
@@ -297,9 +297,9 @@ module mor1kx_ctrl_cappuccino
 		       except_dbus_i | except_align_i | except_ticktimer |
 			       except_pic | except_trap_i );
 
-   assign exception = exception_pending & padv_ctrl;
+   assign exception = exception_pending &
+		      (padv_ctrl | execute_stage_exceptions);
 
-   assign execute_stage_exceptions = except_dbus_i | except_align_i;
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
 
    assign exception_re = exception & !exception_r & !exception_taken;
@@ -309,6 +309,9 @@ module mor1kx_ctrl_cappuccino
 
    assign ctrl_branch_except_pc_o = (op_rfe | doing_rfe) ? spr_epcr :
 				    exception_pc_addr;
+
+   always @(posedge clk)
+     execute_stage_exceptions <= except_align_i | except_dbus_i;
 
    always @(posedge clk)
      if (exception & !exception_r)
@@ -514,7 +517,8 @@ module mor1kx_ctrl_cappuccino
 	  if (FEATURE_IMMU!="NONE")
 	    spr_sr[`OR1K_SPR_SR_IME ] <= 1'b0;
           if (FEATURE_DSX!="NONE")
-	    spr_sr[`OR1K_SPR_SR_DSX ] <= ctrl_delay_slot;
+	    spr_sr[`OR1K_SPR_SR_DSX ] <= execute_stage_exceptions ?
+					 execute_delay_slot : ctrl_delay_slot;
        end
      else if (padv_ctrl)
        begin
@@ -600,6 +604,8 @@ module mor1kx_ctrl_cappuccino
 	    spr_epcr <= ctrl_delay_slot ? last_branch_target_pc :
 			execute_delay_slot ? pc_ctrl_i:
 			pc_ctrl_i + 4;
+	  else if (execute_stage_exceptions)
+	    spr_epcr <= execute_delay_slot ? pc_execute_i - 4 : pc_execute_i;
 	  else
 	    spr_epcr <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i;
        end
@@ -965,7 +971,8 @@ module mor1kx_ctrl_cappuccino
 	 /* goes out to the debug interface and comes back 1 cycle later
 	  via du_stall_i */
 	 assign du_stall_o = /* execute stage */
-			     (stepping & padv_ctrl);
+			     (stepping & (padv_ctrl |
+					  execute_stage_exceptions));
 
 	 /* Pulse to indicate we're restarting after a stall */
 	 assign du_restart_from_stall = du_stall_r & !du_stall_i;
@@ -995,8 +1002,8 @@ module mor1kx_ctrl_cappuccino
 	     stepped_into_exception <= 0;
 	   else if (du_restart_from_stall)
 	     stepped_into_exception <= 0;
-	   else if (stepping & padv_ctrl)
-	     stepped_into_exception <= exception;
+	   else if (exception & stepping & (padv_ctrl | execute_stage_exceptions))
+	     stepped_into_exception <= 1;
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
@@ -1027,7 +1034,7 @@ module mor1kx_ctrl_cappuccino
 	   else if ((pstep[0] & fetch_valid_i) |
 		    /* decode is always single cycle */
 		    (pstep[1] & padv_decode_o) |
-		    (pstep[2] & execute_valid_i))
+		    (pstep[2] & (execute_valid_i | execute_stage_exceptions)))
 	     pstep_r <= {pstep_r[2:0],1'b0};
 
 	 assign pstep = pstep_r;
