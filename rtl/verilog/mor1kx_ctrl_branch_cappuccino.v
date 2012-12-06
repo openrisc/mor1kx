@@ -4,7 +4,7 @@
   of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
-  Description: mor1k branch control
+  Description: mor1kx branch control
 
   jump/branch address and opcode input from execute stage
 
