@@ -32,15 +32,19 @@ module mor1kx_ctrl_branch_cappuccino
     input 			      clk,
     input 			      rst,
 
-    // ALU result from execute stage - target of l.bf/l.bnf/l.j/l.jal
-    input [OPTION_OPERAND_WIDTH-1:0]  ex_alu_result_i,
-
     // Operand B from RF for l.jr/l.jalr
     input [OPTION_OPERAND_WIDTH-1:0]  ex_rfb_i,
 
     // Signals indicating jump/branch
-    input 			      op_jbr_i,
     input 			      op_jr_i,
+
+    // Inputs from decode stage
+    input 			      decode_branch_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  decode_branch_target_i,
+
+    input 			      padv_decode_i,
+
+    input 			      pipeline_flush_i,
 
     // Execute stage's instruction opcode in
     input [`OR1K_OPCODE_WIDTH-1:0]    execute_opc_insn_i,
@@ -64,14 +68,25 @@ module mor1kx_ctrl_branch_cappuccino
    wire 			     new_branch;
    wire [OPTION_OPERAND_WIDTH-1:0]    ctrl_branch_target;
 
+   /* Here we move the branch detected in decode stage into execute stage,
+    * to keep it inline with the other branches.
+    * TODO: resolve those in decode stage already to avoid 1 cycle latency */
+   reg imm_branch;
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       imm_branch <= 0;
+     else if (pipeline_flush_i)
+       imm_branch <= 0;
+     else if (padv_decode_i)
+       imm_branch <= decode_branch_i;
+
+   reg [OPTION_OPERAND_WIDTH-1:0] imm_branch_target;
+   always @(posedge clk)
+     imm_branch_target <= decode_branch_target_i;
+
    // Exceptions take precedence
-   assign ctrl_branch_occur_o = (ctrl_branch_exception_i) |
-				// instruction is branch, and flag is right
-				(op_jbr_i &
-				 // is l.j or l.jal
-				 (!(|execute_opc_insn_i[2:1]) |
-				  // is l.bf/bnf and flag is right
-				  (execute_opc_insn_i[2]==ctrl_flag_i))) |
+   assign ctrl_branch_occur_o = ctrl_branch_exception_i |
+				imm_branch |
 				/* Only look at execute_except_ibus_align on the
 				 * first cycle because potentially the branch
 				 * target has changed one cycle later.
@@ -86,9 +101,9 @@ module mor1kx_ctrl_branch_cappuccino
 				 ctrl_branch_target_r;
 
    assign ctrl_branch_target = ctrl_branch_exception_i ?
-				 ctrl_branch_except_pc_i :
-				 op_jbr_i ? ex_alu_result_i :
-				 ex_rfb_i;
+			       ctrl_branch_except_pc_i :
+			       imm_branch ? imm_branch_target :
+			       ex_rfb_i;
 
    always @(posedge clk)
      if (rst)
