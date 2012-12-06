@@ -51,7 +51,9 @@ module mor1kx_decode
     parameter FEATURE_CUST7 = "NONE",
     parameter FEATURE_CUST8 = "NONE",
 
-    parameter REGISTERED_DECODE = "ENABLED"
+    parameter REGISTERED_DECODE = "ENABLED",
+
+    parameter FEATURE_INBUILT_CHECKERS = "ENABLED"
     )
    (
     input 				  clk,
@@ -63,6 +65,11 @@ module mor1kx_decode
     // input from fetch stage
     input [OPTION_OPERAND_WIDTH-1:0] 	  pc_decode_i,
     input [`OR1K_INSN_WIDTH-1:0] 	  decode_insn_i,
+
+    // input from execute stage
+    input 				  flag_i,
+    input 				  flag_set_i,
+    input 				  flag_clear_i,
 
     input 				  pipeline_flush_i,
 
@@ -92,6 +99,10 @@ module mor1kx_decode
     output reg 				  op_lsu_store_o,
 
     output reg 				  op_mfspr_o,
+
+    // branch detection
+    output 				  decode_branch_o,
+    output [OPTION_OPERAND_WIDTH-1:0] 	  decode_branch_target_o,
 
     // exceptions in
     input 				  decode_except_ibus_err_i,
@@ -136,6 +147,8 @@ module mor1kx_decode
    wire 				 op_jr;
    wire 				 op_jal;
    wire 				 op_mfspr;
+
+   wire 				 flag;
 
    // load opcodes are 6'b10_0000 to 6'b10_0110, 0 to 6, so check for 7 and up
    assign op_load = (decode_insn_i[31:30]==2'b10) & !(&decode_insn_i[28:26])&
@@ -228,6 +241,34 @@ module mor1kx_decode
 				`OR1K_SYSTRAPSYNC_OPC_TRAP;
 
    assign pc_execute = pc_decode_i;
+
+   // Flag calculation, we get the flag_set_i and flag_clear_i straight from
+   // execute stage, and we keep track of the value.
+   reg 					 pipeline_flush_r;
+   always @(posedge clk)
+     pipeline_flush_r <= pipeline_flush_i;
+
+   reg 					 flag_r;
+   always @(posedge clk)
+     if (pipeline_flush_r)
+       flag_r <= flag_i;
+     else if (flag_set_i)
+       flag_r <= 1;
+     else if (flag_clear_i)
+       flag_r <= 0;
+
+   assign flag = pipeline_flush_r ? flag_i :
+		 (!flag_clear_i & flag_r) | flag_set_i;
+
+   // Branch detection
+   assign decode_branch_o = (op_jbr &
+			     // l.j/l.jal
+			     (!(|opc_insn[2:1]) |
+			      // l.bf/bnf and flag is right
+			      (opc_insn[2] == flag)));
+
+   assign decode_branch_target_o = pc_decode_i + {{4{immjbr_upper[9]}},
+						  immjbr_upper,imm16,2'b00};
 
    // Illegal instruction decode
    always @*
@@ -543,4 +584,18 @@ module mor1kx_decode
       end
    endgenerate
 
+   // synthesis translate_off
+   generate
+      if (FEATURE_INBUILT_CHECKERS != "NONE") begin
+	 // assert on l.bnf/l.bf and flag is 'x'
+	 always @(posedge clk)
+	    if (padv_i & !rst & !pipeline_flush_i &
+		op_jbr & (|opc_insn[2:1]) & flag === 1'bx) begin
+	       $display("ERROR: flag === 'x' on l.b(n)f");
+	       $finish();
+	    end
+
+      end
+   endgenerate
+   // synthesis translate_on
 endmodule // mor1kx_decode
