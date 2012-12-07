@@ -90,20 +90,18 @@ module mor1kx_rf_cappuccino
      if (rst) begin
 	rfa_r <= 0;
 	rfb_r <= 0;
-	rfd_r <= 0;
      end
      else if (padv_decode_i)
        begin
 	  rfa_r <= rfa_adr_i;
 	  rfb_r <= rfb_adr_i;
-	  rfd_r <= rfd_adr_i;
        end
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        rfd_last <= 0;
      else if (execute_rf_we_i & rf_wb_i)
-       rfd_last <= rfd_r;
+       rfd_last <= rfd_adr_i;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -130,7 +128,7 @@ module mor1kx_rf_cappuccino
       .rdad_i(rfa_adr_i),
       .rden_i(rfa_rden),
       .rdda_o(rfa_ram_o),
-      .wrad_i(rfd_r),
+      .wrad_i(rfd_adr_i),
       .wren_i(rf_wren),
       .wrda_i(result_i)
       );
@@ -148,7 +146,7 @@ module mor1kx_rf_cappuccino
       .rdad_i(rfb_adr_i),
       .rden_i(rfb_rden),
       .rdda_o(rfb_ram_o),
-      .wrad_i(rfd_r),
+      .wrad_i(rfd_adr_i),
       .wren_i(rf_wren),
       .wrda_i(result_i)
       );

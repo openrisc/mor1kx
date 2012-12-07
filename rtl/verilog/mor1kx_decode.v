@@ -83,7 +83,7 @@ module mor1kx_decode
     output reg [9:0] 			  immjbr_upper_o,
 
     // GPR numbers
-    output [OPTION_RF_ADDR_WIDTH-1:0] 	  rfd_adr_o,
+    output reg [OPTION_RF_ADDR_WIDTH-1:0] rfd_adr_o,
     output [OPTION_RF_ADDR_WIDTH-1:0] 	  rfa_adr_o,
     output [OPTION_RF_ADDR_WIDTH-1:0] 	  rfb_adr_o,
 
@@ -204,8 +204,6 @@ module mor1kx_decode
 
    // Register file addresses are not registered here, but rather go
    // straight out to RF so read is done when execute stage is ready
-   assign rfd_adr_o = op_jal ? 9 :
-		      decode_insn_i[`OR1K_RD_SELECT];
    assign rfa_adr_o = decode_insn_i[`OR1K_RA_SELECT];
    assign rfb_adr_o = decode_insn_i[`OR1K_RB_SELECT];
 
@@ -426,9 +424,11 @@ module mor1kx_decode
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst) begin
 	      rf_wb_o <= 0;
+	      rfd_adr_o <= 0;
 	   end
 	   else if (padv_i ) begin
 	      rf_wb_o <= rf_wb;
+	      rfd_adr_o <= op_jal ? 9 : decode_insn_i[`OR1K_RD_SELECT];
 	   end
 
 	 always @(posedge clk `OR_ASYNC_RST)
@@ -550,6 +550,7 @@ module mor1kx_decode
       else begin : combinatorial_decode
 	 always @*
 	   begin
+	      rfd_adr_o = op_jal ? 9 : decode_insn_i[`OR1K_RD_SELECT];
 	      rf_wb_o			= rf_wb;
 
 	      op_jbr_o			= op_jbr;
