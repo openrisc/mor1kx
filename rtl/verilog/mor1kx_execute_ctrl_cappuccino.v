@@ -112,24 +112,6 @@ module mor1kx_execute_ctrl_cappuccino
 	execute_valid_o = execute_valid;
 	execute_waiting_o = !execute_valid;
      end
-   /*
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       execute_valid_o <= 0;
-     else
-       execute_valid_o <= execute_valid & padv_i & !execute_waiting_o;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       execute_waiting_o <= 0;
-     else if (execute_valid)
-       execute_waiting_o <= 0;
-     else
-       execute_waiting_o <= (op_alu_i & !alu_valid_i) |
-			    ((op_lsu_load_i | op_lsu_store_i) &
-			     !lsu_valid_i) & !padv_i;
-    */
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
