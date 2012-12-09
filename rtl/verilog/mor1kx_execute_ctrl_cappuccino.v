@@ -57,6 +57,8 @@ module mor1kx_execute_ctrl_cappuccino
 
     input 				  rf_wb_i,
 
+    input 				  exec_bubble_i,
+
     // Input from control stage for mfspr WE
     input 				  ctrl_mfspr_we_i,
 
@@ -170,10 +172,12 @@ module mor1kx_execute_ctrl_cappuccino
 	ctrl_flag_clear_o <= flag_clear_i;
      end
 
+   // pc_ctrl should not advance when a nop bubble moves from execute to
+   // ctrl/mem stage
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        pc_ctrl_o <= OPTION_RESET_PC;
-     else if (padv_i)
+     else if (padv_i & !exec_bubble_i)
        pc_ctrl_o <= pc_execute_i;
 
    always @(posedge clk `OR_ASYNC_RST)

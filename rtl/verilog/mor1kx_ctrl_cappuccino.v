@@ -119,6 +119,8 @@ module mor1kx_ctrl_cappuccino
 
     input 			      fetch_branch_taken_i,
 
+    input 			      decode_bubble_i,
+
     // External IRQ lines in
     input [31:0] 		      irq_i,
 
@@ -362,7 +364,7 @@ module mor1kx_ctrl_cappuccino
 
    assign wait_mfspr = execute_op_mfspr & !mfspr_delay & !mfspr_done;
 
-   assign padv_fetch_o = !execute_waiting_i & !wait_mfspr & !cpu_stall
+   assign padv_fetch_o = !execute_waiting_i & !wait_mfspr & !cpu_stall & !decode_bubble_i
 			 & (!stepping | (stepping & pstep[0] & !fetch_valid_i));
 
    assign padv_decode_o = fetch_valid_i & !execute_waiting_i &

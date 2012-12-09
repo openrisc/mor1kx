@@ -52,7 +52,7 @@ module mor1kx_decode
     parameter FEATURE_CUST8 = "NONE",
 
     parameter REGISTERED_DECODE = "ENABLED",
-
+    parameter PIPELINE_BUBBLE = "NONE",
     parameter FEATURE_INBUILT_CHECKERS = "ENABLED"
     )
    (
@@ -117,6 +117,9 @@ module mor1kx_decode
     output reg [OPTION_OPERAND_WIDTH-1:0] pc_execute_o,
 
     output reg 				  decode_valid_o,
+
+    output 				  decode_bubble_o,
+    output reg 				  exec_bubble_o,
 
     output reg [`OR1K_OPCODE_WIDTH-1:0]   opc_insn_o
     );
@@ -267,6 +270,41 @@ module mor1kx_decode
 
    assign decode_branch_target_o = pc_decode_i + {{4{immjbr_upper[9]}},
 						  immjbr_upper,imm16,2'b00};
+generate
+/* verilator lint_off WIDTH */
+if (PIPELINE_BUBBLE=="ENABLED") begin : pipeline_bubble
+/* verilator lint_on WIDTH */
+
+   /*
+    * Detect the situation where there is an instruction in execute stage
+    * that will produce it's result in control stage (i.e. load and mfspr),
+    * and an instruction currently in decode stage needing it's result as input.
+    */
+   assign decode_bubble_o = padv_i & ((op_lsu_load_o | op_mfspr_o) &
+				      (rfa_adr_o == rfd_adr_o ||
+				       rfb_adr_o == rfd_adr_o) |
+				      /*
+				       * FIXME: ugly hack to prevent branches
+				       * in exe stage from being stalled by
+				       * load/stores in ctrl/mem stage.
+				       * This is needed since fetch et al
+				       * assumes that branches are stall-free
+				       * operations, so some lecturing to
+				       * teach them that that's not the case.
+				       */
+				      (op_lsu_load_o | op_lsu_store_o) &
+				      (op_jbr | op_jr | op_jal));
+
+end else begin
+   assign decode_bubble_o = 0;
+end
+endgenerate
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       exec_bubble_o <= 0;
+     else if (padv_i)
+       exec_bubble_o <= decode_bubble_o;
 
    // Illegal instruction decode
    always @*
@@ -426,9 +464,13 @@ module mor1kx_decode
 	      rf_wb_o <= 0;
 	      rfd_adr_o <= 0;
 	   end
-	   else if (padv_i ) begin
+	   else if (padv_i) begin
 	      rf_wb_o <= rf_wb;
 	      rfd_adr_o <= op_jal ? 9 : decode_insn_i[`OR1K_RD_SELECT];
+	      if (decode_bubble_o) begin
+		 rf_wb_o <= 0;
+		 rfd_adr_o <= 0;
+	      end
 	   end
 
 	 always @(posedge clk `OR_ASYNC_RST)
@@ -447,13 +489,21 @@ module mor1kx_decode
 	      op_jbr_o <= op_jbr;
 	      op_jr_o <= op_jr;
 	      op_jal_o <= op_jal;
+	      if (decode_bubble_o) begin
+		 op_jbr_o <= 0;
+		 op_jr_o <= 0;
+		 op_jal_o <= 0;
+	      end
 	   end
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
 	     op_alu_o <= 1'b0;
-	   else if (padv_i )
+	   else if (padv_i) begin
 	     op_alu_o <= op_alu;
+	      if (decode_bubble_o)
+		op_alu_o <= 0;
+	   end
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
@@ -466,16 +516,23 @@ module mor1kx_decode
 		op_lsu_load_o <= 0;
 		op_lsu_store_o <= 0;
 	     end
-	   else if (padv_i ) begin
+	   else if (padv_i) begin
        	      op_lsu_load_o <= op_load;
 	      op_lsu_store_o <= op_store;
+	      if (decode_bubble_o) begin
+       		 op_lsu_load_o <= 0;
+		 op_lsu_store_o <= 0;
+	      end
 	   end
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
 	     op_mfspr_o <= 1'b0;
-	   else if (padv_i )
+	   else if (padv_i) begin
 	     op_mfspr_o <= op_mfspr;
+	     if (decode_bubble_o)
+	       op_mfspr_o <= 0;
+	   end
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
@@ -494,9 +551,13 @@ module mor1kx_decode
 	      opc_alu_o <= 0;
 	      opc_alu_secondary_o <= 0;
 	   end
-	   else if (padv_i ) begin
+	   else if (padv_i) begin
 	      opc_alu_o <= opc_alu;
 	      opc_alu_secondary_o <= opc_alu_secondary;
+	      if (decode_bubble_o) begin
+		 opc_alu_o <= 0;
+		 opc_alu_secondary_o <= 0;
+	      end
 	   end
 
 	 always @(posedge clk `OR_ASYNC_RST)
@@ -504,8 +565,11 @@ module mor1kx_decode
 	     opc_insn_o <= `OR1K_OPCODE_NOP;
 	   else if (pipeline_flush_i)
 	     opc_insn_o <= `OR1K_OPCODE_NOP;
-	   else if (padv_i )
-	     opc_insn_o <= opc_insn;
+	   else if (padv_i) begin
+	      opc_insn_o <= opc_insn;
+	      if (decode_bubble_o)
+		opc_insn_o <= `OR1K_OPCODE_NOP;
+	   end
 
 	 // Decode for system call exception
 	 always @(posedge clk `OR_ASYNC_RST)
