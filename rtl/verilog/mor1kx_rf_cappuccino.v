@@ -9,6 +9,7 @@
   Copyright (C) 2012 Authors
 
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
+             Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
 
 ***************************************************************************** */
 
@@ -30,90 +31,118 @@ module mor1kx_rf_cappuccino
 
     input 			      padv_decode_i,
 
-    // GPR numbers from decode stage
-    input [OPTION_RF_ADDR_WIDTH-1:0]  rfd_adr_i,
+    input 			      decode_valid_i,
+
+    // GPR numbers
     input [OPTION_RF_ADDR_WIDTH-1:0]  rfa_adr_i,
     input [OPTION_RF_ADDR_WIDTH-1:0]  rfb_adr_i,
 
-    // Decode stage indicating writeback expected
-    input 			      rf_wb_i,
-    // Execute stage asserting write back
-    input 			      execute_rf_we_i,
+    input [OPTION_RF_ADDR_WIDTH-1:0]  exec_rfd_adr_i,
+    input [OPTION_RF_ADDR_WIDTH-1:0]  ctrl_rfd_adr_i,
+    input [OPTION_RF_ADDR_WIDTH-1:0]  wb_rfd_adr_i,
+
+    // Write back signal indications
+    input 			      exec_rf_wb_i,
+    input 			      ctrl_rf_wb_i,
+    input 			      wb_rf_wb_i,
 
     input [OPTION_OPERAND_WIDTH-1:0]  result_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_alu_result_i,
 
-    input 			      write_mask_i,
+    input 			      pipeline_flush_i,
 
     output [OPTION_OPERAND_WIDTH-1:0] rfa_o,
     output [OPTION_OPERAND_WIDTH-1:0] rfb_o
     );
 
-   wire [OPTION_OPERAND_WIDTH-1:0]   rfa_o_mux;
-   wire [OPTION_OPERAND_WIDTH-1:0]   rfb_o_mux;
+   wire [OPTION_OPERAND_WIDTH-1:0]    rfa_ram_o;
+   wire [OPTION_OPERAND_WIDTH-1:0]    rfb_ram_o;
 
-
-   wire [OPTION_OPERAND_WIDTH-1:0]   rfa_ram_o;
-   wire [OPTION_OPERAND_WIDTH-1:0]   rfb_ram_o;
-
-   reg [OPTION_OPERAND_WIDTH-1:0]    result_last;
-   reg [OPTION_RF_ADDR_WIDTH-1:0]      rfd_last;
-   reg [OPTION_RF_ADDR_WIDTH-1:0]      rfd_r;
-   reg [OPTION_RF_ADDR_WIDTH-1:0]      rfa_r;
-   reg [OPTION_RF_ADDR_WIDTH-1:0]      rfb_r;
-
-   wire 			      rfa_o_use_last;
-   wire 			      rfb_o_use_last;
-
-   reg 				      padv_decode_r;
+   reg [OPTION_OPERAND_WIDTH-1:0]     wb_hazard_result;
 
    wire 			      rfa_rden;
    wire 			      rfb_rden;
 
    wire 			      rf_wren;
 
-   // Avoid read-write
-   // Use when this instruction actually will write to its destination
-   // register.
-   assign rfa_o_use_last = (rfd_last == rfa_r);
-   assign rfb_o_use_last = (rfd_last == rfb_r);
+   reg 				      flushing;
 
-   assign rfa_o = rfa_o_use_last ? result_last : rfa_ram_o;
+   // Keep track of that the flush signal, this is needed to not wrongly assert
+   // exec_hazard after an exception (or rfe) has happened.
+   // What happens in that case is that the instruction in execute stage is
+   // invalid until the next padv_decode, so it's exec_rfd_adr can not be used
+   // to evaluate the exec_hazard.
+   always @(posedge clk)
+     if (pipeline_flush_i)
+       flushing <= 1;
+     else if (padv_decode_i)
+       flushing <= 0;
 
-   assign rfb_o = rfb_o_use_last ? result_last : rfb_ram_o;
+   // Detect hazards
+   reg exec_hazard_a;
+   reg exec_hazard_b;
+   always @(posedge clk)
+     if (pipeline_flush_i) begin
+	exec_hazard_a <= 0;
+	exec_hazard_b <= 0;
+     end else if (padv_decode_i & !flushing) begin
+	exec_hazard_a <= exec_rf_wb_i & (exec_rfd_adr_i == rfa_adr_i);
+	exec_hazard_b <= exec_rf_wb_i & (exec_rfd_adr_i == rfb_adr_i);
+     end
+
+   reg [OPTION_OPERAND_WIDTH-1:0] exec_hazard_result_r;
+   always @(posedge clk)
+     if (decode_valid_i)
+       exec_hazard_result_r <= ctrl_alu_result_i;
+
+   wire [OPTION_OPERAND_WIDTH-1:0] exec_hazard_result;
+   assign exec_hazard_result = decode_valid_i ? ctrl_alu_result_i :
+			       exec_hazard_result_r;
+
+   reg ctrl_hazard_a;
+   reg ctrl_hazard_b;
+   always @(posedge clk)
+      if (padv_decode_i) begin
+	 ctrl_hazard_a <= ctrl_rf_wb_i & (ctrl_rfd_adr_i == rfa_adr_i);
+	 ctrl_hazard_b <= ctrl_rf_wb_i & (ctrl_rfd_adr_i == rfb_adr_i);
+     end
+
+   reg [OPTION_OPERAND_WIDTH-1:0] ctrl_hazard_result_r;
+   always @(posedge clk)
+     if (decode_valid_i)
+       ctrl_hazard_result_r <= result_i;
+
+   wire [OPTION_OPERAND_WIDTH-1:0] ctrl_hazard_result;
+   assign ctrl_hazard_result = decode_valid_i ? result_i : ctrl_hazard_result_r;
+
+   reg wb_hazard_a;
+   reg wb_hazard_b;
+   always @(posedge clk)
+     if (padv_decode_i) begin
+	wb_hazard_a <= wb_rf_wb_i & (wb_rfd_adr_i == rfa_adr_i);
+	wb_hazard_b <= wb_rf_wb_i & (wb_rfd_adr_i == rfb_adr_i);
+     end
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       wb_hazard_result <= 0;
+     else if (padv_decode_i)
+       wb_hazard_result <= result_i;
+
+   assign rfa_o = exec_hazard_a ? exec_hazard_result :
+		  ctrl_hazard_a ? ctrl_hazard_result :
+		  wb_hazard_a ? wb_hazard_result :
+		  rfa_ram_o;
+
+   assign rfb_o = exec_hazard_b ? exec_hazard_result :
+		  ctrl_hazard_b ? ctrl_hazard_result :
+		  wb_hazard_b ? wb_hazard_result :
+		  rfb_ram_o;
+
 
    assign rfa_rden = padv_decode_i;
    assign rfb_rden = padv_decode_i;
-
-   assign rf_wren = !write_mask_i & execute_rf_we_i;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	rfa_r <= 0;
-	rfb_r <= 0;
-     end
-     else if (padv_decode_i)
-       begin
-	  rfa_r <= rfa_adr_i;
-	  rfb_r <= rfb_adr_i;
-       end
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       rfd_last <= 0;
-     else if (execute_rf_we_i & rf_wb_i)
-       rfd_last <= rfd_adr_i;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       result_last <= 0;
-     else if (execute_rf_we_i & rf_wb_i)
-       result_last <= result_i;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       padv_decode_r <= 0;
-     else
-       padv_decode_r <= padv_decode_i;
+   assign rf_wren =  wb_rf_wb_i;
 
    mor1kx_rf_ram
      #(
@@ -128,7 +157,7 @@ module mor1kx_rf_cappuccino
       .rdad_i(rfa_adr_i),
       .rden_i(rfa_rden),
       .rdda_o(rfa_ram_o),
-      .wrad_i(rfd_adr_i),
+      .wrad_i(wb_rfd_adr_i),
       .wren_i(rf_wren),
       .wrda_i(result_i)
       );
@@ -146,7 +175,7 @@ module mor1kx_rf_cappuccino
       .rdad_i(rfb_adr_i),
       .rden_i(rfb_rden),
       .rdda_o(rfb_ram_o),
-      .wrad_i(rfd_adr_i),
+      .wrad_i(wb_rfd_adr_i),
       .wren_i(rf_wren),
       .wrda_i(result_i)
       );

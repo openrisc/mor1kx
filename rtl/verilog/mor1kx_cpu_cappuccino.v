@@ -533,13 +533,18 @@ module mor1kx_cpu_cappuccino
    /* mor1kx_rf_cappuccino AUTO_TEMPLATE (
     .padv_execute_i			(padv_execute_o),
     .padv_decode_i			(padv_decode_o),
-    .rfd_adr_i  			(rfd_adr_o),
+    .decode_valid_i			(decode_valid_o),
     .rfa_adr_i  			(rfa_adr_o),
     .rfb_adr_i  			(rfb_adr_o),
-    .execute_rf_we_i			(execute_rf_we_o),
+    .exec_rfd_adr_i			(0),
+    .ctrl_rfd_adr_i			(0),
+    .wb_rfd_adr_i  			(rfd_adr_o),
+    .exec_rf_wb_i			(0),
+    .ctrl_rf_wb_i			(0),
+    .wb_rf_wb_i				(execute_rf_we_o),
     .result_i				(rf_result_o),
-    .write_mask_i			(1'b0),
-    .rf_wb_i				(rf_wb_o),
+    .ctrl_alu_result_i			(ctrl_alu_result_o),
+    .pipeline_flush_i			(pipeline_flush_o),
     ); */
    mor1kx_rf_cappuccino
      #(
@@ -557,13 +562,18 @@ module mor1kx_cpu_cappuccino
       .rst				(rst),
       .padv_execute_i			(padv_execute_o),	 // Templated
       .padv_decode_i			(padv_decode_o),	 // Templated
-      .rfd_adr_i			(rfd_adr_o),		 // Templated
+      .decode_valid_i			(decode_valid_o),	 // Templated
       .rfa_adr_i			(rfa_adr_o),		 // Templated
       .rfb_adr_i			(rfb_adr_o),		 // Templated
-      .rf_wb_i				(rf_wb_o),		 // Templated
-      .execute_rf_we_i			(execute_rf_we_o),	 // Templated
+      .exec_rfd_adr_i			(0),			 // Templated
+      .ctrl_rfd_adr_i			(0),			 // Templated
+      .wb_rfd_adr_i			(rfd_adr_o),		 // Templated
+      .exec_rf_wb_i			(0),			 // Templated
+      .ctrl_rf_wb_i			(0),			 // Templated
+      .wb_rf_wb_i			(execute_rf_we_o),	 // Templated
       .result_i				(rf_result_o),		 // Templated
-      .write_mask_i			(1'b0));			 // Templated
+      .ctrl_alu_result_i		(ctrl_alu_result_o),	 // Templated
+      .pipeline_flush_i			(pipeline_flush_o));	 // Templated
 
 
    /* Debug signals required for the debug monitor */
@@ -571,7 +581,18 @@ module mor1kx_cpu_cappuccino
       // verilator public
       input [4:0] 		   gpr_num;
       begin
-	 get_gpr = mor1kx_rf_cappuccino.rfa.ram[gpr_num];
+	 // TODO: handle load ops
+	 if ((mor1kx_rf_cappuccino.exec_rfd_adr_i == gpr_num) &
+	     mor1kx_rf_cappuccino.exec_rf_wb_i)
+	   get_gpr = alu_result_o;
+	 else if ((mor1kx_rf_cappuccino.ctrl_rfd_adr_i == gpr_num) &
+		  mor1kx_rf_cappuccino.ctrl_rf_wb_i)
+	   get_gpr = ctrl_alu_result_o;
+	 else if ((mor1kx_rf_cappuccino.wb_rfd_adr_i == gpr_num) &
+		  mor1kx_rf_cappuccino.wb_rf_wb_i)
+	   get_gpr = mor1kx_rf_cappuccino.result_i;
+	 else
+	   get_gpr = mor1kx_rf_cappuccino.rfa.ram[gpr_num];
       end
    endfunction //
 
