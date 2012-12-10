@@ -144,6 +144,7 @@ module mor1kx_ctrl_cappuccino
     output 			      padv_fetch_o,
     output 			      padv_decode_o,
     output 			      padv_execute_o,
+    output 			      padv_ctrl_o,
 
     // Debug bus
     input [15:0] 		      du_addr_i,
@@ -382,6 +383,8 @@ module mor1kx_ctrl_cappuccino
 			   // Not exceptions occurring
 			   !decode_execute_halt & !exception_re & !op_rfe
 			   & !cpu_stall & (!stepping | (stepping & pstep[2]));
+
+   assign padv_ctrl_o = padv_ctrl;
 
    assign spr_addr = du_access ? du_addr_i : ctrl_alu_result_i[15:0];
    assign ctrl_mfspr_we_o = mfspr_delay;

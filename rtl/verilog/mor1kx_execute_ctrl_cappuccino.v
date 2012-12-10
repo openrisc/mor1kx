@@ -27,6 +27,7 @@ module mor1kx_execute_ctrl_cappuccino
     input 				  rst,
 
     input 				  padv_i,
+    input 				  padv_ctrl_i,
 
     // insn opcode, indicating what's going on
     input [`OR1K_OPCODE_WIDTH-1:0] 	  opc_insn_i,
@@ -157,8 +158,6 @@ module mor1kx_execute_ctrl_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        ctrl_rfb_o <= 0;
-     else if (pipeline_flush_i)
-       ctrl_rfb_o <= 0;
      else if (padv_i)
        ctrl_rfb_o <= rfb_i;
 
@@ -180,10 +179,11 @@ module mor1kx_execute_ctrl_cappuccino
      else if (padv_i & !exec_bubble_i)
        pc_ctrl_o <= pc_execute_i;
 
+   wire op_rfe = ctrl_opc_insn_o==`OR1K_OPCODE_RFE;
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        ctrl_opc_insn_o <= `OR1K_OPCODE_NOP;
-     else if (pipeline_flush_i)
+     else if (padv_ctrl_i & op_rfe)
        ctrl_opc_insn_o <= `OR1K_OPCODE_NOP;
      else if (padv_i)
        ctrl_opc_insn_o <= opc_insn_i;

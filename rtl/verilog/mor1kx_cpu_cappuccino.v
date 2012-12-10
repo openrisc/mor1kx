@@ -209,6 +209,7 @@ module mor1kx_cpu_cappuccino
    wire [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_secondary_o;// From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_OPCODE_WIDTH-1:0] opc_insn_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			padv_ctrl_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			padv_decode_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			padv_execute_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			padv_fetch_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
@@ -610,6 +611,7 @@ module mor1kx_cpu_cappuccino
 
    /* mor1kx_execute_ctrl_cappuccino AUTO_TEMPLATE (
     .padv_i				(padv_execute_o),
+    .padv_ctrl_i			(padv_ctrl_o),
     .opc_insn_i 			(opc_insn_o),
     .execute_except_ibus_err_i		(execute_except_ibus_err_o),
     .execute_except_illegal_i		(execute_except_illegal_o),
@@ -663,6 +665,7 @@ module mor1kx_cpu_cappuccino
       .clk				(clk),
       .rst				(rst),
       .padv_i				(padv_execute_o),	 // Templated
+      .padv_ctrl_i			(padv_ctrl_o),		 // Templated
       .opc_insn_i			(opc_insn_o),		 // Templated
       .execute_except_ibus_err_i	(execute_except_ibus_err_o), // Templated
       .execute_except_illegal_i		(execute_except_illegal_o), // Templated
@@ -788,6 +791,7 @@ module mor1kx_cpu_cappuccino
       .padv_fetch_o			(padv_fetch_o),
       .padv_decode_o			(padv_decode_o),
       .padv_execute_o			(padv_execute_o),
+      .padv_ctrl_o			(padv_ctrl_o),
       .du_dat_o				(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
       .du_ack_o				(du_ack_o),
       .du_stall_o			(du_stall_o),
