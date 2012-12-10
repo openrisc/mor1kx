@@ -520,14 +520,15 @@ module mor1kx_cpu_espresso
    endfunction //
    
    
-   function set_gpr;
+   task set_gpr;
       // verilator public
       input [4:0] gpr_num;
       input [OPTION_OPERAND_WIDTH-1:0] gpr_value;
       begin
 	 mor1kx_rf_espresso.rfa.ram[gpr_num] = gpr_value;
+	 mor1kx_rf_espresso.rfb.ram[gpr_num] = gpr_value;
       end
-   endfunction
+   endtask
 
    /* mor1kx_ctrl_espresso AUTO_TEMPLATE (   
     .ctrl_alu_result_i		(alu_result_o),
