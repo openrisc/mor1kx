@@ -6,7 +6,7 @@
 
   Description: RF writeback mux
 
-  Choose between ALU and LSU input. All combinatorial
+  Choose between ALU and LSU input.
 
   Copyright (C) 2012 Authors
 
@@ -21,25 +21,27 @@ module mor1kx_wb_mux_cappuccino
     parameter OPTION_OPERAND_WIDTH = 32
     )
    (
-    input 			      clk,
-    input 			      rst,
+    input 				  clk,
+    input 				  rst,
 
-    input [OPTION_OPERAND_WIDTH-1:0]  alu_result_i,
-    input [OPTION_OPERAND_WIDTH-1:0]  lsu_result_i,
-    input [OPTION_OPERAND_WIDTH-1:0]  pc_execute_i,
-    input [OPTION_OPERAND_WIDTH-1:0]  spr_i,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  alu_result_i,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  lsu_result_i,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  pc_i,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  spr_i,
 
-    output [OPTION_OPERAND_WIDTH-1:0] rf_result_o,
+    output reg [OPTION_OPERAND_WIDTH-1:0] rf_result_o,
 
-    input 			      op_jal_i,
-    input 			      op_lsu_load_i,
-    input 			      op_mfspr_i
-   );
+    input 				  op_jal_i,
+    input 				  op_lsu_load_i,
+    input 				  op_mfspr_i,
+    input 				  lsu_valid_i
+    );
 
-   assign rf_result_o = op_lsu_load_i ? lsu_result_i :
-			op_mfspr_i ? spr_i :
-			/* TODO - maybe eliminate this adder */
-			op_jal_i ? pc_execute_i + 8 :
-			alu_result_i;
+   always @(*)
+     rf_result_o = op_lsu_load_i ? lsu_result_i :
+		   op_mfspr_i ? spr_i :
+		   /* TODO - maybe eliminate this adder */
+		   op_jal_i ? pc_i + 8 :
+		   alu_result_i;
 
 endmodule // mor1kx_wb_mux_cappuccino

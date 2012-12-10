@@ -514,10 +514,11 @@ module mor1kx_cpu_cappuccino
    /* mor1kx_wb_mux_cappuccino AUTO_TEMPLATE (
     .alu_result_i			(alu_result_o),
     .lsu_result_i			(lsu_result_o),
+    .lsu_valid_i			(lsu_valid_o),
     .spr_i				(mfspr_dat_o),
     .op_jal_i				(op_jal_o),
     .op_lsu_load_i			(op_lsu_load_o),
-    .pc_execute_i			(pc_decode_to_execute),
+    .pc_i				(pc_decode_to_execute),
     .op_mfspr_i			        (op_mfspr_o),
     ); */
    mor1kx_wb_mux_cappuccino
@@ -533,11 +534,12 @@ module mor1kx_cpu_cappuccino
       .rst				(rst),
       .alu_result_i			(alu_result_o),		 // Templated
       .lsu_result_i			(lsu_result_o),		 // Templated
-      .pc_execute_i			(pc_decode_to_execute),	 // Templated
+      .pc_i				(pc_decode_to_execute),	 // Templated
       .spr_i				(mfspr_dat_o),		 // Templated
       .op_jal_i				(op_jal_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
-      .op_mfspr_i			(op_mfspr_o));		 // Templated
+      .op_mfspr_i			(op_mfspr_o),		 // Templated
+      .lsu_valid_i			(lsu_valid_o));		 // Templated
 
 
    /* mor1kx_rf_cappuccino AUTO_TEMPLATE (
