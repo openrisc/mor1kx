@@ -61,7 +61,6 @@ module mor1kx_execute_ctrl_cappuccino
     input [OPTION_OPERAND_WIDTH-1:0] 	  pc_execute_i,
 
     input 				  exec_rf_wb_i,
-    output 				  execute_rf_we_o,
     output reg 				  ctrl_rf_wb_o,
     output reg 				  wb_rf_wb_o,
 
@@ -114,16 +113,9 @@ module mor1kx_execute_ctrl_cappuccino
    assign op_mfspr = opc_insn_i==`OR1K_OPCODE_MFSPR;
 
    // ALU or LSU stall execution, nothing else can
-   assign execute_valid = (op_alu_i) ? alu_valid_i :
-			  (op_lsu_load_i | op_lsu_store_i) ? lsu_valid_i :
-			  1'b1;
-
-   // Do writeback when we register our output to the next stage, or if
-   // we're doing mfspr
-   assign execute_rf_we_o = (exec_rf_wb_i & padv_i & !op_mfspr
-			     & !((op_lsu_load_i | op_lsu_store_i) &
-				 lsu_except_dbus_i | lsu_except_align_i)) |
-			    (op_mfspr & ctrl_mfspr_we_i);
+   assign execute_valid = (ctrl_op_lsu_load_o | ctrl_op_lsu_store_o) ?
+			  lsu_valid_i & (!op_alu_i | alu_valid_i) :
+			  (op_alu_i) ? alu_valid_i : 1'b1;
 
    // Check for unaligned jump address from register
    assign execute_except_ibus_align_o = op_jr_i & (|rfb_i[1:0]);

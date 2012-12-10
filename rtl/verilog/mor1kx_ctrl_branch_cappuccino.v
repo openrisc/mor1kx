@@ -43,6 +43,7 @@ module mor1kx_ctrl_branch_cappuccino
     input [OPTION_OPERAND_WIDTH-1:0]  decode_branch_target_i,
 
     input 			      padv_decode_i,
+    input 			      decode_bubble_i,
 
     input 			      pipeline_flush_i,
 
@@ -75,7 +76,7 @@ module mor1kx_ctrl_branch_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        imm_branch <= 0;
-     else if (pipeline_flush_i)
+     else if (pipeline_flush_i | decode_bubble_i)
        imm_branch <= 0;
      else if (padv_decode_i)
        imm_branch <= decode_branch_i;

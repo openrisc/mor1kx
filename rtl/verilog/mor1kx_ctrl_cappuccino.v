@@ -19,16 +19,6 @@
 
   contains PIC logic
 
-  l.mfspr implemented as follows:
-  We receieve an indication from the execute stage if it has a l.mfspr
-  instruction. We take note of this and it causes a 1-cycle stall of
-  the fetch and decode stages. We still issue the asserted padv_execute so
-  we get the result from the ALU which will be the address of the SPR to write
-  into the register file. On the next cycle, with the SPR address known, the
-  data is output to the RF and the ctrl_mfspr_we_o is asserted ensuring this
-  value is written into the RF. As we introduced a delay in the fetch/decode
-  logic, this should not clash with the next instruction to be executed.
-
   Copyright (C) 2012 Authors
 
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
@@ -80,6 +70,9 @@ module mor1kx_ctrl_cappuccino
 
     // ALU result - either jump target, SPR address
     input [OPTION_OPERAND_WIDTH-1:0]  ctrl_alu_result_i,
+
+    // LSU address, needed for effective address
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_lsu_adr_i,
 
     // Operand B from RF might be jump address, might be value for SPR
     input [OPTION_OPERAND_WIDTH-1:0]  ctrl_rfb_i,
@@ -203,8 +196,6 @@ module mor1kx_ctrl_cappuccino
    reg 				     execute_delay_slot;
    reg 				     ctrl_delay_slot;
 
-   reg 				     mfspr_delay, mfspr_done;
-
    reg 				     execute_waiting_r;
 
    reg 				     decode_execute_halt;
@@ -227,7 +218,7 @@ module mor1kx_ctrl_cappuccino
 
    wire 			     exception, exception_pending;
 
-   reg 				     execute_stage_exceptions;
+   reg 				     ctrl_stage_exceptions;
    wire 			     decode_stage_exceptions;
 
    wire 			     exception_re;
@@ -245,7 +236,6 @@ module mor1kx_ctrl_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0]   b;
 
    wire 			     execute_op_mfspr;
-   wire 			     wait_mfspr;
 
    wire 			     deassert_decode_execute_halt;
 
@@ -300,8 +290,7 @@ module mor1kx_ctrl_cappuccino
 		       except_dbus_i | except_align_i | except_ticktimer |
 			       except_pic | except_trap_i );
 
-   assign exception = exception_pending &
-		      (padv_ctrl | execute_stage_exceptions);
+   assign exception = exception_pending & (padv_ctrl | ctrl_stage_exceptions);
 
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
 
@@ -314,7 +303,7 @@ module mor1kx_ctrl_cappuccino
 				    exception_pc_addr;
 
    always @(posedge clk)
-     execute_stage_exceptions <= except_align_i | except_dbus_i;
+     ctrl_stage_exceptions <= except_align_i | except_dbus_i;
 
    always @(posedge clk)
      if (exception & !exception_r)
@@ -363,13 +352,11 @@ module mor1kx_ctrl_cappuccino
    assign execute_op_mfspr = execute_opc_insn_i==`OR1K_OPCODE_MFSPR;
    assign op_rfe = ctrl_opc_insn_i==`OR1K_OPCODE_RFE;
 
-   assign wait_mfspr = execute_op_mfspr & !mfspr_delay & !mfspr_done;
-
-   assign padv_fetch_o = !execute_waiting_i & !wait_mfspr & !cpu_stall & !decode_bubble_i
+   assign padv_fetch_o = !execute_waiting_i & !cpu_stall & !decode_bubble_i
 			 & (!stepping | (stepping & pstep[0] & !fetch_valid_i));
 
    assign padv_decode_o = fetch_valid_i & !execute_waiting_i &
-			  !wait_mfspr & !decode_execute_halt & !cpu_stall
+			  !decode_execute_halt & !cpu_stall
 			  & (!stepping | (stepping & pstep[1]));
 
    assign padv_execute_o = ((decode_valid_i & !execute_waiting_i &
@@ -387,7 +374,7 @@ module mor1kx_ctrl_cappuccino
    assign padv_ctrl_o = padv_ctrl;
 
    assign spr_addr = du_access ? du_addr_i : ctrl_alu_result_i[15:0];
-   assign ctrl_mfspr_we_o = mfspr_delay;
+   assign ctrl_mfspr_we_o = spr_access_ack[spr_group];
 
    // Pipeline flush
    assign pipeline_flush_o = (padv_ctrl & op_rfe) |
@@ -404,24 +391,6 @@ module mor1kx_ctrl_cappuccino
        padv_ctrl <= 0;
      else
        padv_ctrl <= padv_execute_o;
-
-   // Generate delay if necessary, when we have mtspr followed by mfspr
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       mfspr_delay <= 0;
-     else if (mfspr_delay)
-       mfspr_delay <= 0;
-     else if (execute_op_mfspr & !mfspr_done)
-       mfspr_delay <= 1;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       mfspr_done <= 0;
-     else if (padv_decode_o )
-       mfspr_done <= 0;
-   /* TODO - wait on bus access if we need to */
-     else if (mfspr_delay)
-       mfspr_done <= 1;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -522,8 +491,7 @@ module mor1kx_ctrl_cappuccino
 	  if (FEATURE_IMMU!="NONE")
 	    spr_sr[`OR1K_SPR_SR_IME ] <= 1'b0;
           if (FEATURE_DSX!="NONE")
-	    spr_sr[`OR1K_SPR_SR_DSX ] <= execute_stage_exceptions ?
-					 execute_delay_slot : ctrl_delay_slot;
+	    spr_sr[`OR1K_SPR_SR_DSX ] <= ctrl_delay_slot;
        end
      else if (padv_ctrl)
        begin
@@ -609,8 +577,6 @@ module mor1kx_ctrl_cappuccino
 	    spr_epcr <= ctrl_delay_slot ? last_branch_target_pc :
 			execute_delay_slot ? pc_ctrl_i:
 			pc_ctrl_i + 4;
-	  else if (execute_stage_exceptions)
-	    spr_epcr <= execute_delay_slot ? pc_execute_i - 4 : pc_execute_i;
 	  else
 	    spr_epcr <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i;
        end
@@ -626,7 +592,7 @@ module mor1kx_ctrl_cappuccino
 	  if (except_ibus_err_i)
 	    spr_eear <= pc_ctrl_i;
 	  else
-	    spr_eear <= ctrl_alu_result_i;
+	    spr_eear <= ctrl_lsu_adr_i;
        end
 
    // Track the PC
@@ -977,7 +943,7 @@ module mor1kx_ctrl_cappuccino
 	  via du_stall_i */
 	 assign du_stall_o = /* execute stage */
 			     (stepping & (padv_ctrl |
-					  execute_stage_exceptions));
+					  ctrl_stage_exceptions));
 
 	 /* Pulse to indicate we're restarting after a stall */
 	 assign du_restart_from_stall = du_stall_r & !du_stall_i;
@@ -1007,7 +973,7 @@ module mor1kx_ctrl_cappuccino
 	     stepped_into_exception <= 0;
 	   else if (du_restart_from_stall)
 	     stepped_into_exception <= 0;
-	   else if (exception & stepping & (padv_ctrl | execute_stage_exceptions))
+	   else if (exception & stepping & (padv_ctrl | ctrl_stage_exceptions))
 	     stepped_into_exception <= 1;
 
 	 always @(posedge clk `OR_ASYNC_RST)
@@ -1039,7 +1005,7 @@ module mor1kx_ctrl_cappuccino
 	   else if ((pstep[0] & fetch_valid_i) |
 		    /* decode is always single cycle */
 		    (pstep[1] & padv_decode_o) |
-		    (pstep[2] & (execute_valid_i | execute_stage_exceptions)))
+		    (pstep[2] & (execute_valid_i | ctrl_stage_exceptions)))
 	     pstep_r <= {pstep_r[2:0],1'b0};
 
 	 assign pstep = pstep_r;

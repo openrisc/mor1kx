@@ -37,11 +37,17 @@ module mor1kx_wb_mux_cappuccino
     input 				  lsu_valid_i
     );
 
-   always @(*)
-     rf_result_o = op_lsu_load_i ? lsu_result_i :
-		   op_mfspr_i ? spr_i :
-		   /* TODO - maybe eliminate this adder */
-		   op_jal_i ? pc_i + 8 :
-		   alu_result_i;
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       rf_result_o <= 0;
+     else if (op_mfspr_i)
+       rf_result_o <= spr_i;
+     else if (op_jal_i)
+       /* TODO - maybe eliminate this adder */
+       rf_result_o <= pc_i + 8;
+     else if (op_lsu_load_i & lsu_valid_i)
+       rf_result_o <= lsu_result_i;
+     else if (!op_lsu_load_i)
+       rf_result_o <= alu_result_i;
 
 endmodule // mor1kx_wb_mux_cappuccino

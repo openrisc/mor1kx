@@ -67,9 +67,6 @@ module mor1kx_lsu_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_aligned;  // comb.
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_extended; // comb.
 
-
-   reg [OPTION_OPERAND_WIDTH-1:0]    dbus_adr_r;
-
    reg [3:0] 			     dbus_bsel;
 
    reg 				     access_done;
@@ -90,7 +87,7 @@ module mor1kx_lsu_cappuccino
 
    reg 				     except_dbus;
 
-   assign dbus_adr_o = decode_valid_i ? lsu_adr_i : dbus_adr_r;
+   assign dbus_adr_o = lsu_adr_i;
    assign dbus_dat_o = (opc_insn_i[1:0]==2'b10) ?        // l.sb
 		       {rfb_i[7:0],rfb_i[7:0],rfb_i[7:0],rfb_i[7:0]} :
 		       (opc_insn_i[1:0]==2'b11) ?        // l.sh
@@ -135,18 +132,6 @@ module mor1kx_lsu_cappuccino
        except_dbus <= 0;
      else if (dbus_err_i)
        except_dbus <= 1;
-
-   // Need to register address due to behavior of RF when source register is
-   // same as destination register - value changes after one cycle to the
-   // forwarding register's value, which is incorrect.
-   // So we save it on first cycle.
-   // TODO - perhaps detect in RF when this is case, and make it keep the
-   // output steady to avoid an extra address registering stage here.
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       dbus_adr_r <= 0;
-     else if (decode_valid_i & (op_lsu_load_i | op_lsu_store_i))
-       dbus_adr_r <= lsu_adr_i;
 
    // Big endian bus mapping
    always @*
@@ -208,10 +193,8 @@ module mor1kx_lsu_cappuccino
    assign dbus_we_o =  op_lsu_store_i;
 
    // Select part of read word
-   // Can use registered address here, as it'll take at least one cycle for
-   // the data to come back, and by that time dbus_adr_r has the address
    always @*
-     case(dbus_adr_r[1:0])
+     case(dbus_adr_o[1:0])
        2'b00:
 	 dbus_dat_aligned = dbus_dat_i;
        2'b01:
@@ -220,7 +203,7 @@ module mor1kx_lsu_cappuccino
 	 dbus_dat_aligned = {dbus_dat_i[15:0],16'd0};
        2'b11:
 	 dbus_dat_aligned = {dbus_dat_i[7:0],24'd0};
-     endcase // case (dbus_adr_r[1:0])
+     endcase // case (dbus_adr_o[1:0])
 
    // Do appropriate extension
    always @*
