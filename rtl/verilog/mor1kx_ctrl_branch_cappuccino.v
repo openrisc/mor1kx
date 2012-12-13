@@ -74,9 +74,9 @@ module mor1kx_ctrl_branch_cappuccino
     * TODO: resolve those in decode stage already to avoid 1 cycle latency */
    reg imm_branch;
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
+     if (rst | pipeline_flush_i)
        imm_branch <= 0;
-     else if (pipeline_flush_i | decode_bubble_i)
+     else if (decode_bubble_i)
        imm_branch <= 0;
      else if (padv_decode_i)
        imm_branch <= decode_branch_i;
