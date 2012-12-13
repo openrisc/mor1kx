@@ -24,11 +24,11 @@ module mor1kx_cpu_cappuccino
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, dbus_err_i,
    dbus_ack_i, dbus_dat_i, irq_i, du_addr_i, du_stb_i, du_dat_i,
-   du_we_i, du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i,
-   spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i, spr_bus_dat_immu_i,
-   spr_bus_ack_immu_i, spr_bus_dat_mac_i, spr_bus_ack_mac_i,
-   spr_bus_dat_pmu_i, spr_bus_ack_pmu_i, spr_bus_dat_pcu_i,
-   spr_bus_ack_pcu_i, spr_bus_dat_fpu_i, spr_bus_ack_fpu_i
+   du_we_i, du_stall_i, spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i,
+   spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
+   spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
+   spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
+   spr_bus_ack_fpu_i
    );
 
    input clk, rst;
@@ -39,6 +39,7 @@ module mor1kx_cpu_cappuccino
    parameter OPTION_DCACHE_BLOCK_WIDTH = 5;
    parameter OPTION_DCACHE_SET_WIDTH = 9;
    parameter OPTION_DCACHE_WAYS = 2;
+   parameter OPTION_DCACHE_LIMIT_WIDTH = 32;
    parameter FEATURE_DMMU = "NONE";
    parameter FEATURE_INSTRUCTIONCACHE = "NONE";
    parameter OPTION_ICACHE_BLOCK_WIDTH = 5;
@@ -125,8 +126,6 @@ module mor1kx_cpu_cappuccino
    output 			     spr_bus_we_o;
    output 			     spr_bus_stb_o;
    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dc_i;
-   input 			     spr_bus_ack_dc_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i;
    input 			     spr_bus_ack_dmmu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i;
@@ -229,7 +228,9 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_RF_ADDR_WIDTH-1:0] rfb_adr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] rfb_o;	// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] rfd_adr_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			spr_bus_ack_dc_i;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire			spr_bus_ack_ic_i;	// From mor1kx_icache of mor1kx_icache.v
+   wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_dc_i;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_ic_i;// From mor1kx_icache of mor1kx_icache.v
    wire			wb_rf_wb_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd_adr_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
@@ -478,10 +479,22 @@ module mor1kx_cpu_cappuccino
     .op_lsu_load_i			(ctrl_op_lsu_load_o),
     .op_lsu_store_i			(ctrl_op_lsu_store_o),
     .pipeline_flush_i			(pipeline_flush_o),
+    .dc_enable				(spr_sr_o[`OR1K_SPR_SR_DCE]),
+    .spr_bus_dat_o			(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]),
+    .spr_bus_ack_o			(spr_bus_ack_dc_i),
+    .spr_bus_addr_i			(spr_bus_addr_o[15:0]),
+    .spr_bus_we_i			(spr_bus_we_o),
+    .spr_bus_stb_i			(spr_bus_stb_o),
+    .spr_bus_dat_i			(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
     ); */
    mor1kx_lsu_cappuccino
      #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
+       .FEATURE_DATACACHE(FEATURE_DATACACHE),
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
+       .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
+       .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
+       .OPTION_DCACHE_LIMIT_WIDTH(OPTION_DCACHE_LIMIT_WIDTH)
        )
      mor1kx_lsu_cappuccino
      (/*AUTOINST*/
@@ -490,6 +503,8 @@ module mor1kx_cpu_cappuccino
       .lsu_valid_o			(lsu_valid_o),
       .lsu_except_dbus_o		(lsu_except_dbus_o),
       .lsu_except_align_o		(lsu_except_align_o),
+      .spr_bus_dat_o			(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .spr_bus_ack_o			(spr_bus_ack_dc_i),	 // Templated
       .dbus_adr_o			(dbus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
       .dbus_req_o			(dbus_req_o),
       .dbus_dat_o			(dbus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -505,6 +520,11 @@ module mor1kx_cpu_cappuccino
       .opc_insn_i			(ctrl_opc_insn_o),	 // Templated
       .op_lsu_load_i			(ctrl_op_lsu_load_o),	 // Templated
       .op_lsu_store_i			(ctrl_op_lsu_store_o),	 // Templated
+      .spr_bus_addr_i			(spr_bus_addr_o[15:0]),	 // Templated
+      .spr_bus_we_i			(spr_bus_we_o),		 // Templated
+      .spr_bus_stb_i			(spr_bus_stb_o),	 // Templated
+      .spr_bus_dat_i			(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .dc_enable			(spr_sr_o[`OR1K_SPR_SR_DCE]), // Templated
       .dbus_err_i			(dbus_err_i),
       .dbus_ack_i			(dbus_ack_i),
       .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]),

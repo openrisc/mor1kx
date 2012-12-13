@@ -27,11 +27,11 @@ module mor1kx_cpu(/*AUTOARG*/
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, dbus_err_i,
    dbus_ack_i, dbus_dat_i, irq_i, du_addr_i, du_stb_i, du_dat_i,
-   du_we_i, du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i,
-   spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i, spr_bus_dat_immu_i,
-   spr_bus_ack_immu_i, spr_bus_dat_mac_i, spr_bus_ack_mac_i,
-   spr_bus_dat_pmu_i, spr_bus_ack_pmu_i, spr_bus_dat_pcu_i,
-   spr_bus_ack_pcu_i, spr_bus_dat_fpu_i, spr_bus_ack_fpu_i
+   du_we_i, du_stall_i, spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i,
+   spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
+   spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
+   spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
+   spr_bus_ack_fpu_i
    );
 
    
@@ -45,6 +45,7 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter OPTION_DCACHE_BLOCK_WIDTH	= 5;
    parameter OPTION_DCACHE_SET_WIDTH	= 9;
    parameter OPTION_DCACHE_WAYS		= 2;
+   parameter OPTION_DCACHE_LIMIT_WIDTH  = 32;
    parameter FEATURE_DMMU		= "NONE";
    parameter FEATURE_INSTRUCTIONCACHE	= "NONE";
    parameter OPTION_ICACHE_BLOCK_WIDTH	= 5;
@@ -131,8 +132,6 @@ module mor1kx_cpu(/*AUTOARG*/
    output 			     spr_bus_we_o;
    output 			     spr_bus_stb_o;
    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dc_i;
-   input 			     spr_bus_ack_dc_i;   
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i;
    input 			     spr_bus_ack_dmmu_i;   
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i;
@@ -175,6 +174,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	     .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
 	     .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
 	     .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
+	     .OPTION_DCACHE_LIMIT_WIDTH(OPTION_DCACHE_LIMIT_WIDTH),
 	     .FEATURE_DMMU(FEATURE_DMMU),
 	     .FEATURE_INSTRUCTIONCACHE(FEATURE_INSTRUCTIONCACHE),
 	     .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
@@ -248,8 +248,6 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .du_dat_i			(du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .du_we_i			(du_we_i),
 	    .du_stall_i			(du_stall_i),
-	    .spr_bus_dat_dc_i		(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_dc_i		(spr_bus_ack_dc_i),
 	    .spr_bus_dat_dmmu_i		(spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_dmmu_i		(spr_bus_ack_dmmu_i),
 	    .spr_bus_dat_immu_i		(spr_bus_dat_immu_i[OPTION_OPERAND_WIDTH-1:0]),
@@ -380,8 +378,8 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .du_stall_i			(du_stall_i),
 	    .spr_bus_dat_dc_i		(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_dc_i		(spr_bus_ack_dc_i),
-	    .spr_bus_dat_ic_i		({OPTION_OPERAND_WIDTH{1'b0}}),
-	    .spr_bus_ack_ic_i		(1'b0),
+	    .spr_bus_dat_ic_i		(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .spr_bus_ack_ic_i		(spr_bus_ack_ic_i),
 	    .spr_bus_dat_dmmu_i		(spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_dmmu_i		(spr_bus_ack_dmmu_i),
 	    .spr_bus_dat_immu_i		(spr_bus_dat_immu_i[OPTION_OPERAND_WIDTH-1:0]),
@@ -504,8 +502,8 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .du_stall_i			(du_stall_i),
 	    .spr_bus_dat_dc_i		(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_dc_i		(spr_bus_ack_dc_i),
-	    .spr_bus_dat_ic_i		({OPTION_OPERAND_WIDTH{1'b0}}),
-	    .spr_bus_ack_ic_i		(1'b0),
+	    .spr_bus_dat_ic_i		(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .spr_bus_ack_ic_i		(spr_bus_ack_ic_i),
 	    .spr_bus_dat_dmmu_i		(spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_dmmu_i		(spr_bus_ack_dmmu_i),
 	    .spr_bus_dat_immu_i		(spr_bus_dat_immu_i[OPTION_OPERAND_WIDTH-1:0]),

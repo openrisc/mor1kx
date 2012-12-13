@@ -138,14 +138,9 @@ module mor1kx
    wire [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o;	// From mor1kx_cpu of mor1kx_cpu.v
    wire			dbus_req_o;		// From mor1kx_cpu of mor1kx_cpu.v
    wire			dbus_we_o;		// From mor1kx_cpu of mor1kx_cpu.v
-   wire			dc_ack_i;		// From dbus_bridge of mor1kx_bus_if_wb32.v
-   wire [OPTION_OPERAND_WIDTH-1:0] dc_dat_i;	// From dbus_bridge of mor1kx_bus_if_wb32.v
-   wire			dc_err_i;		// From dbus_bridge of mor1kx_bus_if_wb32.v
    wire [OPTION_OPERAND_WIDTH-1:0] ibus_adr_o;	// From mor1kx_cpu of mor1kx_cpu.v
    wire			ibus_req_o;		// From mor1kx_cpu of mor1kx_cpu.v
-   wire			spr_bus_ack_dc_i;	// From mor1kx_dcache of mor1kx_dcache.v
    wire [15:0]		spr_bus_addr_o;		// From mor1kx_cpu of mor1kx_cpu.v
-   wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_dc_i;// From mor1kx_dcache of mor1kx_dcache.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;// From mor1kx_cpu of mor1kx_cpu.v
    wire			spr_bus_stb_o;		// From mor1kx_cpu of mor1kx_cpu.v
    wire			spr_bus_we_o;		// From mor1kx_cpu of mor1kx_cpu.v
@@ -159,11 +154,6 @@ module mor1kx
    wire 			   dbus_ack_i;
    wire [OPTION_OPERAND_WIDTH-1:0] dbus_dat_i;
    wire 			   dbus_err_i;
-   wire [OPTION_OPERAND_WIDTH-1:0] dc_adr_o;
-   wire 			   dc_req_o;
-   wire 			   dc_we_o;
-   wire [OPTION_OPERAND_WIDTH-1:0] dc_dat_o;
-   wire [3:0] 			   dc_bsel_o;
 
    generate
       if (BUS_IF_TYPE=="WISHBONE32") begin : bus_gen
@@ -223,9 +213,9 @@ module mor1kx
 		       .wbm_rty_i	(iwbm_rty_i));		 // Templated
 	 
 	 /* mor1kx_bus_if_wb32 AUTO_TEMPLATE (
-	  .cpu_err_o			(dc_err_i),
-	  .cpu_ack_o			(dc_ack_i),
-	  .cpu_dat_o			(dc_dat_i[OPTION_OPERAND_WIDTH-1:0]),
+	  .cpu_err_o			(dbus_err_i),
+	  .cpu_ack_o			(dbus_ack_i),
+	  .cpu_dat_o			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
 	  .wbm_adr_o			(dwbm_adr_o),
 	  .wbm_stb_o			(dwbm_stb_o),
 	  .wbm_cyc_o			(dwbm_cyc_o),
@@ -235,11 +225,11 @@ module mor1kx
 	  .wbm_bte_o			(dwbm_bte_o),
 	  .wbm_dat_o			(dwbm_dat_o),
 	  // Inputs
-	  .cpu_adr_i			(dc_adr_o[31:0]),
-	  .cpu_dat_i			(dc_dat_o),
-	  .cpu_req_i			(dc_req_o),
-	  .cpu_we_i			(dc_we_o),
-	  .cpu_bsel_i			(dc_bsel_o),
+	  .cpu_adr_i			(dbus_adr_o[31:0]),
+	  .cpu_dat_i			(dbus_dat_o),
+	  .cpu_req_i			(dbus_req_o),
+	  .cpu_we_i			(dbus_we_o),
+	  .cpu_bsel_i			(dbus_bsel_o),
 	  .wbm_err_i			(dwbm_err_i),
 	  .wbm_ack_i			(dwbm_ack_i),
 	  .wbm_dat_i			(dwbm_dat_i),
@@ -251,9 +241,9 @@ module mor1kx
 	 dbus_bridge
 	   (/*AUTOINST*/
 	    // Outputs
-	    .cpu_err_o			(dc_err_i),		 // Templated
-	    .cpu_ack_o			(dc_ack_i),		 // Templated
-	    .cpu_dat_o			(dc_dat_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
+	    .cpu_err_o			(dbus_err_i),		 // Templated
+	    .cpu_ack_o			(dbus_ack_i),		 // Templated
+	    .cpu_dat_o			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
 	    .wbm_adr_o			(dwbm_adr_o),		 // Templated
 	    .wbm_stb_o			(dwbm_stb_o),		 // Templated
 	    .wbm_cyc_o			(dwbm_cyc_o),		 // Templated
@@ -265,11 +255,11 @@ module mor1kx
 	    // Inputs
 	    .clk			(clk),
 	    .rst			(rst),
-	    .cpu_adr_i			(dc_adr_o[31:0]),	 // Templated
-	    .cpu_dat_i			(dc_dat_o),		 // Templated
-	    .cpu_req_i			(dc_req_o),		 // Templated
-	    .cpu_bsel_i			(dc_bsel_o),		 // Templated
-	    .cpu_we_i			(dc_we_o),		 // Templated
+	    .cpu_adr_i			(dbus_adr_o[31:0]),	 // Templated
+	    .cpu_dat_i			(dbus_dat_o),		 // Templated
+	    .cpu_req_i			(dbus_req_o),		 // Templated
+	    .cpu_bsel_i			(dbus_bsel_o),		 // Templated
+	    .cpu_we_i			(dbus_we_o),		 // Templated
 	    .wbm_err_i			(dwbm_err_i),		 // Templated
 	    .wbm_ack_i			(dwbm_ack_i),		 // Templated
 	    .wbm_dat_i			(dwbm_dat_i),		 // Templated
@@ -285,82 +275,9 @@ module mor1kx
 	end // else: !if(BUS_IF_TYPE=="WISHBONE32")
    endgenerate
 
-   generate
-      if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
-
-   /* mor1kx_dcache AUTO_TEMPLATE (
-	    // Outputs
-	    .cpu_err_o			(dbus_err_i),
-	    .cpu_ack_o			(dbus_ack_i),
-	    .cpu_dat_o			(dbus_dat_i[31:0]),
-	    .spr_bus_dat_o		(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_o		(spr_bus_ack_dc_i),
-	    // Inputs
-	    .dc_enable			(spr_sr_o[`OR1K_SPR_SR_DCE]),
-	    .cpu_dat_i			(dbus_dat_o[31:0]),
-	    .cpu_adr_i			(dbus_adr_o[31:0]),
-	    .cpu_req_i			(dbus_req_o),
-	    .cpu_we_i			(dbus_we_o),
-	    .cpu_bsel_i			(dbus_bsel_o[3:0]),
-	    .spr_bus_addr_i		(spr_bus_addr_o[15:0]),
-	    .spr_bus_we_i		(spr_bus_we_o),
-	    .spr_bus_stb_i		(spr_bus_stb_o),
-	    .spr_bus_dat_i		(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
-    );*/
-
-   mor1kx_dcache
-     #(
-       .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
-       .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
-       .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
-       .OPTION_DCACHE_LIMIT_WIDTH(OPTION_DCACHE_LIMIT_WIDTH)
-       )
-   mor1kx_dcache
-	   (/*AUTOINST*/
-	    // Outputs
-	    .cpu_err_o			(dbus_err_i),		 // Templated
-	    .cpu_ack_o			(dbus_ack_i),		 // Templated
-	    .cpu_dat_o			(dbus_dat_i[31:0]),	 // Templated
-	    .dc_dat_o			(dc_dat_o[31:0]),
-	    .dc_adr_o			(dc_adr_o[31:0]),
-	    .dc_req_o			(dc_req_o),
-	    .dc_we_o			(dc_we_o),
-	    .dc_bsel_o			(dc_bsel_o[3:0]),
-	    .spr_bus_dat_o		(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
-	    .spr_bus_ack_o		(spr_bus_ack_dc_i),	 // Templated
-	    // Inputs
-	    .clk			(clk),
-	    .rst			(rst),
-	    .dc_enable			(spr_sr_o[`OR1K_SPR_SR_DCE]), // Templated
-	    .cpu_dat_i			(dbus_dat_o[31:0]),	 // Templated
-	    .cpu_adr_i			(dbus_adr_o[31:0]),	 // Templated
-	    .cpu_req_i			(dbus_req_o),		 // Templated
-	    .cpu_we_i			(dbus_we_o),		 // Templated
-	    .cpu_bsel_i			(dbus_bsel_o[3:0]),	 // Templated
-	    .dc_err_i			(dc_err_i),
-	    .dc_ack_i			(dc_ack_i),
-	    .dc_dat_i			(dc_dat_i[31:0]),
-	    .spr_bus_addr_i		(spr_bus_addr_o[15:0]),	 // Templated
-	    .spr_bus_we_i		(spr_bus_we_o),		 // Templated
-	    .spr_bus_stb_i		(spr_bus_stb_o),	 // Templated
-	    .spr_bus_dat_i		(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0])); // Templated
-      end
-      else
-	begin
-	   assign dbus_ack_i = dc_ack_i;
-	   assign dbus_dat_i = dc_dat_i;
-	   assign dbus_err_i = dc_err_i;
-	   assign dc_adr_o = dbus_adr_o;
-	   assign dc_req_o = dbus_req_o;
-	   assign dc_we_o = dbus_we_o;
-	   assign dc_dat_o = dbus_dat_o;
-	   assign dc_bsel_o = dbus_bsel_o;
-	end
-   endgenerate
 
    /* mor1kx_cpu AUTO_TEMPLATE
-    ( .spr_bus_dat_dc_i		(spr_bus_dat_dc_i),
-    .spr_bus_ack_dc_i		(spr_bus_ack_dc_i),
+    (
     .spr_bus_dat_dmmu_i		(),
     .spr_bus_ack_dmmu_i		(),
     .spr_bus_dat_immu_i		(),
@@ -382,6 +299,7 @@ module mor1kx
 	     .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
 	     .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
 	     .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
+	     .OPTION_DCACHE_LIMIT_WIDTH(OPTION_DCACHE_LIMIT_WIDTH),
 	     .FEATURE_DMMU(FEATURE_DMMU),
 	     .FEATURE_INSTRUCTIONCACHE(FEATURE_INSTRUCTIONCACHE),
 	     .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
@@ -455,8 +373,6 @@ module mor1kx
       .du_dat_i				(du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
       .du_we_i				(du_we_i),
       .du_stall_i			(du_stall_i),
-      .spr_bus_dat_dc_i			(spr_bus_dat_dc_i),	 // Templated
-      .spr_bus_ack_dc_i			(spr_bus_ack_dc_i),	 // Templated
       .spr_bus_dat_dmmu_i		(),			 // Templated
       .spr_bus_ack_dmmu_i		(),			 // Templated
       .spr_bus_dat_immu_i		(),			 // Templated
