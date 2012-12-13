@@ -155,8 +155,6 @@ module mor1kx
    wire 			   ibus_ack_i;
    wire [OPTION_OPERAND_WIDTH-1:0] ibus_dat_i;
    wire 			   ibus_err_i;
-   wire [OPTION_OPERAND_WIDTH-1:0] ic_adr_o;
-   wire 			   ic_req_o;
 
    wire 			   dbus_ack_i;
    wire [OPTION_OPERAND_WIDTH-1:0] dbus_dat_i;

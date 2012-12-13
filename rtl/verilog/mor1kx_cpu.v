@@ -133,8 +133,6 @@ module mor1kx_cpu(/*AUTOARG*/
    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dc_i;
    input 			     spr_bus_ack_dc_i;   
-//SJK   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_ic_i;
-//SJK   input 			     spr_bus_ack_ic_i;   
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i;
    input 			     spr_bus_ack_dmmu_i;   
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i;
