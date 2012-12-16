@@ -181,7 +181,7 @@ module mor1kx_ctrl_cappuccino
    reg [SPR_SR_WIDTH-1:0] 	     spr_esr;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_epcr;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_eear;
-   reg [OPTION_OPERAND_WIDTH-1:0]    spr_evba;
+   reg [OPTION_OPERAND_WIDTH-1:0]    spr_evbar;
 
    // Programmable Interrupt Control SPRs
    wire [31:0] 			     spr_picmr;
@@ -271,6 +271,8 @@ module mor1kx_ctrl_cappuccino
 
    /* Wires from mor1kx_cfgrs module */
    wire [31:0] 			     spr_vr;
+   wire [31:0] 			     spr_vr2;
+   wire [31:0] 			     spr_avr;
    wire [31:0] 			     spr_upr;
    wire [31:0] 			     spr_cpucfgr;
    wire [31:0] 			     spr_dmmucfgr;
@@ -280,6 +282,7 @@ module mor1kx_ctrl_cappuccino
    wire [31:0] 			     spr_dcfgr;
    wire [31:0] 			     spr_pccfgr;
    wire [31:0] 			     spr_fpcsr;
+   wire [31:0] 			     spr_isr [0:7];
 
    assign  b = ctrl_rfb_i;
 
@@ -320,30 +323,30 @@ module mor1kx_ctrl_cappuccino
 	      }
 	     )
 	 9'b1????????:
-	   exception_pc_addr <= spr_evba |
+	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_BERR_VECTOR,8'd0};
 	 9'b01???????:
-	   exception_pc_addr <= spr_evba |
+	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_ILLEGAL_VECTOR,8'd0};
 	 9'b001??????,
 	   9'b0001?????:
-	     exception_pc_addr <= spr_evba |
+	     exception_pc_addr <= spr_evbar |
 				  {19'd0,`OR1K_ALIGN_VECTOR,8'd0};
 	 9'b00001????:
-	   exception_pc_addr <= spr_evba |
+	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_SYSCALL_VECTOR,8'd0};
 	 9'b000001???:
-	   exception_pc_addr <= spr_evba |
+	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_TRAP_VECTOR,8'd0};
 	 9'b0000001??:
-	   exception_pc_addr <= spr_evba |
+	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_BERR_VECTOR,8'd0};
 	 9'b00000001?:
-	   exception_pc_addr <= spr_evba |
+	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_INT_VECTOR,8'd0};
 	 //9'b000000001:
 	 default:
-	   exception_pc_addr <= spr_evba |
+	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_TT_VECTOR,8'd0};
        endcase // casex (...
 
@@ -608,9 +611,9 @@ module mor1kx_ctrl_cappuccino
    // Exception Vector Address
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       spr_evba <= {OPTION_OPERAND_WIDTH{1'b0}};
-     else if (spr_we && spr_addr==`OR1K_SPR_EVBA_ADDR)
-       spr_evba <= {spr_write_dat[OPTION_OPERAND_WIDTH-1:13], 13'd0};
+       spr_evbar <= {OPTION_OPERAND_WIDTH{1'b0}};
+     else if (spr_we && spr_addr==`OR1K_SPR_EVBAR_ADDR)
+       spr_evbar <= {spr_write_dat[OPTION_OPERAND_WIDTH-1:13], 13'd0};
 
    // Remember when we're in a delay slot in execute stage.
    always @(posedge clk `OR_ASYNC_RST)
@@ -647,12 +650,15 @@ module mor1kx_ctrl_cappuccino
        .FEATURE_MAC			(FEATURE_MAC),
        .FEATURE_SYSCALL			(FEATURE_SYSCALL),
        .FEATURE_TRAP			(FEATURE_TRAP),
-       .FEATURE_RANGE			(FEATURE_RANGE)
+       .FEATURE_RANGE			(FEATURE_RANGE),
+       .FEATURE_DELAYSLOT               ("ENABLED"),
+       .FEATURE_EVBAR                   ("ENABLED")
        )
    mor1kx_cfgrs
      (/*AUTOINST*/
       // Outputs
       .spr_vr				(spr_vr[31:0]),
+      .spr_vr2				(spr_vr2[31:0]),
       .spr_upr				(spr_upr[31:0]),
       .spr_cpucfgr			(spr_cpucfgr[31:0]),
       .spr_dmmucfgr			(spr_dmmucfgr[31:0]),
@@ -661,13 +667,28 @@ module mor1kx_ctrl_cappuccino
       .spr_iccfgr			(spr_iccfgr[31:0]),
       .spr_dcfgr			(spr_dcfgr[31:0]),
       .spr_pccfgr			(spr_pccfgr[31:0]),
-      .spr_fpcsr			(spr_fpcsr[31:0]));
+      .spr_fpcsr			(spr_fpcsr[31:0]),
+      .spr_avr				(spr_avr[31:0]));
 
+   /* Implementation-specific registers */
+   assign spr_isr[0] = 0;
+   assign spr_isr[1] = 0;
+   assign spr_isr[2] = 0;
+   assign spr_isr[3] = 0;
+   assign spr_isr[4] = 0;
+   assign spr_isr[5] = 0;
+   assign spr_isr[6] = 0;
+   assign spr_isr[7] = 0;
+   
    // System group (0) SPR data out
    always @*
      case(spr_addr)
        `OR1K_SPR_VR_ADDR:
 	 spr_sys_group_read = spr_vr;
+       `OR1K_SPR_VR2_ADDR:
+	 spr_sys_group_read = {spr_vr2[31:8], `MOR1KX_PIPEID_CAPPUCCINO};
+       `OR1K_SPR_AVR_ADDR:
+	 spr_sys_group_read = spr_avr;
        `OR1K_SPR_UPR_ADDR:
 	 spr_sys_group_read = spr_upr;
        `OR1K_SPR_CPUCFGR_ADDR:
@@ -701,8 +722,25 @@ module mor1kx_ctrl_cappuccino
        `OR1K_SPR_ESR0_ADDR:
 	 spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-SPR_SR_WIDTH){1'b0}},
 			       spr_esr};
-       `OR1K_SPR_EVBA_ADDR:
-	 spr_sys_group_read = spr_evba;
+       `OR1K_SPR_EVBAR_ADDR:
+	 spr_sys_group_read = spr_evbar;
+       `OR1K_SPR_ISR0_ADDR:
+	 spr_sys_group_read = spr_isr[0];
+       `OR1K_SPR_ISR0_ADDR +1:
+	 spr_sys_group_read = spr_isr[1];
+       `OR1K_SPR_ISR0_ADDR +2:
+	 spr_sys_group_read = spr_isr[2];
+       `OR1K_SPR_ISR0_ADDR +3:
+	 spr_sys_group_read = spr_isr[3];
+       `OR1K_SPR_ISR0_ADDR +4:
+	 spr_sys_group_read = spr_isr[4];
+       `OR1K_SPR_ISR0_ADDR +5:
+	 spr_sys_group_read = spr_isr[5];
+       `OR1K_SPR_ISR0_ADDR +6:
+	 spr_sys_group_read = spr_isr[6];
+       `OR1K_SPR_ISR0_ADDR +7:
+	 spr_sys_group_read = spr_isr[7];
+       
        default: begin
 	  /* GPR read */
 	  if (spr_addr >= `OR1K_SPR_GPR0_ADDR &&
