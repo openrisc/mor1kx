@@ -24,8 +24,8 @@
 module mor1kx_cfgrs
   (/*AUTOARG*/
    // Outputs
-   spr_vr, spr_upr, spr_cpucfgr, spr_dmmucfgr, spr_immucfgr,
-   spr_dccfgr, spr_iccfgr, spr_dcfgr, spr_pccfgr, spr_fpcsr
+   spr_vr, spr_vr2, spr_upr, spr_cpucfgr, spr_dmmucfgr, spr_immucfgr,
+   spr_dccfgr, spr_iccfgr, spr_dcfgr, spr_pccfgr, spr_fpcsr, spr_avr
    );
    
    parameter FEATURE_SYSCALL            = "ENABLED";
@@ -56,7 +56,13 @@ module mor1kx_cfgrs
    parameter FEATURE_FASTCONTEXTS       = "NONE";
    parameter FEATURE_OVERFLOW           = "NONE";
 
+   parameter FEATURE_DELAYSLOT          = "NONE";
+
+   parameter FEATURE_EVBAR              = "NONE";
+   parameter FEATURE_AECSR              = "NONE";
+   
    output [31:0] spr_vr;
+   output [31:0] spr_vr2;
    output [31:0] spr_upr;
    output [31:0] spr_cpucfgr;
    output [31:0] spr_dmmucfgr;
@@ -66,8 +72,10 @@ module mor1kx_cfgrs
    output [31:0] spr_dcfgr;
    output [31:0] spr_pccfgr;
    output [31:0] spr_fpcsr;
+   output [31:0] spr_avr;
 
    assign spr_vr[`OR1K_SPR_VR_REV] = 0;
+   assign spr_vr[`OR1K_SPR_VR_UVRP] = 1;
    assign spr_vr[`OR1K_SPR_VR_RESERVED] = 0;
    assign spr_vr[`OR1K_SPR_VR_CFG] = 0;
    assign spr_vr[`OR1K_SPR_VR_VER] = 0;
@@ -93,8 +101,34 @@ module mor1kx_cfgrs
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OF32S] = 0;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OF64S] = 0;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OV64S] = 0;
+   assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_ND] = (FEATURE_DELAYSLOT=="NONE");
+   /* AVR will always be present in mor1kx */
+   assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_AVRP] = 1;
+   assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_EVBARP] = (FEATURE_EVBAR!="NONE");
+   /* ISRs will always be present */
+   assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_ISRP] = 1;
+   assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_AECSRP] = (FEATURE_AECSR!="NONE");
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_RESERVED] = 0;
 
+   /* Version register 2 */
+   /* Implementation ID as per: 
+      http://opencores.org/or1k/OR1K_CPU_Cores#CPU_ID_Table 
+      mor1kx breaks up the VR2[23:0] to be 3 8-bit fields
+      23:16 - Major version number
+      15:8  - Minor version number
+      7:0   - Pipeline implementation identifier (set outside of this module)
+   */
+   assign spr_vr2[`OR1K_SPR_VR2_CPUID] = `MOR1KX_CPUID;
+   assign spr_vr2[`OR1K_SPR_VR2_VER] = {`MOR1KX_VERSION_MAJOR,
+                                        `MOR1KX_VERSION_MINOR,
+                                        8'd0};
+      
+   /* Currently supporting Or1K version 1.0 rev0 */
+   assign spr_avr[`OR1K_SPR_AVR_MAJ] = 8'd1;
+   assign spr_avr[`OR1K_SPR_AVR_MIN] = 8'd0;
+   assign spr_avr[`OR1K_SPR_AVR_REV] = 8'd0;
+   assign spr_avr[`OR1K_SPR_AVR_RESERVED] = 0;
+   
    assign spr_dmmucfgr = 0;
    assign spr_immucfgr = 0;
 
