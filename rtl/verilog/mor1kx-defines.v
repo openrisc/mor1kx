@@ -220,3 +220,16 @@
 // Whether we'll allow things using AYNC reset to have it:
 //`define OR_ASYNC_RST or posedge rst
 `define OR_ASYNC_RST
+
+// Implementation version defines
+`define MOR1KX_CPUID 8'h01
+// mor1kx breaks up the VR2 version register to be 3 8-bit fields
+// MSB is major version, middle byte is minor version number
+// and final byte is the pipeline identifier.
+`define MOR1KX_VERSION_MAJOR 8'd0
+`define MOR1KX_VERSION_MINOR 8'd1
+
+// mor1kx implementation-specific register definitions
+`define MOR1KX_PIPEID_CAPPUCCINO 8'd1
+`define MOR1KX_PIPEID_ESPRESSO   8'd2
+`define MOR1KX_PIPEID_PRONTOESPRESSO 8'd3
