@@ -306,6 +306,8 @@ module mor1kx_ctrl_espresso
 
    /* Wires from mor1kx_cfgrs module */
    wire [31:0] 			     spr_vr;
+   wire [31:0] 			     spr_vr2;
+   wire [31:0] 			     spr_avr;
    wire [31:0] 			     spr_upr;
    wire [31:0] 			     spr_cpucfgr;
    wire [31:0] 			     spr_dmmucfgr;
@@ -315,7 +317,8 @@ module mor1kx_ctrl_espresso
    wire [31:0] 			     spr_dcfgr;
    wire [31:0] 			     spr_pccfgr;
    wire [31:0] 			     spr_fpcsr;
-
+   wire [31:0] 			     spr_isr [0:7];
+   
    assign b = ctrl_rfb_i;
 
    assign ctrl_branch_exception = (exception_r | (op_rfe | doing_rfe)) & 
@@ -787,12 +790,14 @@ module mor1kx_ctrl_espresso
        .FEATURE_MAC			(FEATURE_MAC),
        .FEATURE_SYSCALL			(FEATURE_SYSCALL),
        .FEATURE_TRAP			(FEATURE_TRAP),
-       .FEATURE_RANGE			(FEATURE_RANGE)
+       .FEATURE_RANGE			(FEATURE_RANGE),
+       .FEATURE_DELAYSLOT               ("ENABLED")
        )
    mor1kx_cfgrs
      (/*AUTOINST*/
       // Outputs
       .spr_vr				(spr_vr[31:0]),
+      .spr_vr2				(spr_vr2[31:0]),
       .spr_upr				(spr_upr[31:0]),
       .spr_cpucfgr			(spr_cpucfgr[31:0]),
       .spr_dmmucfgr			(spr_dmmucfgr[31:0]),
@@ -801,13 +806,28 @@ module mor1kx_ctrl_espresso
       .spr_iccfgr			(spr_iccfgr[31:0]),
       .spr_dcfgr			(spr_dcfgr[31:0]),
       .spr_pccfgr			(spr_pccfgr[31:0]),
-      .spr_fpcsr			(spr_fpcsr[31:0]));
+      .spr_fpcsr			(spr_fpcsr[31:0]),
+      .spr_avr				(spr_avr[31:0]));
 
+   /* Implementation-specific registers */
+   assign spr_isr[0] = 0;
+   assign spr_isr[1] = 0;
+   assign spr_isr[2] = 0;
+   assign spr_isr[3] = 0;
+   assign spr_isr[4] = 0;
+   assign spr_isr[5] = 0;
+   assign spr_isr[6] = 0;
+   assign spr_isr[7] = 0;
+   
    // System group (0) SPR data out
    always @*
      case(spr_addr)
        `OR1K_SPR_VR_ADDR:
          spr_sys_group_read = spr_vr;
+       `OR1K_SPR_VR2_ADDR:
+	 spr_sys_group_read = {spr_vr2[31:8], `MOR1KX_PIPEID_ESPRESSO};
+       `OR1K_SPR_AVR_ADDR:
+	 spr_sys_group_read = spr_avr;
        `OR1K_SPR_UPR_ADDR:
          spr_sys_group_read = spr_upr;
        `OR1K_SPR_CPUCFGR_ADDR:
@@ -841,6 +861,23 @@ module mor1kx_ctrl_espresso
        `OR1K_SPR_ESR0_ADDR:
          spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-SPR_SR_WIDTH){1'b0}},
                                spr_esr};
+       `OR1K_SPR_ISR0_ADDR:
+	 spr_sys_group_read = spr_isr[0];
+       `OR1K_SPR_ISR0_ADDR +1:
+	 spr_sys_group_read = spr_isr[1];
+       `OR1K_SPR_ISR0_ADDR +2:
+	 spr_sys_group_read = spr_isr[2];
+       `OR1K_SPR_ISR0_ADDR +3:
+	 spr_sys_group_read = spr_isr[3];
+       `OR1K_SPR_ISR0_ADDR +4:
+	 spr_sys_group_read = spr_isr[4];
+       `OR1K_SPR_ISR0_ADDR +5:
+	 spr_sys_group_read = spr_isr[5];
+       `OR1K_SPR_ISR0_ADDR +6:
+	 spr_sys_group_read = spr_isr[6];
+       `OR1K_SPR_ISR0_ADDR +7:
+	 spr_sys_group_read = spr_isr[7];
+       
        default: begin
           /* GPR read */
           if (spr_addr >= `OR1K_SPR_GPR0_ADDR &&
