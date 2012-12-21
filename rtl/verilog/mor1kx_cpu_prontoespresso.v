@@ -24,12 +24,11 @@ module mor1kx_cpu_prontoespresso
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, dbus_err_i,
    dbus_ack_i, dbus_dat_i, irq_i, du_addr_i, du_stb_i, du_dat_i,
-   du_we_i, du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i,
-   spr_bus_dat_ic_i, spr_bus_ack_ic_i, spr_bus_dat_dmmu_i,
-   spr_bus_ack_dmmu_i, spr_bus_dat_immu_i, spr_bus_ack_immu_i,
-   spr_bus_dat_mac_i, spr_bus_ack_mac_i, spr_bus_dat_pmu_i,
-   spr_bus_ack_pmu_i, spr_bus_dat_pcu_i, spr_bus_ack_pcu_i,
-   spr_bus_dat_fpu_i, spr_bus_ack_fpu_i
+   du_we_i, du_stall_i, spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i,
+   spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
+   spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
+   spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
+   spr_bus_ack_fpu_i
    );
 
    input clk, rst;
@@ -125,10 +124,6 @@ module mor1kx_cpu_prontoespresso
    output 			     spr_bus_we_o;
    output 			     spr_bus_stb_o;
    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dc_i;
-   input 			     spr_bus_ack_dc_i;   
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_ic_i;
-   input 			     spr_bus_ack_ic_i;   
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i;
    input 			     spr_bus_ack_dmmu_i;   
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i;
@@ -576,6 +571,10 @@ module mor1kx_cpu_prontoespresso
     .fetch_ppc_i                (fetched_pc_o),
     .fetch_sleep_i              (fetch_sleep_o),
     .rf_wb_i			(rf_wb_o),
+    .spr_bus_dat_dc_i		(),
+    .spr_bus_ack_dc_i		(),
+    .spr_bus_dat_ic_i		(),
+    .spr_bus_ack_ic_i		(),
     ); */
    mor1kx_ctrl_prontoespresso
      #(
@@ -666,10 +665,10 @@ module mor1kx_cpu_prontoespresso
 	.du_dat_i			(du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
 	.du_we_i			(du_we_i),
 	.du_stall_i			(du_stall_i),
-	.spr_bus_dat_dc_i		(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]),
-	.spr_bus_ack_dc_i		(spr_bus_ack_dc_i),
-	.spr_bus_dat_ic_i		(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]),
-	.spr_bus_ack_ic_i		(spr_bus_ack_ic_i),
+	.spr_bus_dat_dc_i		(),			 // Templated
+	.spr_bus_ack_dc_i		(),			 // Templated
+	.spr_bus_dat_ic_i		(),			 // Templated
+	.spr_bus_ack_ic_i		(),			 // Templated
 	.spr_bus_dat_dmmu_i		(spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]),
 	.spr_bus_ack_dmmu_i		(spr_bus_ack_dmmu_i),
 	.spr_bus_dat_immu_i		(spr_bus_dat_immu_i[OPTION_OPERAND_WIDTH-1:0]),
