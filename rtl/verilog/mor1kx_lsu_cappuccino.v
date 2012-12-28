@@ -41,15 +41,16 @@ module mor1kx_lsu_cappuccino
     input 			      padv_execute_i,
     input 			      decode_valid_i,
     // calculated address from ALU
-    input [OPTION_OPERAND_WIDTH-1:0]  lsu_adr_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  exec_lsu_adr_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_lsu_adr_i,
 
     // register file B in (store operand)
-    input [OPTION_OPERAND_WIDTH-1:0]  rfb_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_rfb_i,
     // insn opcode, indicating what's going on
-    input [`OR1K_OPCODE_WIDTH-1:0]    opc_insn_i,
+    input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i,
     // from decode stage regs, indicate if load or store
-    input 			      op_lsu_load_i,
-    input 			      op_lsu_store_i,
+    input 			      ctrl_op_lsu_load_i,
+    input 			      ctrl_op_lsu_store_i,
 
     output [OPTION_OPERAND_WIDTH-1:0] lsu_result_o,
     output 			      lsu_valid_o,
@@ -93,8 +94,8 @@ module mor1kx_lsu_cappuccino
    wire 			     load_align_err;
    wire 			     store_align_err;
 
-   wire 			     load_sext = !opc_insn_i[0];
-   wire 			     load_zext = opc_insn_i[0];
+   wire 			     load_sext = !ctrl_opc_insn_i[0];
+   wire 			     load_zext = ctrl_opc_insn_i[0];
 
 
    wire 			     except_align;
@@ -110,14 +111,14 @@ module mor1kx_lsu_cappuccino
    wire 			     dc_we_i;
    wire [3:0] 			     dc_bsel_i;
 
-   assign dc_adr_i = lsu_adr_i;
-   assign dc_dat_i = (opc_insn_i[1:0]==2'b10) ?        // l.sb
-		     {rfb_i[7:0],rfb_i[7:0],rfb_i[7:0],rfb_i[7:0]} :
-		     (opc_insn_i[1:0]==2'b11) ?        // l.sh
-		     {rfb_i[15:0],rfb_i[15:0]} :
-		     rfb_i;                         // l.sw
+   assign dc_adr_i = ctrl_lsu_adr_i;
+   assign dc_dat_i = (ctrl_opc_insn_i[1:0]==2'b10) ?        // l.sb
+		     {ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],ctrl_rfb_i[7:0]} :
+		     (ctrl_opc_insn_i[1:0]==2'b11) ?        // l.sh
+		     {ctrl_rfb_i[15:0],ctrl_rfb_i[15:0]} :
+		     ctrl_rfb_i;                         // l.sw
 
-   assign dc_req_i = (op_lsu_load_i | op_lsu_store_i) &
+   assign dc_req_i = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) &
 		     !except_align & !access_done & !pipeline_flush_i;
 
    assign align_err_word = |dc_adr_i[1:0];
@@ -127,16 +128,18 @@ module mor1kx_lsu_cappuccino
    assign lsu_valid_o = dc_ack_o | access_done;
    assign lsu_except_dbus_o = dc_err_o | except_dbus;
 
-   assign load_align_err = ((opc_insn_i==`OR1K_OPCODE_LWZ |
-			     opc_insn_i==`OR1K_OPCODE_LWS) & align_err_word) |
-			   ((opc_insn_i==`OR1K_OPCODE_LHZ |
-			     opc_insn_i==`OR1K_OPCODE_LHS) & align_err_short);
+   assign load_align_err = ((ctrl_opc_insn_i==`OR1K_OPCODE_LWZ |
+			     ctrl_opc_insn_i==`OR1K_OPCODE_LWS) &
+			    align_err_word) |
+			   ((ctrl_opc_insn_i==`OR1K_OPCODE_LHZ |
+			     ctrl_opc_insn_i==`OR1K_OPCODE_LHS) &
+			    align_err_short);
 
-   assign store_align_err = (opc_insn_i==`OR1K_OPCODE_SW & align_err_word) |
-			    (opc_insn_i==`OR1K_OPCODE_SH & align_err_short);
+   assign store_align_err = (ctrl_opc_insn_i==`OR1K_OPCODE_SW & align_err_word) |
+			    (ctrl_opc_insn_i==`OR1K_OPCODE_SH & align_err_short);
 
-   assign except_align = (op_lsu_load_i & load_align_err) |
-			 (op_lsu_store_i & store_align_err) ;
+   assign except_align = (ctrl_op_lsu_load_i & load_align_err) |
+			 (ctrl_op_lsu_store_i & store_align_err) ;
 
    assign lsu_except_align_o = except_align;
 
@@ -158,8 +161,8 @@ module mor1kx_lsu_cappuccino
 
    // Big endian bus mapping
    always @*
-     if (op_lsu_load_i) begin
-	case(opc_insn_i[2:0])
+     if (ctrl_op_lsu_load_i) begin
+	case(ctrl_opc_insn_i[2:0])
 	  3'b101,
 	  3'b110: // load halfword
 	    case(dc_adr_i[1])
@@ -184,8 +187,8 @@ module mor1kx_lsu_cappuccino
 	    dbus_bsel = 4'b1111;
 	endcase // case (opc_insn_i[1:0])
      end
-     else if (op_lsu_store_i) begin
-	case(opc_insn_i[1:0])
+     else if (ctrl_op_lsu_store_i) begin
+	case(ctrl_opc_insn_i[1:0])
 	  2'b11: // Store halfword
 	    case(dc_adr_i[1])
 	      1'b0:
@@ -206,14 +209,14 @@ module mor1kx_lsu_cappuccino
 	    endcase // case (dbus_adr_o[1:0])
 	  default:
 	    dbus_bsel = 4'b1111;
-	endcase // case (opc_insn_i[1:0])
-     end // if (op_lsu_store_i)
+	endcase // case (ctrl_opc_insn_i[1:0])
+     end // if (ctrl_op_lsu_store_i)
      else
        dbus_bsel = 4'b0000;
 
    assign dc_bsel_i = dbus_bsel;
 
-   assign dc_we_i = op_lsu_store_i;
+   assign dc_we_i = ctrl_op_lsu_store_i;
 
    // Select part of read word
    always @*
@@ -230,9 +233,9 @@ module mor1kx_lsu_cappuccino
 
    // Do appropriate extension
    always @*
-     case(opc_insn_i[0])// zero or sign-extended
+     case(ctrl_opc_insn_i[0])// zero or sign-extended
        1'b1: // zero extended
-	 case(opc_insn_i[2:1])
+	 case(ctrl_opc_insn_i[2:1])
 	   2'b01: // lbz
 	     dbus_dat_extended = {24'd0,dbus_dat_aligned[31:24]};
 	   2'b10: // lhz
@@ -241,7 +244,7 @@ module mor1kx_lsu_cappuccino
 	     dbus_dat_extended = dbus_dat_aligned;
 	 endcase // case (opc_insn_i[2:1])
        1'b0: // sign extended
-	 case(opc_insn_i[2:1])
+	 case(ctrl_opc_insn_i[2:1])
 	   2'b10: // lbs
 	     dbus_dat_extended = {{24{dbus_dat_aligned[31]}},
 				  dbus_dat_aligned[31:24]};
@@ -255,7 +258,7 @@ module mor1kx_lsu_cappuccino
 
    // Register result incase writeback doesn't occur for a few cycles
    always @(posedge clk)
-     if (dc_ack_o & op_lsu_load_i)
+     if (dc_ack_o & ctrl_op_lsu_load_i)
        lsu_result_r <= dbus_dat_extended;
 
    assign lsu_result_o = access_done ? lsu_result_r : dbus_dat_extended;

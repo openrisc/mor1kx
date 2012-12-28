@@ -473,11 +473,12 @@ module mor1kx_cpu_cappuccino
    /* mor1kx_lsu_cappuccino AUTO_TEMPLATE (
     .padv_execute_i			(padv_execute_o),
     .decode_valid_i			(decode_valid_o),
-    .lsu_adr_i				(ctrl_lsu_adr_o),
-    .rfb_i				(ctrl_rfb_o),
-    .opc_insn_i			        (ctrl_opc_insn_o),
-    .op_lsu_load_i			(ctrl_op_lsu_load_o),
-    .op_lsu_store_i			(ctrl_op_lsu_store_o),
+    .exec_lsu_adr_i			(adder_result_o),
+    .ctrl_lsu_adr_i			(ctrl_lsu_adr_o),
+    .ctrl_rfb_i				(ctrl_rfb_o),
+    .ctrl_opc_insn_i			(ctrl_opc_insn_o),
+    .ctrl_op_lsu_load_i			(ctrl_op_lsu_load_o),
+    .ctrl_op_lsu_store_i		(ctrl_op_lsu_store_o),
     .pipeline_flush_i			(pipeline_flush_o),
     .dc_enable				(spr_sr_o[`OR1K_SPR_SR_DCE]),
     .spr_bus_dat_o			(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]),
@@ -515,11 +516,12 @@ module mor1kx_cpu_cappuccino
       .rst				(rst),
       .padv_execute_i			(padv_execute_o),	 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
-      .lsu_adr_i			(ctrl_lsu_adr_o),	 // Templated
-      .rfb_i				(ctrl_rfb_o),		 // Templated
-      .opc_insn_i			(ctrl_opc_insn_o),	 // Templated
-      .op_lsu_load_i			(ctrl_op_lsu_load_o),	 // Templated
-      .op_lsu_store_i			(ctrl_op_lsu_store_o),	 // Templated
+      .exec_lsu_adr_i			(adder_result_o),	 // Templated
+      .ctrl_lsu_adr_i			(ctrl_lsu_adr_o),	 // Templated
+      .ctrl_rfb_i			(ctrl_rfb_o),		 // Templated
+      .ctrl_opc_insn_i			(ctrl_opc_insn_o),	 // Templated
+      .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),	 // Templated
+      .ctrl_op_lsu_store_i		(ctrl_op_lsu_store_o),	 // Templated
       .spr_bus_addr_i			(spr_bus_addr_o[15:0]),	 // Templated
       .spr_bus_we_i			(spr_bus_we_o),		 // Templated
       .spr_bus_stb_i			(spr_bus_stb_o),	 // Templated
