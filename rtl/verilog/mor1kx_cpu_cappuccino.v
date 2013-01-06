@@ -751,6 +751,7 @@ module mor1kx_cpu_cappuccino
     .ctrl_branch_exception_i		(ctrl_branch_exception_o),
     .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o),
     .ctrl_except_ibus_align_i		(ctrl_except_ibus_align_o),
+    .ctrl_except_syscall_i		(ctrl_except_syscall_o),
     .execute_except_ibus_align_i	(execute_except_ibus_align_o),
     ); */
    mor1kx_ctrl_branch_cappuccino
@@ -777,7 +778,8 @@ module mor1kx_cpu_cappuccino
       .ctrl_branch_exception_i		(ctrl_branch_exception_o), // Templated
       .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o), // Templated
       .execute_except_ibus_align_i	(execute_except_ibus_align_o), // Templated
-      .ctrl_except_ibus_align_i		(ctrl_except_ibus_align_o)); // Templated
+      .ctrl_except_ibus_align_i		(ctrl_except_ibus_align_o), // Templated
+      .ctrl_except_syscall_i		(ctrl_except_syscall_o)); // Templated
 
 
    /* mor1kx_ctrl_cappuccino AUTO_TEMPLATE (

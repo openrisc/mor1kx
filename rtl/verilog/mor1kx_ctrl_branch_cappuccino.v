@@ -59,6 +59,8 @@ module mor1kx_ctrl_branch_cappuccino
     input 			      execute_except_ibus_align_i,
     input 			      ctrl_except_ibus_align_i,
 
+    input 			      ctrl_except_syscall_i,
+
     output 			      ctrl_branch_occur_o,
     output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o
     );
@@ -87,7 +89,12 @@ module mor1kx_ctrl_branch_cappuccino
 
    // Exceptions take precedence
    assign ctrl_branch_occur_o = ctrl_branch_exception_i |
-				imm_branch |
+				/* we have to prevent branches when we have
+				 * syscall exception in control stage
+				 * TODO: check if there are other exceptions
+				 * that need this too */
+				!ctrl_except_syscall_i &
+				(imm_branch |
 				/* Only look at execute_except_ibus_align on the
 				 * first cycle because potentially the branch
 				 * target has changed one cycle later.
@@ -96,7 +103,7 @@ module mor1kx_ctrl_branch_cappuccino
 				 * module, which calculates if it's an alignment
 				 * exception */
 				(op_jr_i & !(execute_except_ibus_align_i &
-					     !ctrl_branch_occur_r));
+					     !ctrl_branch_occur_r)));
 
    assign ctrl_branch_target_o = new_branch ? ctrl_branch_target :
 				 ctrl_branch_target_r;
