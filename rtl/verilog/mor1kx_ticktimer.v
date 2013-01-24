@@ -41,7 +41,7 @@ module mor1kx_ticktimer
 
    assign spr_ttmr_o = spr_ttmr;
    assign spr_ttcr_o = spr_ttcr;
-   assign spr_bus_ack = spr_we_i;
+   assign spr_bus_ack = 1'b1;
    assign spr_dat_o = (spr_addr_i==`OR1K_SPR_TTCR_ADDR) ?
 		      spr_ttcr :
 		      (spr_addr_i==`OR1K_SPR_TTMR_ADDR) ?
