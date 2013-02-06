@@ -270,7 +270,7 @@ module mor1kx_ctrl_cappuccino
    wire 			     spr_we;
       wire 			     spr_read;
    wire [OPTION_OPERAND_WIDTH-1:0]   spr_write_dat;
-   wire [11:0] 			     spr_access_ack;
+   wire [12:0] 			     spr_access_ack;
    wire [31:0] 			     spr_internal_read_dat [0:12];
    wire 			     spr_read_access;
    wire 			     spr_write_access;
@@ -964,6 +964,7 @@ module mor1kx_ctrl_cappuccino
 
    /* Default group when a selected one is not present - it reads as zero */
    assign spr_internal_read_dat[12] = 0;
+   assign spr_access_ack[12] = 1;
 
    /* Is a SPR bus access needed, or is the requested SPR in this file? */
    assign spr_bus_access = /* Any of the units we don't have in this file */
@@ -1180,7 +1181,7 @@ module mor1kx_ctrl_cappuccino
 	   assign stepped_into_delay_slot = 0;
 	   assign du_dat_o = 0;
 	   assign du_restart_from_stall = 0;
-	   assign spr_access_ack[6] = 0;
+	   assign spr_access_ack[6] = 1;
 
 	   always @(posedge clk)
 	     begin
@@ -1200,7 +1201,7 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_internal_read_dat[1] = spr_bus_dat_dmmu_i;
       end
       else begin
-	 assign spr_access_ack[1] = 0;
+	 assign spr_access_ack[1] = 1;
 	 assign spr_internal_read_dat[1] = 0;
       end
    endgenerate
@@ -1211,7 +1212,7 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_internal_read_dat[2] = spr_bus_dat_immu_i;
       end
       else begin
-	 assign spr_access_ack[2] = 0;
+	 assign spr_access_ack[2] = 1;
 	 assign spr_internal_read_dat[2] = 0;
       end
    endgenerate
@@ -1222,7 +1223,7 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_internal_read_dat[3] = spr_bus_dat_dc_i;
       end
       else begin
-	 assign spr_access_ack[3] = 0;
+	 assign spr_access_ack[3] = 1;
 	 assign spr_internal_read_dat[3] = 0;
       end
    endgenerate
@@ -1233,7 +1234,7 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_internal_read_dat[4] = spr_bus_dat_ic_i;
       end
       else begin
-	 assign spr_access_ack[4] = 0;
+	 assign spr_access_ack[4] = 1;
 	 assign spr_internal_read_dat[4] = 0;
       end
    endgenerate
@@ -1244,7 +1245,7 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_internal_read_dat[5] = spr_bus_dat_mac_i;
       end
       else begin
-	 assign spr_access_ack[5] = 0;
+	 assign spr_access_ack[5] = 1;
 	 assign spr_internal_read_dat[5] = 0;
       end
    endgenerate
@@ -1255,7 +1256,7 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_internal_read_dat[7] = spr_bus_dat_pcu_i;
       end
       else begin
-	 assign spr_access_ack[7] = 0;
+	 assign spr_access_ack[7] = 1;
 	 assign spr_internal_read_dat[7] = 0;
       end
    endgenerate
@@ -1266,7 +1267,7 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_internal_read_dat[8] = spr_bus_dat_pcu_i;
       end
       else begin
-	 assign spr_access_ack[8] = 0;
+	 assign spr_access_ack[8] = 1;
 	 assign spr_internal_read_dat[8] = 0;
       end
    endgenerate
@@ -1277,7 +1278,7 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_internal_read_dat[11] = spr_bus_dat_fpu_i;
       end
       else begin
-	 assign spr_access_ack[11] = 0;
+	 assign spr_access_ack[11] = 1;
 	 assign spr_internal_read_dat[11] = 0;
       end
    endgenerate
