@@ -148,6 +148,9 @@ module mor1kx_cpu_prontoespresso
    wire [OPTION_OPERAND_WIDTH-1:0] adder_result_o;// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire [OPTION_OPERAND_WIDTH-1:0] alu_result_o;// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			alu_valid_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire			carry_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire			carry_o;		// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
+   wire			carry_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			ctrl_branch_occur_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o;// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			ctrl_mfspr_we_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
@@ -191,6 +194,8 @@ module mor1kx_cpu_prontoespresso
    wire [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_secondary_o;// From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_OPCODE_WIDTH-1:0] opc_insn_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			overflow_clear_o;	// From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire			overflow_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			padv_decode_o;		// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			padv_execute_o;		// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			padv_fetch_o;		// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
@@ -361,6 +366,7 @@ module mor1kx_cpu_prontoespresso
     .rfa_i				(rfa_o),
     .rfb_i				(rfb_o),
     .flag_i                             (flag_o),
+    .carry_i				(carry_o),
     ); */
    mor1kx_execute_alu
      #(
@@ -388,6 +394,10 @@ module mor1kx_cpu_prontoespresso
       // Outputs
       .flag_set_o			(flag_set_o),
       .flag_clear_o			(flag_clear_o),
+      .carry_set_o			(carry_set_o),
+      .carry_clear_o			(carry_clear_o),
+      .overflow_set_o			(overflow_set_o),
+      .overflow_clear_o			(overflow_clear_o),
       .alu_result_o			(alu_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .alu_valid_o			(alu_valid_o),
       .adder_result_o			(adder_result_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -406,7 +416,8 @@ module mor1kx_cpu_prontoespresso
       .pc_execute_i			(spr_ppc_o),		 // Templated
       .rfa_i				(rfa_o),		 // Templated
       .rfb_i				(rfb_o),		 // Templated
-      .flag_i				(flag_o));		 // Templated
+      .flag_i				(flag_o),		 // Templated
+      .carry_i				(carry_o));		 // Templated
 
    
    /* mor1kx_lsu_espresso AUTO_TEMPLATE (
@@ -575,6 +586,10 @@ module mor1kx_cpu_prontoespresso
     .spr_bus_ack_dc_i		(),
     .spr_bus_dat_ic_i		(),
     .spr_bus_ack_ic_i		(),
+    .carry_set_i		(carry_set_o),
+    .carry_clear_i		(carry_clear_o),
+    .overflow_set_i		(overflow_set_o),
+    .overflow_clear_i		(overflow_clear_o),
     ); */
    mor1kx_ctrl_prontoespresso
      #(
@@ -612,6 +627,7 @@ module mor1kx_cpu_prontoespresso
 	.mfspr_dat_o			(mfspr_dat_o[OPTION_OPERAND_WIDTH-1:0]),
 	.ctrl_mfspr_we_o		(ctrl_mfspr_we_o),
 	.flag_o				(flag_o),
+	.carry_o			(carry_o),
 	.pipeline_flush_o		(pipeline_flush_o),
 	.padv_fetch_o			(padv_fetch_o),
 	.padv_decode_o			(padv_decode_o),
@@ -660,6 +676,10 @@ module mor1kx_cpu_prontoespresso
 	.op_jr_i			(op_jr_o),		 // Templated
 	.op_jbr_i			(op_jbr_o),		 // Templated
 	.irq_i				(irq_i[31:0]),
+	.carry_set_i			(carry_set_o),		 // Templated
+	.carry_clear_i			(carry_clear_o),	 // Templated
+	.overflow_set_i			(overflow_set_o),	 // Templated
+	.overflow_clear_i		(overflow_clear_o),	 // Templated
 	.du_addr_i			(du_addr_i[15:0]),
 	.du_stb_i			(du_stb_i),
 	.du_dat_i			(du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
