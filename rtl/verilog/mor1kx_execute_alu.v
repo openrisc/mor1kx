@@ -74,6 +74,13 @@ module mor1kx_execute_alu
     output 			      flag_set_o,
     output 			      flag_clear_o,
 
+    input                             carry_i,
+    output reg                        carry_set_o,
+    output reg                        carry_clear_o,
+
+    output reg                        overflow_set_o,
+    output reg                        overflow_clear_o,
+
     output [OPTION_OPERAND_WIDTH-1:0] alu_result_o,
     output 			      alu_valid_o,
     output [OPTION_OPERAND_WIDTH-1:0] adder_result_o
@@ -90,6 +97,8 @@ module mor1kx_execute_alu
    // Adder & comparator wires
    wire [OPTION_OPERAND_WIDTH-1:0]        adder_result;
    wire                                   adder_carryout;
+   wire 				  adder_signed_overflow;
+   wire 				  adder_unsigned_overflow;   
 
    wire [OPTION_OPERAND_WIDTH-1:0]        b_neg;
    wire [OPTION_OPERAND_WIDTH-1:0]        b_mux;
@@ -98,7 +107,8 @@ module mor1kx_execute_alu
    wire                                   a_eq_b;
    wire                                   a_lt_b;
    wire                                   adder_do_sub;
-
+   wire 				  adder_do_carry_in;
+   
    // Shifter wires
    wire [`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0] opc_alu_shr;
    wire                                   shift_op;
@@ -122,9 +132,13 @@ module mor1kx_execute_alu
    wire                                   mul_op_signed;
    wire [OPTION_OPERAND_WIDTH-1:0]        mul_result;
    wire                                   mul_valid;
+   wire 				  mul_signed_overflow;
+   wire 				  mul_unsigned_overflow;
 
    wire [OPTION_OPERAND_WIDTH-1:0]        div_result;
    wire                                   div_valid;
+   wire 				  div_by_zero;
+   
 
    wire [OPTION_OPERAND_WIDTH-1:0]        ffl1_result;
 
@@ -164,15 +178,31 @@ module mor1kx_execute_alu
                           opc_alu_i==`OR1K_ALU_OPC_SUB) |
                          comp_op;
 
+   // Generate carry-in
+   assign adder_do_carry_in = (FEATURE_ADDC!="NONE") &&
+			      ((opc_insn_i==`OR1K_OPCODE_ALU &
+			       opc_alu_i==`OR1K_ALU_OPC_ADDC) ||
+			       (opc_insn_i==`OR1K_OPCODE_ADDIC)) & carry_i;
+   
    // Adder/subtractor inputs
    assign b_neg = ~b;
-   assign carry_in = adder_do_sub;
+   assign carry_in = adder_do_sub | adder_do_carry_in;
    assign b_mux = adder_do_sub ? b_neg : b;
    // Adder
    assign {adder_carryout, adder_result} = a + b_mux +
                                            {{OPTION_OPERAND_WIDTH-1{1'b0}},
                                             carry_in};
 
+   assign adder_signed_overflow = // Input signs are same and ...
+				  (a[OPTION_OPERAND_WIDTH-1] == 
+				   b_mux[OPTION_OPERAND_WIDTH-1]) &
+				  // result sign is different to input signs
+				  (a[OPTION_OPERAND_WIDTH-1] ^ 
+				   adder_result[OPTION_OPERAND_WIDTH-1]);
+
+   assign adder_unsigned_overflow = adder_carryout;
+   
+				   
    assign mul_op = (opc_insn_i==`OR1K_OPCODE_ALU &&
                     (opc_alu_i == `OR1K_ALU_OPC_MUL ||
                      opc_alu_i == `OR1K_ALU_OPC_MULU)) ||
@@ -221,6 +251,9 @@ module mor1kx_execute_alu
 
          assign mul_valid = mul_valid_shr[2] & !decode_valid_i;
 
+	 // Can't detect unsigned overflow in this implementation
+	 assign mul_unsigned_overflow = 0;
+
       end // if (FEATURE_MULTIPLIER=="THREESTAGE")
       else if (FEATURE_MULTIPLIER=="SERIAL") begin : serialmultiply
          reg [(OPTION_OPERAND_WIDTH*2)-1:0]  mul_prod_r;
@@ -235,7 +268,7 @@ module mor1kx_execute_alu
 					  ~b + 1 : b;
 
          always @(posedge clk)
-            if (rst) begin
+           if (rst) begin
                mul_prod_r <=  64'h0000_0000_0000_0000;
                serial_mul_cnt <= 6'd0;
                mul_done <= 1'b0;
@@ -274,6 +307,9 @@ module mor1kx_execute_alu
                              mul_prod_r[OPTION_OPERAND_WIDTH-1:0]) :
                              mul_prod_r[OPTION_OPERAND_WIDTH-1:0];
 
+	 assign mul_unsigned_overflow =  OPTION_OPERAND_WIDTH==64 ? 0 :
+					 |mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:
+						     OPTION_OPERAND_WIDTH];
 
 	 // synthesis translate_off
 	 `ifndef verilator
@@ -293,13 +329,20 @@ module mor1kx_execute_alu
       end // if (FEATURE_MULTIPLIER=="SERIAL")
       else if (FEATURE_MULTIPLIER=="SIMULATION") begin
          // Simple multiplier result
-         assign mul_result = a * b;
+	 wire [(OPTION_OPERAND_WIDTH*2)-1:0] mul_full_result;
+	 assign mul_full_result = a * b;
+         assign mul_result = mul_full_result[OPTION_OPERAND_WIDTH-1:0];
+	 
+	 assign mul_unsigned_overflow =  OPTION_OPERAND_WIDTH==64 ? 0 :
+	       |mul_full_result[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH];
+	 
          assign mul_valid = 1;
       end
       else if (FEATURE_MULTIPLIER=="NONE") begin
          // No multiplier
          assign mul_result = adder_result;
          assign mul_valid = alu_result_valid;
+	 assign mul_unsigned_overflow = 0;
       end
       else begin
          // Incorrect configuration option
@@ -311,15 +354,36 @@ module mor1kx_execute_alu
       end
    endgenerate
 
+   // One signed overflow detection for all multiplication implmentations
+   assign mul_signed_overflow = (FEATURE_MULTIPLIER=="NONE") ? 0 :
+				// Same signs, check for negative result
+				// (should be positive)
+				((a[OPTION_OPERAND_WIDTH-1] ==
+				  b[OPTION_OPERAND_WIDTH-1]) &&
+				 mul_result[OPTION_OPERAND_WIDTH-1]) ||
+				// Differring signs, check for positive result
+				// (should be negative)
+				((a[OPTION_OPERAND_WIDTH-1] ^
+				  b[OPTION_OPERAND_WIDTH-1]) &&
+				 !mul_result[OPTION_OPERAND_WIDTH-1]);
+
    generate
       if (FEATURE_DIVIDER=="SERIAL") begin
-         reg [4:0] div_count;
+         reg [5:0] div_count;
          reg [OPTION_OPERAND_WIDTH-1:0] div_n;
          reg [OPTION_OPERAND_WIDTH-1:0] div_d;
          reg [OPTION_OPERAND_WIDTH-1:0] div_r;
          wire [OPTION_OPERAND_WIDTH:0]  div_sub;
          reg                            div_neg;
          reg                            div_done;
+	 reg 				div_by_zero_r;
+	 wire 				divs_op;
+	 wire 				divu_op;
+	 wire 				div_op;
+
+	 assign divs_op =  opc_alu_i == `OR1K_ALU_OPC_DIV;
+	 assign divu_op =  opc_alu_i == `OR1K_ALU_OPC_DIVU;
+	 assign div_op = divs_op | divu_op;
 
          assign div_sub = {div_r[OPTION_OPERAND_WIDTH-2:0],
                            div_n[OPTION_OPERAND_WIDTH-1]} - div_d;
@@ -328,32 +392,35 @@ module mor1kx_execute_alu
          always @(posedge clk `OR_ASYNC_RST)
            if (rst)
 	     /* verilator lint_off WIDTH */
-             div_count <= OPTION_OPERAND_WIDTH-1;
+             div_count <= 0;
            else if (decode_valid_i)
-             div_count <= OPTION_OPERAND_WIDTH-1;
+             div_count <= OPTION_OPERAND_WIDTH;
 	    /* verilator lint_on WIDTH */
-           else
+           else if (|div_count)
              div_count <= div_count - 1;
 
          always @(posedge clk `OR_ASYNC_RST) begin
             if (rst) begin
-               div_n <= a;
+               div_n <= 0;
+               div_d <= 0;
+               div_r <= 0;
+               div_neg <= 1'b0;
+               div_done <= 1'b0;
+	       div_by_zero_r <= 1'b0;
+            end else if (decode_valid_i & div_op) begin
+	       div_n <= a;
                div_d <= b;
                div_r <= 0;
                div_neg <= 1'b0;
                div_done <= 1'b0;
-            end else if (decode_valid_i) begin
-               div_n <= a;
-               div_d <= b;
-               div_r <= 0;
-               div_neg <= 1'b0;
-               div_done <= 1'b0;
+	       div_by_zero_r <= !(|b);
+	       
                /*
                 * Convert negative operands in the case of signed division.
                 * If only one of the operands is negative, the result is
                 * converted back to negative later on
                 */
-               if (opc_alu_i == `OR1K_ALU_OPC_DIV) begin
+               if (divs_op) begin
                   if (a[OPTION_OPERAND_WIDTH-1] ^ b[OPTION_OPERAND_WIDTH-1])
                     div_neg <= 1'b1;
 
@@ -372,21 +439,26 @@ module mor1kx_execute_alu
                             div_n[OPTION_OPERAND_WIDTH-1]};
                   div_n <= {div_n[OPTION_OPERAND_WIDTH-2:0], 1'b0};
                end
-               if (div_count == 0)
+               if (div_count == 1)
                  div_done <= 1'b1;
            end
          end
 
          assign div_valid = div_done & !decode_valid_i;
          assign div_result = div_neg ? ~div_n + 1 : div_n;
+	 assign div_by_zero = div_by_zero_r;
       end
       else if (FEATURE_DIVIDER=="SIMULATION") begin
          assign div_result = a / b;
          assign div_valid = 1;
+	 assign div_by_zero = (opc_alu_i == `OR1K_ALU_OPC_DIV || 
+				 opc_alu_i == `OR1K_ALU_OPC_DIVU) && !(|b);
+	 
       end
       else if (FEATURE_DIVIDER=="NONE") begin
          assign div_result = adder_result;
          assign div_valid = alu_result_valid;
+	 assign div_by_zero = 0;
       end
       else begin
          // Incorrect configuration option
@@ -604,8 +676,7 @@ module mor1kx_execute_alu
    assign and_result = a & b;
    assign or_result = a | b;
    assign xor_result = a ^ b;
-
-
+   
    // Result muxing - result is registered in RF
    always @*
      case(opc_insn_i)
@@ -682,6 +753,82 @@ module mor1kx_execute_alu
    assign alu_result_valid = 1'b1; // ALU (adder, logic ops) always ready
    assign alu_result_o = alu_result;
 
+
+   // Carry and overflow flag generation
+   always @*
+     case(opc_insn_i)
+       `OR1K_OPCODE_ALU:
+         case(opc_alu_i)
+           `OR1K_ALU_OPC_ADDC,
+           `OR1K_ALU_OPC_ADD,
+	   `OR1K_ALU_OPC_SUB:
+	     begin
+		overflow_set_o		= adder_signed_overflow;
+		overflow_clear_o	= !adder_signed_overflow;
+		carry_set_o		= adder_unsigned_overflow;
+		carry_clear_o		= !adder_unsigned_overflow;
+	     end
+           `OR1K_ALU_OPC_MUL:
+	     begin
+		overflow_set_o		= mul_signed_overflow;
+		overflow_clear_o	= !mul_signed_overflow;
+		carry_set_o		= 0;
+		carry_clear_o		= 0;
+	     end
+           `OR1K_ALU_OPC_MULU:
+	     begin
+		overflow_set_o		= 0;
+		overflow_clear_o	= 0;
+		carry_set_o		= mul_unsigned_overflow;
+		carry_clear_o		= !mul_unsigned_overflow;
+	     end
+
+           `OR1K_ALU_OPC_DIV:
+	     begin
+		overflow_set_o		= div_by_zero;
+		overflow_clear_o	= !div_by_zero;
+		carry_set_o		= 0;
+		carry_clear_o		= 0;
+	     end
+           `OR1K_ALU_OPC_DIVU:
+             begin
+		overflow_set_o		= 0;
+		overflow_clear_o	= 0;
+		carry_set_o		= div_by_zero;
+		carry_clear_o		= !div_by_zero;
+	     end
+	   default:
+	     begin
+		overflow_set_o		= 0;
+		overflow_clear_o	= 0;
+		carry_set_o		= 0;
+		carry_clear_o		= 0;
+	     end
+	 endcase // case (opc_alu_i)
+       `OR1K_OPCODE_ADDIC,
+       `OR1K_OPCODE_ADDI:
+         begin
+	    overflow_set_o	= adder_signed_overflow;
+	    overflow_clear_o	= !adder_signed_overflow;
+	    carry_set_o		= adder_unsigned_overflow;
+	    carry_clear_o	= !adder_unsigned_overflow;
+	 end
+       `OR1K_OPCODE_MULI:
+	 begin
+	    overflow_set_o	= mul_signed_overflow;
+	    overflow_clear_o	= !mul_signed_overflow;
+	    carry_set_o		= 0;
+	    carry_clear_o	= 0;
+	 end
+       default:
+	 begin
+	    overflow_set_o	= 0;
+	    overflow_clear_o	= 0;
+	    carry_set_o		= 0;
+	    carry_clear_o	= 0;
+	 end
+     endcase // case (opc_insn_i)
+   
    // ALU finished/valid MUXing
    always @*
      case(opc_insn_i)
