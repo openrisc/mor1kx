@@ -113,6 +113,7 @@ module mor1kx_ctrl_cappuccino
     input 			      fetch_branch_taken_i,
 
     input 			      decode_bubble_i,
+    input 			      exec_bubble_i,
 
     // External IRQ lines in
     input [31:0] 		      irq_i,
@@ -235,6 +236,8 @@ module mor1kx_ctrl_cappuccino
 
    wire 			     except_range;
 
+   reg 				     ctrl_bubble;
+
    wire [15:0] 			     spr_addr;
 
    wire 			     op_mtspr;
@@ -301,7 +304,8 @@ module mor1kx_ctrl_cappuccino
 			       except_dbus_i | except_align_i | except_ticktimer |
 			       except_range | except_pic | except_trap_i );
 
-   assign exception = exception_pending & (padv_ctrl | ctrl_stage_exceptions);
+   assign exception = exception_pending &
+		      (padv_ctrl & !ctrl_bubble | ctrl_stage_exceptions);
 
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
 
@@ -612,6 +616,12 @@ module mor1kx_ctrl_cappuccino
        end
      else if (spr_we & spr_addr==`OR1K_SPR_ESR0_ADDR)
        spr_esr <= spr_write_dat[SPR_SR_WIDTH-1:0];
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       ctrl_bubble <= 0;
+     else if (padv_execute_o)
+       ctrl_bubble <= exec_bubble_i;
 
    // Exception PC
    always @(posedge clk `OR_ASYNC_RST)

@@ -794,6 +794,7 @@ module mor1kx_cpu_cappuccino
     .execute_opc_insn_i		(opc_insn_o),
     .fetch_branch_taken_i	(fetch_branch_taken_o),
     .decode_bubble_i		(decode_bubble_o),
+    .exec_bubble_i		(exec_bubble_o),
     .ctrl_carry_set_i		(ctrl_carry_set_o),
     .ctrl_carry_clear_i		(ctrl_carry_clear_o),
     .ctrl_overflow_set_i       (ctrl_overflow_set_o),
@@ -876,6 +877,7 @@ module mor1kx_cpu_cappuccino
       .execute_waiting_i		(execute_waiting_o),	 // Templated
       .fetch_branch_taken_i		(fetch_branch_taken_o),	 // Templated
       .decode_bubble_i			(decode_bubble_o),	 // Templated
+      .exec_bubble_i			(exec_bubble_o),	 // Templated
       .irq_i				(irq_i[31:0]),
       .ctrl_carry_set_i			(ctrl_carry_set_o),	 // Templated
       .ctrl_carry_clear_i		(ctrl_carry_clear_o),	 // Templated
