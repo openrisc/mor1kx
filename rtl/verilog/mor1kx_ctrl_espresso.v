@@ -31,8 +31,8 @@ module mor1kx_ctrl_espresso
   (/*AUTOARG*/
    // Outputs
    flag_o, spr_npc_o, spr_ppc_o, mfspr_dat_o, ctrl_mfspr_we_o,
-   pipeline_flush_o, padv_fetch_o, padv_decode_o, padv_execute_o,
-   fetch_take_exception_branch_o, exception_taken_o,
+   carry_o, pipeline_flush_o, padv_fetch_o, padv_decode_o,
+   padv_execute_o, fetch_take_exception_branch_o, exception_taken_o,
    execute_waiting_o, stepping_o, du_dat_o, du_ack_o, du_stall_o,
    du_restart_pc_o, du_restart_o, spr_bus_addr_o, spr_bus_we_o,
    spr_bus_stb_o, spr_bus_dat_o, spr_sr_o, ctrl_branch_target_o,
@@ -43,13 +43,14 @@ module mor1kx_ctrl_espresso
    except_ibus_err_i, except_illegal_i, except_syscall_i,
    except_dbus_i, except_trap_i, except_align_i, next_fetch_done_i,
    alu_valid_i, lsu_valid_i, op_alu_i, op_lsu_load_i, op_lsu_store_i,
-   op_jr_i, op_jbr_i, irq_i, du_addr_i, du_stb_i, du_dat_i, du_we_i,
-   du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i, spr_bus_dat_ic_i,
-   spr_bus_ack_ic_i, spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i,
-   spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
-   spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
-   spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
-   spr_bus_ack_fpu_i, rf_wb_i
+   op_jr_i, op_jbr_i, irq_i, carry_set_i, carry_clear_i,
+   overflow_set_i, overflow_clear_i, du_addr_i, du_stb_i, du_dat_i,
+   du_we_i, du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i,
+   spr_bus_dat_ic_i, spr_bus_ack_ic_i, spr_bus_dat_dmmu_i,
+   spr_bus_ack_dmmu_i, spr_bus_dat_immu_i, spr_bus_ack_immu_i,
+   spr_bus_dat_mac_i, spr_bus_ack_mac_i, spr_bus_dat_pmu_i,
+   spr_bus_ack_pmu_i, spr_bus_dat_pcu_i, spr_bus_ack_pcu_i,
+   spr_bus_dat_fpu_i, spr_bus_ack_fpu_i, rf_wb_i
    );
 
    parameter OPTION_OPERAND_WIDTH       = 32;
@@ -133,6 +134,13 @@ module mor1kx_ctrl_espresso
    
    // Flag out to branch control, combinatorial
    reg                               flag;
+
+   // Arithmetic flags to and from ALU
+   output 			     carry_o;
+   input 			     carry_set_i;
+   input 			     carry_clear_i;
+   input 			     overflow_set_i;
+   input 			     overflow_clear_i;
    
    // Branch indicator from control unit (l.rfe/exception)
    wire                              ctrl_branch_exception;
@@ -249,7 +257,8 @@ module mor1kx_ctrl_espresso
 
    wire                              except_ticktimer_nonsrmasked;
    wire                              except_pic_nonsrmasked;
-   
+
+   wire 			     except_range;
    
    wire [15:0]                       spr_addr;
    
@@ -326,7 +335,7 @@ module mor1kx_ctrl_espresso
    assign exception_pending = (except_ibus_err_i | except_ibus_align | 
                                except_illegal_i | except_syscall_i |
                                except_dbus_i | except_align_i | 
-                               except_ticktimer |
+                               except_ticktimer | except_range |
                                except_pic | except_trap_i );
       
    assign exception = exception_pending;
@@ -334,7 +343,8 @@ module mor1kx_ctrl_espresso
    assign fetch_take_exception_branch_o =  (take_exception | op_rfe) & 
                                            !stepping;
    
-   assign execute_stage_exceptions = except_dbus_i | except_align_i;
+   assign execute_stage_exceptions = except_dbus_i | except_align_i |
+				     except_range;
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
 
    assign exception_re = exception & !exception_r & !exception_taken;
@@ -376,6 +386,10 @@ module mor1kx_ctrl_espresso
                       & !((op_lsu_load_i | op_lsu_store_i) &
                           except_dbus_i | except_align_i)) |
                      (op_mfspr));
+
+   assign except_range = (FEATURE_RANGE!="NONE") ? spr_sr[`OR1K_SPR_SR_OVE] &&
+			 (spr_sr[`OR1K_SPR_SR_OV] | overflow_set_i & 
+			  execute_done)  & !doing_rfe : 0;
    
    // Check for unaligned jump address from register
    assign except_ibus_align = op_jr_i & (|ctrl_rfb_i[1:0]);
@@ -396,26 +410,29 @@ module mor1kx_ctrl_espresso
               except_syscall_i,
               except_trap_i,
               except_dbus_i,
+	      except_range,
               except_pic_nonsrmasked,
               except_ticktimer_nonsrmasked
               }
              )
-         9'b1????????:
+         10'b1?????????:
            exception_pc_addr <= {19'd0,`OR1K_BERR_VECTOR,8'd0};
-         9'b01???????:
+         10'b01????????:
            exception_pc_addr <= {19'd0,`OR1K_ILLEGAL_VECTOR,8'd0};
-         9'b001??????,
-           9'b0001?????:
+         10'b001???????,
+           10'b0001??????:
              exception_pc_addr <= {19'd0,`OR1K_ALIGN_VECTOR,8'd0};
-         9'b00001????:
+         10'b00001?????:
            exception_pc_addr <= {19'd0,`OR1K_SYSCALL_VECTOR,8'd0};
-         9'b000001???:
+         10'b000001????:
            exception_pc_addr <= {19'd0,`OR1K_TRAP_VECTOR,8'd0};
-         9'b0000001??:
+         10'b0000001???:
            exception_pc_addr <= {19'd0,`OR1K_BERR_VECTOR,8'd0};
-         9'b00000001?:
+         10'b00000001??:
+           exception_pc_addr <= {19'd0,`OR1K_RANGE_VECTOR,8'd0};
+         10'b000000001?:
            exception_pc_addr <= {19'd0,`OR1K_INT_VECTOR,8'd0};
-         //9'b000000001:
+         //10'b0000000001:
          default:
            exception_pc_addr <= {19'd0,`OR1K_TT_VECTOR,8'd0};
        endcase // casex (...
@@ -614,16 +631,26 @@ module mor1kx_ctrl_espresso
                  spr_sr[`OR1K_SPR_SR_DME ] <= 1'b0;
                if (FEATURE_IMMU!="NONE")
                  spr_sr[`OR1K_SPR_SR_IME ] <= 1'b0;
+	       if (FEATURE_OVERFLOW!="NONE")
+		 spr_sr[`OR1K_SPR_SR_OVE ] <= 1'b0;
             end
        end
      else if (execute_done)
        begin
-          if (ctrl_flag_set_i)
-            spr_sr[`OR1K_SPR_SR_F   ] <= 1'b1;
-          else if (ctrl_flag_clear_i)
-            spr_sr[`OR1K_SPR_SR_F   ] <= 1'b0;
-          else if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) && 
-                   spr_addr==`OR1K_SPR_SR_ADDR)
+	  spr_sr[`OR1K_SPR_SR_F   ] <= ctrl_flag_set_i ? 1 :
+				       ctrl_flag_clear_i ? 0 :
+				       spr_sr[`OR1K_SPR_SR_F   ];
+	  spr_sr[`OR1K_SPR_SR_CY   ] <= carry_set_i ? 1 :
+					carry_clear_i ? 0 :
+					spr_sr[`OR1K_SPR_SR_CY   ];
+
+	  if (FEATURE_OVERFLOW!="NONE")
+	    spr_sr[`OR1K_SPR_SR_OV   ] <= overflow_set_i ? 1 :
+				overflow_clear_i ? 0 :
+				spr_sr[`OR1K_SPR_SR_OV   ];
+	  
+	  if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) && 
+              spr_addr==`OR1K_SPR_SR_ADDR)
             begin
                spr_sr[`OR1K_SPR_SR_SM  ] <= spr_write_dat[`OR1K_SPR_SR_SM  ];
 
@@ -668,8 +695,9 @@ module mor1kx_ctrl_espresso
             if (exception_r || exception_re)
               spr_sr[`OR1K_SPR_SR_DSX ] <= execute_delay_slot;
 
-
        end // if (execute_done)
+
+   assign carry_o = spr_sr[`OR1K_SPR_SR_CY];
    
    // Exception SR
    always @(posedge clk `OR_ASYNC_RST)
@@ -683,12 +711,27 @@ module mor1kx_ctrl_espresso
            edge, EPCR will point to the insn past the l.sf but the flag will
            not have been saved to the SR properly. So we must put it in here
            so it can be restored correctly.
+	   Ditto for the other flags which may have been changed in a similar
+	   fashion.
            */
           if (execute_done)
-            if (ctrl_flag_set_i)
-              spr_esr[`OR1K_SPR_SR_F   ] <= 1'b1;
-            else if (ctrl_flag_clear_i)
-              spr_esr[`OR1K_SPR_SR_F   ] <= 1'b0;
+	    begin
+               if (ctrl_flag_set_i)
+		 spr_esr[`OR1K_SPR_SR_F   ] <= 1'b1;
+               else if (ctrl_flag_clear_i)
+		 spr_esr[`OR1K_SPR_SR_F   ] <= 1'b0;
+	       if (FEATURE_OVERFLOW!="NONE")
+		 begin
+		    if (overflow_set_i)
+		      spr_esr[`OR1K_SPR_SR_OV   ] <= 1'b1;
+		    else if (overflow_clear_i)
+		      spr_esr[`OR1K_SPR_SR_OV   ] <= 1'b0;
+		 end
+	       if (carry_set_i)
+		 spr_esr[`OR1K_SPR_SR_CY   ] <= 1'b1;
+	       else if (carry_clear_i)
+		 spr_esr[`OR1K_SPR_SR_CY   ] <= 1'b0;
+	    end
        end
      else if (spr_we & spr_addr==`OR1K_SPR_ESR0_ADDR)
        spr_esr <= spr_write_dat[SPR_SR_WIDTH-1:0];
