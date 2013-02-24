@@ -48,7 +48,7 @@ module mor1kx_pic
    assign spr_picmr_o = spr_picmr;
    assign spr_picsr_o = spr_picsr;
 
-   assign spr_bus_ack = spr_we_i;
+   assign spr_bus_ack = 1'b1;
    assign spr_dat_o =  (spr_addr_i==`OR1K_SPR_PICSR_ADDR) ?
 		       spr_picsr :
 		       (spr_addr_i==`OR1K_SPR_PICMR_ADDR) ?
