@@ -126,6 +126,13 @@ module mor1kx_ctrl_cappuccino
     // Flag out to branch control, combinatorial
     output 			      ctrl_flag_o,
 
+   // Arithmetic flags to and from ALU
+    output 			     ctrl_carry_o,
+    input 			     ctrl_carry_set_i,
+    input 			     ctrl_carry_clear_i,
+    input 			     ctrl_overflow_set_i,
+    input 			     ctrl_overflow_clear_i,
+
     // Branch indicator from control unit (l.rfe/exception)
     output 			      ctrl_branch_exception_o,
     // PC out to fetch stage for l.rfe, exceptions
@@ -226,6 +233,7 @@ module mor1kx_ctrl_cappuccino
    wire 			     except_ticktimer;
    wire 			     except_pic;
 
+   wire 			     except_range;
 
    wire [15:0] 			     spr_addr;
 
@@ -289,15 +297,19 @@ module mor1kx_ctrl_cappuccino
    assign ctrl_branch_exception_o = (exception_r | (op_rfe | doing_rfe)) &
 				    !exception_taken;
    assign exception_pending = (except_ibus_err_i | except_ibus_align_i |
-		       except_illegal_i | except_syscall_i |
-		       except_dbus_i | except_align_i | except_ticktimer |
-			       except_pic | except_trap_i );
+			       except_illegal_i | except_syscall_i |
+			       except_dbus_i | except_align_i | except_ticktimer |
+			       except_range | except_pic | except_trap_i );
 
    assign exception = exception_pending & (padv_ctrl | ctrl_stage_exceptions);
 
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
 
    assign exception_re = exception & !exception_r & !exception_taken;
+
+   assign except_range = (FEATURE_RANGE!="NONE") ? spr_sr[`OR1K_SPR_SR_OVE] &&
+			 (spr_sr[`OR1K_SPR_SR_OV] | ctrl_overflow_set_i & 
+			  execute_valid_i)  & !doing_rfe : 0;
 
    assign deassert_decode_execute_halt = fetch_branch_taken_i &
 					 decode_execute_halt;
@@ -306,7 +318,7 @@ module mor1kx_ctrl_cappuccino
 				    exception_pc_addr;
 
    always @(posedge clk)
-     ctrl_stage_exceptions <= except_align_i | except_dbus_i;
+     ctrl_stage_exceptions <= except_align_i | except_dbus_i | except_range;
 
    always @(posedge clk)
      if (exception & !exception_r)
@@ -318,33 +330,40 @@ module mor1kx_ctrl_cappuccino
 	      except_syscall_i,
 	      except_trap_i,
 	      except_dbus_i,
+	      except_range,
 	      except_pic,
 	      except_ticktimer
 	      }
 	     )
-	 9'b1????????:
+	 10'b1?????????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_BERR_VECTOR,8'd0};
-	 9'b01???????:
+	 10'b01????????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_ILLEGAL_VECTOR,8'd0};
-	 9'b001??????,
-	   9'b0001?????:
+	 10'b001???????,
+	   10'b0001??????:
 	     exception_pc_addr <= spr_evbar |
 				  {19'd0,`OR1K_ALIGN_VECTOR,8'd0};
-	 9'b00001????:
+	 10'b00001?????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_SYSCALL_VECTOR,8'd0};
-	 9'b000001???:
+	 10'b000001????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_TRAP_VECTOR,8'd0};
-	 9'b0000001??:
+	 10'b0000001???:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_BERR_VECTOR,8'd0};
-	 9'b00000001?:
+	 10'b0000001???:
+	   exception_pc_addr <= spr_evbar |
+				{19'd0,`OR1K_BERR_VECTOR,8'd0};
+         10'b00000001??:
+           exception_pc_addr <= spr_evbar | 
+				{19'd0,`OR1K_RANGE_VECTOR,8'd0};
+	 10'b000000001?:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_INT_VECTOR,8'd0};
-	 //9'b000000001:
+	 //10'b0000000001:
 	 default:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_TT_VECTOR,8'd0};
@@ -387,6 +406,11 @@ module mor1kx_ctrl_cappuccino
    // Flag output
    assign ctrl_flag_o = (!ctrl_flag_clear_i & spr_sr[`OR1K_SPR_SR_F]) |
 			ctrl_flag_set_i;
+
+   // Carry output
+   assign ctrl_carry_o = (!ctrl_carry_clear_i & spr_sr[`OR1K_SPR_SR_CY]) |
+			 ctrl_carry_set_i;
+   
 
    // Ctrl stage pipeline advance signal is one cycle behind execute stage's
    always @(posedge clk `OR_ASYNC_RST)
@@ -495,15 +519,24 @@ module mor1kx_ctrl_cappuccino
 	    spr_sr[`OR1K_SPR_SR_IME ] <= 1'b0;
           if (FEATURE_DSX!="NONE")
 	    spr_sr[`OR1K_SPR_SR_DSX ] <= ctrl_delay_slot;
+	  if (FEATURE_OVERFLOW!="NONE")
+	    spr_sr[`OR1K_SPR_SR_OVE ] <= 1'b0;
        end
      else if (padv_ctrl)
        begin
-	  if (ctrl_flag_set_i)
-	    spr_sr[`OR1K_SPR_SR_F   ] <= 1'b1;
-	  else if (ctrl_flag_clear_i)
-	    spr_sr[`OR1K_SPR_SR_F   ] <= 1'b0;
-	  else if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) &&
-		   spr_addr==`OR1K_SPR_SR_ADDR)
+	  spr_sr[`OR1K_SPR_SR_F   ] <= ctrl_flag_set_i ? 1 :
+				       ctrl_flag_clear_i ? 0 :
+				       spr_sr[`OR1K_SPR_SR_F   ];
+	  spr_sr[`OR1K_SPR_SR_CY   ] <= ctrl_carry_set_i ? 1 :
+					ctrl_carry_clear_i ? 0 :
+					spr_sr[`OR1K_SPR_SR_CY   ];
+	  if (FEATURE_OVERFLOW!="NONE")
+	    spr_sr[`OR1K_SPR_SR_OV   ] <= ctrl_overflow_set_i ? 1 :
+				ctrl_overflow_clear_i ? 0 :
+				spr_sr[`OR1K_SPR_SR_OV   ];
+	  
+	  if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) &&
+	      spr_addr==`OR1K_SPR_SR_ADDR)
 	    begin
 	       spr_sr[`OR1K_SPR_SR_SM  ] <= spr_write_dat[`OR1K_SPR_SR_SM  ];
 
@@ -544,7 +577,7 @@ module mor1kx_ctrl_cappuccino
 	    spr_sr <= spr_esr;
 
        end // if (padv_ctrl)
-
+   
    // Exception SR
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -559,10 +592,23 @@ module mor1kx_ctrl_cappuccino
 	   so it can be restored correctly.
 	   */
 	  if (padv_ctrl)
-	    if (ctrl_flag_set_i)
-	      spr_esr[`OR1K_SPR_SR_F   ] <= 1'b1;
-	    else if (ctrl_flag_clear_i)
-	      spr_esr[`OR1K_SPR_SR_F   ] <= 1'b0;
+	    begin
+	       if (ctrl_flag_set_i)
+		 spr_esr[`OR1K_SPR_SR_F   ] <= 1'b1;
+	       else if (ctrl_flag_clear_i)
+		 spr_esr[`OR1K_SPR_SR_F   ] <= 1'b0;
+	       if (FEATURE_OVERFLOW!="NONE")
+		 begin
+		    if (ctrl_overflow_set_i)
+		      spr_esr[`OR1K_SPR_SR_OV   ] <= 1'b1;
+		    else if (ctrl_overflow_clear_i)
+		      spr_esr[`OR1K_SPR_SR_OV   ] <= 1'b0;
+		 end
+	       if (ctrl_carry_set_i)
+		 spr_esr[`OR1K_SPR_SR_CY   ] <= 1'b1;
+	       else if (ctrl_carry_clear_i)
+		 spr_esr[`OR1K_SPR_SR_CY   ] <= 1'b0;
+	    end
        end
      else if (spr_we & spr_addr==`OR1K_SPR_ESR0_ADDR)
        spr_esr <= spr_write_dat[SPR_SR_WIDTH-1:0];

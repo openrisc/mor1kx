@@ -21,7 +21,8 @@ module mor1kx_execute_ctrl_cappuccino
     parameter OPTION_OPERAND_WIDTH = 32,
     parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
 				 `OR1K_RESET_VECTOR,8'd0},
-    parameter OPTION_RF_ADDR_WIDTH = 5
+    parameter OPTION_RF_ADDR_WIDTH = 5,
+    parameter FEATURE_OVERFLOW = "NONE"
     )
    (
     input 				  clk,
@@ -58,6 +59,11 @@ module mor1kx_execute_ctrl_cappuccino
     input [OPTION_OPERAND_WIDTH-1:0] 	  rfb_i,
     input 				  flag_set_i,
     input 				  flag_clear_i,
+    input                                 carry_set_i,
+    input                                 carry_clear_i,
+    input 	                          overflow_set_i,
+    input 			          overflow_clear_i,
+
     input [OPTION_OPERAND_WIDTH-1:0] 	  pc_execute_i,
 
     input 				  exec_rf_wb_i,
@@ -83,6 +89,11 @@ module mor1kx_execute_ctrl_cappuccino
     output reg [OPTION_OPERAND_WIDTH-1:0] ctrl_rfb_o,
     output reg 				  ctrl_flag_set_o,
     output reg 				  ctrl_flag_clear_o,
+    output reg 				  ctrl_carry_set_o,
+    output reg 				  ctrl_carry_clear_o,
+    output reg 				  ctrl_overflow_set_o,
+    output reg 				  ctrl_overflow_clear_o,
+    
     output reg [OPTION_OPERAND_WIDTH-1:0] pc_ctrl_o,
     output reg [`OR1K_OPCODE_WIDTH-1:0]   ctrl_opc_insn_o,
 
@@ -178,10 +189,20 @@ module mor1kx_execute_ctrl_cappuccino
      if (rst) begin
 	ctrl_flag_set_o <= 0;
 	ctrl_flag_clear_o <= 0;
+	ctrl_carry_set_o <= 0;
+	ctrl_carry_clear_o <= 0;
+	ctrl_overflow_set_o <= 0;
+	ctrl_overflow_clear_o <= 0;
      end
      else if (padv_i) begin
 	ctrl_flag_set_o <= flag_set_i;
 	ctrl_flag_clear_o <= flag_clear_i;
+	ctrl_carry_set_o <= carry_set_i;
+	ctrl_carry_clear_o <= carry_clear_i;
+	if (FEATURE_OVERFLOW!="NONE") begin
+	   ctrl_overflow_set_o <= overflow_set_i;
+	   ctrl_overflow_clear_o <= overflow_clear_i;
+	end
      end
 
    // pc_ctrl should not advance when a nop bubble moves from execute to
