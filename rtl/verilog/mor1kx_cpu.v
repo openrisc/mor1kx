@@ -146,9 +146,7 @@ module mor1kx_cpu(/*AUTOARG*/
    input 			     spr_bus_ack_fpu_i;   
    output [15:0] 		     spr_sr_o;
 
-   wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_decode_insn/* verilator public */;
    wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_execute_insn/* verilator public */;   
-   wire 			     monitor_decode_advance/* verilator public */;
    wire 			     monitor_execute_advance/* verilator public */;
    wire 			     monitor_flag_set/* verilator public */;
    wire 			     monitor_flag_clear/* verilator public */;
@@ -270,8 +268,6 @@ module mor1kx_cpu(/*AUTOARG*/
 				monitor_flag_sr;
 	 assign monitor_clk = clk;
 
-	 assign monitor_decode_insn = cappuccino.mor1kx_cpu.mor1kx_decode.decode_insn_i;
-	 assign monitor_decode_advance = cappuccino.mor1kx_cpu.padv_decode_o;
 	 assign monitor_execute_advance = cappuccino.mor1kx_cpu.padv_execute_o;
  	 assign monitor_flag_set = cappuccino.mor1kx_cpu.mor1kx_execute_ctrl_cappuccino.flag_set_i;
 	 assign monitor_flag_clear = cappuccino.mor1kx_cpu.mor1kx_execute_ctrl_cappuccino.flag_clear_i;
