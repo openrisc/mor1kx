@@ -72,8 +72,8 @@ module mor1kx_dcache
     */
    parameter TAG_INDEX_WIDTH = (OPTION_DCACHE_LIMIT_WIDTH - WAY_WIDTH);
    parameter TAG_WAY_WIDTH = TAG_INDEX_WIDTH + 1;
-   parameter TAG_WAY_VALID = TAG_WAY_WIDTH - 1;
-   parameter TAG_WIDTH = TAG_WAY_WIDTH * OPTION_DCACHE_WAYS;
+   parameter TAG_WAY_VALID = TAG_WAY_WIDTH;
+   parameter TAG_WIDTH = TAG_WAY_WIDTH * OPTION_DCACHE_WAYS + 1;
    parameter TAG_LRU = TAG_WIDTH - 1;
 
    reg 				      dc_enabled;
@@ -154,7 +154,7 @@ module mor1kx_dcache
 	  * compare tag stored index with incoming index
 	  * and check valid bit
 	  */
-	 assign way_hit[i] = tag_dout[(i+1)*TAG_WAY_VALID] &
+	 assign way_hit[i] = tag_dout[((i+1)*TAG_WAY_VALID)-1] &
 			      (tag_dout[((i + 1)*TAG_WAY_WIDTH)-2:
 					i*TAG_WAY_WIDTH] == tag_index);
       end
@@ -367,16 +367,16 @@ module mor1kx_dcache
 	      if (refill_done) begin
 		 if (OPTION_DCACHE_WAYS == 2) begin
 		    if (lru) begin // way 1
-		       tag_din[TAG_WAY_VALID*2] = 1'b1;
+		       tag_din[(2*TAG_WAY_VALID)-1] = 1'b1;
 		       tag_din[TAG_LRU] = 1'b0;
 		       tag_din[(2*TAG_WAY_WIDTH)-2:TAG_WAY_WIDTH] = tag_index;
 		    end else begin // way0
-		       tag_din[TAG_WAY_VALID] = 1'b1;
+		       tag_din[TAG_WAY_VALID-1] = 1'b1;
 		       tag_din[TAG_LRU] = 1'b1;
 		       tag_din[TAG_WAY_WIDTH-2:0] = tag_index;
 		    end
 		 end else begin
-		       tag_din[TAG_WAY_VALID] = 1'b1;
+		       tag_din[TAG_WAY_VALID-1] = 1'b1;
 		       tag_din[TAG_LRU] = 1'b1;
 		       tag_din[TAG_WAY_WIDTH-2:0] = tag_index;
 		 end
