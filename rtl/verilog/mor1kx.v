@@ -58,7 +58,7 @@ module mor1kx
 
    parameter FEATURE_DSX		= "ENABLED";
    parameter FEATURE_FASTCONTEXTS	= "NONE";
-   parameter FEATURE_OVERFLOW		= "NONE";
+   parameter FEATURE_OVERFLOW		= "ENABLED";
 
    parameter OPTION_RF_ADDR_WIDTH	= 5;
    parameter OPTION_RF_WORDS		= 32;
@@ -69,7 +69,7 @@ module mor1kx
    parameter FEATURE_MULTIPLIER		= "THREESTAGE";
    parameter FEATURE_DIVIDER		= "SERIAL";
 
-   parameter FEATURE_ADDC		= "NONE";
+   parameter FEATURE_ADDC		= "ENABLED";
    parameter FEATURE_SRA		= "ENABLED";
    parameter FEATURE_ROR		= "NONE";
    parameter FEATURE_EXT		= "NONE";
