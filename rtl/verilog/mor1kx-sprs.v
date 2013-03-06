@@ -244,6 +244,21 @@
 `define OR1K_SPR_DSR_FPE  12
 `define OR1K_SPR_DSR_TE   13
 
+`define OR1K_SPR_DRR_RSTE  0
+`define OR1K_SPR_DRR_BUSEE 1
+`define OR1K_SPR_DRR_DPFE  2
+`define OR1K_SPR_DRR_IPFE  3
+`define OR1K_SPR_DRR_TTE   4
+`define OR1K_SPR_DRR_AE    5
+`define OR1K_SPR_DRR_IIE   6
+`define OR1K_SPR_DRR_IE    7
+`define OR1K_SPR_DRR_DME   8
+`define OR1K_SPR_DRR_IME   9
+`define OR1K_SPR_DRR_RE   10
+`define OR1K_SPR_DRR_SCE  11
+`define OR1K_SPR_DRR_FPE  12
+`define OR1K_SPR_DRR_TE   13
+
 // Implementation-specific SPR defines
 `define MOR1KX_SPR_SR_WIDTH 16
 `define MOR1KX_SPR_SR_RESET_VALUE `MOR1KX_SPR_SR_WIDTH'h8001
