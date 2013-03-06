@@ -282,6 +282,7 @@ module mor1kx_ctrl_espresso
    wire                              except_ibus_align;
    wire                              fetch_advance;
    wire                              rfete;
+   wire 			     stall_on_trap;
    
    /* Debug SPRs */
    reg [31:0]                        spr_dmr1;
@@ -750,9 +751,11 @@ module mor1kx_ctrl_espresso
           else if (except_ticktimer | except_pic)
             spr_epcr <= branched_and_waiting_for_fetch ? spr_npc :
 			execute_delay_slot ? spr_ppc-4 : spr_ppc+4;
-          else if (execute_stage_exceptions | decode_stage_exceptions)
+          else if (execute_stage_exceptions | 
+		   // Don't update EPCR on software breakpoint
+		   (decode_stage_exceptions & !(stall_on_trap & except_trap_i)))
             spr_epcr <= execute_delay_slot ? spr_ppc-4 : spr_ppc;
-          else
+          else if (!(stall_on_trap & except_trap_i))
             spr_epcr <= execute_delay_slot ? spr_ppc-4 : spr_ppc;
        end
      else if (spr_we && spr_addr==`OR1K_SPR_EPCR0_ADDR)
@@ -1167,7 +1170,8 @@ module mor1kx_ctrl_espresso
          
          /* goes out to the debug interface and comes back 1 cycle later
           via du_stall_i */
-         assign du_stall_o = (stepping & execute_done);
+         assign du_stall_o = (stepping & execute_done)|
+			     (stall_on_trap & execute_done & except_trap_i);
          
          /* Pulse to indicate we're restarting after a stall */
          assign du_restart_from_stall = du_stall_r & !du_stall_i;
@@ -1175,6 +1179,9 @@ module mor1kx_ctrl_espresso
          /* NPC debug control logic */
          assign du_npc_write = (du_we_i && du_addr_i==`OR1K_SPR_NPC_ADDR &&
                                 du_ack_o);
+
+	 /* Pick the traps-cause-stall bit out of the DSR */
+	 assign stall_on_trap = spr_dsr[`OR1K_SPR_DSR_TE];
 
          /* record if NPC was written while we were stalled.
           If so, we will use this value for restarting */
@@ -1302,6 +1309,8 @@ module mor1kx_ctrl_espresso
              spr_drr <= 0;
            else if (spr_we && spr_addr==`OR1K_SPR_DRR_ADDR)
              spr_drr[13:0] <= spr_write_dat[13:0];
+	   else if (stall_on_trap & execute_done & except_trap_i)
+	     spr_drr[`OR1K_SPR_DRR_TE] <= 1;
 
       end // block: du
       else
