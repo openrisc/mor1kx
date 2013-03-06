@@ -307,7 +307,6 @@ module mor1kx_ctrl_prontoespresso
    wire [1:0] 			     pstep;
    wire                              stepping;
    wire                              du_npc_write;
-   reg                               du_npc_written;
    
    /* Wires for SPR management */
    wire                              spr_group_present;
@@ -757,7 +756,7 @@ module mor1kx_ctrl_prontoespresso
        spr_npc <= OPTION_RESET_PC;
      else if (deassert_doing_rfe)
        spr_npc <= rfete ? exception_pc_addr : spr_epcr;
-     else if (du_restart_o)
+     else if (du_npc_write)
        spr_npc <= du_restart_pc_o;
      else if (stepping & ctrl_branch_occur)
        spr_npc <= ctrl_branch_target_o;
@@ -1142,8 +1141,8 @@ module mor1kx_ctrl_prontoespresso
          
          /* goes out to the debug interface and comes back 1 cycle later
           via du_stall_i */
-         assign du_stall_o = (stepping & execute_done) 
-	   | (stall_on_trap & execute_done & except_trap_i);
+         assign du_stall_o = (stepping & execute_done) |
+			     (stall_on_trap & execute_done & except_trap_i);
          
          /* Pulse to indicate we're restarting after a stall */
          assign du_restart_from_stall = du_stall_r & !du_stall_i;
@@ -1155,16 +1154,6 @@ module mor1kx_ctrl_prontoespresso
 	 /* Pick the traps-cause-stall bit out of the DSR */
 	 assign stall_on_trap = spr_dsr[`OR1K_SPR_DSR_TE];
 	 
-         /* record if NPC was written while we were stalled.
-          If so, we will use this value for restarting */
-         always @(posedge clk `OR_ASYNC_RST)
-           if (rst)
-             du_npc_written <= 0;
-           else if (du_restart_from_stall)
-             du_npc_written <= 0;
-           else if (du_npc_write)
-             du_npc_written <= 1;
-         
          always @(posedge clk `OR_ASYNC_RST)
            if (rst)
              stepped_into_exception <= 0;
@@ -1271,6 +1260,9 @@ module mor1kx_ctrl_prontoespresso
              spr_drr <= 0;
            else if (spr_we && spr_addr==`OR1K_SPR_DRR_ADDR)
              spr_drr[13:0] <= spr_write_dat[13:0];
+	   else if (stall_on_trap & execute_done & except_trap_i)
+	     spr_drr[`OR1K_SPR_DRR_TE] <= 1;
+	 
 
       end // block: du
       else
@@ -1293,7 +1285,6 @@ module mor1kx_ctrl_prontoespresso
                 spr_dmr2 = 0;
                 spr_dsr = 0;
                 spr_drr = 0;
-                du_npc_written = 0;
              end
         end
    endgenerate
