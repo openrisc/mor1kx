@@ -78,8 +78,8 @@ module mor1kx_cfgrs
    assign spr_vr[`OR1K_SPR_VR_UVRP] = 1;
    assign spr_vr[`OR1K_SPR_VR_RESERVED] = 0;
    assign spr_vr[`OR1K_SPR_VR_CFG] = 0;
-   assign spr_vr[`OR1K_SPR_VR_VER] = 0;
-   
+   assign spr_vr[`OR1K_SPR_VR_VER] = 8'h10;
+
    assign spr_upr[`OR1K_SPR_UPR_UP] = 1;
    assign spr_upr[`OR1K_SPR_UPR_DCP] = (FEATURE_DATACACHE!="NONE");
    assign spr_upr[`OR1K_SPR_UPR_ICP] = (FEATURE_INSTRUCTIONCACHE!="NONE");
