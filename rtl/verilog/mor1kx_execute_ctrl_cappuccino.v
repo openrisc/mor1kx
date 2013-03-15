@@ -122,7 +122,9 @@ module mor1kx_execute_ctrl_cappuccino
    // ALU or LSU stall execution, nothing else can
    assign execute_valid = (ctrl_op_lsu_load_o | ctrl_op_lsu_store_o) ?
 			  lsu_valid_i & (!op_alu_i | alu_valid_i) :
-			  (op_alu_i) ? alu_valid_i : 1'b1;
+			  ctrl_op_mfspr_o ?
+			  ctrl_mfspr_we_i & (!op_alu_i | alu_valid_i) :
+			  op_alu_i ? alu_valid_i : 1'b1;
 
    // Check for unaligned jump address from register
    assign execute_except_ibus_align_o = op_jr_i & (|rfb_i[1:0]);
@@ -249,10 +251,19 @@ module mor1kx_execute_ctrl_cappuccino
 	ctrl_rfd_adr_o <= exec_rfd_adr_i;
      end
 
+   reg ctrl_mfspr_we_r;
+   always @(posedge clk)
+     ctrl_mfspr_we_r <= ctrl_mfspr_we_i;
+
+   // load and mfpsr can stall from ctrl stage, so we have to hold off the
+   // write back on them
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
 	wb_rf_wb_o <= 0;
 	wb_rfd_adr_o <= 0;
+     end else if (ctrl_op_mfspr_o) begin
+	wb_rf_wb_o <= ctrl_mfspr_we_i & (padv_ctrl_i | !ctrl_mfspr_we_r);
+	wb_rfd_adr_o <= ctrl_rfd_adr_o;
      end else if (!ctrl_op_lsu_load_o | lsu_valid_i) begin
 	wb_rf_wb_o <= ctrl_rf_wb_o & (padv_ctrl_i | lsu_valid_i);
 	wb_rfd_adr_o <= ctrl_rfd_adr_o;
