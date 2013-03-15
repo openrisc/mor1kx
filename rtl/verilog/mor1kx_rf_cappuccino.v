@@ -67,7 +67,7 @@ module mor1kx_rf_cappuccino
 
    reg 				      flushing;
 
-   // Keep track of that the flush signal, this is needed to not wrongly assert
+   // Keep track of the flush signal, this is needed to not wrongly assert
    // exec_hazard after an exception (or rfe) has happened.
    // What happens in that case is that the instruction in execute stage is
    // invalid until the next padv_decode, so it's exec_rfd_adr can not be used
