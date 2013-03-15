@@ -201,9 +201,6 @@ module mor1kx_cpu_cappuccino
    wire			fetch_valid_o;		// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			flag_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			flag_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
-   wire			ic_ack_o;		// From mor1kx_icache of mor1kx_icache.v
-   wire [OPTION_OPERAND_WIDTH-1:0] ic_dat_o;	// From mor1kx_icache of mor1kx_icache.v
-   wire			ic_err_o;		// From mor1kx_icache of mor1kx_icache.v
    wire [`OR1K_IMM_WIDTH-1:0] imm16_o;		// From mor1kx_decode of mor1kx_decode.v
    wire [9:0]		immjbr_upper_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			lsu_except_align_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
@@ -227,8 +224,6 @@ module mor1kx_cpu_cappuccino
    wire			padv_decode_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			padv_execute_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			padv_fetch_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire [OPTION_OPERAND_WIDTH-1:0] pc_addr_o;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
-   wire [OPTION_OPERAND_WIDTH-1:0] pc_fetch_o;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			pipeline_flush_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] rf_result_o;	// From mor1kx_wb_mux_cappuccino of mor1kx_wb_mux_cappuccino.v
    wire			rf_wb_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -238,9 +233,9 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0] rfb_o;	// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] rfd_adr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			spr_bus_ack_dc_i;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire			spr_bus_ack_ic_i;	// From mor1kx_icache of mor1kx_icache.v
+   wire			spr_bus_ack_ic_i;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_dc_i;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_ic_i;// From mor1kx_icache of mor1kx_icache.v
+   wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_ic_i;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			wb_rf_wb_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd_adr_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    // End of automatics
@@ -254,89 +249,53 @@ module mor1kx_cpu_cappuccino
     .decode_insn_o			(insn_fetch_to_decode),
     .du_restart_pc_i			(du_restart_pc_o),
     .du_restart_i			(du_restart_o),
-    .ibus_err_i				(ic_err_o),
-    .ibus_ack_i				(ic_ack_o),
-    .ibus_dat_i				(ic_dat_o),
+    .spr_bus_dat_ic_o			(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]),
+    .spr_bus_ack_ic_o			(spr_bus_ack_ic_i),
+    .spr_bus_addr_i			(spr_bus_addr_o[15:0]),
+    .spr_bus_we_i			(spr_bus_we_o),
+    .spr_bus_stb_i			(spr_bus_stb_o),
+    .spr_bus_dat_i			(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
+    .ic_enable				(spr_sr_o[`OR1K_SPR_SR_ICE]),
     ); */
    mor1kx_fetch_cappuccino
      #(
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-       .OPTION_RESET_PC(OPTION_RESET_PC)
-       )
-     mor1kx_fetch_cappuccino
-     (/*AUTOINST*/
-      // Outputs
-      .pc_decode_o			(pc_fetch_to_decode),	 // Templated
-      .decode_insn_o			(insn_fetch_to_decode),	 // Templated
-      .fetch_valid_o			(fetch_valid_o),
-      .pc_addr_o			(pc_addr_o[OPTION_OPERAND_WIDTH-1:0]),
-      .pc_fetch_o			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
-      .decode_except_ibus_err_o		(decode_except_ibus_err_o),
-      .fetch_branch_taken_o		(fetch_branch_taken_o),
-      // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .ibus_err_i			(ic_err_o),		 // Templated
-      .ibus_ack_i			(ic_ack_o),		 // Templated
-      .ibus_dat_i			(ic_dat_o),		 // Templated
-      .padv_i				(padv_fetch_o),		 // Templated
-      .branch_occur_i			(ctrl_branch_occur_o),	 // Templated
-      .branch_dest_i			(ctrl_branch_target_o),	 // Templated
-      .du_restart_pc_i			(du_restart_pc_o),	 // Templated
-      .du_restart_i			(du_restart_o),		 // Templated
-      .pipeline_flush_i			(pipeline_flush_o));	 // Templated
-
-   /* mor1kx_icache AUTO_TEMPLATE (
-    // Outputs
-    .cpu_err_o			(ic_err_o),
-    .cpu_ack_o			(ic_ack_o),
-    .cpu_dat_o			(ic_dat_o[OPTION_OPERAND_WIDTH-1:0]),
-    .spr_bus_dat_o		(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]),
-    .spr_bus_ack_o		(spr_bus_ack_ic_i),
-    // Inputs
-    .ic_enable			(spr_sr_o[`OR1K_SPR_SR_ICE]),
-    .pc_addr_i			(pc_addr_o[OPTION_OPERAND_WIDTH-1:0]),
-    .pc_fetch_i			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
-    .padv_fetch_i		(padv_fetch_o),
-    .cpu_adr_i			(ic_adr_i[OPTION_OPERAND_WIDTH-1:0]),
-    .spr_bus_addr_i		(spr_bus_addr_o[15:0]),
-    .spr_bus_we_i		(spr_bus_we_o),
-    .spr_bus_stb_i		(spr_bus_stb_o),
-    .spr_bus_dat_i		(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
-    );*/
-
-   mor1kx_icache
-     #(
+       .OPTION_RESET_PC(OPTION_RESET_PC),
        .FEATURE_INSTRUCTIONCACHE(FEATURE_INSTRUCTIONCACHE),
        .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
        .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
        .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
        .OPTION_ICACHE_LIMIT_WIDTH(OPTION_ICACHE_LIMIT_WIDTH)
        )
-   mor1kx_icache
+     mor1kx_fetch_cappuccino
      (/*AUTOINST*/
       // Outputs
-      .cpu_err_o			(ic_err_o),		 // Templated
-      .cpu_ack_o			(ic_ack_o),		 // Templated
-      .cpu_dat_o			(ic_dat_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .ibus_adr_o			(ibus_adr_o[31:0]),
+      .spr_bus_dat_ic_o			(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .spr_bus_ack_ic_o			(spr_bus_ack_ic_i),	 // Templated
       .ibus_req_o			(ibus_req_o),
-      .spr_bus_dat_o			(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .spr_bus_ack_o			(spr_bus_ack_ic_i),	 // Templated
+      .ibus_adr_o			(ibus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
+      .pc_decode_o			(pc_fetch_to_decode),	 // Templated
+      .decode_insn_o			(insn_fetch_to_decode),	 // Templated
+      .fetch_valid_o			(fetch_valid_o),
+      .decode_except_ibus_err_o		(decode_except_ibus_err_o),
+      .fetch_branch_taken_o		(fetch_branch_taken_o),
       // Inputs
       .clk				(clk),
       .rst				(rst),
-      .ic_enable			(spr_sr_o[`OR1K_SPR_SR_ICE]), // Templated
-      .pc_addr_i			(pc_addr_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .pc_fetch_i			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .padv_fetch_i			(padv_fetch_o),		 // Templated
-      .ibus_err_i			(ibus_err_i),
-      .ibus_ack_i			(ibus_ack_i),
-      .ibus_dat_i			(ibus_dat_i[31:0]),
       .spr_bus_addr_i			(spr_bus_addr_o[15:0]),	 // Templated
       .spr_bus_we_i			(spr_bus_we_o),		 // Templated
       .spr_bus_stb_i			(spr_bus_stb_o),	 // Templated
-      .spr_bus_dat_i			(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0])); // Templated
+      .spr_bus_dat_i			(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .ic_enable			(spr_sr_o[`OR1K_SPR_SR_ICE]), // Templated
+      .ibus_err_i			(ibus_err_i),
+      .ibus_ack_i			(ibus_ack_i),
+      .ibus_dat_i			(ibus_dat_i[`OR1K_INSN_WIDTH-1:0]),
+      .padv_i				(padv_fetch_o),		 // Templated
+      .branch_occur_i			(ctrl_branch_occur_o),	 // Templated
+      .branch_dest_i			(ctrl_branch_target_o),	 // Templated
+      .du_restart_pc_i			(du_restart_pc_o),	 // Templated
+      .du_restart_i			(du_restart_o),		 // Templated
+      .pipeline_flush_i			(pipeline_flush_o));	 // Templated
 
    /* mor1kx_decode AUTO_TEMPLATE (
     .padv_i				(padv_decode_o),
