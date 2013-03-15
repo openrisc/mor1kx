@@ -338,7 +338,7 @@ end else begin
    assign dbus_dat_o = dc_dat_i;
    assign dbus_adr_o = dc_adr_i;
    assign dbus_we_o = dc_we_i;
-   assign dbus_bsel_o = dc_we_i;
+   assign dbus_bsel_o = dc_bsel_i;
    assign dbus_req_o = dc_req_i;
 end
 
