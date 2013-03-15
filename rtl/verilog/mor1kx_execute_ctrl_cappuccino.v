@@ -119,10 +119,6 @@ module mor1kx_execute_ctrl_cappuccino
 
    wire 				  execute_valid;
 
-   wire 				  op_mfspr;
-
-   assign op_mfspr = opc_insn_i==`OR1K_OPCODE_MFSPR;
-
    // ALU or LSU stall execution, nothing else can
    assign execute_valid = (ctrl_op_lsu_load_o | ctrl_op_lsu_store_o) ?
 			  lsu_valid_i & (!op_alu_i | alu_valid_i) :
