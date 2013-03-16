@@ -26,12 +26,14 @@ module mor1kx_dcache
 
     input 			      dc_enable,
 
+    input 			      cache_inhibit_i,
+
     // BUS Interface towards CPU
     output 			      cpu_err_o,
     output 			      cpu_ack_o,
     output [31:0] 		      cpu_dat_o,
     input [31:0] 		      cpu_dat_i,
-    input [31:0] 		      cpu_adr_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  cpu_adr_i,
     input 			      cpu_req_i,
     input 			      cpu_we_i,
     input [3:0]			      cpu_bsel_i,
@@ -164,9 +166,9 @@ module mor1kx_dcache
 
    generate
       if (OPTION_DCACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
-	 assign cache_req = dc_enabled & !invalidating;
+	 assign cache_req = dc_enabled & !invalidating & !cache_inhibit_i;
       end else if (OPTION_DCACHE_LIMIT_WIDTH < OPTION_OPERAND_WIDTH) begin
-	assign cache_req = dc_enabled & !invalidating &
+	assign cache_req = dc_enabled & !invalidating & !cache_inhibit_i &
 			   (cpu_adr_i[OPTION_OPERAND_WIDTH-1:
 				      OPTION_DCACHE_LIMIT_WIDTH] == 0);
       end else begin

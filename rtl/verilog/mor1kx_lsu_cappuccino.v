@@ -32,13 +32,17 @@ module mor1kx_lsu_cappuccino
     parameter OPTION_DCACHE_BLOCK_WIDTH = 5,
     parameter OPTION_DCACHE_SET_WIDTH = 9,
     parameter OPTION_DCACHE_WAYS = 2,
-    parameter OPTION_DCACHE_LIMIT_WIDTH = 32
+    parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
+    parameter FEATURE_DMMU = "NONE",
+    parameter OPTION_DMMU_SET_WIDTH = 6,
+    parameter OPTION_DMMU_WAYS = 1
     )
    (
     input 			      clk,
     input 			      rst,
 
     input 			      padv_execute_i,
+    input 			      padv_ctrl_i, // needed for dmmu spr
     input 			      decode_valid_i,
     // calculated address from ALU
     input [OPTION_OPERAND_WIDTH-1:0]  exec_lsu_adr_i,
@@ -49,6 +53,8 @@ module mor1kx_lsu_cappuccino
     // insn opcode, indicating what's going on
     input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i,
     // from decode stage regs, indicate if load or store
+    input 			      exec_op_lsu_load_i,
+    input 			      exec_op_lsu_store_i,
     input 			      ctrl_op_lsu_load_i,
     input 			      ctrl_op_lsu_store_i,
 
@@ -57,15 +63,22 @@ module mor1kx_lsu_cappuccino
     // exception output
     output 			      lsu_except_dbus_o,
     output 			      lsu_except_align_o,
+    output 			      lsu_except_dtlb_miss_o,
+    output 			      lsu_except_dpagefault_o,
 
-    // Cache interface
+    // SPR interface
     input [15:0] 		      spr_bus_addr_i,
     input 			      spr_bus_we_i,
     input 			      spr_bus_stb_i,
     input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_i,
-    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
-    output 			      spr_bus_ack_o,
-    input 			      dc_enable,
+    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_dc_o,
+    output 			      spr_bus_ack_dc_o,
+    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_dmmu_o,
+    output 			      spr_bus_ack_dmmu_o,
+
+    input 			      dc_enable_i,
+    input 			      dmmu_enable_i,
+    input 			      supervisor_mode_i,
 
     // interface to data bus
     output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
@@ -111,8 +124,19 @@ module mor1kx_lsu_cappuccino
    wire 			     dc_req_i;
    wire 			     dc_we_i;
    wire [3:0] 			     dc_bsel_i;
+   wire 			     dc_cache_inhibit;
 
-   assign dc_adr_i = ctrl_lsu_adr_i;
+   // DMMU
+   wire 			     tlb_miss;
+   wire 			     pagefault;
+   wire [OPTION_OPERAND_WIDTH-1:0]   dmmu_phys_addr;
+   wire				     except_dtlb_miss;
+   reg 				     except_dtlb_miss_r;
+   wire 			     except_dpagefault;
+   reg 				     except_dpagefault_r;
+   wire 			     dmmu_cache_inhibit;
+
+   assign dc_adr_i = dmmu_enable_i ? dmmu_phys_addr : ctrl_lsu_adr_i;
    assign dc_dat_i = (ctrl_opc_insn_i[1:0]==2'b10) ?        // l.sb
 		     {ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],ctrl_rfb_i[7:0]} :
 		     (ctrl_opc_insn_i[1:0]==2'b11) ?        // l.sh
@@ -120,8 +144,9 @@ module mor1kx_lsu_cappuccino
 		     ctrl_rfb_i;                         // l.sw
 
    assign dc_req_i = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) &
-		     !except_align & !access_done &
-		     !(pipeline_flush_i & !du_stall_i);
+		     !except_align & !(except_dtlb_miss | except_dtlb_miss_r) &
+		     !(except_dpagefault | except_dpagefault_r) &
+		     !access_done & !(pipeline_flush_i & !du_stall_i);
 
    assign align_err_word = |dc_adr_i[1:0];
    assign align_err_short = dc_adr_i[0];
@@ -145,6 +170,17 @@ module mor1kx_lsu_cappuccino
 
    assign lsu_except_align_o = except_align;
 
+   assign except_dtlb_miss = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) &
+			     tlb_miss & dmmu_enable_i;
+
+   assign lsu_except_dtlb_miss_o = except_dtlb_miss;
+
+   assign except_dpagefault = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) &
+			      pagefault & dmmu_enable_i;
+
+   assign lsu_except_dpagefault_o = except_dpagefault;
+
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        access_done <= 0;
@@ -160,6 +196,22 @@ module mor1kx_lsu_cappuccino
        except_dbus <= 0;
      else if (dc_err_o)
        except_dbus <= 1;
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       except_dtlb_miss_r <= 0;
+     else if (padv_execute_i)
+       except_dtlb_miss_r <= 0;
+     else if (except_dtlb_miss)
+       except_dtlb_miss_r <= 1;
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       except_dpagefault_r <= 0;
+     else if (padv_execute_i)
+       except_dpagefault_r <= 0;
+     else if (except_dpagefault)
+       except_dpagefault_r <= 1;
 
    // Big endian bus mapping
    always @*
@@ -265,6 +317,7 @@ module mor1kx_lsu_cappuccino
 
    assign lsu_result_o = access_done ? lsu_result_r : dbus_dat_extended;
 
+   assign dc_cache_inhibit = dmmu_enable_i & dmmu_cache_inhibit;
 generate
 if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 
@@ -277,12 +330,13 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .dc_req_o			(dbus_req_o),
 	    .dc_we_o			(dbus_we_o),
 	    .dc_bsel_o			(dbus_bsel_o),
-	    .spr_bus_dat_o		(spr_bus_dat_o),
-	    .spr_bus_ack_o		(spr_bus_ack_o),
+	    .spr_bus_dat_o		(spr_bus_dat_dc_o),
+	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
 	    // Inputs
 	    .clk			(clk),
 	    .rst			(rst),
-	    .dc_enable			(dc_enable),
+	    .dc_enable			(dc_enable_i),
+	    .cache_inhibit_i		(dc_cache_inhibit),
 	    .cpu_dat_i			(dc_dat_i),
 	    .cpu_adr_i			(dc_adr_i),
 	    .cpu_req_i			(dc_req_i),
@@ -291,14 +345,11 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .dc_err_i			(dbus_err_i),
 	    .dc_ack_i			(dbus_ack_i),
 	    .dc_dat_i			(dbus_dat_i),
-	    .spr_bus_addr_i		(spr_bus_addr_i),
-	    .spr_bus_we_i		(spr_bus_we_i),
-	    .spr_bus_stb_i		(spr_bus_stb_i),
-	    .spr_bus_dat_i		(spr_bus_dat_i),
     );*/
 
    mor1kx_dcache
      #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
        .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
        .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
        .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
@@ -315,12 +366,13 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .dc_req_o			(dbus_req_o),		 // Templated
 	    .dc_we_o			(dbus_we_o),		 // Templated
 	    .dc_bsel_o			(dbus_bsel_o),		 // Templated
-	    .spr_bus_dat_o		(spr_bus_dat_o),	 // Templated
-	    .spr_bus_ack_o		(spr_bus_ack_o),	 // Templated
+	    .spr_bus_dat_o		(spr_bus_dat_dc_o),	 // Templated
+	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
 	    // Inputs
 	    .clk			(clk),			 // Templated
 	    .rst			(rst),			 // Templated
-	    .dc_enable			(dc_enable),		 // Templated
+	    .dc_enable			(dc_enable_i),		 // Templated
+	    .cache_inhibit_i		(dc_cache_inhibit),	 // Templated
 	    .cpu_dat_i			(dc_dat_i),		 // Templated
 	    .cpu_adr_i			(dc_adr_i),		 // Templated
 	    .cpu_req_i			(dc_req_i),		 // Templated
@@ -329,10 +381,10 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .dc_err_i			(dbus_err_i),		 // Templated
 	    .dc_ack_i			(dbus_ack_i),		 // Templated
 	    .dc_dat_i			(dbus_dat_i),		 // Templated
-	    .spr_bus_addr_i		(spr_bus_addr_i),	 // Templated
-	    .spr_bus_we_i		(spr_bus_we_i),		 // Templated
-	    .spr_bus_stb_i		(spr_bus_stb_i),	 // Templated
-	    .spr_bus_dat_i		(spr_bus_dat_i));	 // Templated
+	    .spr_bus_addr_i		(spr_bus_addr_i[15:0]),
+	    .spr_bus_we_i		(spr_bus_we_i),
+	    .spr_bus_stb_i		(spr_bus_stb_i),
+	    .spr_bus_dat_i		(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
 end else begin
    assign dc_err_o = dbus_err_i;
    assign dc_ack_o = dbus_ack_i;
@@ -344,6 +396,66 @@ end else begin
    assign dbus_req_o = dc_req_i;
 end
 
+endgenerate
+
+generate
+if (FEATURE_DMMU!="NONE") begin : dmmu_gen
+   wire  [OPTION_OPERAND_WIDTH-1:0] virt_addr;
+   wire 			    dmmu_spr_bus_stb;
+
+   assign virt_addr = padv_execute_i &
+		      (exec_op_lsu_load_i | exec_op_lsu_store_i) ?
+		      exec_lsu_adr_i : ctrl_lsu_adr_i;
+
+   // small hack to delay dmmu spr reads by one cycle
+   // ideally the spr accesses should work so that the address is presented
+   // in execute stage and the delayed data should be available in control
+   // stage, but this is not how things currently work.
+   assign dmmu_spr_bus_stb = spr_bus_stb_i & (!padv_ctrl_i | spr_bus_we_i);
+
+   /* mor1kx_dmmu AUTO_TEMPLATE (
+    .phys_addr_o		(dmmu_phys_addr),
+    .cache_inhibit_o		(dmmu_cache_inhibit),
+    .op_store_i			(ctrl_op_lsu_store_i),
+    .op_load_i			(ctrl_op_lsu_load_i),
+    .tlb_miss_o			(tlb_miss),
+    .pagefault_o		(pagefault),
+    .spr_bus_dat_o		(spr_bus_dat_dmmu_o),
+    .spr_bus_ack_o		(spr_bus_ack_dmmu_o),
+    .spr_bus_stb_i		(dmmu_spr_bus_stb),
+    .virt_addr_i		(virt_addr),
+    .virt_addr_match_i		(ctrl_lsu_adr_i),
+    ); */
+   mor1kx_dmmu
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .OPTION_DMMU_SET_WIDTH(OPTION_DMMU_SET_WIDTH),
+       .OPTION_DMMU_WAYS(OPTION_DMMU_WAYS)
+       )
+   mor1kx_dmmu
+     (/*AUTOINST*/
+      // Outputs
+      .phys_addr_o			(dmmu_phys_addr),	 // Templated
+      .cache_inhibit_o			(dmmu_cache_inhibit),	 // Templated
+      .tlb_miss_o			(tlb_miss),		 // Templated
+      .pagefault_o			(pagefault),		 // Templated
+      .spr_bus_dat_o			(spr_bus_dat_dmmu_o),	 // Templated
+      .spr_bus_ack_o			(spr_bus_ack_dmmu_o),	 // Templated
+      // Inputs
+      .clk				(clk),
+      .rst				(rst),
+      .virt_addr_i			(virt_addr),		 // Templated
+      .virt_addr_match_i		(ctrl_lsu_adr_i),	 // Templated
+      .op_store_i			(ctrl_op_lsu_store_i),	 // Templated
+      .op_load_i			(ctrl_op_lsu_load_i),	 // Templated
+      .supervisor_mode_i		(supervisor_mode_i),
+      .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
+      .spr_bus_we_i			(spr_bus_we_i),
+      .spr_bus_stb_i			(dmmu_spr_bus_stb),	 // Templated
+      .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
+end else begin
+   assign dmmu_cache_inhibit = 0;
+end
 endgenerate
 
 endmodule // mor1kx_lsu_cappuccino

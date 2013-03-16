@@ -106,9 +106,13 @@ module mor1kx_decode
 
     // exceptions in
     input 				  decode_except_ibus_err_i,
+    input				  decode_except_itlb_miss_i,
+    input				  decode_except_ipagefault_i,
 
     // exception output -
     output reg 				  execute_except_ibus_err_o,
+    output reg				  execute_except_itlb_miss_o,
+    output reg				  execute_except_ipagefault_o,
     output reg 				  execute_except_illegal_o,
     output reg 				  execute_except_syscall_o,
     output reg 				  execute_except_trap_o,
@@ -132,6 +136,8 @@ module mor1kx_decode
 
    reg 					execute_except_illegal;
    wire 				execute_except_ibus_err,
+					execute_except_itlb_miss,
+					execute_except_ipagefault,
 					execute_except_syscall,
 					execute_except_trap;
 
@@ -231,6 +237,8 @@ module mor1kx_decode
 			       decode_insn_i[`OR1K_ALU_OPC_SECONDAY_SELECT]};
 
    assign execute_except_ibus_err = decode_except_ibus_err_i;
+   assign execute_except_itlb_miss = decode_except_itlb_miss_i;
+   assign execute_except_ipagefault = decode_except_ipagefault_i;
 
    assign execute_except_syscall = decode_insn_i[`OR1K_OPCODE_SELECT] ==
 				   `OR1K_OPCODE_SYSTRAPSYNC &&
@@ -600,6 +608,18 @@ endgenerate
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
+	     execute_except_itlb_miss_o <= 1'b0;
+	   else if (padv_i )
+	     execute_except_itlb_miss_o <= execute_except_itlb_miss;
+
+	 always @(posedge clk `OR_ASYNC_RST)
+	   if (rst)
+	     execute_except_ipagefault_o <= 1'b0;
+	   else if (padv_i )
+	     execute_except_ipagefault_o <= execute_except_ipagefault;
+
+	 always @(posedge clk `OR_ASYNC_RST)
+	   if (rst)
 	     decode_valid_o <= 0;
 	   else
 	     decode_valid_o <= padv_i ;
@@ -641,6 +661,8 @@ endgenerate
 	      execute_except_trap_o	= execute_except_trap;
 	      execute_except_illegal_o	= execute_except_illegal;
 	      execute_except_ibus_err_o = execute_except_ibus_err;
+	      execute_except_itlb_miss_o  = execute_except_itlb_miss;
+	      execute_except_ipagefault_o = execute_except_ipagefault;
 
 	      decode_valid_o		= padv_i ;
 

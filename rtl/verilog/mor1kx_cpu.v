@@ -47,12 +47,16 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter OPTION_DCACHE_WAYS		= 2;
    parameter OPTION_DCACHE_LIMIT_WIDTH  = 32;
    parameter FEATURE_DMMU		= "NONE";
+   parameter OPTION_DMMU_SET_WIDTH 	= 6;
+   parameter OPTION_DMMU_WAYS		= 1;
    parameter FEATURE_INSTRUCTIONCACHE	= "NONE";
    parameter OPTION_ICACHE_BLOCK_WIDTH	= 5;
    parameter OPTION_ICACHE_SET_WIDTH	= 9;
    parameter OPTION_ICACHE_WAYS		= 2;
    parameter OPTION_ICACHE_LIMIT_WIDTH  = 32;   
    parameter FEATURE_IMMU		= "NONE";
+   parameter OPTION_IMMU_SET_WIDTH	= 6;
+   parameter OPTION_IMMU_WAYS		= 1;
    parameter FEATURE_PIC		= "ENABLED";
    parameter FEATURE_TIMER		= "ENABLED";
    parameter FEATURE_DEBUGUNIT		= "NONE";
@@ -174,12 +178,16 @@ module mor1kx_cpu(/*AUTOARG*/
 	     .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
 	     .OPTION_DCACHE_LIMIT_WIDTH(OPTION_DCACHE_LIMIT_WIDTH),
 	     .FEATURE_DMMU(FEATURE_DMMU),
+	     .OPTION_DMMU_SET_WIDTH(OPTION_DMMU_SET_WIDTH),
+	     .OPTION_DMMU_WAYS(OPTION_DMMU_WAYS),
 	     .FEATURE_INSTRUCTIONCACHE(FEATURE_INSTRUCTIONCACHE),
 	     .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
 	     .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
 	     .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
 	     .OPTION_ICACHE_LIMIT_WIDTH(OPTION_ICACHE_LIMIT_WIDTH),
 	     .FEATURE_IMMU(FEATURE_IMMU),
+	     .OPTION_IMMU_SET_WIDTH(OPTION_IMMU_SET_WIDTH),
+	     .OPTION_IMMU_WAYS(OPTION_IMMU_WAYS),
 	     .FEATURE_PIC(FEATURE_PIC),
 	     .FEATURE_TIMER(FEATURE_TIMER),
 	     .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
@@ -246,10 +254,6 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .du_dat_i			(du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .du_we_i			(du_we_i),
 	    .du_stall_i			(du_stall_i),
-	    .spr_bus_dat_dmmu_i		(spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_dmmu_i		(spr_bus_ack_dmmu_i),
-	    .spr_bus_dat_immu_i		(spr_bus_dat_immu_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_immu_i		(spr_bus_ack_immu_i),
 	    .spr_bus_dat_mac_i		(spr_bus_dat_mac_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_mac_i		(spr_bus_ack_mac_i),
 	    .spr_bus_dat_pmu_i		(spr_bus_dat_pmu_i[OPTION_OPERAND_WIDTH-1:0]),

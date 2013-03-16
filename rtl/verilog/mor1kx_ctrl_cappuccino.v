@@ -84,6 +84,8 @@ module mor1kx_ctrl_cappuccino
 
     input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i,
 
+    input 			      ctrl_op_lsu_load_i, //SJK
+    input 			      ctrl_op_lsu_store_i, //SJK
     // Indicate if branch will be taken based on instruction currently in
     // execute stage. Combinatorially generated, uses signals from both
     // execute and ctrl stage.
@@ -97,10 +99,14 @@ module mor1kx_ctrl_cappuccino
 
     // Exception inputs, registered on output of execute stage
     input 			      except_ibus_err_i,
+    input 			      except_itlb_miss_i,
+    input 			      except_ipagefault_i,
     input 			      except_ibus_align_i,
     input 			      except_illegal_i,
     input 			      except_syscall_i,
     input 			      except_dbus_i,
+    input 			      except_dtlb_miss_i,
+    input 			      except_dpagefault_i,
     input 			      except_trap_i,
     input 			      except_align_i,
 
@@ -304,8 +310,11 @@ module mor1kx_ctrl_cappuccino
 				    !exception_taken;
    assign exception_pending = (except_ibus_err_i | except_ibus_align_i |
 			       except_illegal_i | except_syscall_i |
-			       except_dbus_i | except_align_i | except_ticktimer |
-			       except_range | except_pic | except_trap_i );
+			       except_dbus_i | except_align_i |
+			       except_ticktimer | except_range |
+			       except_pic | except_trap_i |
+			       except_itlb_miss_i | except_ipagefault_i |
+			       except_dtlb_miss_i | except_dpagefault_i);
 
    assign exception = exception_pending &
 		      (padv_ctrl & !ctrl_bubble | ctrl_stage_exceptions);
@@ -325,16 +334,22 @@ module mor1kx_ctrl_cappuccino
 				    exception_pc_addr;
 
    always @(posedge clk)
-     ctrl_stage_exceptions <= except_align_i | except_dbus_i | except_range;
+     ctrl_stage_exceptions <= except_align_i | except_dbus_i | except_range |
+			      except_dtlb_miss_i | except_dpagefault_i;
 
    always @(posedge clk)
      if (exception & !exception_r)
        casez(
-	     {except_ibus_err_i,
+	     {
+	      except_itlb_miss_i,
+	      except_ipagefault_i,
+	      except_ibus_err_i,
 	      except_illegal_i,
 	      except_align_i,
 	      except_ibus_align_i,
 	      except_syscall_i,
+	      except_dtlb_miss_i,
+	      except_dpagefault_i,
 	      except_trap_i,
 	      except_dbus_i,
 	      except_range,
@@ -342,35 +357,44 @@ module mor1kx_ctrl_cappuccino
 	      except_ticktimer
 	      }
 	     )
-	 10'b1?????????:
+	 14'b1?????????????:
+	   exception_pc_addr <= spr_evbar |
+				{19'd0,`OR1K_ITLB_VECTOR,8'd0};
+	 14'b01????????????:
+	   exception_pc_addr <= spr_evbar |
+				{19'd0,`OR1K_IPF_VECTOR,8'd0};
+	 14'b001???????????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_BERR_VECTOR,8'd0};
-	 10'b01????????:
+	 14'b0001??????????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_ILLEGAL_VECTOR,8'd0};
-	 10'b001???????,
-	   10'b0001??????:
+	 14'b00001?????????,
+	   14'b000001????????:
 	     exception_pc_addr <= spr_evbar |
 				  {19'd0,`OR1K_ALIGN_VECTOR,8'd0};
-	 10'b00001?????:
+	 14'b0000001???????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_SYSCALL_VECTOR,8'd0};
-	 10'b000001????:
+	 14'b00000001??????:
+	   exception_pc_addr <= spr_evbar |
+				{19'd0,`OR1K_DTLB_VECTOR,8'd0};
+	 14'b000000001?????:
+	   exception_pc_addr <= spr_evbar |
+				{19'd0,`OR1K_DPF_VECTOR,8'd0};
+	 14'b0000000001????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_TRAP_VECTOR,8'd0};
-	 10'b0000001???:
+	 14'b00000000001???:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_BERR_VECTOR,8'd0};
-	 10'b0000001???:
-	   exception_pc_addr <= spr_evbar |
-				{19'd0,`OR1K_BERR_VECTOR,8'd0};
-	 10'b00000001??:
+	 14'b000000000001??:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_RANGE_VECTOR,8'd0};
-	 10'b000000001?:
+	 14'b0000000000001?:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_INT_VECTOR,8'd0};
-	 //10'b0000000001:
+	 //14'b00000000000001:
 	 default:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_TT_VECTOR,8'd0};
@@ -651,7 +675,7 @@ module mor1kx_ctrl_cappuccino
        spr_eear <= {OPTION_OPERAND_WIDTH{1'b0}};
      else if (/*padv_ctrl & exception*/ exception_re)
        begin
-	  if (except_ibus_err_i)
+	  if (except_ibus_err_i | except_itlb_miss_i | except_ipagefault_i)
 	    spr_eear <= pc_ctrl_i;
 	  else
 	    spr_eear <= ctrl_lsu_adr_i;
@@ -860,7 +884,11 @@ module mor1kx_ctrl_cappuccino
 			     // fetch stage
 			     !exec_branch_insn &
 			     // Stops issues with PC when branching
-			     !execute_delay_slot;
+			     !execute_delay_slot &
+			     // SJK: ugly temp hack to prevent tick timer
+			     // exception to turn off MMU while a
+			     // load/store is going on
+			     !(ctrl_op_lsu_load_i | ctrl_op_lsu_store_i);
       end
       else begin
 	 assign except_pic = 0;
@@ -905,7 +933,11 @@ module mor1kx_ctrl_cappuccino
 				   // fetch  stage.
 				   !exec_branch_insn &
 				   // Stops issues with PC when branching
-				   !execute_delay_slot;
+				   !execute_delay_slot &
+				   // SJK: ugly temp hack to prevent tick timer
+				   // exception to turn off MMU while a
+				   // load/store is going on
+				   !(ctrl_op_lsu_load_i | ctrl_op_lsu_store_i);
 
       end // if (FEATURE_TIMER!="NONE")
       else begin

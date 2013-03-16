@@ -35,10 +35,14 @@ module mor1kx_execute_ctrl_cappuccino
     input [`OR1K_OPCODE_WIDTH-1:0] 	  opc_insn_i,
 
     input 				  execute_except_ibus_err_i,
+    input 				  execute_except_itlb_miss_i,
+    input 				  execute_except_ipagefault_i,
     input 				  execute_except_illegal_i,
     input 				  execute_except_syscall_i,
     input 				  lsu_except_dbus_i,
     input 				  lsu_except_align_i,
+    input 				  lsu_except_dtlb_miss_i,
+    input 				  lsu_except_dpagefault_i,
     input 				  execute_except_trap_i,
 
     input 				  pipeline_flush_i,
@@ -106,10 +110,14 @@ module mor1kx_execute_ctrl_cappuccino
     output reg 				  ctrl_op_jal_o,
 
     output reg 				  ctrl_except_ibus_err_o,
+    output reg 				  ctrl_except_itlb_miss_o,
+    output reg 				  ctrl_except_ipagefault_o,
     output reg 				  ctrl_except_ibus_align_o,
     output reg 				  ctrl_except_illegal_o,
     output reg 				  ctrl_except_syscall_o,
     output reg 				  ctrl_except_dbus_o,
+    output reg 				  ctrl_except_dtlb_miss_o,
+    output reg 				  ctrl_except_dpagefault_o,
     output reg 				  ctrl_except_align_o,
     output reg 				  ctrl_except_trap_o,
 
@@ -139,6 +147,8 @@ module mor1kx_execute_ctrl_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
 	ctrl_except_ibus_err_o <= 0;
+	ctrl_except_itlb_miss_o <= 0;
+	ctrl_except_ipagefault_o <= 0;
 	ctrl_except_ibus_align_o <= 0;
 	ctrl_except_illegal_o <= 0;
 	ctrl_except_syscall_o <= 0;
@@ -148,6 +158,8 @@ module mor1kx_execute_ctrl_cappuccino
      end
      else if (pipeline_flush_i & !du_stall_i) begin
 	ctrl_except_ibus_err_o <= 0;
+	ctrl_except_itlb_miss_o <= 0;
+	ctrl_except_ipagefault_o <= 0;
 	ctrl_except_ibus_align_o <= 0;
 	ctrl_except_illegal_o <= 0;
 	ctrl_except_syscall_o <= 0;
@@ -158,6 +170,8 @@ module mor1kx_execute_ctrl_cappuccino
      else begin
 	if (padv_i) begin
 	   ctrl_except_ibus_err_o <= execute_except_ibus_err_i;
+	   ctrl_except_itlb_miss_o <= execute_except_itlb_miss_i;
+	   ctrl_except_ipagefault_o <= execute_except_ipagefault_i;
 	   ctrl_except_ibus_align_o <= execute_except_ibus_align_o;
 	   ctrl_except_illegal_o <= execute_except_illegal_i;
 	   ctrl_except_syscall_o <= execute_except_syscall_i;
@@ -165,6 +179,8 @@ module mor1kx_execute_ctrl_cappuccino
 	end
 	ctrl_except_dbus_o <= lsu_except_dbus_i;
 	ctrl_except_align_o <= lsu_except_align_i;
+	ctrl_except_dtlb_miss_o <= lsu_except_dtlb_miss_i;
+	ctrl_except_dpagefault_o <= lsu_except_dpagefault_i;
      end
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -248,7 +264,8 @@ module mor1kx_execute_ctrl_cappuccino
      if (rst) begin
 	ctrl_op_lsu_load_o <= 0;
 	ctrl_op_lsu_store_o <= 0;
-     end else if (ctrl_except_align_o | ctrl_except_dbus_o) begin
+     end else if (ctrl_except_align_o | ctrl_except_dbus_o |
+		  ctrl_except_dtlb_miss_o | ctrl_except_dpagefault_o) begin
 	ctrl_op_lsu_load_o <= 0;
 	ctrl_op_lsu_store_o <= 0;
     end else if (padv_i) begin
