@@ -312,7 +312,7 @@ module mor1kx_ctrl_cappuccino
    assign exception_re = exception & !exception_r & !exception_taken;
 
    assign except_range = (FEATURE_RANGE!="NONE") ? spr_sr[`OR1K_SPR_SR_OVE] &&
-			 (spr_sr[`OR1K_SPR_SR_OV] | ctrl_overflow_set_i & 
+			 (spr_sr[`OR1K_SPR_SR_OV] | ctrl_overflow_set_i &
 			  execute_valid_i)  & !doing_rfe : 0;
 
    assign deassert_decode_execute_halt = fetch_branch_taken_i &
@@ -361,8 +361,8 @@ module mor1kx_ctrl_cappuccino
 	 10'b0000001???:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_BERR_VECTOR,8'd0};
-         10'b00000001??:
-           exception_pc_addr <= spr_evbar | 
+	 10'b00000001??:
+	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_RANGE_VECTOR,8'd0};
 	 10'b000000001?:
 	   exception_pc_addr <= spr_evbar |
@@ -414,7 +414,6 @@ module mor1kx_ctrl_cappuccino
    // Carry output
    assign ctrl_carry_o = (!ctrl_carry_clear_i & spr_sr[`OR1K_SPR_SR_CY]) |
 			 ctrl_carry_set_i;
-   
 
    // Ctrl stage pipeline advance signal is one cycle behind execute stage's
    always @(posedge clk `OR_ASYNC_RST)
@@ -538,7 +537,7 @@ module mor1kx_ctrl_cappuccino
 	    spr_sr[`OR1K_SPR_SR_OV   ] <= ctrl_overflow_set_i ? 1 :
 				ctrl_overflow_clear_i ? 0 :
 				spr_sr[`OR1K_SPR_SR_OV   ];
-	  
+
 	  if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) &&
 	      spr_addr==`OR1K_SPR_SR_ADDR)
 	    begin
@@ -581,7 +580,7 @@ module mor1kx_ctrl_cappuccino
 	    spr_sr <= spr_esr;
 
        end // if (padv_ctrl)
-   
+
    // Exception SR
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -735,7 +734,7 @@ module mor1kx_ctrl_cappuccino
    assign spr_isr[5] = 0;
    assign spr_isr[6] = 0;
    assign spr_isr[7] = 0;
-   
+
    // System group (0) SPR data out
    always @*
      case(spr_addr)
@@ -796,7 +795,7 @@ module mor1kx_ctrl_cappuccino
 	 spr_sys_group_read = spr_isr[6];
        `OR1K_SPR_ISR0_ADDR +7:
 	 spr_sys_group_read = spr_isr[7];
-       
+
        default: begin
 	  /* GPR read */
 	  if (spr_addr >= `OR1K_SPR_GPR0_ADDR &&
