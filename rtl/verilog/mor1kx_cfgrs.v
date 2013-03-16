@@ -37,11 +37,15 @@ module mor1kx_cfgrs
    parameter OPTION_DCACHE_SET_WIDTH    = 9;
    parameter OPTION_DCACHE_WAYS         = 2;
    parameter FEATURE_DMMU               = "NONE";
+   parameter OPTION_DMMU_SET_WIDTH      = 6;
+   parameter OPTION_DMMU_WAYS           = 1;
    parameter FEATURE_INSTRUCTIONCACHE   = "NONE";
    parameter OPTION_ICACHE_BLOCK_WIDTH  = 5;
    parameter OPTION_ICACHE_SET_WIDTH    = 9;
    parameter OPTION_ICACHE_WAYS         = 2;
    parameter FEATURE_IMMU               = "NONE";
+   parameter OPTION_IMMU_SET_WIDTH      = 6;
+   parameter OPTION_IMMU_WAYS           = 1;
    parameter FEATURE_PIC                = "ENABLED";
    parameter FEATURE_TIMER              = "ENABLED";
    parameter FEATURE_DEBUGUNIT          = "NONE";
@@ -128,9 +132,46 @@ module mor1kx_cfgrs
    assign spr_avr[`OR1K_SPR_AVR_MIN] = 8'd0;
    assign spr_avr[`OR1K_SPR_AVR_REV] = 8'd0;
    assign spr_avr[`OR1K_SPR_AVR_RESERVED] = 0;
-   
-   assign spr_dmmucfgr = 0;
-   assign spr_immucfgr = 0;
+
+   /* Data MMU Configuration Register */
+   /* Reserved */
+   assign spr_dmmucfgr[31:15] = 0;
+   /* Hardware TLB Reload */
+   assign spr_dmmucfgr[`OR1K_SPR_DMMUFGR_HTR] = 0;
+   /* TLB Entry Invalidate Register Implemented */
+   assign spr_dmmucfgr[`OR1K_SPR_DMMUFGR_TEIRI] = 0;
+   /* Protection Register Implemented */
+   assign spr_dmmucfgr[`OR1K_SPR_DMMUFGR_PRI] = 0;
+   /* Control Register Implemented */
+   assign spr_dmmucfgr[`OR1K_SPR_DMMUFGR_CRI] = 0;
+   /* Number of ATB entries */
+   assign spr_dmmucfgr[`OR1K_SPR_DMMUFGR_NAE] = 0;
+   /* Number of TLB sets */
+   assign spr_dmmucfgr[`OR1K_SPR_DMMUFGR_NTS] = (FEATURE_DMMU!="NONE") ?
+						OPTION_DMMU_SET_WIDTH : 0;
+   /* Number of TLB ways */
+   assign spr_dmmucfgr[`OR1K_SPR_DMMUFGR_NTW] = (FEATURE_DMMU!="NONE") ?
+						OPTION_DMMU_WAYS-1 : 0;
+
+   /* Instruction MMU Configuration Register */
+   /* Reserved */
+   assign spr_immucfgr[31:15] = 0;
+   /* Hardware TLB Reload */
+   assign spr_immucfgr[`OR1K_SPR_IMMUFGR_HTR] = 0;
+   /* TLB Entry Invalidate Register Implemented */
+   assign spr_immucfgr[`OR1K_SPR_IMMUFGR_TEIRI] = 0;
+   /* Protection Register Implemented */
+   assign spr_immucfgr[`OR1K_SPR_IMMUFGR_PRI] = 0;
+   /* Control Register Implemented */
+   assign spr_immucfgr[`OR1K_SPR_IMMUFGR_CRI] = 0;
+   /* Number of ATB entries */
+   assign spr_immucfgr[`OR1K_SPR_IMMUFGR_NAE] = 0;
+   /* Number of TLB sets */
+   assign spr_immucfgr[`OR1K_SPR_IMMUFGR_NTS] = (FEATURE_IMMU!="NONE") ?
+						OPTION_IMMU_SET_WIDTH : 0;
+   /* Number of TLB ways */
+   assign spr_immucfgr[`OR1K_SPR_IMMUFGR_NTW] = (FEATURE_IMMU!="NONE") ?
+						OPTION_IMMU_WAYS-1 : 0;
 
    /* Data Cache Configuration register */
    /* Reserved */
