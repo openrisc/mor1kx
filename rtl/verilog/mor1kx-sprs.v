@@ -224,6 +224,24 @@
 `define OR1K_SPR_ICCFGR_CBPRI 11  /* Cache Block Prefetch Register Implemented */
 `define OR1K_SPR_ICCFGR_CBLRI 12  /* Cache Block Lock Register Implemented */
 
+// Data MMU Configuration register
+`define OR1K_SPR_DMMUFGR_NTW   1:0 /* Number of TLB ways */
+`define OR1K_SPR_DMMUFGR_NTS   4:2 /* Number of TLB sets */
+`define OR1K_SPR_DMMUFGR_NAE   7:5 /* Number of ATB entries */
+`define OR1K_SPR_DMMUFGR_CRI   8   /* Control Register Implemented */
+`define OR1K_SPR_DMMUFGR_PRI   9   /* Protection Register Implemented */
+`define OR1K_SPR_DMMUFGR_TEIRI 10  /* TLB Entry Invalidate Register Implemented */
+`define OR1K_SPR_DMMUFGR_HTR   11  /* Hardware TLB Reload */
+
+// Instruction MMU Configuration register
+`define OR1K_SPR_IMMUFGR_NTW   1:0 /* Number of TLB ways */
+`define OR1K_SPR_IMMUFGR_NTS   4:2 /* Number of TLB sets */
+`define OR1K_SPR_IMMUFGR_NAE   7:5 /* Number of ATB entries */
+`define OR1K_SPR_IMMUFGR_CRI   8   /* Control Register Implemented */
+`define OR1K_SPR_IMMUFGR_PRI   9   /* Protection Register Implemented */
+`define OR1K_SPR_IMMUFGR_TEIRI 10  /* TLB Entry Invalidate Register Implemented */
+`define OR1K_SPR_IMMUFGR_HTR   11  /* Hardware TLB Reload */
+
 // Debug Mode Register 1
 `define OR1K_SPR_DMR1_ST 22
 `define OR1K_SPR_DMR1_BT 23
