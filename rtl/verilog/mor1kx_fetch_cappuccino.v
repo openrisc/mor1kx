@@ -60,6 +60,7 @@ module mor1kx_fetch_cappuccino
 
     // branch/jump indication
     input 				  branch_occur_i,
+    input 				  branch_except_occur_i,
     input [OPTION_OPERAND_WIDTH-1:0] 	  branch_dest_i,
     input [OPTION_OPERAND_WIDTH-1:0] 	  du_restart_pc_i,
     input 				  du_restart_i,
@@ -78,10 +79,13 @@ module mor1kx_fetch_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_addr;
    reg 					  branch_fetch_valid;
    reg 					  branch_occur_r;
+   reg 					  branch_except_occur_r;
+
    reg 					  padv_addr;
 
    wire 				  bus_access_done;
    wire 				  branch_occur_edge;
+   wire 				  branch_except_occur_edge;
    wire					  delay_slot;
    wire					  kill_fetch;
    wire					  stall_fetch_valid;
@@ -93,6 +97,8 @@ module mor1kx_fetch_cappuccino
 
    assign bus_access_done =  imem_ack | imem_err;
    assign branch_occur_edge = branch_occur_i & !branch_occur_r;
+   assign branch_except_occur_edge = branch_except_occur_i &
+				     !branch_except_occur_r;
 
    /*
     * Detect when we are doing a delay slot,
@@ -111,10 +117,13 @@ module mor1kx_fetch_cappuccino
 
 
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       branch_occur_r <= 1'b0;
-     else
-       branch_occur_r <= branch_occur_i;
+     if (rst) begin
+	branch_occur_r <= 1'b0;
+	branch_except_occur_r <= 1'b0;
+     end else begin
+	branch_occur_r <= branch_occur_i;
+	branch_except_occur_r <= branch_except_occur_i;
+     end
 
    // calculate address stage pc
    always @(*)
@@ -188,7 +197,7 @@ module mor1kx_fetch_cappuccino
        decode_except_ibus_err_o <= 0;
      else if (imem_err)
        decode_except_ibus_err_o <= 1;
-     else if (decode_except_ibus_err_o & branch_occur_i)
+     else if (decode_except_ibus_err_o & branch_except_occur_i)
        decode_except_ibus_err_o <= 0;
 
    /* mor1kx_icache AUTO_TEMPLATE (

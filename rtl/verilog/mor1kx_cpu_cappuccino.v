@@ -243,6 +243,7 @@ module mor1kx_cpu_cappuccino
    /* mor1kx_fetch_cappuccino AUTO_TEMPLATE (
     .padv_i				(padv_fetch_o),
     .branch_occur_i			(ctrl_branch_occur_o),
+    .branch_except_occur_i		(ctrl_branch_exception_o),
     .branch_dest_i			(ctrl_branch_target_o),
     .pipeline_flush_i			(pipeline_flush_o),
     .pc_decode_o			(pc_fetch_to_decode),
@@ -292,6 +293,7 @@ module mor1kx_cpu_cappuccino
       .ibus_dat_i			(ibus_dat_i[`OR1K_INSN_WIDTH-1:0]),
       .padv_i				(padv_fetch_o),		 // Templated
       .branch_occur_i			(ctrl_branch_occur_o),	 // Templated
+      .branch_except_occur_i		(ctrl_branch_exception_o), // Templated
       .branch_dest_i			(ctrl_branch_target_o),	 // Templated
       .du_restart_pc_i			(du_restart_pc_o),	 // Templated
       .du_restart_i			(du_restart_o),		 // Templated
