@@ -76,7 +76,8 @@ module mor1kx_lsu_cappuccino
     input 			      dbus_err_i,
     input 			      dbus_ack_i,
     input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
-    input 			      pipeline_flush_i
+    input 			      pipeline_flush_i,
+    input 			      du_stall_i
     );
 
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_aligned;  // comb.
@@ -119,7 +120,8 @@ module mor1kx_lsu_cappuccino
 		     ctrl_rfb_i;                         // l.sw
 
    assign dc_req_i = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) &
-		     !except_align & !access_done & !pipeline_flush_i;
+		     !except_align & !access_done &
+		     !(pipeline_flush_i & !du_stall_i);
 
    assign align_err_word = |dc_adr_i[1:0];
    assign align_err_short = dc_adr_i[0];

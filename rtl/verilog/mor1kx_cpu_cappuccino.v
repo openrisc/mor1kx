@@ -504,7 +504,8 @@ module mor1kx_cpu_cappuccino
       .dbus_err_i			(dbus_err_i),
       .dbus_ack_i			(dbus_ack_i),
       .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
-      .pipeline_flush_i			(pipeline_flush_o));	 // Templated
+      .pipeline_flush_i			(pipeline_flush_o),	 // Templated
+      .du_stall_i			(du_stall_i));
 
 
    /* mor1kx_wb_mux_cappuccino AUTO_TEMPLATE (
@@ -702,6 +703,7 @@ module mor1kx_cpu_cappuccino
       .lsu_except_align_i		(lsu_except_align_o),	 // Templated
       .execute_except_trap_i		(execute_except_trap_o), // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
+      .du_stall_i			(du_stall_i),
       .op_alu_i				(op_alu_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
       .op_lsu_store_i			(op_lsu_store_o),	 // Templated

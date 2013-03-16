@@ -42,6 +42,7 @@ module mor1kx_execute_ctrl_cappuccino
     input 				  execute_except_trap_i,
 
     input 				  pipeline_flush_i,
+    input 				  du_stall_i,
 
     input 				  op_alu_i,
     input 				  op_lsu_load_i,
@@ -145,7 +146,7 @@ module mor1kx_execute_ctrl_cappuccino
 	ctrl_except_dbus_o <= 0;
 	ctrl_except_align_o <= 0;
      end
-     else if (pipeline_flush_i) begin
+     else if (pipeline_flush_i & !du_stall_i) begin
 	ctrl_except_ibus_err_o <= 0;
 	ctrl_except_ibus_align_o <= 0;
 	ctrl_except_illegal_o <= 0;
@@ -211,6 +212,15 @@ module mor1kx_execute_ctrl_cappuccino
      else if (padv_i & !exec_bubble_i)
        pc_ctrl_o <= pc_execute_i;
 
+   // The pipeline flush comes when the instruction that has caused
+   // an exception or the instruction that has been interrupted is in
+   // ctrl stage, so the padv_execute signal has to have higher prioity
+   // than the pipeline flush in order to not accidently kill a valid
+   // instruction coming in from execute stage.
+   //
+   // The tail of the pipeline should also not be flushed when the
+   // pipeline_flush have been caused by a debug unit stall.
+
    wire op_rfe = ctrl_opc_insn_o==`OR1K_OPCODE_RFE;
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -219,6 +229,8 @@ module mor1kx_execute_ctrl_cappuccino
        ctrl_opc_insn_o <= `OR1K_OPCODE_NOP;
      else if (padv_i)
        ctrl_opc_insn_o <= opc_insn_i;
+     else if (pipeline_flush_i & !du_stall_i)
+       ctrl_opc_insn_o <= `OR1K_OPCODE_NOP;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
@@ -227,7 +239,10 @@ module mor1kx_execute_ctrl_cappuccino
     end else if (padv_i) begin
 	ctrl_op_mfspr_o <= op_mfspr_i;
 	ctrl_op_jal_o <= op_jal_i;
-     end
+    end else if (pipeline_flush_i & !du_stall_i) begin
+	ctrl_op_mfspr_o <= 0;
+	ctrl_op_jal_o <= 0;
+    end
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
@@ -239,8 +254,10 @@ module mor1kx_execute_ctrl_cappuccino
     end else if (padv_i) begin
 	ctrl_op_lsu_load_o <= op_lsu_load_i;
 	ctrl_op_lsu_store_o <= op_lsu_store_i;
+     end else if (pipeline_flush_i & !du_stall_i) begin
+	ctrl_op_lsu_load_o <= 0;
+	ctrl_op_lsu_store_o <= 0;
      end
-
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
@@ -249,6 +266,9 @@ module mor1kx_execute_ctrl_cappuccino
      end else if (padv_i) begin
 	ctrl_rf_wb_o <= exec_rf_wb_i;
 	ctrl_rfd_adr_o <= exec_rfd_adr_i;
+     end else if (pipeline_flush_i & !du_stall_i) begin
+	ctrl_rf_wb_o <= 0;
+	ctrl_rfd_adr_o <= 0;
      end
 
    reg ctrl_mfspr_we_r;
@@ -258,7 +278,7 @@ module mor1kx_execute_ctrl_cappuccino
    // load and mfpsr can stall from ctrl stage, so we have to hold off the
    // write back on them
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
+     if (rst | (pipeline_flush_i & !du_stall_i)) begin
 	wb_rf_wb_o <= 0;
 	wb_rfd_adr_o <= 0;
      end else if (ctrl_op_mfspr_o) begin
