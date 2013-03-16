@@ -315,8 +315,8 @@ module mor1kx_ctrl_cappuccino
    assign exception_re = exception & !exception_r & !exception_taken;
 
    assign except_range = (FEATURE_RANGE!="NONE") ? spr_sr[`OR1K_SPR_SR_OVE] &&
-			 (spr_sr[`OR1K_SPR_SR_OV] | ctrl_overflow_set_i &
-			  execute_valid_i)  & !doing_rfe : 0;
+			 (spr_sr[`OR1K_SPR_SR_OV] | ctrl_overflow_set_i) &
+			 !doing_rfe : 0;
 
    assign deassert_decode_execute_halt = fetch_branch_taken_i &
 					 decode_execute_halt;
