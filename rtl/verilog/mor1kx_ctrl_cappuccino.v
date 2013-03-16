@@ -260,7 +260,7 @@ module mor1kx_ctrl_cappuccino
    wire 			     du_access;
    wire 			     cpu_stall;
    wire 			     du_restart_from_stall;
-   wire [3:0] 			     pstep;
+   wire [5:0] 			     pstep;
    wire 			     stepping;
    wire 			     stepped_into_delay_slot;
    wire 			     du_npc_write;
@@ -993,7 +993,7 @@ module mor1kx_ctrl_cappuccino
 
 	 reg 				du_ack;
 	 reg 				du_stall_r;
-	 reg [3:0] 			pstep_r;
+	 reg [5:0] 			pstep_r;
 	 reg [1:0] 			branch_step;
 	 reg 				stepped_into_exception;
 	 reg 				stepped_into_rfe;
@@ -1036,8 +1036,8 @@ module mor1kx_ctrl_cappuccino
 	 /* goes out to the debug interface and comes back 1 cycle later
 	  via du_stall_i */
 	 assign du_stall_o = /* execute stage */
-			     (stepping & (padv_ctrl |
-					  ctrl_stage_exceptions));
+			     (stepping & pstep[4]/*(padv_ctrl |
+					  ctrl_stage_exceptions)*/);
 
 	 /* Pulse to indicate we're restarting after a stall */
 	 assign du_restart_from_stall = du_stall_r & !du_stall_i;
@@ -1095,12 +1095,15 @@ module mor1kx_ctrl_cappuccino
 	   if (rst)
 	     pstep_r <= 0;
 	   else if (du_restart_from_stall & stepping)
-	     pstep_r <= 4'h1;
+	     pstep_r <= 6'h1;
 	   else if ((pstep[0] & fetch_valid_i) |
 		    /* decode is always single cycle */
 		    (pstep[1] & padv_decode_o) |
-		    (pstep[2] & (execute_valid_i | ctrl_stage_exceptions)))
-	     pstep_r <= {pstep_r[2:0],1'b0};
+		    (pstep[2] & (execute_valid_i | ctrl_stage_exceptions)) |
+		    /* ctrl stage can deassert execute_valid */
+		    (pstep[3] & (execute_valid_i | ctrl_stage_exceptions)) |
+		    pstep[4])
+	     pstep_r <= {pstep_r[4:0],1'b0};
 
 	 assign pstep = pstep_r;
 
