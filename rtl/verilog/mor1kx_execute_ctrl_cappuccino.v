@@ -59,10 +59,10 @@ module mor1kx_execute_ctrl_cappuccino
     input [OPTION_OPERAND_WIDTH-1:0] 	  rfb_i,
     input 				  flag_set_i,
     input 				  flag_clear_i,
-    input                                 carry_set_i,
-    input                                 carry_clear_i,
-    input 	                          overflow_set_i,
-    input 			          overflow_clear_i,
+    input 				  carry_set_i,
+    input 				  carry_clear_i,
+    input 				  overflow_set_i,
+    input 				  overflow_clear_i,
 
     input [OPTION_OPERAND_WIDTH-1:0] 	  pc_execute_i,
 
@@ -93,7 +93,7 @@ module mor1kx_execute_ctrl_cappuccino
     output reg 				  ctrl_carry_clear_o,
     output reg 				  ctrl_overflow_set_o,
     output reg 				  ctrl_overflow_clear_o,
-    
+
     output reg [OPTION_OPERAND_WIDTH-1:0] pc_ctrl_o,
     output reg [`OR1K_OPCODE_WIDTH-1:0]   ctrl_opc_insn_o,
 
