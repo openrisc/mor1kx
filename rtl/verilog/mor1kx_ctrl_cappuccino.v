@@ -142,6 +142,9 @@ module mor1kx_ctrl_cappuccino
     // Clear instructions from decode and fetch stage
     output 			      pipeline_flush_o,
 
+    // Indicate that a rfe is going on
+    output 			      doing_rfe_o,
+
     output 			      padv_fetch_o,
     output 			      padv_decode_o,
     output 			      padv_execute_o,
@@ -491,6 +494,8 @@ module mor1kx_ctrl_cappuccino
 
    assign doing_rfe = ((padv_ctrl & op_rfe) | doing_rfe_r) &
 		      !deassert_doing_rfe;
+
+   assign doing_rfe_o = doing_rfe;
 
    assign deassert_doing_rfe = fetch_branch_taken_i & doing_rfe_r;
 
