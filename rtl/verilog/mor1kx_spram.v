@@ -25,15 +25,26 @@ module mor1kx_spram
     );
 
    reg [DATA_WIDTH-1:0]     mem[(1<<ADDR_WIDTH)-1:0];
+   reg [DATA_WIDTH-1:0]     rdata;
+   reg [DATA_WIDTH-1:0]     din_r;
 
-   reg [ADDR_WIDTH-1:0]     raddr_r;
+   reg 			    bypass;
 
-   assign dout = mem[raddr_r];
+   assign dout = bypass ? din_r : rdata;
 
    always @(posedge clk) begin
       if (we)
 	mem[waddr] <= din;
-      raddr_r <= raddr;
+      rdata <= mem[raddr];
    end
+
+   always @(posedge clk)
+     din_r <= din;
+
+   always @(posedge clk)
+     if (waddr == raddr && we)
+       bypass <= 1;
+     else
+       bypass <= 0;
 
 endmodule
