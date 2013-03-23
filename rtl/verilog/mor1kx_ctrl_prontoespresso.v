@@ -719,7 +719,7 @@ module mor1kx_ctrl_prontoespresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_epcr <= OPTION_RESET_PC;
-     else if (exception_re & !(rfete & op_rfe))
+     else if (exception_re & !(rfete & (op_rfe | deassert_doing_rfe)))
        begin
           if (except_ibus_err_i)
             spr_epcr <= spr_ppc;
@@ -998,12 +998,10 @@ module mor1kx_ctrl_prontoespresso
 			  .spr_dat_i		(spr_write_dat)); // Templated
 
          assign except_ticktimer_nonsrmasked = spr_ttmr[28] &
-                                   !op_mtspr & 
+                    !(op_mtspr & !(spr_esr[`OR1K_SPR_SR_TEE] & execute_done)) & 
                                    // Stops back-to-back branch addresses to 
                                    // fetch  stage.
-                                   !ctrl_branch_occur /*&
-                                   // Stops issues with PC when branching
-                                   !execute_delay_slot*/;
+                                   !ctrl_branch_occur;
          
          assign except_ticktimer = except_ticktimer_nonsrmasked & 
                                    spr_sr[`OR1K_SPR_SR_TEE] & !doing_rfe;
