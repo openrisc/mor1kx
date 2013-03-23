@@ -163,6 +163,8 @@ module mor1kx_cpu_prontoespresso
    wire			exec_bubble_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_ibus_err_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_illegal_o;// From mor1kx_decode of mor1kx_decode.v
+   wire			execute_except_ipagefault_o;// From mor1kx_decode of mor1kx_decode.v
+   wire			execute_except_itlb_miss_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_syscall_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_trap_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			execute_waiting_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
@@ -283,6 +285,8 @@ module mor1kx_cpu_prontoespresso
     .pipeline_flush_i			(pipeline_flush_o),
     .pc_execute_o                       (),
     .pc_decode_i                        (),
+    .decode_except_itlb_miss_i          (0),
+    .decode_except_ipagefault_i         (0),
     ); */
    mor1kx_decode
      #(
@@ -332,6 +336,8 @@ module mor1kx_cpu_prontoespresso
       .decode_branch_o			(),			 // Templated
       .decode_branch_target_o		(),			 // Templated
       .execute_except_ibus_err_o	(execute_except_ibus_err_o),
+      .execute_except_itlb_miss_o	(execute_except_itlb_miss_o),
+      .execute_except_ipagefault_o	(execute_except_ipagefault_o),
       .execute_except_illegal_o		(execute_except_illegal_o),
       .execute_except_syscall_o		(execute_except_syscall_o),
       .execute_except_trap_o		(execute_except_trap_o),
@@ -350,7 +356,9 @@ module mor1kx_cpu_prontoespresso
       .flag_set_i			(flag_set_o),		 // Templated
       .flag_clear_i			(flag_clear_o),		 // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
-      .decode_except_ibus_err_i		(decode_except_ibus_err_o)); // Templated
+      .decode_except_ibus_err_i		(decode_except_ibus_err_o), // Templated
+      .decode_except_itlb_miss_i	(0),			 // Templated
+      .decode_except_ipagefault_i	(0));			 // Templated
    
    /* mor1kx_execute_alu AUTO_TEMPLATE (
     .padv_i				(padv_execute_o),    
