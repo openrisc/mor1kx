@@ -89,7 +89,6 @@ module mor1kx_icache
    reg 				      bypass_req;
 
    reg [31:0] 			      mem_adr;
-   reg 				      mem_req;
    wire [31:0] 			      next_mem_adr;
    reg [OPTION_ICACHE_BLOCK_WIDTH-1:0] start_adr;
    wire 			      refill_done;
@@ -127,7 +126,7 @@ module mor1kx_icache
    assign cpu_err_o = ibus_err_i;
    assign cpu_ack_o = cpu_ack;
    assign ibus_adr_o = mem_adr;
-   assign ibus_req_o = mem_req;
+   assign ibus_req_o = refill;
 
    always @(posedge clk)
      if (invalidate_edge)
@@ -303,7 +302,6 @@ module mor1kx_icache
 
    always @(*) begin
       cpu_ack = 1'b0;
-      mem_req = 1'b0;
       tag_we = 1'b0;
       way_we = {(OPTION_ICACHE_WAYS){1'b0}};
       tag_din = tag_dout;
@@ -331,7 +329,6 @@ module mor1kx_icache
 	end
 
 	REFILL: begin
-	   mem_req = 1'b1;
 	   tag_raddr = mem_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
 	   if (ibus_ack_i) begin
 	      if (OPTION_ICACHE_WAYS == 2) begin
