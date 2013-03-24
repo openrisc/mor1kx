@@ -58,12 +58,11 @@ module mor1kx_icache
     );
 
    // States
-   localparam IDLE		= 6'b000001;
-   localparam RESTART		= 6'b000010;
-   localparam READ		= 6'b000100;
-   localparam REFILL		= 6'b001000;
-   localparam INVALIDATE	= 6'b010000;
-   localparam BYPASS		= 6'b100000;
+   localparam IDLE		= 5'b00001;
+   localparam RESTART		= 5'b00010;
+   localparam READ		= 5'b00100;
+   localparam REFILL		= 5'b01000;
+   localparam INVALIDATE	= 5'b10000;
 
    // Address space in bytes for a way
    localparam WAY_WIDTH = OPTION_ICACHE_BLOCK_WIDTH + OPTION_ICACHE_SET_WIDTH;
@@ -80,11 +79,10 @@ module mor1kx_icache
    localparam TAG_LRU = TAG_WIDTH - 1;
 
    // FSM state signals
-   reg [5:0] 			      state;
+   reg [4:0] 			      state;
    wire				      idle;
    wire				      read;
    wire				      refill;
-   wire				      bypass;
 
    reg 				      cpu_ack;
 
