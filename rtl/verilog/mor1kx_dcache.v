@@ -72,11 +72,11 @@ module mor1kx_dcache
     * | LRU | wayN valid | wayN index |...| way0 valid | way0 index |
     * +-------------------------------------------------------------+
     */
-   parameter TAG_INDEX_WIDTH = (OPTION_DCACHE_LIMIT_WIDTH - WAY_WIDTH);
-   parameter TAG_WAY_WIDTH = TAG_INDEX_WIDTH + 1;
-   parameter TAG_WAY_VALID = TAG_WAY_WIDTH;
-   parameter TAG_WIDTH = TAG_WAY_WIDTH * OPTION_DCACHE_WAYS + 1;
-   parameter TAG_LRU = TAG_WIDTH - 1;
+   localparam TAG_INDEX_WIDTH = (OPTION_DCACHE_LIMIT_WIDTH - WAY_WIDTH);
+   localparam TAG_WAY_WIDTH = TAG_INDEX_WIDTH + 1;
+   localparam TAG_WAY_VALID = TAG_WAY_WIDTH;
+   localparam TAG_WIDTH = TAG_WAY_WIDTH * OPTION_DCACHE_WAYS + 1;
+   localparam TAG_LRU = TAG_WIDTH - 1;
 
    reg 				      dc_enabled;
 
