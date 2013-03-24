@@ -84,15 +84,12 @@ module mor1kx_icache
    wire				      read;
    wire				      refill;
 
-   reg 				      cpu_ack;
-
    reg 				      bypass_req;
 
    reg [31:0] 			      mem_adr;
    wire [31:0] 			      next_mem_adr;
    reg [OPTION_ICACHE_BLOCK_WIDTH-1:0] start_adr;
    wire 			      refill_done;
-   reg 				      refill_match;
    wire				      invalidate;
    wire				      invalidate_edge;
    reg				      invalidate_r;
@@ -124,7 +121,7 @@ module mor1kx_icache
    assign cache_present = (FEATURE_INSTRUCTIONCACHE != "NONE");
 
    assign cpu_err_o = ibus_err_i;
-   assign cpu_ack_o = cpu_ack;
+   assign cpu_ack_o = read & hit;
    assign ibus_adr_o = mem_adr;
    assign ibus_req_o = refill;
 
@@ -250,7 +247,6 @@ module mor1kx_icache
 	      end else if (req_i) begin
 		 start_adr <= addr_match_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
 		 mem_adr <= addr_match_i;
-		 refill_match <= 1'b0;//1;
 		 if (refill_allowed_i)
 		   state <= REFILL;
 	      end
@@ -263,12 +259,6 @@ module mor1kx_icache
 	   if (ibus_ack_i) begin
 	      mem_adr <= next_mem_adr;
 
-/*
-	      if (addr_i == next_mem_adr)
-		refill_match <= 1'b1;
-	      else
-		refill_match <= 1'b0;
- */
 	      /*
 	       * done refilling, go back to READ
 	       * the correct address will be muxed onto
@@ -279,9 +269,6 @@ module mor1kx_icache
 		 mem_adr <= addr_i;
 	      end
 	   end
-	   /* prevent acking when no request */
-//	   if (!req_i)
-//	      refill_match <= 1'b0;
 	end
 
 	INVALIDATE: begin
@@ -301,7 +288,6 @@ module mor1kx_icache
    end
 
    always @(*) begin
-      cpu_ack = 1'b0;
       tag_we = 1'b0;
       way_we = {(OPTION_ICACHE_WAYS){1'b0}};
       tag_din = tag_dout;
@@ -310,7 +296,6 @@ module mor1kx_icache
       case (state)
 	READ: begin
 	   if (hit) begin
-	      cpu_ack = 1'b1;
 	      /* output data and write back tag with LRU info */
 	      if (way_hit[0]) begin
 		 tag_din[TAG_LRU] = 1'b1;
@@ -339,8 +324,6 @@ module mor1kx_icache
 	      end else begin
 		   way_we[0] = 1'b1;
 	      end
-	      if (refill_match & ic_enable & (addr_match_i == mem_adr))
-		 cpu_ack = 1'b1;
 
 	      if (refill_done) begin
 		 tag_raddr = addr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
