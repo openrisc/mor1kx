@@ -28,7 +28,7 @@ module mor1kx_dcache
 
     input 			      cache_inhibit_i,
 
-    // BUS Interface towards CPU
+    // CPU Interface
     output 			      cpu_err_o,
     output 			      cpu_ack_o,
     output [31:0] 		      cpu_dat_o,
@@ -38,15 +38,15 @@ module mor1kx_dcache
     input 			      cpu_we_i,
     input [3:0]			      cpu_bsel_i,
 
-    // BUS Interface towards MEM
-    input 			      dc_err_i,
-    input 			      dc_ack_i,
-    input [31:0] 		      dc_dat_i,
-    output [31:0] 		      dc_dat_o,
-    output [31:0] 		      dc_adr_o,
-    output 			      dc_req_o,
-    output 			      dc_we_o,
-    output [3:0]		      dc_bsel_o,
+    // BUS Interface
+    input 			      dbus_err_i,
+    input 			      dbus_ack_i,
+    input [31:0] 		      dbus_dat_i,
+    output [31:0] 		      dbus_dat_o,
+    output [31:0] 		      dbus_adr_o,
+    output 			      dbus_req_o,
+    output 			      dbus_we_o,
+    output [3:0]		      dbus_bsel_o,
 
     // SPR interface
     input [15:0] 		      spr_bus_addr_i,
@@ -124,14 +124,14 @@ module mor1kx_dcache
 
 
    // Bypass cache when not enabled and when invalidating
-   assign cpu_err_o = dc_err_i;
-   assign cpu_ack_o = (cache_req | refill) ? cpu_ack : dc_ack_i;
-   assign cpu_dat_o = (cache_req) ? cpu_dat : dc_dat_i;
-   assign dc_adr_o = (cache_req | refill) ? mem_adr : cpu_adr_i;
-   assign dc_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
-   assign dc_we_o = (cache_req | refill) ? mem_we : cpu_we_i;
-   assign dc_dat_o = cpu_dat_i;
-   assign dc_bsel_o = refill ? 4'b1111 : cpu_bsel_i;
+   assign cpu_err_o = dbus_err_i;
+   assign cpu_ack_o = (cache_req | refill) ? cpu_ack : dbus_ack_i;
+   assign cpu_dat_o = (cache_req) ? cpu_dat : dbus_dat_i;
+   assign dbus_adr_o = (cache_req | refill) ? mem_adr : cpu_adr_i;
+   assign dbus_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
+   assign dbus_we_o = (cache_req | refill) ? mem_we : cpu_we_i;
+   assign dbus_dat_o = cpu_dat_i;
+   assign dbus_bsel_o = refill ? 4'b1111 : cpu_bsel_i;
 
    assign tag_raddr = idle ?
 		      cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH] :
@@ -151,7 +151,7 @@ module mor1kx_dcache
       for (i = 0; i < OPTION_DCACHE_WAYS; i=i+1) begin : ways
 	 assign way_raddr[i] = cpu_adr_i[WAY_WIDTH-1:2];
 	 assign way_waddr[i] = mem_adr[WAY_WIDTH-1:2];
-	 assign way_din[i] = (state == WRITE) ? mem_dat : dc_dat_i;
+	 assign way_din[i] = (state == WRITE) ? mem_dat : dbus_dat_i;
 	 /*
 	  * compare tag stored index with incoming index
 	  * and check valid bit
@@ -181,10 +181,10 @@ module mor1kx_dcache
 
    generate
       if (OPTION_DCACHE_WAYS == 2) begin
-	 assign cpu_dat = (state == REFILL) ? dc_dat_i :
+	 assign cpu_dat = (state == REFILL) ? dbus_dat_i :
 			  way_hit[0] ? way_dout[0] : way_dout[1];
       end else begin
-	 assign cpu_dat = (state == REFILL) ? dc_dat_i : way_dout[0];
+	 assign cpu_dat = (state == REFILL) ? dbus_dat_i : way_dout[0];
       end
    endgenerate
 
@@ -217,7 +217,7 @@ module mor1kx_dcache
 	 // before switching cache back on after invalidating
 	 if (invalidate)
 	   invalidating <= 1;
-	 else if (idle & invalidating & (dc_ack_i | !cpu_req_i))
+	 else if (idle & invalidating & (dbus_ack_i | !cpu_req_i))
 	   invalidating <= 0;
       end
    end
@@ -228,7 +228,7 @@ module mor1kx_dcache
     always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        dc_enabled <= 0;
-     else if (dc_enable & (dc_ack_i | !cpu_req_i))
+     else if (dc_enable & (dbus_ack_i | !cpu_req_i))
        dc_enabled <= 1;
      else if (!dc_enable & idle)
        dc_enabled <= 0;
@@ -257,7 +257,7 @@ module mor1kx_dcache
 	  */
 	 refill_match <= 1;
       end else if (state == REFILL) begin
-	 if (dc_ack_i) begin
+	 if (dbus_ack_i) begin
 	    mem_adr <= next_mem_adr;
 	    refill_match <= 0;
 	    if (cpu_req_i & !cpu_we_i) begin
@@ -318,7 +318,7 @@ module mor1kx_dcache
 	   end else begin
 	      mem_req = 1'b1;
 	      mem_we = 1'b1;
-	      if (dc_ack_i) begin
+	      if (dbus_ack_i) begin
 		 cpu_ack = 1'b1;
 		 if (hit) begin
 		    // cpu_dat is already assigned to the right wayX_dout
@@ -354,7 +354,7 @@ module mor1kx_dcache
 	   mem_req = 1'b1;
 	   if (invalidating) begin
 	      next_state = IDLE;
-	   end else if (dc_ack_i) begin
+	   end else if (dbus_ack_i) begin
 	      if (OPTION_DCACHE_WAYS == 2) begin
 		 if (lru)
 		   way_we[1] = 1'b1;
@@ -398,7 +398,7 @@ module mor1kx_dcache
 	 tag_we = 1'b1;
       end
 
-      if (dc_err_i)
+      if (dbus_err_i)
 	next_state = IDLE;
    end
 

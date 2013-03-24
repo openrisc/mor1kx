@@ -325,11 +325,6 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_err_o			(dc_err_o),
 	    .cpu_ack_o			(dc_ack_o),
 	    .cpu_dat_o			(dc_dat_o),
-	    .dc_dat_o			(dbus_dat_o),
-	    .dc_adr_o			(dbus_adr_o),
-	    .dc_req_o			(dbus_req_o),
-	    .dc_we_o			(dbus_we_o),
-	    .dc_bsel_o			(dbus_bsel_o),
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
 	    // Inputs
@@ -342,9 +337,6 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_req_i			(dc_req_i),
 	    .cpu_we_i			(dc_we_i),
 	    .cpu_bsel_i			(dc_bsel_i),
-	    .dc_err_i			(dbus_err_i),
-	    .dc_ack_i			(dbus_ack_i),
-	    .dc_dat_i			(dbus_dat_i),
     );*/
 
    mor1kx_dcache
@@ -361,11 +353,11 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_err_o			(dc_err_o),		 // Templated
 	    .cpu_ack_o			(dc_ack_o),		 // Templated
 	    .cpu_dat_o			(dc_dat_o),		 // Templated
-	    .dc_dat_o			(dbus_dat_o),		 // Templated
-	    .dc_adr_o			(dbus_adr_o),		 // Templated
-	    .dc_req_o			(dbus_req_o),		 // Templated
-	    .dc_we_o			(dbus_we_o),		 // Templated
-	    .dc_bsel_o			(dbus_bsel_o),		 // Templated
+	    .dbus_dat_o			(dbus_dat_o[31:0]),
+	    .dbus_adr_o			(dbus_adr_o[31:0]),
+	    .dbus_req_o			(dbus_req_o),
+	    .dbus_we_o			(dbus_we_o),
+	    .dbus_bsel_o		(dbus_bsel_o[3:0]),
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),	 // Templated
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
 	    // Inputs
@@ -378,9 +370,9 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_req_i			(dc_req_i),		 // Templated
 	    .cpu_we_i			(dc_we_i),		 // Templated
 	    .cpu_bsel_i			(dc_bsel_i),		 // Templated
-	    .dc_err_i			(dbus_err_i),		 // Templated
-	    .dc_ack_i			(dbus_ack_i),		 // Templated
-	    .dc_dat_i			(dbus_dat_i),		 // Templated
+	    .dbus_err_i			(dbus_err_i),
+	    .dbus_ack_i			(dbus_ack_i),
+	    .dbus_dat_i			(dbus_dat_i[31:0]),
 	    .spr_bus_addr_i		(spr_bus_addr_i[15:0]),
 	    .spr_bus_we_i		(spr_bus_we_i),
 	    .spr_bus_stb_i		(spr_bus_stb_i),
