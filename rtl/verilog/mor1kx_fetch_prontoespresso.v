@@ -25,8 +25,8 @@ module mor1kx_fetch_prontoespresso
   (/*AUTOARG*/
    // Outputs
    ibus_adr_o, ibus_req_o, decode_insn_o, fetched_pc_o, fetch_ready_o,
-   fetch_rfa_adr_o, fetch_rfb_adr_o, fetch_rf_re_o, pc_fetch_o,
-   pc_fetch_next_o, decode_except_ibus_err_o, fetch_sleep_o,
+   fetch_rfa_adr_o, fetch_rfb_adr_o, fetch_rf_re_o, pc_fetch_next_o,
+   decode_except_ibus_err_o, fetch_sleep_o,
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, padv_i,
    branch_occur_i, branch_dest_i, du_restart_i, du_restart_pc_i,
@@ -67,7 +67,6 @@ module mor1kx_fetch_prontoespresso
    output 				 fetch_rf_re_o;
 
    // Signal back to the control
-   output [OPTION_OPERAND_WIDTH-1:0] 	 pc_fetch_o;
    output [OPTION_OPERAND_WIDTH-1:0] 	 pc_fetch_next_o;
    
    
@@ -139,7 +138,6 @@ module mor1kx_fetch_prontoespresso
 
    assign fetch_ready_o		= ibus_ack_i | jump_insn_in_decode;
 
-   assign pc_fetch_o            = pc;
    assign pc_fetch_next_o       = pc_fetch_next;
    
    // Register file control

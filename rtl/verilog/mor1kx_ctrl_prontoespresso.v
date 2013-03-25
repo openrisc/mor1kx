@@ -39,19 +39,18 @@ module mor1kx_ctrl_prontoespresso
    ctrl_branch_occur_o, rf_we_o,
    // Inputs
    clk, rst, ctrl_alu_result_i, ctrl_rfb_i, ctrl_flag_set_i,
-   ctrl_flag_clear_i, ctrl_opc_insn_i, fetch_ppc_i, pc_fetch_i,
-   pc_fetch_next_i, fetch_sleep_i, except_ibus_err_i,
-   except_illegal_i, except_syscall_i, except_dbus_i, except_trap_i,
-   except_align_i, fetch_ready_i, alu_valid_i, lsu_valid_i, op_alu_i,
-   op_lsu_load_i, op_lsu_store_i, op_jr_i, op_jbr_i, irq_i,
-   carry_set_i, carry_clear_i, overflow_set_i, overflow_clear_i,
-   du_addr_i, du_stb_i, du_dat_i, du_we_i, du_stall_i,
-   spr_bus_dat_dc_i, spr_bus_ack_dc_i, spr_bus_dat_ic_i,
-   spr_bus_ack_ic_i, spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i,
-   spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
-   spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
-   spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
-   spr_bus_ack_fpu_i, rf_wb_i
+   ctrl_flag_clear_i, ctrl_opc_insn_i, fetch_ppc_i, pc_fetch_next_i,
+   fetch_sleep_i, except_ibus_err_i, except_illegal_i,
+   except_syscall_i, except_dbus_i, except_trap_i, except_align_i,
+   fetch_ready_i, alu_valid_i, lsu_valid_i, op_alu_i, op_lsu_load_i,
+   op_lsu_store_i, op_jr_i, op_jbr_i, irq_i, carry_set_i,
+   carry_clear_i, overflow_set_i, overflow_clear_i, du_addr_i,
+   du_stb_i, du_dat_i, du_we_i, du_stall_i, spr_bus_dat_dc_i,
+   spr_bus_ack_dc_i, spr_bus_dat_ic_i, spr_bus_ack_ic_i,
+   spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i, spr_bus_dat_immu_i,
+   spr_bus_ack_immu_i, spr_bus_dat_mac_i, spr_bus_ack_mac_i,
+   spr_bus_dat_pmu_i, spr_bus_ack_pmu_i, spr_bus_dat_pcu_i,
+   spr_bus_ack_pcu_i, spr_bus_dat_fpu_i, spr_bus_ack_fpu_i, rf_wb_i
    );
 
    parameter OPTION_OPERAND_WIDTH       = 32;
@@ -112,9 +111,7 @@ module mor1kx_ctrl_prontoespresso
    // PCs from the fetch stage
    // PC of the instruction from fetch stage
    input [OPTION_OPERAND_WIDTH-1:0]  fetch_ppc_i;
-   // PC on the bus right now
-   input [OPTION_OPERAND_WIDTH-1:0]  pc_fetch_i;
-   // Next PC to go on the bus
+   // Next PC we're going to deliver
    input [OPTION_OPERAND_WIDTH-1:0]  pc_fetch_next_i;
 
    // Input from fetch stage, indicating it's "sleeping", or not fetching

@@ -204,7 +204,6 @@ module mor1kx_cpu_prontoespresso
    wire			padv_execute_o;		// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			padv_fetch_o;		// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] pc_fetch_next_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
-   wire [OPTION_OPERAND_WIDTH-1:0] pc_fetch_o;	// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
    wire			pipeline_flush_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] rf_result_o;	// From mor1kx_wb_mux_espresso of mor1kx_wb_mux_espresso.v
    wire			rf_wb_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -256,7 +255,6 @@ module mor1kx_cpu_prontoespresso
 	      .fetch_rfa_adr_o		(fetch_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
 	      .fetch_rfb_adr_o		(fetch_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
 	      .fetch_rf_re_o		(fetch_rf_re_o),
-	      .pc_fetch_o		(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
 	      .pc_fetch_next_o		(pc_fetch_next_o[OPTION_OPERAND_WIDTH-1:0]),
 	      .decode_except_ibus_err_o	(decode_except_ibus_err_o),
 	      .fetch_sleep_o		(fetch_sleep_o),
@@ -316,7 +314,6 @@ module mor1kx_cpu_prontoespresso
 	      .fetch_rfa_adr_o		(fetch_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
 	      .fetch_rfb_adr_o		(fetch_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
 	      .fetch_rf_re_o		(fetch_rf_re_o),
-	      .pc_fetch_o		(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
 	      .pc_fetch_next_o		(pc_fetch_next_o[OPTION_OPERAND_WIDTH-1:0]),
 	      .decode_except_ibus_err_o	(decode_except_ibus_err_o),
 	      .fetch_sleep_o		(fetch_sleep_o),
@@ -634,7 +631,6 @@ module mor1kx_cpu_prontoespresso
     .ctrl_flag_set_i		(flag_set_o),
     .ctrl_flag_clear_i		(flag_clear_o),
     .pc_ctrl_i			(),
-    .pc_fetch_i 		(pc_fetch_o),
     .pc_fetch_next_i 		(pc_fetch_next_o),
     .ctrl_opc_insn_i		(opc_insn_o),
     .ctrl_branch_target_i	(ctrl_branch_target_o),
@@ -734,7 +730,6 @@ module mor1kx_cpu_prontoespresso
 	.ctrl_flag_clear_i		(flag_clear_o),		 // Templated
 	.ctrl_opc_insn_i		(opc_insn_o),		 // Templated
 	.fetch_ppc_i			(fetched_pc_o),		 // Templated
-	.pc_fetch_i			(pc_fetch_o),		 // Templated
 	.pc_fetch_next_i		(pc_fetch_next_o),	 // Templated
 	.fetch_sleep_i			(fetch_sleep_o),	 // Templated
 	.except_ibus_err_i		(execute_except_ibus_err_o), // Templated
