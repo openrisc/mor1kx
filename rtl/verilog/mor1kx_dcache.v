@@ -29,7 +29,7 @@ module mor1kx_dcache
     input 			      cache_inhibit_i,
 
     // CPU Interface
-    output 			      cpu_err_o,
+    output reg			      cpu_err_o,
     output 			      cpu_ack_o,
     output [31:0] 		      cpu_dat_o,
     input [31:0] 		      cpu_dat_i,
@@ -124,7 +124,6 @@ module mor1kx_dcache
 
 
    // Bypass cache when not enabled and when invalidating
-   assign cpu_err_o = dbus_err_i;
    assign cpu_ack_o = (cache_req | refill) ? cpu_ack : dbus_ack_i;
    assign cpu_dat_o = (cache_req) ? cpu_dat : dbus_dat_i;
    assign dbus_adr_o = (cache_req | refill) ? mem_adr : cpu_adr_i;
@@ -244,6 +243,7 @@ module mor1kx_dcache
 
    // Register incoming address in IDLE state and wrap increment it in REFILL
    always @(posedge clk) begin
+      cpu_err_o <= dbus_err_i;
       if (invalidate) begin
 	 // Load address to invalidate from SPR bus
 	 mem_adr <= spr_bus_dat_i;
