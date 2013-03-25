@@ -5,12 +5,27 @@
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
   Description: mor1kx pronto espresso fetch unit for TCM memories
-  
-  Fetch insn, advance PC (or take new branch address) on padv_i.
-  
-  What we might want to do is have a 1-insn buffer here, so when the current
-  insn is fetched, but the main pipeline doesn't want it yet
-  
+
+  This is the fetch unit for the pipeline, so begins at the reset address and,
+  in lock-step with the pipeline, provides the instructions according to the
+  program flow.
+ 
+  It is designed to interface to a single-cycle memory system (usually referred
+  to as a tightly-coupled memory, or TCM - a ROM or a RAM). As such, it 
+  attempts to maximise throughput of the fetch stage to the pipeline.
+ 
+  It responds to branch/exception indications from the control stage and 
+  delivers the appropriate instructions to the decode stage when the pipeline
+  is ready to advance.
+ 
+  It will go to "sleep" when it hits a jump-to-self instruction (0x00000000). 
+ 
+  Assumptions:
+  Relies _heavily_ on being attached to a single-cycle memory.
+  The ibus_adr_o requests byte-addresses, ibus_req_o is analogous to a 
+  read-enable signal, and the ibus_ack_i should be aligned with the read-data
+  coming back.
+ 
   indicate ibus errors
  
   Copyright (C) 2013 Authors
@@ -25,8 +40,8 @@ module mor1kx_fetch_tcm_prontoespresso
   (/*AUTOARG*/
    // Outputs
    ibus_adr_o, ibus_req_o, decode_insn_o, fetched_pc_o, fetch_ready_o,
-   fetch_rfa_adr_o, fetch_rfb_adr_o, fetch_rf_re_o, pc_fetch_o,
-   pc_fetch_next_o, decode_except_ibus_err_o, fetch_sleep_o,
+   fetch_rfa_adr_o, fetch_rfb_adr_o, fetch_rf_re_o, pc_fetch_next_o,
+   decode_except_ibus_err_o, fetch_sleep_o,
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, padv_i,
    branch_occur_i, branch_dest_i, du_restart_i, du_restart_pc_i,
@@ -66,8 +81,8 @@ module mor1kx_fetch_tcm_prontoespresso
    output [OPTION_RF_ADDR_WIDTH-1:0] 	 fetch_rfb_adr_o;
    output 				 fetch_rf_re_o;
 
-   // Signal back to the control
-   output [OPTION_OPERAND_WIDTH-1:0] 	 pc_fetch_o;
+   // Signal back to the control which pc we're goint to
+   // deliver next
    output [OPTION_OPERAND_WIDTH-1:0] 	 pc_fetch_next_o;
    
    
@@ -99,22 +114,15 @@ module mor1kx_fetch_tcm_prontoespresso
    output 				  fetch_sleep_o;
 
 
-   wire 				  first_bus_req_cycle;
    reg [OPTION_OPERAND_WIDTH-1:0] 	  current_bus_pc;
    wire [OPTION_OPERAND_WIDTH-1:0] 	  next_bus_pc;
-   wire [OPTION_OPERAND_WIDTH-1:0] 	  early_pc_next;   
-   // PC we've already issued a request for
-   wire 				  pipelined_bus_pc;
-   
-   reg 					  addr_pipelined;
-
-   reg 					  bus_req, bus_req_r;
-   wire [`OR1K_OPCODE_WIDTH-1:0] 	  next_insn_opcode;
-
    reg [OPTION_OPERAND_WIDTH-1:0] 	  insn_buffer;
    
+   wire 				  first_bus_req_cycle;
+   reg 					  addr_pipelined;
+   reg 					  bus_req, bus_req_r;
+   wire [`OR1K_OPCODE_WIDTH-1:0] 	  next_insn_opcode;   
    reg 					  next_insn_will_branch;
-   reg 					  have_early_pc_next;
    reg 					  jump_insn_in_decode;
    reg 					  just_took_branch_addr;
    wire 				  taking_branch_addr;
@@ -127,32 +135,30 @@ module mor1kx_fetch_tcm_prontoespresso
    wire 				  execute_waited_single_cycle;
    reg      				  just_waited_single_cycle;
    reg      				  just_waited_single_cycle_r;
-   wire 				  single_cycle_wait_catchup;   
    reg 					  insn_buffered;
    wire 				  buffered_insn_is_jump;
    reg 					  push_buffered_jump_through_pipeline;
    wire 				  will_go_to_sleep;
    reg 					  sleep;
    reg 					  fetch_take_exception_branch_r;
+   reg [3:0] 				  padv_r;
+   wire 				  long_stall;
    
    
    assign next_bus_pc = current_bus_pc + 4;
    assign ibus_adr_o = addr_pipelined ? next_bus_pc : current_bus_pc;
 
-   assign pc_fetch_o = current_bus_pc;
-   assign pc_fetch_next_o = next_bus_pc;
+   assign pc_fetch_next_o = ibus_adr_o;
    
    assign ibus_req_o = bus_req  | (execute_waiting_deasserted & 
 				   !(insn_buffered & next_insn_will_branch)) |
 		       fetch_take_exception_branch_r;
 
-   assign pipelined_bus_pc = addr_pipelined ? current_bus_pc : 0;
-
    // Signal rising edge on bus request signal
    assign first_bus_req_cycle = ibus_req_o & !bus_req_r;
-   assign pipelining_adr = bus_req & bus_req_r;
 
-   assign taking_branch_addr = (branch_occur_i & padv_i) | fetch_take_exception_branch_i;
+   assign taking_branch_addr = (branch_occur_i & padv_i) | 
+			       fetch_take_exception_branch_i;
 
    assign buffered_insn_is_jump = insn_buffered & next_insn_will_branch;
    
@@ -172,7 +178,9 @@ module mor1kx_fetch_tcm_prontoespresso
 	  current_bus_pc <= branch_dest_i;
 	  just_took_branch_addr         <= 1;
        end
-     else if (ibus_ack_i & (padv_i | just_waited_single_cycle_r) & !execute_waited_single_cycle)
+     else if (ibus_ack_i & (padv_i | (just_waited_single_cycle_r && 
+				      !({padv_r[0],padv_i}==2'b00))) & 
+	      !execute_waited_single_cycle)
        begin
 	  current_bus_pc <= next_bus_pc;
 	  just_took_branch_addr         <= 0;
@@ -184,6 +192,13 @@ module mor1kx_fetch_tcm_prontoespresso
      else if (just_took_branch_addr)
        begin
 	  just_took_branch_addr <= 0;
+       end
+   
+     else if (long_stall)
+       begin
+	  // Long wait - this is a work around for an annoying bug which
+	  // I can't solve any other way!
+	  current_bus_pc <= fetched_pc_o + 4;
        end
 
    // BIG assumptions here - that the read only takes a single cycle!!
@@ -228,7 +243,8 @@ module mor1kx_fetch_tcm_prontoespresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        addr_pipelined <= 0;
-     else if (ibus_err_i | decode_except_ibus_err_o | fetch_take_exception_branch_i)
+     else if (ibus_err_i | decode_except_ibus_err_o | 
+	      fetch_take_exception_branch_i)
        addr_pipelined <= 0;
      else if (first_bus_req_cycle)
        addr_pipelined <= 1;
@@ -263,7 +279,7 @@ module mor1kx_fetch_tcm_prontoespresso
 	  decode_insn_o <= ibus_dat_i;
 	  fetched_pc_o  <= current_bus_pc;
        end
-     else if (just_waited_single_cycle_r)
+     else if (just_waited_single_cycle_r & !execute_waiting_i)
        begin
 	  decode_insn_o <= ibus_dat_i;
 	  fetched_pc_o  <= current_bus_pc;
@@ -289,8 +305,9 @@ module mor1kx_fetch_tcm_prontoespresso
      else
        fetch_ready_r <= fetch_ready_o;
 
-   assign fetch_ready_o = (ibus_ack_i | insn_buffered) & !(just_took_branch_addr) & 
-			  !(just_waited_single_cycle) |
+   assign fetch_ready_o = (ibus_ack_i | insn_buffered ) & 
+			  !(just_took_branch_addr) & 
+			  !(just_waited_single_cycle) | 
 			  push_buffered_jump_through_pipeline ;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -315,12 +332,16 @@ module mor1kx_fetch_tcm_prontoespresso
    
    
    // Register file control
-   assign fetch_rfa_adr_o	= insn_buffered ? insn_buffer[`OR1K_RA_SELECT] : ibus_dat_i[`OR1K_RA_SELECT];
-   assign fetch_rfb_adr_o	= insn_buffered ? insn_buffer[`OR1K_RB_SELECT] : ibus_dat_i[`OR1K_RB_SELECT];
-   assign fetch_rf_re_o		= (ibus_ack_i | execute_waiting_deasserted) & (padv_i | stepping_i);
+   assign fetch_rfa_adr_o	= insn_buffered ? insn_buffer[`OR1K_RA_SELECT] :
+				  ibus_dat_i[`OR1K_RA_SELECT];
+   assign fetch_rfb_adr_o	= insn_buffered ? insn_buffer[`OR1K_RB_SELECT] :
+				  ibus_dat_i[`OR1K_RB_SELECT];
+   assign fetch_rf_re_o		= (ibus_ack_i | execute_waiting_deasserted) & 
+				  (padv_i | stepping_i);
 
    // Pick out opcode of next instruction to go to decode stage
-   assign next_insn_opcode      = insn_buffered ? insn_buffer[`OR1K_OPCODE_SELECT] : 
+   assign next_insn_opcode      = insn_buffered ? 
+				  insn_buffer[`OR1K_OPCODE_SELECT] : 
 				  ibus_dat_i[`OR1K_OPCODE_SELECT];
 
    always @*
@@ -328,44 +349,30 @@ module mor1kx_fetch_tcm_prontoespresso
        case (next_insn_opcode)
 	 `OR1K_OPCODE_J,
 	 `OR1K_OPCODE_JAL: begin
-	    have_early_pc_next		= 1;
 	    next_insn_will_branch	= 1;
 	 end
 	 `OR1K_OPCODE_JR,
 	   `OR1K_OPCODE_JALR: begin
-	      have_early_pc_next	= 0;
 	      next_insn_will_branch	= 1;
 	   end
 	 `OR1K_OPCODE_BNF: begin
-	    have_early_pc_next		= !(flag_i | flag_set_i) | flag_clear_i;
 	    next_insn_will_branch	= !(flag_i | flag_set_i) | flag_clear_i;
 	 end
 	 `OR1K_OPCODE_BF: begin
-	    have_early_pc_next		= !(!flag_i | flag_clear_i) |flag_set_i;
 	    next_insn_will_branch	= !(!flag_i | flag_clear_i) |flag_set_i;
 	 end
 	 `OR1K_OPCODE_SYSTRAPSYNC,
 	   `OR1K_OPCODE_RFE: begin
-	      have_early_pc_next	= 0;
 	      next_insn_will_branch	= 1;
 	   end
 	 default: begin
-	    have_early_pc_next		= 0;
 	    next_insn_will_branch	= 0;
 	 end
        endcase // case (next_insn_opcode)
      else 
        begin
-	  have_early_pc_next		= 0;
 	  next_insn_will_branch		= 0;
        end
-
-   // Can calculate next PC based on instruction coming in
-   assign early_pc_next = {OPTION_OPERAND_WIDTH{have_early_pc_next}} &
-			  ({{4{ibus_dat_i[25]}},
-			    ibus_dat_i[`OR1K_JUMPBRANCH_IMMEDIATE_SELECT],
-			    2'b00} + current_bus_pc);
-   
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -391,6 +398,8 @@ module mor1kx_fetch_tcm_prontoespresso
      else if (execute_waiting_deasserted)
        insn_buffered <= 0;
      else if (fetch_take_exception_branch_i)
+       insn_buffered <= 0;
+     else if (long_stall)
        insn_buffered <= 0;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -441,8 +450,15 @@ module mor1kx_fetch_tcm_prontoespresso
 	  just_waited_single_cycle_r <= just_waited_single_cycle;
        end
 
-   assign single_cycle_wait_catchup = just_waited_single_cycle | just_waited_single_cycle_r;
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       padv_r <= 4'd0;
+     else
+       padv_r <= {padv_r[2:0],padv_i};
+
+   assign long_stall = {padv_r,padv_i}==5'b10000 && execute_waiting_i;
       
-endmodule // mor1kx_fetch_prontoespresso
+endmodule // mor1kx_fetch_tcm_prontoespresso
+
 
 
