@@ -79,6 +79,8 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter OPTION_RESET_PC		= {{(OPTION_OPERAND_WIDTH-13){1'b0}},
 					   `OR1K_RESET_VECTOR,8'd0};
 
+   parameter OPTION_TCM_FETCHER = "DISABLED";
+   
    parameter FEATURE_MULTIPLIER		= "THREESTAGE";
    parameter FEATURE_DIVIDER		= "NONE";
 
@@ -445,6 +447,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	     .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
 	     .OPTION_RF_WORDS(OPTION_RF_WORDS),
 	     .OPTION_RESET_PC(OPTION_RESET_PC),
+	     .OPTION_TCM_FETCHER(OPTION_TCM_FETCHER),
 	     .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER),
 	     .FEATURE_DIVIDER(FEATURE_DIVIDER),
 	     .FEATURE_ADDC(FEATURE_ADDC),
@@ -515,7 +518,7 @@ module mor1kx_cpu(/*AUTOARG*/
 			        monitor_flag_clear ? 0 : 
 				monitor_flag_sr;
 	 assign monitor_clk = clk;
-	 assign monitor_execute_insn = prontoespresso.mor1kx_cpu.mor1kx_fetch_prontoespresso.decode_insn_o;
+	 assign monitor_execute_insn = prontoespresso.mor1kx_cpu.insn_fetch_to_decode;
 	 assign monitor_execute_advance = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.execute_done;
  	 assign monitor_flag_set = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.ctrl_flag_set_i;
 	 assign monitor_flag_clear = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.ctrl_flag_clear_i;

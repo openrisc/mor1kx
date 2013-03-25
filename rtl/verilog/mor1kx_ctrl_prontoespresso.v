@@ -375,12 +375,7 @@ module mor1kx_ctrl_prontoespresso
    
    assign ctrl_branch_occur_o = // Usual branch signaling
                                 ((ctrl_branch_occur | ctrl_branch_exception) &
-                                fetch_advance) /*|
-                                // Need to tell the fetch stage to branch
-                                // when it gets the next instruction because
-                                // there was fetch stalls between the branch
-                                // and the delay slot insn
-                                (execute_delay_slot)*/;
+                                fetch_advance);
       
    assign ctrl_branch_target_o = ctrl_branch_exception ? 
                                  ctrl_branch_except_pc :
@@ -489,6 +484,17 @@ module mor1kx_ctrl_prontoespresso
        padv_decode_r <= padv_fetch_o;
    
    assign padv_decode_o = padv_decode_r;
+
+   reg 				     ctrl_branch_occur_r;
+   wire 			     ctrl_branch_occur_re;
+   assign ctrl_branch_occur_re = ctrl_branch_occur & !ctrl_branch_occur_r;
+   
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       ctrl_branch_occur_r <= 0;
+     else
+       ctrl_branch_occur_r <= ctrl_branch_occur;
+   
    
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -497,7 +503,7 @@ module mor1kx_ctrl_prontoespresso
        // Note: turned padv_fetch_o here into (padv_fetch_o & 
        // !ctrl_branch_occur) for pronto version. This may have implications 
        // for exeception handling.
-       execute_go <= (padv_fetch_o & !(ctrl_branch_occur | op_rfe)) | 
+       execute_go <= (padv_fetch_o & !(ctrl_branch_occur_re | op_rfe)) | 
 		     execute_waiting | (stepping & fetch_ready_i);
 
    assign execute_done = execute_go & !execute_waiting;

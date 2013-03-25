@@ -66,7 +66,9 @@ module mor1kx_cpu_prontoespresso
 
    parameter OPTION_RESET_PC		= {{(OPTION_OPERAND_WIDTH-13){1'b0}},
 					   `OR1K_RESET_VECTOR,8'd0};
-
+   
+   parameter OPTION_TCM_FETCHER = "DISABLED";
+   
    parameter FEATURE_MULTIPLIER		= "THREESTAGE";
    parameter FEATURE_DIVIDER		= "NONE";
 
@@ -155,7 +157,7 @@ module mor1kx_cpu_prontoespresso
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o;// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			ctrl_mfspr_we_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			decode_bubble_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_except_ibus_err_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
+   wire			decode_except_ibus_err_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
    wire			decode_valid_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			du_restart_o;		// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
@@ -168,13 +170,13 @@ module mor1kx_cpu_prontoespresso
    wire			execute_except_syscall_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_trap_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			execute_waiting_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
-   wire			fetch_ready_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
-   wire			fetch_rf_re_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
-   wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa_adr_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
-   wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
-   wire			fetch_sleep_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
+   wire			fetch_ready_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
+   wire			fetch_rf_re_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
+   wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa_adr_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
+   wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
+   wire			fetch_sleep_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
    wire			fetch_take_exception_branch_o;// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
-   wire [OPTION_OPERAND_WIDTH-1:0] fetched_pc_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
+   wire [OPTION_OPERAND_WIDTH-1:0] fetched_pc_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
    wire			flag_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			flag_o;			// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			flag_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
@@ -201,8 +203,8 @@ module mor1kx_cpu_prontoespresso
    wire			padv_decode_o;		// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			padv_execute_o;		// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			padv_fetch_o;		// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
-   wire [OPTION_OPERAND_WIDTH-1:0] pc_fetch_next_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
-   wire [OPTION_OPERAND_WIDTH-1:0] pc_fetch_o;	// From mor1kx_fetch_prontoespresso of mor1kx_fetch_prontoespresso.v
+   wire [OPTION_OPERAND_WIDTH-1:0] pc_fetch_next_o;// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
+   wire [OPTION_OPERAND_WIDTH-1:0] pc_fetch_o;	// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
    wire			pipeline_flush_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] rf_result_o;	// From mor1kx_wb_mux_espresso of mor1kx_wb_mux_espresso.v
    wire			rf_wb_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -217,62 +219,128 @@ module mor1kx_cpu_prontoespresso
    wire			stepping_o;		// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    // End of automatics
 
-   /* mor1kx_fetch_prontoespresso AUTO_TEMPLATE (
-    .padv_i				(padv_fetch_o),
-    .branch_occur_i			(ctrl_branch_occur_o),
-    .branch_dest_i			(ctrl_branch_target_o),
-    .pipeline_flush_i			(pipeline_flush_o),
-    .pc_decode_o                        (pc_fetch_to_decode),
-    .decode_insn_o                      (insn_fetch_to_decode),
-    .du_restart_pc_i                    (du_restart_pc_o),
-    .du_restart_i                       (du_restart_o),
-    .fetch_take_exception_branch_i      (fetch_take_exception_branch_o),
-    .execute_waiting_i                  (execute_waiting_o),
-    .stepping_i                         (stepping_o),
-    .flag_i				(flag_o),
-    .flag_clear_i			(flag_clear_o),
-    .flag_set_i			        (flag_set_o),
-    ); */
-   mor1kx_fetch_prontoespresso
-     #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
-       .OPTION_RESET_PC(OPTION_RESET_PC)
-       )
-     mor1kx_fetch_prontoespresso
-     (/*AUTOINST*/
-      // Outputs
-      .ibus_adr_o			(ibus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
-      .ibus_req_o			(ibus_req_o),
-      .decode_insn_o			(insn_fetch_to_decode),	 // Templated
-      .fetched_pc_o			(fetched_pc_o[OPTION_OPERAND_WIDTH-1:0]),
-      .fetch_ready_o			(fetch_ready_o),
-      .fetch_rfa_adr_o			(fetch_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .fetch_rfb_adr_o			(fetch_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .fetch_rf_re_o			(fetch_rf_re_o),
-      .pc_fetch_o			(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
-      .pc_fetch_next_o			(pc_fetch_next_o[OPTION_OPERAND_WIDTH-1:0]),
-      .decode_except_ibus_err_o		(decode_except_ibus_err_o),
-      .fetch_sleep_o			(fetch_sleep_o),
-      // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .ibus_err_i			(ibus_err_i),
-      .ibus_ack_i			(ibus_ack_i),
-      .ibus_dat_i			(ibus_dat_i[`OR1K_INSN_WIDTH-1:0]),
-      .padv_i				(padv_fetch_o),		 // Templated
-      .branch_occur_i			(ctrl_branch_occur_o),	 // Templated
-      .branch_dest_i			(ctrl_branch_target_o),	 // Templated
-      .du_restart_i			(du_restart_o),		 // Templated
-      .du_restart_pc_i			(du_restart_pc_o),	 // Templated
-      .fetch_take_exception_branch_i	(fetch_take_exception_branch_o), // Templated
-      .execute_waiting_i		(execute_waiting_o),	 // Templated
-      .du_stall_i			(du_stall_i),
-      .stepping_i			(stepping_o),		 // Templated
-      .flag_i				(flag_o),		 // Templated
-      .flag_clear_i			(flag_clear_o),		 // Templated
-      .flag_set_i			(flag_set_o));		 // Templated
-
+   generate
+      if (OPTION_TCM_FETCHER=="ENABLED")
+	begin : fetch_tcm
+	   
+	   /* mor1kx_fetch_tcm_prontoespresso AUTO_TEMPLATE (
+	    .padv_i				(padv_fetch_o),
+	    .branch_occur_i			(ctrl_branch_occur_o),
+	    .branch_dest_i			(ctrl_branch_target_o),
+	    .pipeline_flush_i			(pipeline_flush_o),
+	    .pc_decode_o                        (pc_fetch_to_decode),
+	    .decode_insn_o                      (insn_fetch_to_decode),
+	    .du_restart_pc_i                    (du_restart_pc_o),
+	    .du_restart_i                       (du_restart_o),
+	    .fetch_take_exception_branch_i      (fetch_take_exception_branch_o),
+	    .execute_waiting_i                  (execute_waiting_o),
+	    .stepping_i                         (stepping_o),
+	    .flag_i				(flag_o),
+	    .flag_clear_i			(flag_clear_o),
+	    .flag_set_i			        (flag_set_o),
+	    ); */
+	   mor1kx_fetch_tcm_prontoespresso
+	     #(
+	       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+	       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
+	       .OPTION_RESET_PC(OPTION_RESET_PC)
+	       )
+	   mor1kx_fetch_prontoespresso
+	     (/*AUTOINST*/
+	      // Outputs
+	      .ibus_adr_o		(ibus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
+	      .ibus_req_o		(ibus_req_o),
+	      .decode_insn_o		(insn_fetch_to_decode),	 // Templated
+	      .fetched_pc_o		(fetched_pc_o[OPTION_OPERAND_WIDTH-1:0]),
+	      .fetch_ready_o		(fetch_ready_o),
+	      .fetch_rfa_adr_o		(fetch_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+	      .fetch_rfb_adr_o		(fetch_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+	      .fetch_rf_re_o		(fetch_rf_re_o),
+	      .pc_fetch_o		(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
+	      .pc_fetch_next_o		(pc_fetch_next_o[OPTION_OPERAND_WIDTH-1:0]),
+	      .decode_except_ibus_err_o	(decode_except_ibus_err_o),
+	      .fetch_sleep_o		(fetch_sleep_o),
+	      // Inputs
+	      .clk			(clk),
+	      .rst			(rst),
+	      .ibus_err_i		(ibus_err_i),
+	      .ibus_ack_i		(ibus_ack_i),
+	      .ibus_dat_i		(ibus_dat_i[`OR1K_INSN_WIDTH-1:0]),
+	      .padv_i			(padv_fetch_o),		 // Templated
+	      .branch_occur_i		(ctrl_branch_occur_o),	 // Templated
+	      .branch_dest_i		(ctrl_branch_target_o),	 // Templated
+	      .du_restart_i		(du_restart_o),		 // Templated
+	      .du_restart_pc_i		(du_restart_pc_o),	 // Templated
+	      .fetch_take_exception_branch_i(fetch_take_exception_branch_o), // Templated
+	      .execute_waiting_i	(execute_waiting_o),	 // Templated
+	      .du_stall_i		(du_stall_i),
+	      .stepping_i		(stepping_o),		 // Templated
+	      .flag_i			(flag_o),		 // Templated
+	      .flag_clear_i		(flag_clear_o),		 // Templated
+	      .flag_set_i		(flag_set_o));		 // Templated
+	   
+	end
+      else
+	begin : fetch
+	   
+	   /* mor1kx_fetch_prontoespresso AUTO_TEMPLATE (
+	    .padv_i				(padv_fetch_o),
+	    .branch_occur_i			(ctrl_branch_occur_o),
+	    .branch_dest_i			(ctrl_branch_target_o),
+	    .pipeline_flush_i			(pipeline_flush_o),
+	    .pc_decode_o                        (pc_fetch_to_decode),
+	    .decode_insn_o                      (insn_fetch_to_decode),
+	    .du_restart_pc_i                    (du_restart_pc_o),
+	    .du_restart_i                       (du_restart_o),
+	    .fetch_take_exception_branch_i      (fetch_take_exception_branch_o),
+	    .execute_waiting_i                  (execute_waiting_o),
+	    .stepping_i                         (stepping_o),
+	    .flag_i				(flag_o),
+	    .flag_clear_i			(flag_clear_o),
+	    .flag_set_i			        (flag_set_o),
+	    ); */
+	   mor1kx_fetch_prontoespresso
+	     #(
+	       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+	       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
+	       .OPTION_RESET_PC(OPTION_RESET_PC)
+	       )
+	   mor1kx_fetch_prontoespresso
+	     (/*AUTOINST*/
+	      // Outputs
+	      .ibus_adr_o		(ibus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
+	      .ibus_req_o		(ibus_req_o),
+	      .decode_insn_o		(insn_fetch_to_decode),	 // Templated
+	      .fetched_pc_o		(fetched_pc_o[OPTION_OPERAND_WIDTH-1:0]),
+	      .fetch_ready_o		(fetch_ready_o),
+	      .fetch_rfa_adr_o		(fetch_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+	      .fetch_rfb_adr_o		(fetch_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+	      .fetch_rf_re_o		(fetch_rf_re_o),
+	      .pc_fetch_o		(pc_fetch_o[OPTION_OPERAND_WIDTH-1:0]),
+	      .pc_fetch_next_o		(pc_fetch_next_o[OPTION_OPERAND_WIDTH-1:0]),
+	      .decode_except_ibus_err_o	(decode_except_ibus_err_o),
+	      .fetch_sleep_o		(fetch_sleep_o),
+	      // Inputs
+	      .clk			(clk),
+	      .rst			(rst),
+	      .ibus_err_i		(ibus_err_i),
+	      .ibus_ack_i		(ibus_ack_i),
+	      .ibus_dat_i		(ibus_dat_i[`OR1K_INSN_WIDTH-1:0]),
+	      .padv_i			(padv_fetch_o),		 // Templated
+	      .branch_occur_i		(ctrl_branch_occur_o),	 // Templated
+	      .branch_dest_i		(ctrl_branch_target_o),	 // Templated
+	      .du_restart_i		(du_restart_o),		 // Templated
+	      .du_restart_pc_i		(du_restart_pc_o),	 // Templated
+	      .fetch_take_exception_branch_i(fetch_take_exception_branch_o), // Templated
+	      .execute_waiting_i	(execute_waiting_o),	 // Templated
+	      .du_stall_i		(du_stall_i),
+	      .stepping_i		(stepping_o),		 // Templated
+	      .flag_i			(flag_o),		 // Templated
+	      .flag_clear_i		(flag_clear_o),		 // Templated
+	      .flag_set_i		(flag_set_o));		 // Templated
+	end // else: !if(OPTION_TCM_FETCHER=="ENABLED")
+   endgenerate
+   
    /* mor1kx_decode AUTO_TEMPLATE (
     .padv_i				(padv_decode_o),
     .decode_insn_i			(insn_fetch_to_decode),
