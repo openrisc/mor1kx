@@ -329,6 +329,9 @@ module mor1kx_fetch_cappuccino
 	      state <= IDLE;
 	   end
 	end
+
+	default:
+	  state <= IDLE;
       endcase // case (state)
 
       if (rst)
