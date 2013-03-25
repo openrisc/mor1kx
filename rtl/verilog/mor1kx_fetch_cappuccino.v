@@ -206,21 +206,16 @@ module mor1kx_fetch_cappuccino
        fetch_branch_taken_o <= 1'b0;
 
    // fetch_valid_o generation
-   reg 					  fetch_valid;
-   always @(*)
-     if (kill_fetch | pipeline_flush_i)
-       fetch_valid <= 1'b0;
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       fetch_valid_o <= 1'b0;
+     else if (kill_fetch | pipeline_flush_i)
+       fetch_valid_o <= 1'b0;
      else if (bus_access_done | stall_fetch_valid |
 	      (except_itlb_miss | except_ipagefault) & !branch_except_occur_i)
-       fetch_valid <= 1'b1;
+       fetch_valid_o <= 1'b1;
      else
-       fetch_valid <= 1'b0;
-
-   always @(posedge clk `OR_ASYNC_RST)
-      if (rst)
-	fetch_valid_o <= 1'b0;
-      else
-	fetch_valid_o <= fetch_valid;
+       fetch_valid_o <= 1'b0;
 
    // Register instruction coming in
    always @(posedge clk `OR_ASYNC_RST)
