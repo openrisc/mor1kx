@@ -92,7 +92,6 @@ module mor1kx_dcache
    wire [31:0] 			      cpu_dat;
 
    reg [31:0] 			      mem_adr;
-   reg 				      mem_req;
    reg 				      mem_we;
    wire [31:0] 			      next_mem_adr;
    reg [31:0] 			      mem_dat;
@@ -130,7 +129,8 @@ module mor1kx_dcache
 		      dbus_ack_i;
    assign cpu_dat_o = (cache_req) ? cpu_dat : dbus_dat_i;
    assign dbus_adr_o = (cache_req | refill) ? mem_adr : cpu_adr_i;
-   assign dbus_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
+   assign dbus_req_o = (cache_req | refill) ? write & !invalidating | refill :
+		       cpu_req_i;
    assign dbus_we_o = (cache_req | refill) ? mem_we : cpu_we_i;
    assign dbus_dat_o = cpu_dat_i;
    assign dbus_bsel_o = refill ? 4'b1111 : cpu_bsel_i;
@@ -278,7 +278,6 @@ module mor1kx_dcache
 
    always @(*) begin
       next_state = state;
-      mem_req = 1'b0;
       mem_we = 1'b0;
       tag_we = 1'b0;
       way_we = {(OPTION_DCACHE_WAYS){1'b0}};
@@ -319,7 +318,6 @@ module mor1kx_dcache
 	   if (invalidating) begin
 	      next_state = IDLE;
 	   end else begin
-	      mem_req = 1'b1;
 	      mem_we = 1'b1;
 	      if (dbus_ack_i) begin
 		 if (hit) begin
@@ -353,7 +351,6 @@ module mor1kx_dcache
 	end
 
 	REFILL: begin
-	   mem_req = 1'b1;
 	   if (invalidating) begin
 	      next_state = IDLE;
 	   end else if (dbus_ack_i) begin
