@@ -63,7 +63,6 @@ Hierarchy
 The top few levels of hierarchy as as follows
 
 * mor1kx - Top-level, instantiatng bus interfaces, data cache and CPU top-level
-** mor1kx_dcache  - Data cache implementation
 ** mor1kx_bus_if_xx - Bus interface, depending on desired bus standard
 ** mor1kx_cpu - Pipeline implementation wrapper
 *** mor1kx_cpu_xx - Pipeline implementation, depending on configuration
@@ -71,6 +70,7 @@ The top few levels of hierarchy as as follows
 **** mor1kx_decode - Generic decode stage
 **** mor1kx_execute_alu - Generic ALU for execute stage
 **** mor1kx_lsu_xx - Pipeline-implementation-dependent load/store unit
+**** mor1kx_dcache  - Data cache implementation
 **** mor1kx_wb_mux_xx - Pipeline-implementation-dependent writeback stage mux
 **** mor1kx_rf_xx - Pipeline-implementation-dependent register file
 **** mor1kx_ctrl_xx - Pipeline-implementation-dependent control stage, usually containing features such as tick timer, interrupts etc.
@@ -102,6 +102,33 @@ features throughout the code. This is a useful tool and it would be useful to
 stick to using this for future pipeline implementations, to speed up the 
 tedious task of wiring up new blocks.
 
+
+Architecture compliance
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The mor1kx aims to be fully OpenRISC 1000 compliant. It implements the VR2, 
+AVR and ISRs (still largely unused). The current OR1K architecture version 
+supported is 1.0. 
+
+Version Register 2 definition
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Bits 23:0 of the VR2 are implementation-specific. They are defined, for mor1kx, 
+to be 3 bytes, interpreted as 3 unsigned 8-bit integers, as the following:
+
+* 23:16 - Major version number
+* 15:8 - Minor version number
+* 7:0 - Pipeline identifier
+** Where this pipeline identifier means
+*** 1 - Cappuccino
+*** 2 - Espresso
+*** 3 - Pronto Espresso
+
+However, the mor1kx does not implement the following at present:
+
+* arithmetic exception control/status registers (AECR, AESR)
+* l.muld[u] and thus access to full 64-bit result as there is no MAC unit
+
 CPU Components
 ==============
 
@@ -117,8 +144,8 @@ At present the following pipeline implementations are available. These
 combine various of the components, outlined in a following section, to 
 implement the bulk of the processor.
 
-- cappuccino - 4 stage, single issue, delay slot, debug unit, timers, PIC, tight cache 
-               coupling,ORBIS32 support
+- cappuccino - 4 stage, single issue, delay slot, debug unit, timers, PIC, 
+  	       tightly coupled cache, ORBIS32 support
 - espresso - 2 stage, single issue, delay slot, debug unit, timers, PIC, ORBIS32 support
 - pronto espresso - 2 stage, single issue, no delay slot, debug unit, timers, PIC, ORBIS32 support
 
@@ -129,7 +156,9 @@ A 4 stage pipeline, similar to the original OR1200 implementation.
 
 Caches supported, instruction cache not optional at present.
 
-It has a delay slot.
+It has a delay slot on jump and branch instructions.
+
+It features the EVBAR.
 
 Pipeline consists of the following modules:
 
