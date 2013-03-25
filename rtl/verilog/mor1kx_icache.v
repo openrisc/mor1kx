@@ -353,6 +353,9 @@ module mor1kx_icache
 	   tag_din = 0;
 	   tag_we = 1'b1;
 	end
+
+	default: begin
+	end
       endcase
    end
 
