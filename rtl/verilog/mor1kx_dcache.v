@@ -85,9 +85,10 @@ module mor1kx_dcache
    reg [3:0] 			      next_state;
    wire				      idle;
    wire				      refill;
+   wire				      read;
+   wire				      write;
 
    reg [3:0]			      cpu_bsel_r;
-   reg 				      cpu_ack;
    wire [31:0] 			      cpu_dat;
 
    reg [31:0] 			      mem_adr;
@@ -124,7 +125,9 @@ module mor1kx_dcache
 
 
    // Bypass cache when not enabled and when invalidating
-   assign cpu_ack_o = (cache_req | refill) ? cpu_ack : dbus_ack_i;
+   assign cpu_ack_o = read & cache_req ? hit :
+		      refill ? refill_match & dc_enable & dbus_ack_i :
+		      dbus_ack_i;
    assign cpu_dat_o = (cache_req) ? cpu_dat : dbus_dat_i;
    assign dbus_adr_o = (cache_req | refill) ? mem_adr : cpu_adr_i;
    assign dbus_req_o = (cache_req | refill) ? mem_req : cpu_req_i;
@@ -198,6 +201,8 @@ module mor1kx_dcache
 
    assign idle = (state == IDLE);
    assign refill = (state == REFILL);
+   assign read = (state == READ);
+   assign write = (state == WRITE);
 
    /*
     * SPR bus interface
@@ -273,7 +278,6 @@ module mor1kx_dcache
 
    always @(*) begin
       next_state = state;
-      cpu_ack = 1'b0;
       mem_req = 1'b0;
       mem_we = 1'b0;
       tag_we = 1'b0;
@@ -295,7 +299,6 @@ module mor1kx_dcache
 	   if (invalidating) begin
 	      next_state = IDLE;
 	   end else if (hit) begin
-	      cpu_ack = 1'b1;
 	      /* output data and write back tag with LRU info */
 	      if (way_hit[0]) begin
 		 tag_din[TAG_LRU] = 1'b1;
@@ -319,7 +322,6 @@ module mor1kx_dcache
 	      mem_req = 1'b1;
 	      mem_we = 1'b1;
 	      if (dbus_ack_i) begin
-		 cpu_ack = 1'b1;
 		 if (hit) begin
 		    // cpu_dat is already assigned to the right wayX_dout
 		    // and mem_dat assigned to cpu_dat_i by default, so just
@@ -363,8 +365,6 @@ module mor1kx_dcache
 	      end else begin
 		   way_we[0] = 1'b1;
 	      end
-	      if (refill_match & dc_enable)
-		 cpu_ack = 1'b1;
 
 	      if (refill_done) begin
 		 if (OPTION_DCACHE_WAYS == 2) begin
