@@ -368,7 +368,9 @@ module mor1kx_execute_alu
 				 !mul_result[OPTION_OPERAND_WIDTH-1]);
 
    generate
+      /* verilator lint_off WIDTH */
       if (FEATURE_DIVIDER=="SERIAL") begin
+      /* verilator lint_on WIDTH */
          reg [5:0] div_count;
          reg [OPTION_OPERAND_WIDTH-1:0] div_n;
          reg [OPTION_OPERAND_WIDTH-1:0] div_d;
@@ -448,7 +450,9 @@ module mor1kx_execute_alu
          assign div_result = div_neg ? ~div_n + 1 : div_n;
 	 assign div_by_zero = div_by_zero_r;
       end
+      /* verilator lint_off WIDTH */
       else if (FEATURE_DIVIDER=="SIMULATION") begin
+      /* verilator lint_on WIDTH */
          assign div_result = a / b;
          assign div_valid = 1;
 	 assign div_by_zero = (opc_alu_i == `OR1K_ALU_OPC_DIV || 
@@ -639,7 +643,9 @@ module mor1kx_execute_alu
 
    // Conditional move
    generate
+      /* verilator lint_off WIDTH */
       if (FEATURE_CMOV=="ENABLED") begin
+      /* verilator lint_on WIDTH */
          assign cmov_result = flag_i ? a : b;
       end
    endgenerate
