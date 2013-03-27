@@ -96,8 +96,6 @@ module mor1kx_lsu_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_aligned;  // comb.
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_extended; // comb.
 
-   reg [3:0] 			     dbus_bsel;
-
    reg 				     access_done;
 
    reg [OPTION_OPERAND_WIDTH-1:0]    lsu_result_r;
@@ -116,15 +114,36 @@ module mor1kx_lsu_cappuccino
 
    reg 				     except_dbus;
 
-   wire 			     dc_err_o;
-   wire 			     dc_ack_o;
-   wire [31:0] 			     dc_dat_o;
-   wire [31:0] 			     dc_dat_i;
-   wire [31:0] 			     dc_adr_i;
-   wire 			     dc_req_i;
-   wire 			     dc_we_i;
-   wire [3:0] 			     dc_bsel_i;
+   wire 			     dbus_ack;
+   wire 			     dbus_err;
+   wire [OPTION_OPERAND_WIDTH-1:0]   dbus_ldat;
+   wire [OPTION_OPERAND_WIDTH-1:0]   dbus_sdat;
+   wire [OPTION_OPERAND_WIDTH-1:0]   dbus_adr;
+   wire 			     dbus_req;
+   reg [3:0] 			     dbus_bsel;
+   wire 			     dbus_we;
+
+   wire 			     dc_err;
+   wire 			     dc_ack;
+   wire [31:0] 			     dc_ldat;
+   wire [31:0] 			     dc_sdat;
+   wire [OPTION_OPERAND_WIDTH-1:0]   dc_dbus_adr;
+   wire 			     dc_dbus_req;
+   wire [3:0]			     dc_dbus_bsel;
+   wire 			     dc_dbus_we;
+   wire [OPTION_OPERAND_WIDTH-1:0]   dc_dbus_sdat;
+   wire [31:0] 			     dc_adr;
+   wire [31:0] 			     dc_adr_match;
+   wire 			     dc_req;
+   wire 			     dc_we;
+   wire [3:0] 			     dc_bsel;
    wire 			     dc_cache_inhibit;
+
+   wire 			     dc_access;
+   wire 			     dc_refill;
+
+   reg 				     dc_enable_r;
+   wire 			     dc_enabled;
 
    // DMMU
    wire 			     tlb_miss;
@@ -136,24 +155,18 @@ module mor1kx_lsu_cappuccino
    reg 				     except_dpagefault_r;
    wire 			     dmmu_cache_inhibit;
 
-   assign dc_adr_i = dmmu_enable_i ? dmmu_phys_addr : ctrl_lsu_adr_i;
-   assign dc_dat_i = (ctrl_opc_insn_i[1:0]==2'b10) ?        // l.sb
-		     {ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],ctrl_rfb_i[7:0]} :
-		     (ctrl_opc_insn_i[1:0]==2'b11) ?        // l.sh
-		     {ctrl_rfb_i[15:0],ctrl_rfb_i[15:0]} :
-		     ctrl_rfb_i;                         // l.sw
+   assign dbus_sdat = (ctrl_opc_insn_i[1:0]==2'b10) ?        // l.sb
+		      {ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],ctrl_rfb_i[7:0]} :
+		      (ctrl_opc_insn_i[1:0]==2'b11) ?        // l.sh
+		      {ctrl_rfb_i[15:0],ctrl_rfb_i[15:0]} :
+		      ctrl_rfb_i;                         // l.sw
 
-   assign dc_req_i = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) &
-		     !except_align & !(except_dtlb_miss | except_dtlb_miss_r) &
-		     !(except_dpagefault | except_dpagefault_r) &
-		     !access_done & !(pipeline_flush_i & !du_stall_i);
-
-   assign align_err_word = |dc_adr_i[1:0];
-   assign align_err_short = dc_adr_i[0];
+   assign align_err_word = |ctrl_lsu_adr_i[1:0];
+   assign align_err_short = ctrl_lsu_adr_i[0];
 
 
-   assign lsu_valid_o = dc_ack_o | access_done;
-   assign lsu_except_dbus_o = dc_err_o | except_dbus;
+   assign lsu_valid_o = dbus_ack | access_done;
+   assign lsu_except_dbus_o = dbus_err | except_dbus;
 
    assign load_align_err = ((ctrl_opc_insn_i==`OR1K_OPCODE_LWZ |
 			     ctrl_opc_insn_i==`OR1K_OPCODE_LWS) &
@@ -186,7 +199,7 @@ module mor1kx_lsu_cappuccino
        access_done <= 0;
      else if (padv_execute_i)
        access_done <= 0;
-     else if (dc_ack_o)
+     else if (dbus_ack)
        access_done <= 1;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -194,7 +207,7 @@ module mor1kx_lsu_cappuccino
        except_dbus <= 0;
      else if (padv_execute_i | pipeline_flush_i)
        except_dbus <= 0;
-     else if (dc_err_o)
+     else if (dbus_err)
        except_dbus <= 1;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -219,15 +232,15 @@ module mor1kx_lsu_cappuccino
 	case(ctrl_opc_insn_i[2:0])
 	  3'b101,
 	  3'b110: // load halfword
-	    case(dc_adr_i[1])
+	    case(ctrl_lsu_adr_i[1])
 	      1'b0:
 		dbus_bsel = 4'b1100;
 	      1'b1:
 		dbus_bsel = 4'b0011;
-	    endcase // case (dbus_adr_o[1])
+	    endcase // case (ctrl_lsu_adr_i[1])
 	  3'b011,
 	      3'b100: // load byte
-		case(dc_adr_i[1:0])
+		case(ctrl_lsu_adr_i[1:0])
 		  2'b00:
 		    dbus_bsel = 4'b1000;
 		  2'b01:
@@ -236,7 +249,7 @@ module mor1kx_lsu_cappuccino
 		    dbus_bsel = 4'b0010;
 		  2'b11:
 		    dbus_bsel = 4'b0001;
-		endcase // case (dbus_adr_o[1:0])
+		endcase // case (ctrl_lsu_adr_i[1:0])
 	  default:
 	    dbus_bsel = 4'b1111;
 	endcase // case (opc_insn_i[1:0])
@@ -244,14 +257,14 @@ module mor1kx_lsu_cappuccino
      else if (ctrl_op_lsu_store_i) begin
 	case(ctrl_opc_insn_i[1:0])
 	  2'b11: // Store halfword
-	    case(dc_adr_i[1])
+	    case(ctrl_lsu_adr_i[1])
 	      1'b0:
 		dbus_bsel = 4'b1100;
 	      1'b1:
 		dbus_bsel = 4'b0011;
-	    endcase // case (dbus_adr_o[1])
+	    endcase // case (ctrl_lsu_adr_i[1])
 	  2'b10: // Store byte
-	    case(dc_adr_i[1:0])
+	    case(ctrl_lsu_adr_i[1:0])
 	      2'b00:
 		dbus_bsel = 4'b1000;
 	      2'b01:
@@ -260,7 +273,7 @@ module mor1kx_lsu_cappuccino
 		dbus_bsel = 4'b0010;
 	      2'b11:
 		dbus_bsel = 4'b0001;
-	    endcase // case (dbus_adr_o[1:0])
+	    endcase // case (ctrl_lsu_adr_i[1:0])
 	  default:
 	    dbus_bsel = 4'b1111;
 	endcase // case (ctrl_opc_insn_i[1:0])
@@ -268,22 +281,18 @@ module mor1kx_lsu_cappuccino
      else
        dbus_bsel = 4'b0000;
 
-   assign dc_bsel_i = dbus_bsel;
-
-   assign dc_we_i = ctrl_op_lsu_store_i;
-
    // Select part of read word
    always @*
-     case(dc_adr_i[1:0])
+     case(ctrl_lsu_adr_i[1:0])
        2'b00:
-	 dbus_dat_aligned = dc_dat_o;
+	 dbus_dat_aligned = dbus_ldat;
        2'b01:
-	 dbus_dat_aligned = {dc_dat_o[23:0],8'd0};
+	 dbus_dat_aligned = {dbus_ldat[23:0],8'd0};
        2'b10:
-	 dbus_dat_aligned = {dc_dat_o[15:0],16'd0};
+	 dbus_dat_aligned = {dbus_ldat[15:0],16'd0};
        2'b11:
-	 dbus_dat_aligned = {dc_dat_o[7:0],24'd0};
-     endcase // case (dc_adr_i[1:0])
+	 dbus_dat_aligned = {dbus_ldat[7:0],24'd0};
+     endcase // case (ctrl_lsu_adr_i[1:0])
 
    // Do appropriate extension
    always @*
@@ -312,31 +321,86 @@ module mor1kx_lsu_cappuccino
 
    // Register result incase writeback doesn't occur for a few cycles
    always @(posedge clk)
-     if (dc_ack_o & ctrl_op_lsu_load_i)
+     if (dbus_ack & ctrl_op_lsu_load_i)
        lsu_result_r <= dbus_dat_extended;
 
    assign lsu_result_o = access_done ? lsu_result_r : dbus_dat_extended;
 
-   assign dc_cache_inhibit = dmmu_enable_i & dmmu_cache_inhibit;
+   assign dbus_req = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) &
+		     !except_align & !(except_dtlb_miss | except_dtlb_miss_r) &
+		     !(except_dpagefault | except_dpagefault_r) &
+		     !access_done & !(pipeline_flush_i & !du_stall_i);
+   assign dbus_we = ctrl_op_lsu_store_i;
+   assign dbus_adr = dmmu_enable_i ? dmmu_phys_addr : ctrl_lsu_adr_i;
+
+   assign dbus_ack = !dc_access ? dbus_ack_i : dc_ack;
+   assign dbus_err = !dc_access ? dbus_err_i : dc_err;
+   assign dbus_ldat = !dc_access ? dbus_dat_i : dc_ldat;
+   assign dbus_adr_o = !dc_access ? dbus_adr : dc_dbus_adr;
+   assign dbus_req_o = !dc_access ? dbus_req : dc_dbus_req;
+   assign dbus_we_o = !dc_access ? dbus_we : dc_dbus_we;
+   assign dbus_bsel_o = !dc_access ? dbus_bsel : dc_dbus_bsel;
+   assign dbus_dat_o = !dc_access ? dbus_sdat : dc_dbus_sdat;
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       dc_enable_r <= 0;
+     else if (dc_enable_i & !dbus_req)
+       dc_enable_r <= 1;
+     else if (!dc_enable_i & !dc_refill)
+       dc_enable_r <= 0;
+
+   assign dc_enabled = dc_enable_i & dc_enable_r;
+   assign dc_adr = padv_execute_i &
+		   (exec_op_lsu_load_i | exec_op_lsu_store_i) ?
+		   exec_lsu_adr_i : ctrl_lsu_adr_i;
+   assign dc_adr_match = dbus_adr;
+   assign dc_req = dbus_req & dc_access;
+   assign dc_sdat = dbus_sdat;
+
 generate
 if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
+   if (OPTION_DCACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
+      assign dc_access = dc_enabled &
+			 !(dmmu_cache_inhibit & dmmu_enable_i);
+   end else if (OPTION_DCACHE_LIMIT_WIDTH < OPTION_OPERAND_WIDTH) begin
+      assign dc_access = dc_enabled &
+			 dc_adr_match[OPTION_OPERAND_WIDTH-1:
+				      OPTION_DCACHE_LIMIT_WIDTH] == 0 &
+			 !(dmmu_cache_inhibit & dmmu_enable_i);
+   end else begin
+      initial begin
+	 $display("ERROR: OPTION_DCACHE_LIMIT_WIDTH > OPTION_OPERAND_WIDTH");
+	 $finish();
+      end
+   end
+
+   assign dc_bsel = dbus_bsel;
+   assign dc_we = exec_op_lsu_store_i & padv_execute_i;
 
    /* mor1kx_dcache AUTO_TEMPLATE (
-	    .cpu_err_o			(dc_err_o),
-	    .cpu_ack_o			(dc_ack_o),
-	    .cpu_dat_o			(dc_dat_o),
+	    .refill_o			(dc_refill),
+	    .cpu_err_o			(dc_err),
+	    .cpu_ack_o			(dc_ack),
+	    .cpu_dat_o			(dc_ldat),
+	    .dbus_adr_o			(dc_dbus_adr),
+	    .dbus_req_o			(dc_dbus_req),
+	    .dbus_we_o			(dc_dbus_we),
+	    .dbus_bsel_o		(dc_dbus_bsel),
+	    .dbus_dat_o			(dc_dbus_sdat),
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
 	    // Inputs
 	    .clk			(clk),
 	    .rst			(rst),
-	    .dc_enable			(dc_enable_i),
-	    .cache_inhibit_i		(dc_cache_inhibit),
-	    .cpu_dat_i			(dc_dat_i),
-	    .cpu_adr_i			(dc_adr_i),
-	    .cpu_req_i			(dc_req_i),
-	    .cpu_we_i			(dc_we_i),
-	    .cpu_bsel_i			(dc_bsel_i),
+	    .dc_enable_i		(dc_enabled),
+	    .dc_access_i		(dc_access),
+	    .cpu_dat_i			(dc_sdat),
+	    .cpu_adr_i			(dc_adr),
+	    .cpu_adr_match_i		(dc_adr_match),
+	    .cpu_req_i			(dc_req),
+	    .cpu_we_i			(dc_we),
+	    .cpu_bsel_i			(dc_bsel),
     );*/
 
    mor1kx_dcache
@@ -350,26 +414,28 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
    mor1kx_dcache
 	   (/*AUTOINST*/
 	    // Outputs
-	    .cpu_err_o			(dc_err_o),		 // Templated
-	    .cpu_ack_o			(dc_ack_o),		 // Templated
-	    .cpu_dat_o			(dc_dat_o),		 // Templated
-	    .dbus_dat_o			(dbus_dat_o[31:0]),
-	    .dbus_adr_o			(dbus_adr_o[31:0]),
-	    .dbus_req_o			(dbus_req_o),
-	    .dbus_we_o			(dbus_we_o),
-	    .dbus_bsel_o		(dbus_bsel_o[3:0]),
+	    .refill_o			(dc_refill),		 // Templated
+	    .cpu_err_o			(dc_err),		 // Templated
+	    .cpu_ack_o			(dc_ack),		 // Templated
+	    .cpu_dat_o			(dc_ldat),		 // Templated
+	    .dbus_dat_o			(dc_dbus_sdat),		 // Templated
+	    .dbus_adr_o			(dc_dbus_adr),		 // Templated
+	    .dbus_req_o			(dc_dbus_req),		 // Templated
+	    .dbus_we_o			(dc_dbus_we),		 // Templated
+	    .dbus_bsel_o		(dc_dbus_bsel),		 // Templated
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),	 // Templated
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
 	    // Inputs
 	    .clk			(clk),			 // Templated
 	    .rst			(rst),			 // Templated
-	    .dc_enable			(dc_enable_i),		 // Templated
-	    .cache_inhibit_i		(dc_cache_inhibit),	 // Templated
-	    .cpu_dat_i			(dc_dat_i),		 // Templated
-	    .cpu_adr_i			(dc_adr_i),		 // Templated
-	    .cpu_req_i			(dc_req_i),		 // Templated
-	    .cpu_we_i			(dc_we_i),		 // Templated
-	    .cpu_bsel_i			(dc_bsel_i),		 // Templated
+	    .dc_enable_i		(dc_enabled),		 // Templated
+	    .dc_access_i		(dc_access),		 // Templated
+	    .cpu_dat_i			(dc_sdat),		 // Templated
+	    .cpu_adr_i			(dc_adr),		 // Templated
+	    .cpu_adr_match_i		(dc_adr_match),		 // Templated
+	    .cpu_req_i			(dc_req),		 // Templated
+	    .cpu_we_i			(dc_we),		 // Templated
+	    .cpu_bsel_i			(dc_bsel),		 // Templated
 	    .dbus_err_i			(dbus_err_i),
 	    .dbus_ack_i			(dbus_ack_i),
 	    .dbus_dat_i			(dbus_dat_i[31:0]),
@@ -378,14 +444,12 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .spr_bus_stb_i		(spr_bus_stb_i),
 	    .spr_bus_dat_i		(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
 end else begin
-   assign dc_err_o = dbus_err_i;
-   assign dc_ack_o = dbus_ack_i;
-   assign dc_dat_o = dbus_dat_i;
-   assign dbus_dat_o = dc_dat_i;
-   assign dbus_adr_o = dc_adr_i;
-   assign dbus_we_o = dc_we_i;
-   assign dbus_bsel_o = dc_bsel_i;
-   assign dbus_req_o = dc_req_i;
+   assign dc_access = 0;
+   assign dc_err = 0;
+   assign dc_ack = 0;
+   assign dc_sdat = 0;
+   assign dc_bsel = 0;
+   assign dc_we = 0;
 end
 
 endgenerate
@@ -395,9 +459,7 @@ if (FEATURE_DMMU!="NONE") begin : dmmu_gen
    wire  [OPTION_OPERAND_WIDTH-1:0] virt_addr;
    wire 			    dmmu_spr_bus_stb;
 
-   assign virt_addr = padv_execute_i &
-		      (exec_op_lsu_load_i | exec_op_lsu_store_i) ?
-		      exec_lsu_adr_i : ctrl_lsu_adr_i;
+   assign virt_addr = dc_adr;
 
    // small hack to delay dmmu spr reads by one cycle
    // ideally the spr accesses should work so that the address is presented

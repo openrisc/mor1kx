@@ -24,19 +24,20 @@ module mor1kx_dcache
     input 			      clk,
     input 			      rst,
 
-    input 			      dc_enable,
-
-    input 			      cache_inhibit_i,
+    input 			      dc_enable_i,
+    input 			      dc_access_i,
+    output 			      refill_o,
 
     // CPU Interface
-    output reg			      cpu_err_o,
+    output reg 			      cpu_err_o,
     output 			      cpu_ack_o,
     output [31:0] 		      cpu_dat_o,
     input [31:0] 		      cpu_dat_i,
     input [OPTION_OPERAND_WIDTH-1:0]  cpu_adr_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  cpu_adr_match_i,
     input 			      cpu_req_i,
     input 			      cpu_we_i,
-    input [3:0]			      cpu_bsel_i,
+    input [3:0] 		      cpu_bsel_i,
 
     // BUS Interface
     input 			      dbus_err_i,
@@ -46,7 +47,7 @@ module mor1kx_dcache
     output [31:0] 		      dbus_adr_o,
     output 			      dbus_req_o,
     output 			      dbus_we_o,
-    output [3:0]		      dbus_bsel_o,
+    output [3:0] 		      dbus_bsel_o,
 
     // SPR interface
     input [15:0] 		      spr_bus_addr_i,
@@ -55,17 +56,18 @@ module mor1kx_dcache
     input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_i,
 
     output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
-    output reg 			      spr_bus_ack_o
+    output 			      spr_bus_ack_o
     );
 
    // States
-   parameter IDLE	= 4'b0001;
-   parameter READ	= 4'b0010;
-   parameter WRITE	= 4'b0100;
-   parameter REFILL	= 4'b1000;
+   localparam IDLE		= 5'b00001;
+   localparam READ		= 5'b00010;
+   localparam WRITE		= 5'b00100;
+   localparam REFILL		= 5'b01000;
+   localparam INVALIDATE	= 5'b10000;
 
    // Address space in bytes for a way
-   parameter WAY_WIDTH = OPTION_DCACHE_BLOCK_WIDTH + OPTION_DCACHE_SET_WIDTH;
+   localparam WAY_WIDTH = OPTION_DCACHE_BLOCK_WIDTH + OPTION_DCACHE_SET_WIDTH;
    /*
     * Tag layout
     * +-------------------------------------------------------------+
@@ -78,34 +80,28 @@ module mor1kx_dcache
    localparam TAG_WIDTH = TAG_WAY_WIDTH * OPTION_DCACHE_WAYS + 1;
    localparam TAG_LRU = TAG_WIDTH - 1;
 
-   reg 				      dc_enabled;
-
    // FSM state signals
-   reg [3:0] 			      state;
-   reg [3:0] 			      next_state;
+   reg [4:0] 			      state;
    wire				      idle;
    wire				      refill;
    wire				      read;
    wire				      write;
 
-   reg [3:0]			      cpu_bsel_r;
-   wire [31:0] 			      cpu_dat;
-
-   reg [31:0] 			      mem_adr;
-   reg 				      mem_we;
-   wire [31:0] 			      next_mem_adr;
-   reg [31:0] 			      mem_dat;
-   reg [OPTION_DCACHE_BLOCK_WIDTH-1:0] start_adr;
+   reg [31:0] 			      dbus_adr;
+   wire [31:0] 			      next_dbus_adr;
+   reg [31:0] 			      way_wr_dat;
    wire 			      refill_done;
-   reg 				      refill_match;
+   reg [(1<<(OPTION_DCACHE_BLOCK_WIDTH-2))-1:0] refill_valid;
    wire				      invalidate;
-   reg				      invalidating;
+   wire				      invalidate_edge;
+   reg				      invalidate_r;
 
    wire [OPTION_DCACHE_SET_WIDTH-1:0] tag_raddr;
-   wire [OPTION_DCACHE_SET_WIDTH-1:0] tag_waddr;
+   reg [OPTION_DCACHE_SET_WIDTH-1:0]  tag_waddr;
    reg [TAG_WIDTH-1:0]		      tag_din;
    reg 				      tag_we;
    wire [TAG_INDEX_WIDTH-1:0] 	      tag_index;
+   wire [TAG_INDEX_WIDTH-1:0] 	      tag_windex;
    wire [TAG_WIDTH-1:0] 	      tag_dout;
 
    wire [WAY_WIDTH-3:0] 	      way_raddr[OPTION_DCACHE_WAYS-1:0];
@@ -118,29 +114,25 @@ module mor1kx_dcache
    wire [OPTION_DCACHE_WAYS-1:0]      way_hit;
    wire 			      lru;
 
-   wire 			      cache_req;
-
    genvar 			      i;
 
-
-   // Bypass cache when not enabled and when invalidating
-   assign cpu_ack_o = read & cache_req ? hit :
-		      refill ? refill_match & dc_enable & dbus_ack_i :
-		      dbus_ack_i;
-   assign cpu_dat_o = (cache_req) ? cpu_dat : dbus_dat_i;
-   assign dbus_adr_o = (cache_req | refill) ? mem_adr : cpu_adr_i;
-   assign dbus_req_o = (cache_req | refill) ? write & !invalidating | refill :
-		       cpu_req_i;
-   assign dbus_we_o = (cache_req | refill) ? mem_we : cpu_we_i;
+   assign cpu_ack_o = (read ? hit : dbus_ack_i & write) & cpu_req_i;
+   assign dbus_adr_o = write ? cpu_adr_match_i : dbus_adr;
+   assign dbus_req_o = refill | write & cpu_req_i;
+   assign dbus_we_o = write & dc_access_i;
    assign dbus_dat_o = cpu_dat_i;
    assign dbus_bsel_o = refill ? 4'b1111 : cpu_bsel_i;
 
-   assign tag_raddr = idle ?
-		      cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH] :
-		      mem_adr[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
-   assign tag_waddr = mem_adr[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
+   assign tag_raddr = cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 
-   assign tag_index = mem_adr[OPTION_DCACHE_LIMIT_WIDTH-1:WAY_WIDTH];
+   always @(posedge clk)
+     if (invalidate_edge)
+       tag_waddr <= spr_bus_dat_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
+     else
+       tag_waddr <= tag_raddr;
+
+   assign tag_index = cpu_adr_match_i[OPTION_DCACHE_LIMIT_WIDTH-1:WAY_WIDTH];
+   assign tag_windex = dbus_adr[OPTION_DCACHE_LIMIT_WIDTH-1:WAY_WIDTH];
 
    generate
       if (OPTION_DCACHE_WAYS > 2) begin
@@ -152,13 +144,13 @@ module mor1kx_dcache
 
       for (i = 0; i < OPTION_DCACHE_WAYS; i=i+1) begin : ways
 	 assign way_raddr[i] = cpu_adr_i[WAY_WIDTH-1:2];
-	 assign way_waddr[i] = mem_adr[WAY_WIDTH-1:2];
-	 assign way_din[i] = (state == WRITE) ? mem_dat : dbus_dat_i;
+	 assign way_waddr[i] = dbus_adr_o[WAY_WIDTH-1:2];
+	 assign way_din[i] = way_wr_dat;
 	 /*
 	  * compare tag stored index with incoming index
 	  * and check valid bit
 	  */
-	 assign way_hit[i] = tag_dout[((i+1)*TAG_WAY_VALID)-1] &
+	 assign way_hit[i] = tag_dout[((i + 1)*TAG_WAY_VALID)-1] &
 			      (tag_dout[((i + 1)*TAG_WAY_WIDTH)-2:
 					i*TAG_WAY_WIDTH] == tag_index);
       end
@@ -167,42 +159,27 @@ module mor1kx_dcache
    assign hit = |way_hit;
 
    generate
-      if (OPTION_DCACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
-	 assign cache_req = dc_enabled & !invalidating & !cache_inhibit_i;
-      end else if (OPTION_DCACHE_LIMIT_WIDTH < OPTION_OPERAND_WIDTH) begin
-	assign cache_req = dc_enabled & !invalidating & !cache_inhibit_i &
-			   (cpu_adr_i[OPTION_OPERAND_WIDTH-1:
-				      OPTION_DCACHE_LIMIT_WIDTH] == 0);
-      end else begin
-	 initial begin
-	    $display("ERROR: OPTION_DCACHE_LIMIT_WIDTH > OPTION_OPERAND_WIDTH");
-	    $finish();
-	 end
-      end
-   endgenerate
-
-   generate
       if (OPTION_DCACHE_WAYS == 2) begin
-	 assign cpu_dat = (state == REFILL) ? dbus_dat_i :
-			  way_hit[0] ? way_dout[0] : way_dout[1];
+	 assign cpu_dat_o = way_hit[0] ? way_dout[0] : way_dout[1];
       end else begin
-	 assign cpu_dat = (state == REFILL) ? dbus_dat_i : way_dout[0];
+	 assign cpu_dat_o = way_dout[0];
       end
    endgenerate
 
    assign lru = tag_dout[TAG_LRU];
 
-   assign next_mem_adr = (OPTION_DCACHE_BLOCK_WIDTH == 5) ?
-			 {mem_adr[31:5],  mem_adr[4:0] + 5'd4} : // 32 byte
-			 {mem_adr[31:4],  mem_adr[3:0] + 4'd4};  // 16 byte
+   assign next_dbus_adr = (OPTION_DCACHE_BLOCK_WIDTH == 5) ?
+			  {dbus_adr[31:5], dbus_adr[4:0] + 5'd4} : // 32 byte
+			  {dbus_adr[31:4], dbus_adr[3:0] + 4'd4};  // 16 byte
 
-   assign refill_done = (next_mem_adr[OPTION_DCACHE_BLOCK_WIDTH-1:0] ==
-			 start_adr);
+   assign refill_done = refill_valid[next_dbus_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]];
 
    assign idle = (state == IDLE);
    assign refill = (state == REFILL);
    assign read = (state == READ);
    assign write = (state == WRITE);
+
+   assign refill_o = refill;
 
    /*
     * SPR bus interface
@@ -211,93 +188,112 @@ module mor1kx_dcache
 		       (spr_bus_addr_i == `OR1K_SPR_DCBFR_ADDR |
 			spr_bus_addr_i == `OR1K_SPR_DCBIR_ADDR);
 
-   always @(posedge clk `OR_ASYNC_RST) begin
-      if (rst) begin
-	 invalidating <= 0;
-	 spr_bus_ack_o <= 0;
-      end else begin
-	 spr_bus_ack_o <= 0;
-	 // wait for any ongoing bus accesses to finish
-	 // before switching cache back on after invalidating
-	 if (invalidate)
-	   invalidating <= 1;
-	 else if (idle & invalidating & (dbus_ack_i | !cpu_req_i))
-	   invalidating <= 0;
-      end
-   end
+   assign invalidate_edge = invalidate & !invalidate_r;
+   assign spr_bus_ack_o = 1'b1;
 
-   /*
-    * Cache enable logic, wait for accesses to finish before enabling cache
-    */
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       invalidate_r <= 1'b0;
+     else
+       invalidate_r <= invalidate;
+
     always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       dc_enabled <= 0;
-     else if (dc_enable & (dbus_ack_i | !cpu_req_i))
-       dc_enabled <= 1;
-     else if (!dc_enable & idle)
-       dc_enabled <= 0;
+       cpu_err_o <= 0;
+     else
+       cpu_err_o <= dbus_err_i;
 
    /*
     * Cache FSM
+    * Starts in IDLE.
+    * State changes between READ and WRITE happens cpu_we_i is asserted or not.
+    * cpu_we_i is in sync with cpu_adr_i, so that means that it's the
+    * *upcoming* write that it is indicating. It only toggles for one cycle,
+    * so if we are busy doing something else when this signal comes
+    * (i.e. refilling) we assert the write_pending signal.
+    * cpu_req_i is in sync with cpu_adr_match_i, so it can be used to
+    * determined if a cache hit should cause a refill or if a write should
+    * really be executed.
     */
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       state <= IDLE;
-     else
-       state <= next_state;
-
-   // Register incoming address in IDLE state and wrap increment it in REFILL
-   always @(posedge clk) begin
-      cpu_err_o <= dbus_err_i;
-      if (invalidate) begin
-	 // Load address to invalidate from SPR bus
-	 mem_adr <= spr_bus_dat_i;
-      end else if (idle & !invalidating) begin
-	 start_adr <= {cpu_adr_i[OPTION_DCACHE_BLOCK_WIDTH-1:2], 2'b0};
-	 mem_adr <= {cpu_adr_i[OPTION_OPERAND_WIDTH-1:2], 2'b0};
-	 cpu_bsel_r <= cpu_bsel_i;
-	 /*
-	  * First req in refill will always be a match,
-	  * since that req was the one causing the refill
-	  */
-	 refill_match <= 1;
-      end else if (state == REFILL) begin
-	 if (dbus_ack_i) begin
-	    mem_adr <= next_mem_adr;
-	    refill_match <= 0;
-	    if (cpu_req_i & !cpu_we_i) begin
-	       if (cpu_adr_i == next_mem_adr)
-		 refill_match <= 1;
-	    end
-	 end else if (cpu_req_i & !cpu_we_i) begin
-	       if (cpu_adr_i == mem_adr)
-		 refill_match <= 1;
-	 end
-      end
-   end
-
-   always @(*) begin
-      next_state = state;
-      mem_we = 1'b0;
-      tag_we = 1'b0;
-      way_we = {(OPTION_DCACHE_WAYS){1'b0}};
-      tag_din = tag_dout;
-      mem_dat = cpu_dat_i;
+   reg write_pending;
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if (cpu_we_i)
+	write_pending <= 1;
+      else if (!cpu_req_i)
+	write_pending <= 0;
 
       case (state)
 	IDLE: begin
-	   if (cache_req & dc_enable) begin
-	      if (cpu_req_i & cpu_we_i)
-		next_state = WRITE;
-	      else if (cpu_req_i)
-		next_state = READ;
+	   if (cpu_req_i) begin
+	      if (cpu_we_i | write_pending)
+		state <= WRITE;
+	      else
+		state <= READ;
 	   end
 	end
 
 	READ: begin
-	   if (invalidating) begin
-	      next_state = IDLE;
-	   end else if (hit) begin
+	   if (dc_access_i | cpu_we_i & dc_enable_i) begin
+	      if (!hit & cpu_req_i & !write_pending) begin
+		 refill_valid <= 0;
+		 dbus_adr <= cpu_adr_match_i;
+		 state <= REFILL;
+	      end else if (cpu_we_i | write_pending) begin
+		 state <= WRITE;
+	      end
+	   end else if (!dc_enable_i) begin
+	      state <= IDLE;
+	   end
+	end
+
+	REFILL: begin
+	   if (dbus_ack_i) begin
+	      dbus_adr <= next_dbus_adr;
+	      refill_valid[dbus_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]] <= 1;
+
+	      if (refill_done) begin
+		 state <= READ;
+	      end
+	   end
+	end
+
+	WRITE: begin
+	   if (dc_access_i) begin
+	      if ((dbus_ack_i | !cpu_req_i) & !cpu_we_i)
+		state <= READ;
+	   end else begin
+	      state <= IDLE;
+	   end
+	   write_pending <= 0;
+	end
+
+	INVALIDATE: begin
+	   state <= IDLE;
+	end
+
+	default:
+	  state <= IDLE;
+      endcase
+
+      if (invalidate_edge)
+	 state <= INVALIDATE;
+
+      if (rst)
+	state <= IDLE;
+   end
+
+   always @(*) begin
+      tag_we = 1'b0;
+      way_we = {(OPTION_DCACHE_WAYS){1'b0}};
+      tag_din = tag_dout;
+      way_wr_dat = dbus_dat_i;
+
+      case (state)
+	IDLE: begin
+	end
+
+	READ: begin
+	   if (hit) begin
 	      /* output data and write back tag with LRU info */
 	      if (way_hit[0]) begin
 		 tag_din[TAG_LRU] = 1'b1;
@@ -308,59 +304,45 @@ module mor1kx_dcache
 		 end
 	      end
 	      tag_we = 1'b1;
-	      next_state = IDLE;
-	   end else begin
-	      next_state = REFILL;
 	   end
 	end
 
 	WRITE: begin
-	   if (invalidating) begin
-	      next_state = IDLE;
-	   end else begin
-	      mem_we = 1'b1;
-	      if (dbus_ack_i) begin
-		 if (hit) begin
-		    // cpu_dat is already assigned to the right wayX_dout
-		    // and mem_dat assigned to cpu_dat_i by default, so just
-		    // pick in the bytes not selected from cache output
-		    if (!cpu_bsel_r[3])
-		      mem_dat[31:24] = cpu_dat[31:24];
-		    if (!cpu_bsel_r[2])
-		      mem_dat[23:16] = cpu_dat[23:16];
-		    if (!cpu_bsel_r[1])
-		      mem_dat[15:8] = cpu_dat[15:8];
-		    if (!cpu_bsel_r[0])
-		      mem_dat[7:0] = cpu_dat[7:0];
+	   way_wr_dat = cpu_dat_i;
+	   if (hit & dbus_ack_i) begin
+	      /* Mux cache output with write data */
+	      if (!cpu_bsel_i[3])
+		way_wr_dat[31:24] = cpu_dat_o[31:24];
+	      if (!cpu_bsel_i[2])
+		way_wr_dat[23:16] = cpu_dat_o[23:16];
+	      if (!cpu_bsel_i[1])
+		way_wr_dat[15:8] = cpu_dat_o[15:8];
+	      if (!cpu_bsel_i[0])
+		way_wr_dat[7:0] = cpu_dat_o[7:0];
 
-		    if (way_hit[0]) begin
-		       way_we[0] = 1'b1;
-		       tag_din[TAG_LRU] = 1'b1;
-		    end
-		    if (OPTION_DCACHE_WAYS == 2) begin
-		       if (way_hit[1]) begin
-			  way_we[1] = 1'b1;
-			  tag_din[TAG_LRU] = 1'b0;
-		       end
-		    end
-		    tag_we = 1'b1;
-		 end
-		 next_state = IDLE;
+	      if (way_hit[0]) begin
+		 way_we[0] = 1'b1;
+		 tag_din[TAG_LRU] = 1'b1;
 	      end
+	      if (OPTION_DCACHE_WAYS == 2) begin
+		 if (way_hit[1]) begin
+		    way_we[1] = 1'b1;
+		    tag_din[TAG_LRU] = 1'b0;
+		 end
+	      end
+	      tag_we = 1'b1;
 	   end
 	end
 
 	REFILL: begin
-	   if (invalidating) begin
-	      next_state = IDLE;
-	   end else if (dbus_ack_i) begin
+	   if (dbus_ack_i) begin
 	      if (OPTION_DCACHE_WAYS == 2) begin
 		 if (lru)
 		   way_we[1] = 1'b1;
 		 else
 		   way_we[0] = 1'b1;
 	      end else begin
-		   way_we[0] = 1'b1;
+		 way_we[0] = 1'b1;
 	      end
 
 	      if (refill_done) begin
@@ -368,35 +350,32 @@ module mor1kx_dcache
 		    if (lru) begin // way 1
 		       tag_din[(2*TAG_WAY_VALID)-1] = 1'b1;
 		       tag_din[TAG_LRU] = 1'b0;
-		       tag_din[(2*TAG_WAY_WIDTH)-2:TAG_WAY_WIDTH] = tag_index;
+		       tag_din[(2*TAG_WAY_WIDTH)-2:TAG_WAY_WIDTH] = tag_windex;
 		    end else begin // way0
 		       tag_din[TAG_WAY_VALID-1] = 1'b1;
 		       tag_din[TAG_LRU] = 1'b1;
-		       tag_din[TAG_WAY_WIDTH-2:0] = tag_index;
+		       tag_din[TAG_WAY_WIDTH-2:0] = tag_windex;
 		    end
 		 end else begin
-		       tag_din[TAG_WAY_VALID-1] = 1'b1;
-		       tag_din[TAG_LRU] = 1'b1;
-		       tag_din[TAG_WAY_WIDTH-2:0] = tag_index;
+		    tag_din[TAG_WAY_VALID-1] = 1'b1;
+		    tag_din[TAG_LRU] = 1'b1;
+		    tag_din[TAG_WAY_WIDTH-2:0] = tag_windex;
 		 end
 
 		 tag_we = 1'b1;
-		 next_state = IDLE;
 	      end
 	   end
 	end
-	default:
-	  next_state = IDLE;
+
+	INVALIDATE: begin
+	   // Lazy invalidation, invalidate everything that matches tag address
+	   tag_din = 0;
+	   tag_we = 1'b1;
+	end
+
+	default: begin
+	end
       endcase
-
-      // Lazy invalidation, invalidate everything that matches tag address
-      if (invalidating) begin
-	 tag_din = 0;
-	 tag_we = 1'b1;
-      end
-
-      if (dbus_err_i)
-	next_state = IDLE;
    end
 
    /* mor1kx_spram AUTO_TEMPLATE (
