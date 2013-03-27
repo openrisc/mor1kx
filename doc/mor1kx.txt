@@ -60,20 +60,24 @@ be no configuration performed with the use of Verilog defines.
 Hierarchy
 ~~~~~~~~~
 
-The top few levels of hierarchy as as follows
+The top few levels of hierarchy are as follows
 
-* mor1kx - Top-level, instantiatng bus interfaces, data cache and CPU top-level
-** mor1kx_bus_if_xx - Bus interface, depending on desired bus standard
-** mor1kx_cpu - Pipeline implementation wrapper
-*** mor1kx_cpu_xx - Pipeline implementation, depending on configuration
-**** mor1kx_fetch_xx - Pipeline-implementation-dependent fetch stage
-**** mor1kx_decode - Generic decode stage
-**** mor1kx_execute_alu - Generic ALU for execute stage
-**** mor1kx_lsu_xx - Pipeline-implementation-dependent load/store unit
+mor1kx:: Top-level, instantiatng bus interfaces and CPU top-level
+* mor1kx_bus_if_xx - Bus interface, depending on desired bus standard
+* mor1kx_cpu - Pipeline implementation wrapper
+** mor1kx_cpu_xx - Pipeline implementation, depending on configuration
+*** mor1kx_fetch_xx - Pipeline-implementation-dependent fetch stage
+**** mor1kx_icache  - Instruction cache implementation
+**** mor1kx_immu  - Instruction memory management unit implementation
+*** mor1kx_decode - Generic decode stage
+*** mor1kx_execute_alu - Generic ALU for execute stage
+*** mor1kx_lsu_xx - Pipeline-implementation-dependent load/store unit
 **** mor1kx_dcache  - Data cache implementation
-**** mor1kx_wb_mux_xx - Pipeline-implementation-dependent writeback stage mux
-**** mor1kx_rf_xx - Pipeline-implementation-dependent register file
-**** mor1kx_ctrl_xx - Pipeline-implementation-dependent control stage, usually containing features such as tick timer, interrupts etc.
+**** mor1kx_dmmu  - Data memory management unit implementation
+*** mor1kx_wb_mux_xx - Pipeline-implementation-dependent writeback stage mux
+*** mor1kx_rf_xx - Pipeline-implementation-dependent register file
+*** mor1kx_ctrl_xx - Pipeline-implementation-dependent control stage, usually containing features such as tick timer, interrupts etc.
+
 
 The above hierarchy is not always the same for each pipeline implementation 
 (from _mor1kx_cpu_xx_ level down) but as a good indicator as to how the 
@@ -91,8 +95,6 @@ style, but if in doubt, the following details some of the rules:
 * port names should have their direction abbreviation appended to the name
 ** E.g the instruction bus address output should be ibus_adr_o
 ** The only exceptions are the clock and reset ports, commonly referred to as _clk_ and _rst_ in the Verilog, and don't really require direction suffixes. The only exception is if a clock or reset generation module is outputting one of these, in which case it should have _o appended, otherwise for clock and reset inputs it can be inferred that they are inputs from the absence of _o.
-* As many port widths are usually reliant on paramters, the style of declaring the port names only in the module declaration statement, followed by the direction and width of each port should be adhered to. 
-** The Emacs Verilog auto-mode does it this way anyway, when the module is declared like _module mor1kx_xxx(/\*AUTOARG*/)_
 * Parameter names should be in UPPERCASE, with parameter values, if strings, also in uppercase.
 * Verilog reg and wire names should be named usefully, in lowercase, and make use of underscores in the name.
 * There should be no reason to alter the mor1kx-defines.v or mor1kx-sprs.v files unless it is expanding upon or fixing what is already there. _No new class of defines controlling implementation should be added_ (use parameters instead!) Those files are only for storing architectural information in Verilog format, which can then be used in the design.
@@ -144,17 +146,19 @@ At present the following pipeline implementations are available. These
 combine various of the components, outlined in a following section, to 
 implement the bulk of the processor.
 
-- cappuccino - 4 stage, single issue, delay slot, debug unit, timers, PIC, 
-  	       tightly coupled cache, ORBIS32 support
+- cappuccino - 6 stage, single issue, delay slot, debug unit, timers, PIC,
+  	       tightly coupled cache, MMU, ORBIS32 support
 - espresso - 2 stage, single issue, delay slot, debug unit, timers, PIC, ORBIS32 support
 - pronto espresso - 2 stage, single issue, no delay slot, debug unit, timers, PIC, ORBIS32 support
 
 Cappuccino pipeline
 ~~~~~~~~~~~~~~~~~~~
 
-A 4 stage pipeline, similar to the original OR1200 implementation.
+A 6 stage pipeline. (address, fetch, decode, execute, control/memory and writeback)
 
-Caches supported, instruction cache not optional at present.
+Caches supported (optional).
+
+MMUs supported (optional).
 
 It has a delay slot on jump and branch instructions.
 
@@ -164,16 +168,19 @@ Pipeline consists of the following modules:
 
 * Fetch:
 ** <<mor1kx_icache,mor1kx_icache>>
+** <<mor1kx_immu,mor1kx_immu>>
 ** <<mor1kx_fetch_cappuccino,mor1kx_fetch_cappuccino>>
 * Decode
 ** <<mor1kx_decode,mor1kx_decode>>
-* Execute/memory stage
+* Execute stage
 ** <<mor1kx_execute_alu,mor1kx_execute_alu>>
-** <<mor1kx_lsu_cappuccino,mor1kx_lsu_cappuccino>>
 ** <<mor1kx_wb_mux_cappuccino,mor1kx_wb_mux_cappuccino>>
 ** <<mor1kx_rf_cappuccino,mor1kx_rf_cappuccino>>
 ** <<mor1kx_execute_ctrl_cappuccino,mor1kx_execute_ctrl_cappuccino>>
-* Control stage
+* Control/memory stage
+** <<mor1kx_dcache,mor1kx_dcache>>
+** <<mor1kx_dmmu,mor1kx_dmmu>>
+** <<mor1kx_lsu_cappuccino,mor1kx_lsu_cappuccino>>
 ** <<mor1kx_ctrl_cappuccino,mor1kx_ctrl_cappuccino>>
 ** <<mor1kx_ctrl_branch_cappuccino,mor1kx_ctrl_branch_cappuccino>>
 
@@ -250,7 +257,7 @@ mor1kx_rf_cappuccino
 
 Register file for the pipeline. 2 lots of 32 general purpose registers (GPRs.)
 
-Handles forwarding from writeback to execute stage.
+Handles forwarding from control/memory and writeback to execute stage.
 
 Instantiates a RAM for each of the two register files (_mor1kx_rf_ram_ module.)
 
@@ -432,12 +439,6 @@ implementation toplevel.
 Additionally, some signals intended to be used as hooks for monitor modules are
 provided.
 
-[[mor1kx_dcache]]
-mor1kx_dcache
-~~~~~~~~~~~~~
-
-A data cache module.
-
 [[mor1kx_decode]]
 mor1kx_decode
 ~~~~~~~~~~~~~
@@ -486,6 +487,27 @@ The module also implements comparison logic for the set flag instructions.
 mor1kx_icache
 ~~~~~~~~~~~~~
 
+Instruction cache module.
+
+[[mor1kx_dcache]]
+mor1kx_dcache
+~~~~~~~~~~~~~
+
+Data cache module.
+
+
+[[mor1kx_immu]]
+mor1kx_immu
+~~~~~~~~~~~
+
+Instruction memory management module.
+
+[[mor1kx_dmmu]]
+mor1kx_dmmu
+~~~~~~~~~~~
+
+Data memory management module.
+
 [[mor1kx_rf_ram]]
 mor1kx_rf_ram
 ~~~~~~~~~~~~~
@@ -494,4 +516,12 @@ mor1kx_rf_ram
 mor1kx_spram
 ~~~~~~~~~~~~
 
+Generic single port ram with seperate read and write addresses. +
+Has explicit bypass logic to correctly present write-first behaviour on
+different platforms.
 
+[[mor1kx_dpram_sclk]]
+mor1kx_dpram_sclk
+~~~~~~~~~~~~~~~~~
+
+Generic single clocked dual port ram.
