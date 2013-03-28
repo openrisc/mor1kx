@@ -1280,7 +1280,7 @@ module mor1kx_ctrl_prontoespresso
            assign du_restart_from_stall = 0;
            assign spr_access_ack[6] = 0;
 
-           always @(posedge clk)
+           always @(*)
              begin
                 spr_dmr1 = 0;
                 spr_dmr2 = 0;
