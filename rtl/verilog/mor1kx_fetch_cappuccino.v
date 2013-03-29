@@ -344,11 +344,12 @@ module mor1kx_fetch_cappuccino
    assign ic_enabled = ic_enable & ic_enable_r;
    assign ic_addr = addr_valid ? pc_addr : pc_fetch;
    assign ic_addr_match = immu_enable_i ? immu_phys_addr : pc_fetch;
-   assign ic_req = padv_i & !decode_except_itlb_miss_o & !except_itlb_miss &
-		   !decode_except_ipagefault_o & !except_ipagefault;
    assign ic_refill_allowed = !((tlb_miss | pagefault) & immu_enable_i) &
 			      !branch_except_occur_i & !pipeline_flush_i &
 			      !kill_fetch | doing_rfe_i;
+   assign ic_req = padv_i & !decode_except_itlb_miss_o & !except_itlb_miss &
+		   !decode_except_ipagefault_o & !except_ipagefault &
+		   ic_access & ic_refill_allowed;
 
 generate
 if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
@@ -357,8 +358,8 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
 			 !(immu_cache_inhibit & immu_enable_i);
    end else if (OPTION_ICACHE_LIMIT_WIDTH < OPTION_OPERAND_WIDTH) begin
       assign ic_access = ic_enabled &
-			 pc_fetch[OPTION_OPERAND_WIDTH-1:
-				  OPTION_ICACHE_LIMIT_WIDTH] == 0 &
+			 ic_addr_match[OPTION_OPERAND_WIDTH-1:
+				       OPTION_ICACHE_LIMIT_WIDTH] == 0 &
 			 !(immu_cache_inhibit & immu_enable_i);
    end else begin
       initial begin
@@ -378,16 +379,14 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
     .spr_bus_ack_o		(spr_bus_ack_ic_o),
     .refill_o			(ic_refill),
     // Inputs
-    .ic_enable			(ic_enabled),
-    .addr_i			(ic_addr),
-    .addr_match_i		(ic_addr_match),
-    .req_i			(ic_req),
-    .refill_allowed_i		(ic_refill_allowed),
+    .ic_access_i		(ic_access),
+    .cpu_adr_i			(ic_addr),
+    .cpu_adr_match_i		(ic_addr_match),
+    .cpu_req_i			(ic_req),
     );*/
 
    mor1kx_icache
      #(
-       .FEATURE_INSTRUCTIONCACHE(FEATURE_INSTRUCTIONCACHE),
        .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
        .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
        .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
@@ -407,11 +406,10 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
       // Inputs
       .clk				(clk),
       .rst				(rst),
-      .ic_enable			(ic_enabled),		 // Templated
-      .addr_i				(ic_addr),		 // Templated
-      .addr_match_i			(ic_addr_match),	 // Templated
-      .req_i				(ic_req),		 // Templated
-      .refill_allowed_i			(ic_refill_allowed),	 // Templated
+      .ic_access_i			(ic_access),		 // Templated
+      .cpu_adr_i			(ic_addr),		 // Templated
+      .cpu_adr_match_i			(ic_addr_match),	 // Templated
+      .cpu_req_i			(ic_req),		 // Templated
       .ibus_err_i			(ibus_err_i),
       .ibus_ack_i			(ibus_ack_i),
       .ibus_dat_i			(ibus_dat_i[31:0]),

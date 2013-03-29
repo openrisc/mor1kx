@@ -14,7 +14,6 @@
 
 module mor1kx_icache
   #(
-    parameter FEATURE_INSTRUCTIONCACHE = "NONE",
     parameter OPTION_OPERAND_WIDTH = 32,
     parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
     parameter OPTION_ICACHE_SET_WIDTH = 9,
@@ -25,22 +24,18 @@ module mor1kx_icache
     input 			      clk,
     input 			      rst,
 
-    input 			      ic_enable,
-
-    input [OPTION_OPERAND_WIDTH-1:0]  addr_i,
-    input [OPTION_OPERAND_WIDTH-1:0]  addr_match_i,
-    input 			      req_i,
-
-    input 			      refill_allowed_i,
-
+    input 			      ic_access_i,
     output 			      refill_o,
 
-    // BUS Interface towards CPU
+    // CPU Interface
     output 			      cpu_err_o,
     output 			      cpu_ack_o,
     output [31:0] 		      cpu_dat_o,
+    input [OPTION_OPERAND_WIDTH-1:0]  cpu_adr_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  cpu_adr_match_i,
+    input 			      cpu_req_i,
 
-    // BUS Interface towards MEM
+    // BUS Interface
     input 			      ibus_err_i,
     input 			      ibus_ack_i,
     input [31:0] 		      ibus_dat_i,
@@ -58,11 +53,10 @@ module mor1kx_icache
     );
 
    // States
-   localparam IDLE		= 5'b00001;
-   localparam RESTART		= 5'b00010;
-   localparam READ		= 5'b00100;
-   localparam REFILL		= 5'b01000;
-   localparam INVALIDATE	= 5'b10000;
+   localparam IDLE		= 4'b0001;
+   localparam READ		= 4'b0010;
+   localparam REFILL		= 4'b0100;
+   localparam INVALIDATE	= 4'b1000;
 
    // Address space in bytes for a way
    localparam WAY_WIDTH = OPTION_ICACHE_BLOCK_WIDTH + OPTION_ICACHE_SET_WIDTH;
@@ -79,17 +73,15 @@ module mor1kx_icache
    localparam TAG_LRU = TAG_WIDTH - 1;
 
    // FSM state signals
-   reg [4:0] 			      state;
+   reg [3:0] 			      state;
    wire				      idle;
    wire				      read;
    wire				      refill;
 
-   reg 				      bypass_req;
-
-   reg [31:0] 			      mem_adr;
-   wire [31:0] 			      next_mem_adr;
-   reg [OPTION_ICACHE_BLOCK_WIDTH-1:0] start_adr;
+   reg [31:0] 			      ibus_adr;
+   wire [31:0] 			      next_ibus_adr;
    wire 			      refill_done;
+   reg [(1<<(OPTION_ICACHE_BLOCK_WIDTH-2))-1:0] refill_valid;
    wire				      invalidate;
    wire				      invalidate_edge;
    reg				      invalidate_r;
@@ -112,17 +104,11 @@ module mor1kx_icache
    wire [OPTION_ICACHE_WAYS-1:0]      way_hit;
    wire 			      lru;
 
-   wire 			      cache_req;
-
    genvar 			      i;
-
-   wire 			      cache_present;
-
-   assign cache_present = (FEATURE_INSTRUCTIONCACHE != "NONE");
 
    assign cpu_err_o = ibus_err_i;
    assign cpu_ack_o = read & hit;
-   assign ibus_adr_o = mem_adr;
+   assign ibus_adr_o = ibus_adr;
    assign ibus_req_o = refill;
 
    always @(posedge clk)
@@ -131,8 +117,8 @@ module mor1kx_icache
      else
        tag_waddr <= tag_raddr;
 
-   assign tag_index = addr_match_i[OPTION_ICACHE_LIMIT_WIDTH-1:WAY_WIDTH];
-   assign tag_windex = mem_adr[OPTION_ICACHE_LIMIT_WIDTH-1:WAY_WIDTH];
+   assign tag_index = cpu_adr_match_i[OPTION_ICACHE_LIMIT_WIDTH-1:WAY_WIDTH];
+   assign tag_windex = ibus_adr[OPTION_ICACHE_LIMIT_WIDTH-1:WAY_WIDTH];
 
    generate
       if (OPTION_ICACHE_WAYS > 2) begin
@@ -143,8 +129,8 @@ module mor1kx_icache
       end
 
       for (i = 0; i < OPTION_ICACHE_WAYS; i=i+1) begin : ways
-	 assign way_raddr[i] = addr_i[WAY_WIDTH-1:2];
-	 assign way_waddr[i] = mem_adr[WAY_WIDTH-1:2];
+	 assign way_raddr[i] = cpu_adr_i[WAY_WIDTH-1:2];
+	 assign way_waddr[i] = ibus_adr[WAY_WIDTH-1:2];
 	 assign way_din[i] = ibus_dat_i;
 	 /*
 	  * compare tag stored index with incoming index
@@ -159,37 +145,20 @@ module mor1kx_icache
    assign hit = |way_hit;
 
    generate
-      if (OPTION_ICACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
-	 assign cache_req = ic_enable & cache_present;
-      end else if (OPTION_ICACHE_LIMIT_WIDTH < OPTION_OPERAND_WIDTH) begin
-	 assign cache_req = ic_enable & cache_present &
-			   (addr_i[OPTION_OPERAND_WIDTH-1:
-				   OPTION_ICACHE_LIMIT_WIDTH] == 0);
-      end else begin
-	 initial begin
-	    $display("ERROR: OPTION_ICACHE_LIMIT_WIDTH > OPTION_OPERAND_WIDTH");
-	    $finish();
-	 end
-      end
-   endgenerate
-
-   generate
       if (OPTION_ICACHE_WAYS == 2) begin
-	 assign cpu_dat_o = refill ? ibus_dat_i :
-			    way_hit[0] ? way_dout[0] : way_dout[1];
+	 assign cpu_dat_o = way_hit[0] ? way_dout[0] : way_dout[1];
       end else begin
-	 assign cpu_dat_o = refill ? ibus_dat_i : way_dout[0];
+	 assign cpu_dat_o = way_dout[0];
       end
    endgenerate
 
    assign lru = tag_dout[TAG_LRU];
 
-   assign next_mem_adr = (OPTION_ICACHE_BLOCK_WIDTH == 5) ?
-			 {mem_adr[31:5],  mem_adr[4:0] + 5'd4} : // 32 byte
-			 {mem_adr[31:4],  mem_adr[3:0] + 4'd4};  // 16 byte
+   assign next_ibus_adr = (OPTION_ICACHE_BLOCK_WIDTH == 5) ?
+			 {ibus_adr[31:5], ibus_adr[4:0] + 5'd4} : // 32 byte
+			 {ibus_adr[31:4], ibus_adr[3:0] + 4'd4};  // 16 byte
 
-   assign refill_done = (next_mem_adr[OPTION_ICACHE_BLOCK_WIDTH-1:0] ==
-			 start_adr);
+   assign refill_done = refill_valid[next_ibus_adr[OPTION_ICACHE_BLOCK_WIDTH-1:2]];
 
    assign idle = (state == IDLE);
    assign refill = (state == REFILL);
@@ -203,7 +172,7 @@ module mor1kx_icache
    assign invalidate = spr_bus_stb_i & spr_bus_we_i &
 		       (spr_bus_addr_i == `OR1K_SPR_ICBIR_ADDR);
 
-   assign invalidate_edge = invalidate & ~invalidate_r;
+   assign invalidate_edge = invalidate & !invalidate_r;
    assign spr_bus_ack_o = 1'b1;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -212,43 +181,25 @@ module mor1kx_icache
      else
        invalidate_r <= invalidate;
 
-   /* Keep track of the previous adress request */
-   reg [31:0] 			      addr_r;
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       addr_r <= addr_i;
-     else if (req_i)
-       addr_r <= addr_i;
-
-
    /*
     * Cache FSM
     */
    always @(posedge clk `OR_ASYNC_RST) begin
       case (state)
 	IDLE: begin
-	   if (req_i & cache_req & ic_enable) begin
-	      state <= READ;
-	      mem_adr <= addr_i;
-	      start_adr <= addr_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
-	   end
-	end
-
-	RESTART: begin
-	   mem_adr <= addr_r;
-	   state <= READ;
+	   if (cpu_req_i)
+	     state <= READ;
 	end
 
 	READ: begin
-	   if (cache_req & ic_enable) begin
+	   if (ic_access_i) begin
 	      if (hit) begin
 		 state <= READ;
-		 mem_adr <= addr_i;
-	      end else if (req_i) begin
-		 start_adr <= addr_match_i[OPTION_ICACHE_BLOCK_WIDTH-1:0];
-		 mem_adr <= addr_match_i;
-		 if (refill_allowed_i)
-		   state <= REFILL;
+		 ibus_adr <= cpu_adr_i;
+	      end else if (cpu_req_i) begin
+		 refill_valid <= 0;
+		 ibus_adr <= cpu_adr_match_i;
+		 state <= REFILL;
 	      end
 	   end else begin
 	      state <= IDLE;
@@ -257,23 +208,16 @@ module mor1kx_icache
 
 	REFILL: begin
 	   if (ibus_ack_i) begin
-	      mem_adr <= next_mem_adr;
+	      ibus_adr <= next_ibus_adr;
+	      refill_valid[ibus_adr[OPTION_ICACHE_BLOCK_WIDTH-1:2]] <= 1;
 
-	      /*
-	       * done refilling, go back to READ
-	       * the correct address will be muxed onto
-	       * tag/cache memories
-	       */
-	      if (refill_done) begin
-		 state <= READ;
-		 mem_adr <= addr_i;
-	      end
+	      if (refill_done)
+		state <= READ;
 	   end
 	end
 
 	INVALIDATE: begin
-	   mem_adr <= addr_r;
-	   state <= RESTART;
+	   state <= IDLE;
 	end
 
 	default:
@@ -289,9 +233,10 @@ module mor1kx_icache
 
    always @(*) begin
       tag_we = 1'b0;
-      way_we = {(OPTION_ICACHE_WAYS){1'b0}};
+      tag_raddr = cpu_adr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
       tag_din = tag_dout;
-      tag_raddr = addr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+      way_we = {(OPTION_ICACHE_WAYS){1'b0}};
+
 
       case (state)
 	READ: begin
@@ -309,12 +254,13 @@ module mor1kx_icache
 	   end
 	end
 
-	RESTART: begin
-	   tag_raddr = addr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
-	end
-
 	REFILL: begin
-	   tag_raddr = mem_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+	   /* 
+	    * The bus address is used here to read the tag mem, this is done in
+	    * order to mux the existing tag data with the new when the refill
+	    * is done.
+	    */
+	   tag_raddr = ibus_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
 	   if (ibus_ack_i) begin
 	      if (OPTION_ICACHE_WAYS == 2) begin
 		 if (lru)
@@ -322,11 +268,11 @@ module mor1kx_icache
 		 else
 		   way_we[0] = 1'b1;
 	      end else begin
-		   way_we[0] = 1'b1;
+		 way_we[0] = 1'b1;
 	      end
 
 	      if (refill_done) begin
-		 tag_raddr = addr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+		 tag_raddr = cpu_adr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
 		 if (OPTION_ICACHE_WAYS == 2) begin
 		    if (lru) begin // way 1
 		       tag_din[(2*TAG_WAY_VALID)-1] = 1'b1;

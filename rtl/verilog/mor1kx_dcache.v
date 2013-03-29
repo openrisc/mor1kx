@@ -83,9 +83,9 @@ module mor1kx_dcache
    // FSM state signals
    reg [4:0] 			      state;
    wire				      idle;
-   wire				      refill;
    wire				      read;
    wire				      write;
+   wire				      refill;
 
    reg [31:0] 			      dbus_adr;
    wire [31:0] 			      next_dbus_adr;
@@ -96,7 +96,7 @@ module mor1kx_dcache
    wire				      invalidate_edge;
    reg				      invalidate_r;
 
-   wire [OPTION_DCACHE_SET_WIDTH-1:0] tag_raddr;
+   reg [OPTION_DCACHE_SET_WIDTH-1:0]  tag_raddr;
    reg [OPTION_DCACHE_SET_WIDTH-1:0]  tag_waddr;
    reg [TAG_WIDTH-1:0]		      tag_din;
    reg 				      tag_we;
@@ -122,8 +122,6 @@ module mor1kx_dcache
    assign dbus_we_o = write & dc_access_i;
    assign dbus_dat_o = cpu_dat_i;
    assign dbus_bsel_o = refill ? 4'b1111 : cpu_bsel_i;
-
-   assign tag_raddr = cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 
    always @(posedge clk)
      if (invalidate_edge)
@@ -251,9 +249,8 @@ module mor1kx_dcache
 	      dbus_adr <= next_dbus_adr;
 	      refill_valid[dbus_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]] <= 1;
 
-	      if (refill_done) begin
-		 state <= READ;
-	      end
+	      if (refill_done)
+		state <= READ;
 	   end
 	end
 
@@ -284,14 +281,12 @@ module mor1kx_dcache
 
    always @(*) begin
       tag_we = 1'b0;
-      way_we = {(OPTION_DCACHE_WAYS){1'b0}};
+      tag_raddr = cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
       tag_din = tag_dout;
+      way_we = {(OPTION_DCACHE_WAYS){1'b0}};
       way_wr_dat = dbus_dat_i;
 
       case (state)
-	IDLE: begin
-	end
-
 	READ: begin
 	   if (hit) begin
 	      /* output data and write back tag with LRU info */
@@ -335,6 +330,12 @@ module mor1kx_dcache
 	end
 
 	REFILL: begin
+	   /* 
+	    * The bus address is used here to read the tag mem, this is done in
+	    * order to mux the existing tag data with the new when the refill
+	    * is done.
+	    */
+	   tag_raddr = dbus_adr[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 	   if (dbus_ack_i) begin
 	      if (OPTION_DCACHE_WAYS == 2) begin
 		 if (lru)
@@ -346,6 +347,7 @@ module mor1kx_dcache
 	      end
 
 	      if (refill_done) begin
+		 tag_raddr = cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 		 if (OPTION_DCACHE_WAYS == 2) begin
 		    if (lru) begin // way 1
 		       tag_din[(2*TAG_WAY_VALID)-1] = 1'b1;
