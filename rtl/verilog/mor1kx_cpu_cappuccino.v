@@ -849,8 +849,6 @@ module mor1kx_cpu_cappuccino
     .pc_ctrl_i			(pc_execute_to_ctrl),
     .pc_execute_i		(pc_decode_to_execute),
     .ctrl_opc_insn_i		(ctrl_opc_insn_o),
-    .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),
-    .ctrl_op_lsu_store_i	(ctrl_op_lsu_store_o),
     .ctrl_branch_occur_i	(ctrl_branch_occur_o),
     .ctrl_branch_target_i	(ctrl_branch_target_o),
     .except_ibus_err_i		(ctrl_except_ibus_err_o),
@@ -942,8 +940,6 @@ module mor1kx_cpu_cappuccino
       .ctrl_flag_clear_i		(ctrl_flag_clear_o),	 // Templated
       .pc_ctrl_i			(pc_execute_to_ctrl),	 // Templated
       .ctrl_opc_insn_i			(ctrl_opc_insn_o),	 // Templated
-      .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),	 // Templated
-      .ctrl_op_lsu_store_i		(ctrl_op_lsu_store_o),	 // Templated
       .ctrl_branch_occur_i		(ctrl_branch_occur_o),	 // Templated
       .ctrl_branch_target_i		(ctrl_branch_target_o),	 // Templated
       .pc_execute_i			(pc_decode_to_execute),	 // Templated

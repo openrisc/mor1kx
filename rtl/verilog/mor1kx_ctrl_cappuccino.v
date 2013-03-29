@@ -88,8 +88,6 @@ module mor1kx_ctrl_cappuccino
 
     input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i,
 
-    input 			      ctrl_op_lsu_load_i, //SJK
-    input 			      ctrl_op_lsu_store_i, //SJK
     // Indicate if branch will be taken based on instruction currently in
     // execute stage. Combinatorially generated, uses signals from both
     // execute and ctrl stage.
@@ -892,11 +890,7 @@ module mor1kx_ctrl_cappuccino
 			     // fetch stage
 			     !exec_branch_insn &
 			     // Stops issues with PC when branching
-			     !execute_delay_slot &
-			     // SJK: ugly temp hack to prevent tick timer
-			     // exception to turn off MMU while a
-			     // load/store is going on
-			     !(ctrl_op_lsu_load_i | ctrl_op_lsu_store_i);
+			     !execute_delay_slot;
       end
       else begin
 	 assign except_pic = 0;
@@ -941,11 +935,7 @@ module mor1kx_ctrl_cappuccino
 				   // fetch  stage.
 				   !exec_branch_insn &
 				   // Stops issues with PC when branching
-				   !execute_delay_slot &
-				   // SJK: ugly temp hack to prevent tick timer
-				   // exception to turn off MMU while a
-				   // load/store is going on
-				   !(ctrl_op_lsu_load_i | ctrl_op_lsu_store_i);
+				   !execute_delay_slot;
 
       end // if (FEATURE_TIMER!="NONE")
       else begin
