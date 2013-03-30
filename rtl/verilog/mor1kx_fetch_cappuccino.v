@@ -347,7 +347,8 @@ module mor1kx_fetch_cappuccino
    assign ic_refill_allowed = !((tlb_miss | pagefault) & immu_enable_i) &
 			      !branch_except_occur_i & !pipeline_flush_i &
 			      !kill_fetch | doing_rfe_i;
-   assign ic_req = padv_i & !decode_except_itlb_miss_o & !except_itlb_miss &
+   assign ic_req = padv_i & !decode_except_ibus_err_o &
+		   !decode_except_itlb_miss_o & !except_itlb_miss &
 		   !decode_except_ipagefault_o & !except_ipagefault &
 		   ic_access & ic_refill_allowed;
 
