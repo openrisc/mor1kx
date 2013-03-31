@@ -91,18 +91,21 @@ module mor1kx_dcache
    wire [31:0] 			      next_dbus_adr;
    reg [31:0] 			      way_wr_dat;
    wire 			      refill_done;
+   wire 			      refill_hit;
    reg [(1<<(OPTION_DCACHE_BLOCK_WIDTH-2))-1:0] refill_valid;
    wire				      invalidate;
    wire				      invalidate_edge;
    reg				      invalidate_r;
 
-   reg [OPTION_DCACHE_SET_WIDTH-1:0]  tag_raddr;
-   reg [OPTION_DCACHE_SET_WIDTH-1:0]  tag_waddr;
+   wire [OPTION_DCACHE_SET_WIDTH-1:0] tag_raddr;
+   wire [OPTION_DCACHE_SET_WIDTH-1:0] tag_waddr;
    reg [TAG_WIDTH-1:0]		      tag_din;
    reg 				      tag_we;
    wire [TAG_INDEX_WIDTH-1:0] 	      tag_index;
    wire [TAG_INDEX_WIDTH-1:0] 	      tag_windex;
    wire [TAG_WIDTH-1:0] 	      tag_dout;
+   reg [TAG_WAY_WIDTH-1:0] 	      tag_save_data;
+   reg 				      tag_save_lru;
 
    wire [WAY_WIDTH-3:0] 	      way_raddr[OPTION_DCACHE_WAYS-1:0];
    wire [WAY_WIDTH-3:0] 	      way_waddr[OPTION_DCACHE_WAYS-1:0];
@@ -116,18 +119,23 @@ module mor1kx_dcache
 
    genvar 			      i;
 
-   assign cpu_ack_o = (read ? hit : dbus_ack_i & write) & cpu_req_i;
+   assign cpu_ack_o = ((read | refill) & hit & !write_pending |
+		       refill_hit |
+		       write & dbus_ack_i) & cpu_req_i;
    assign dbus_adr_o = write ? cpu_adr_match_i : dbus_adr;
    assign dbus_req_o = refill | write & cpu_req_i;
    assign dbus_we_o = write & dc_access_i;
    assign dbus_dat_o = cpu_dat_i;
    assign dbus_bsel_o = refill ? 4'b1111 : cpu_bsel_i;
 
-   always @(posedge clk)
-     if (invalidate_edge)
-       tag_waddr <= spr_bus_dat_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
-     else
-       tag_waddr <= tag_raddr;
+   assign tag_raddr = cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
+   /*
+    * The tag mem is written during reads and writes to write the lru info and
+    * during refill and invalidate.
+    */
+   assign tag_waddr = read | write ?
+		      cpu_adr_match_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH] :
+		      dbus_adr[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 
    assign tag_index = cpu_adr_match_i[OPTION_DCACHE_LIMIT_WIDTH-1:WAY_WIDTH];
    assign tag_windex = dbus_adr[OPTION_DCACHE_LIMIT_WIDTH-1:WAY_WIDTH];
@@ -158,7 +166,8 @@ module mor1kx_dcache
 
    generate
       if (OPTION_DCACHE_WAYS == 2) begin
-	 assign cpu_dat_o = way_hit[0] ? way_dout[0] : way_dout[1];
+	 assign cpu_dat_o = way_hit[0] | refill_hit & !tag_save_lru ?
+			    way_dout[0] : way_dout[1];
       end else begin
 	 assign cpu_dat_o = way_dout[0];
       end
@@ -171,6 +180,12 @@ module mor1kx_dcache
 			  {dbus_adr[31:4], dbus_adr[3:0] + 4'd4};  // 16 byte
 
    assign refill_done = refill_valid[next_dbus_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]];
+   assign refill_hit = refill_valid[cpu_adr_match_i[OPTION_DCACHE_BLOCK_WIDTH-1:2]] &
+		       cpu_adr_match_i[OPTION_DCACHE_LIMIT_WIDTH-1:
+				       OPTION_DCACHE_BLOCK_WIDTH] ==
+		       dbus_adr[OPTION_DCACHE_LIMIT_WIDTH-1:
+				OPTION_DCACHE_BLOCK_WIDTH] &
+		       refill & !write_pending;
 
    assign idle = (state == IDLE);
    assign refill = (state == REFILL);
@@ -235,6 +250,13 @@ module mor1kx_dcache
 	      if (!hit & cpu_req_i & !write_pending) begin
 		 refill_valid <= 0;
 		 dbus_adr <= cpu_adr_match_i;
+		 tag_save_lru <= lru;
+		 if (OPTION_DCACHE_WAYS == 2) begin
+		    if (lru)
+		      tag_save_data <= tag_din[TAG_WAY_WIDTH-1:0];
+		    else
+		      tag_save_data <= tag_din[2*TAG_WAY_WIDTH-1:TAG_WAY_WIDTH];
+		 end
 		 state <= REFILL;
 	      end else if (cpu_we_i | write_pending) begin
 		 state <= WRITE;
@@ -272,16 +294,18 @@ module mor1kx_dcache
 	  state <= IDLE;
       endcase
 
-      if (invalidate_edge)
+      if (invalidate_edge) begin
+	 /* dbus_adr is hijacked as the invalidate address here */
+	 dbus_adr <= spr_bus_dat_i;
 	 state <= INVALIDATE;
+      end
 
-      if (rst)
+      if (rst | dbus_err_i)
 	state <= IDLE;
    end
 
    always @(*) begin
       tag_we = 1'b0;
-      tag_raddr = cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
       tag_din = tag_dout;
       way_we = {(OPTION_DCACHE_WAYS){1'b0}};
       way_wr_dat = dbus_dat_i;
@@ -330,15 +354,9 @@ module mor1kx_dcache
 	end
 
 	REFILL: begin
-	   /* 
-	    * The bus address is used here to read the tag mem, this is done in
-	    * order to mux the existing tag data with the new when the refill
-	    * is done.
-	    */
-	   tag_raddr = dbus_adr[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 	   if (dbus_ack_i) begin
 	      if (OPTION_DCACHE_WAYS == 2) begin
-		 if (lru)
+		 if (tag_save_lru)
 		   way_we[1] = 1'b1;
 		 else
 		   way_we[0] = 1'b1;
@@ -346,21 +364,32 @@ module mor1kx_dcache
 		 way_we[0] = 1'b1;
 	      end
 
+	      /* Invalidate the way on the first write */
+	      if (refill_valid == 0) begin
+		 if (tag_save_lru)
+		   tag_din[(2*TAG_WAY_VALID)-1] = 1'b0;
+		 else
+		   tag_din[TAG_WAY_VALID-1] = 1'b0;
+
+		 tag_we = 1'b1;
+	      end
+
 	      if (refill_done) begin
-		 tag_raddr = cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 		 if (OPTION_DCACHE_WAYS == 2) begin
-		    if (lru) begin // way 1
+		    if (tag_save_lru) begin // way 1
 		       tag_din[(2*TAG_WAY_VALID)-1] = 1'b1;
 		       tag_din[TAG_LRU] = 1'b0;
 		       tag_din[(2*TAG_WAY_WIDTH)-2:TAG_WAY_WIDTH] = tag_windex;
+		       tag_din[TAG_WAY_WIDTH-1:0] = tag_save_data;
 		    end else begin // way0
 		       tag_din[TAG_WAY_VALID-1] = 1'b1;
 		       tag_din[TAG_LRU] = 1'b1;
 		       tag_din[TAG_WAY_WIDTH-2:0] = tag_windex;
+		       tag_din[2*TAG_WAY_WIDTH-1:TAG_WAY_WIDTH] = tag_save_data;
 		    end
 		 end else begin
 		    tag_din[TAG_WAY_VALID-1] = 1'b1;
-		    tag_din[TAG_LRU] = 1'b1;
+		    tag_din[TAG_LRU] = 1'b0;
 		    tag_din[TAG_WAY_WIDTH-2:0] = tag_windex;
 		 end
 
