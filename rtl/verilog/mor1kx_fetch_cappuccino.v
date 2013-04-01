@@ -286,7 +286,7 @@ module mor1kx_fetch_cappuccino
 		   branch_except_occur_edge) & !bus_access_done & !ibus_req &
 		   !kill_fetch;
 
-   assign ibus_access = !ic_access;
+   assign ibus_access = !ic_access & !ic_refill;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
    assign imem_err = ibus_access ? ibus_err : ic_err;
    assign imem_dat = fake_ack ? {`OR1K_OPCODE_NOP,26'd0} :
