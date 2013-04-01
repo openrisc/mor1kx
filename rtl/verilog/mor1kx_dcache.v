@@ -366,7 +366,7 @@ module mor1kx_dcache
 
 	      /* Invalidate the way on the first write */
 	      if (refill_valid == 0) begin
-		 if (tag_save_lru)
+		 if (tag_save_lru && OPTION_DCACHE_WAYS == 2)
 		   tag_din[(2*TAG_WAY_VALID)-1] = 1'b0;
 		 else
 		   tag_din[TAG_WAY_VALID-1] = 1'b0;
