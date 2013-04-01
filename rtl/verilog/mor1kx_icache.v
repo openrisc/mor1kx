@@ -110,7 +110,8 @@ module mor1kx_icache
    genvar 			      i;
 
    assign cpu_err_o = ibus_err_i;
-   assign cpu_ack_o = (read | refill) & hit | refill_hit;
+   assign cpu_ack_o = (read | refill & ic_access_i) & hit |
+		      refill_hit & ic_access_i;
    assign ibus_adr_o = ibus_adr;
    assign ibus_req_o = refill;
 
