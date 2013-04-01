@@ -347,7 +347,7 @@ module mor1kx_ctrl_prontoespresso
    assign exception = exception_pending;
    
    assign fetch_take_exception_branch_o =  (take_exception | op_rfe) & 
-                                           !stepping | du_npc_write;
+                                           !stepping;
    
    assign execute_stage_exceptions = except_dbus_i | except_align_i |
 				     except_range;

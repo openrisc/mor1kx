@@ -150,8 +150,9 @@ module mor1kx_fetch_tcm_prontoespresso
 
    assign pc_fetch_next_o = ibus_adr_o;
    
-   assign ibus_req_o = bus_req  | (execute_waiting_deasserted & 
-				   !(insn_buffered & next_insn_will_branch)) |
+   assign ibus_req_o = bus_req & !(stepping_i & ibus_ack_i)  | 
+		       (execute_waiting_deasserted & 
+			!(insn_buffered & next_insn_will_branch)) |
 		       fetch_take_exception_branch_r;
 
    // Signal rising edge on bus request signal
@@ -168,6 +169,11 @@ module mor1kx_fetch_tcm_prontoespresso
 	  current_bus_pc		<= OPTION_RESET_PC;
 	  just_took_branch_addr         <= 0;
        end
+     else if (du_restart_i)
+       begin
+	  current_bus_pc <= du_restart_pc_i;
+	  just_took_branch_addr         <= 0;
+       end
      else if (fetch_take_exception_branch_i)
        begin
 	  current_bus_pc <= branch_dest_i;
@@ -180,7 +186,7 @@ module mor1kx_fetch_tcm_prontoespresso
        end
      else if (ibus_ack_i & (padv_i | (just_waited_single_cycle_r && 
 				      !({padv_r[0],padv_i}==2'b00))) & 
-	      !execute_waited_single_cycle)
+	      !execute_waited_single_cycle & !stepping_i)
        begin
 	  current_bus_pc <= next_bus_pc;
 	  just_took_branch_addr         <= 0;
@@ -263,7 +269,7 @@ module mor1kx_fetch_tcm_prontoespresso
 	  decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
 	  fetched_pc_o  <= 0;
        end
-     else if (sleep | du_stall_i)
+     else if (sleep | (du_stall_i & !execute_waiting_i))
        begin
 	  decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
        end
@@ -271,9 +277,9 @@ module mor1kx_fetch_tcm_prontoespresso
        begin
 	  decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
        end
-     else if (padv_i & ibus_ack_i & ibus_req_o & ((!jump_insn_in_decode & 
-						   !just_took_branch_addr) | 
-						  (insn_from_branch_on_input))
+     else if ((padv_i | stepping_i) & ibus_ack_i & (ibus_req_o | stepping_i) & 
+	      ((!jump_insn_in_decode & !just_took_branch_addr) | 
+	       (insn_from_branch_on_input))
 	      & !(execute_waited_single_cycle | just_waited_single_cycle))
        begin
 	  decode_insn_o <= ibus_dat_i;
@@ -307,7 +313,8 @@ module mor1kx_fetch_tcm_prontoespresso
 
    assign fetch_ready_o = (ibus_ack_i | insn_buffered ) & 
 			  !(just_took_branch_addr) & 
-			  !(just_waited_single_cycle) | 
+			  !(just_waited_single_cycle) &
+			  !du_stall_i | 
 			  push_buffered_jump_through_pipeline ;
 
    always @(posedge clk `OR_ASYNC_RST)
