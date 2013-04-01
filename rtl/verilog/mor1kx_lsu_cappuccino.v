@@ -333,14 +333,15 @@ module mor1kx_lsu_cappuccino
    assign dbus_we = ctrl_op_lsu_store_i;
    assign dbus_adr = dmmu_enable_i ? dmmu_phys_addr : ctrl_lsu_adr_i;
 
-   assign dbus_ack = !dc_access ? dbus_ack_i : dc_ack;
-   assign dbus_err = !dc_access ? dbus_err_i : dc_err;
-   assign dbus_ldat = !dc_access ? dbus_dat_i : dc_ldat;
-   assign dbus_adr_o = !dc_access ? dbus_adr : dc_dbus_adr;
-   assign dbus_req_o = !dc_access ? dbus_req : dc_dbus_req;
-   assign dbus_we_o = !dc_access ? dbus_we : dc_dbus_we;
-   assign dbus_bsel_o = !dc_access ? dbus_bsel : dc_dbus_bsel;
-   assign dbus_dat_o = !dc_access ? dbus_sdat : dc_dbus_sdat;
+   wire dbus_access = !dc_access & !dc_refill;
+   assign dbus_ack = dbus_access ? dbus_ack_i : dc_ack;
+   assign dbus_err = dbus_access ? dbus_err_i : dc_err;
+   assign dbus_ldat = dbus_access ? dbus_dat_i : dc_ldat;
+   assign dbus_adr_o = dbus_access ? dbus_adr : dc_dbus_adr;
+   assign dbus_req_o = dbus_access ? dbus_req : dc_dbus_req;
+   assign dbus_we_o = dbus_access ? dbus_we : dc_dbus_we;
+   assign dbus_bsel_o = dbus_access ? dbus_bsel : dc_dbus_bsel;
+   assign dbus_dat_o = dbus_access ? dbus_sdat : dc_dbus_sdat;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
