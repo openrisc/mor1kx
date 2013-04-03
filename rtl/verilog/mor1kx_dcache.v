@@ -117,6 +117,8 @@ module mor1kx_dcache
    wire [OPTION_DCACHE_WAYS-1:0]      way_hit;
    wire 			      lru;
 
+   reg 				      write_pending;
+
    genvar 			      i;
 
    assign cpu_ack_o = ((read | refill) & hit & !write_pending |
@@ -228,7 +230,6 @@ module mor1kx_dcache
     * determined if a cache hit should cause a refill or if a write should
     * really be executed.
     */
-   reg write_pending;
    always @(posedge clk `OR_ASYNC_RST) begin
       if (cpu_we_i)
 	write_pending <= 1;
