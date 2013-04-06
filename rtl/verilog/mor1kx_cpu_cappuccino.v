@@ -206,6 +206,8 @@ module mor1kx_cpu_cappuccino
    wire			execute_except_syscall_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_trap_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] execute_jal_result_o;// From mor1kx_decode of mor1kx_decode.v
+   wire [OPTION_OPERAND_WIDTH-1:0] execute_rfa_o;// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
+   wire [OPTION_OPERAND_WIDTH-1:0] execute_rfb_o;// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] execute_rfd_adr_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_valid_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			execute_waiting_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
@@ -241,8 +243,6 @@ module mor1kx_cpu_cappuccino
    wire			pipeline_flush_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] rf_result_o;	// From mor1kx_wb_mux_cappuccino of mor1kx_wb_mux_cappuccino.v
    wire			rf_wb_o;		// From mor1kx_decode of mor1kx_decode.v
-   wire [OPTION_OPERAND_WIDTH-1:0] rfa_o;	// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
-   wire [OPTION_OPERAND_WIDTH-1:0] rfb_o;	// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire			spr_bus_ack_dc_i;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire			spr_bus_ack_dmmu_i;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire			spr_bus_ack_ic_i;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
@@ -429,8 +429,8 @@ module mor1kx_cpu_cappuccino
     .op_jr_i				(op_jr_o),
     .immjbr_upper_i			(immjbr_upper_o),
     .pc_execute_i			(pc_decode_to_execute),
-    .rfa_i				(rfa_o),
-    .rfb_i				(rfb_o),
+    .rfa_i				(execute_rfa_o),
+    .rfb_i				(execute_rfb_o),
     .flag_i				(ctrl_flag_o),
     .carry_i                            (ctrl_carry_o),
     ); */
@@ -480,8 +480,8 @@ module mor1kx_cpu_cappuccino
       .op_jr_i				(op_jr_o),		 // Templated
       .immjbr_upper_i			(immjbr_upper_o),	 // Templated
       .pc_execute_i			(pc_decode_to_execute),	 // Templated
-      .rfa_i				(rfa_o),		 // Templated
-      .rfb_i				(rfb_o),		 // Templated
+      .rfa_i				(execute_rfa_o),	 // Templated
+      .rfb_i				(execute_rfb_o),	 // Templated
       .flag_i				(ctrl_flag_o),		 // Templated
       .carry_i				(ctrl_carry_o));		 // Templated
 
@@ -623,8 +623,8 @@ module mor1kx_cpu_cappuccino
      mor1kx_rf_cappuccino
      (/*AUTOINST*/
       // Outputs
-      .rfa_o				(rfa_o[OPTION_OPERAND_WIDTH-1:0]),
-      .rfb_o				(rfb_o[OPTION_OPERAND_WIDTH-1:0]),
+      .execute_rfa_o			(execute_rfa_o[OPTION_OPERAND_WIDTH-1:0]),
+      .execute_rfb_o			(execute_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
       // Inputs
       .clk				(clk),
       .rst				(rst),
@@ -701,7 +701,7 @@ module mor1kx_cpu_cappuccino
     .execute_jal_result_i		(execute_jal_result_o),
     .op_jr_i				(op_jr_o),
     .op_jal_i				(op_jal_o),
-    .rfb_i				(rfb_o),
+    .rfb_i				(execute_rfb_o),
     .flag_set_i 			(flag_set_o),
     .flag_clear_i			(flag_clear_o),
     .pc_execute_i			(pc_decode_to_execute),
@@ -786,7 +786,7 @@ module mor1kx_cpu_cappuccino
       .op_jal_i				(op_jal_o),		 // Templated
       .alu_result_i			(alu_result_o),		 // Templated
       .adder_result_i			(adder_result_o),	 // Templated
-      .rfb_i				(rfb_o),		 // Templated
+      .rfb_i				(execute_rfb_o),	 // Templated
       .execute_jal_result_i		(execute_jal_result_o),	 // Templated
       .flag_set_i			(flag_set_o),		 // Templated
       .flag_clear_i			(flag_clear_o),		 // Templated
@@ -801,7 +801,7 @@ module mor1kx_cpu_cappuccino
       .ctrl_mfspr_we_i			(ctrl_mfspr_we_o));	 // Templated
 
    /* mor1kx_ctrl_branch_cappuccino AUTO_TEMPLATE (
-    .ex_rfb_i				(rfb_o),
+    .ex_rfb_i				(execute_rfb_o),
     .op_jr_i				(op_jr_o),
     .decode_branch_i			(decode_branch_o),
     .decode_branch_target_i		(decode_branch_target_o),
@@ -828,7 +828,7 @@ module mor1kx_cpu_cappuccino
       // Inputs
       .clk				(clk),
       .rst				(rst),
-      .ex_rfb_i				(rfb_o),		 // Templated
+      .ex_rfb_i				(execute_rfb_o),	 // Templated
       .op_jr_i				(op_jr_o),		 // Templated
       .decode_branch_i			(decode_branch_o),	 // Templated
       .decode_branch_target_i		(decode_branch_target_o), // Templated

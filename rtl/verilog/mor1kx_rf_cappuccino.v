@@ -51,8 +51,8 @@ module mor1kx_rf_cappuccino
 
     input 			      pipeline_flush_i,
 
-    output [OPTION_OPERAND_WIDTH-1:0] rfa_o,
-    output [OPTION_OPERAND_WIDTH-1:0] rfb_o
+    output [OPTION_OPERAND_WIDTH-1:0] execute_rfa_o,
+    output [OPTION_OPERAND_WIDTH-1:0] execute_rfb_o
     );
 
    wire [OPTION_OPERAND_WIDTH-1:0]    rfa_ram_o;
@@ -129,15 +129,15 @@ module mor1kx_rf_cappuccino
      else if (padv_decode_i)
        wb_hazard_result <= result_i;
 
-   assign rfa_o = execute_hazard_a ? execute_hazard_result :
-		  ctrl_hazard_a ? ctrl_hazard_result :
-		  wb_hazard_a ? wb_hazard_result :
-		  rfa_ram_o;
+   assign execute_rfa_o = execute_hazard_a ? execute_hazard_result :
+			  ctrl_hazard_a ? ctrl_hazard_result :
+			  wb_hazard_a ? wb_hazard_result :
+			  rfa_ram_o;
 
-   assign rfb_o = execute_hazard_b ? execute_hazard_result :
-		  ctrl_hazard_b ? ctrl_hazard_result :
-		  wb_hazard_b ? wb_hazard_result :
-		  rfb_ram_o;
+   assign execute_rfb_o = execute_hazard_b ? execute_hazard_result :
+			  ctrl_hazard_b ? ctrl_hazard_result :
+			  wb_hazard_b ? wb_hazard_result :
+			  rfb_ram_o;
 
 
    assign rfa_rden = padv_decode_i;
