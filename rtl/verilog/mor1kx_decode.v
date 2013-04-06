@@ -85,9 +85,10 @@ module mor1kx_decode
     output reg [9:0] 			  immjbr_upper_o,
 
     // GPR numbers
-    output reg [OPTION_RF_ADDR_WIDTH-1:0] rfd_adr_o,
-    output [OPTION_RF_ADDR_WIDTH-1:0] 	  rfa_adr_o,
-    output [OPTION_RF_ADDR_WIDTH-1:0] 	  rfb_adr_o,
+    output reg [OPTION_RF_ADDR_WIDTH-1:0] execute_rfd_adr_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0] 	  decode_rfd_adr_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0] 	  decode_rfa_adr_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0] 	  decode_rfb_adr_o,
     output reg [OPTION_OPERAND_WIDTH-1:0] execute_jal_result_o,
 
     output reg 				  rf_wb_o,
@@ -216,8 +217,10 @@ module mor1kx_decode
 
    // Register file addresses are not registered here, but rather go
    // straight out to RF so read is done when execute stage is ready
-   assign rfa_adr_o = decode_insn_i[`OR1K_RA_SELECT];
-   assign rfb_adr_o = decode_insn_i[`OR1K_RB_SELECT];
+   assign decode_rfa_adr_o = decode_insn_i[`OR1K_RA_SELECT];
+   assign decode_rfb_adr_o = decode_insn_i[`OR1K_RB_SELECT];
+
+   assign decode_rfd_adr_o = op_jal ? 9 : decode_insn_i[`OR1K_RD_SELECT];
 
    // Insn opcode
    assign opc_insn = decode_insn_i[`OR1K_OPCODE_SELECT];
@@ -301,8 +304,8 @@ if (PIPELINE_BUBBLE=="ENABLED") begin : pipeline_bubble
     * and an instruction currently in decode stage needing it's result as input.
     */
    assign decode_bubble_o = padv_i & ((op_lsu_load_o | op_mfspr_o) &
-				      (rfa_adr_o == rfd_adr_o ||
-				       rfb_adr_o == rfd_adr_o) |
+				      (decode_rfa_adr_o == execute_rfd_adr_o ||
+				       decode_rfb_adr_o == execute_rfd_adr_o) |
 				      /*
 				       * FIXME: ugly hack to prevent branches
 				       * in exe stage from being stalled by
@@ -482,14 +485,14 @@ endgenerate
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst) begin
 	      rf_wb_o <= 0;
-	      rfd_adr_o <= 0;
+	      execute_rfd_adr_o <= 0;
 	   end
 	   else if (padv_i) begin
 	      rf_wb_o <= rf_wb;
-	      rfd_adr_o <= op_jal ? 9 : decode_insn_i[`OR1K_RD_SELECT];
+	      execute_rfd_adr_o <= decode_rfd_adr_o;
 	      if (decode_bubble_o) begin
 		 rf_wb_o <= 0;
-		 rfd_adr_o <= 0;
+		 execute_rfd_adr_o <= 0;
 	      end
 	   end
 
@@ -646,7 +649,7 @@ endgenerate
       else begin : combinatorial_decode
 	 always @*
 	   begin
-	      rfd_adr_o = op_jal ? 9 : decode_insn_i[`OR1K_RD_SELECT];
+	      execute_rfd_adr_o = decode_rfd_adr_o;
 	      rf_wb_o			= rf_wb;
 
 	      op_jbr_o			= op_jbr;

@@ -156,6 +156,9 @@ module mor1kx_cpu_espresso
    wire			ctrl_mfspr_we_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire			decode_bubble_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_except_ibus_err_o;// From mor1kx_fetch_espresso of mor1kx_fetch_espresso.v
+   wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfa_adr_o;// From mor1kx_decode of mor1kx_decode.v
+   wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfb_adr_o;// From mor1kx_decode of mor1kx_decode.v
+   wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfd_adr_o;// From mor1kx_decode of mor1kx_decode.v
    wire			decode_valid_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			du_restart_o;		// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
@@ -205,11 +208,8 @@ module mor1kx_cpu_espresso
    wire [OPTION_OPERAND_WIDTH-1:0] rf_result_o;	// From mor1kx_wb_mux_espresso of mor1kx_wb_mux_espresso.v
    wire			rf_wb_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			rf_we_o;		// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
-   wire [OPTION_RF_ADDR_WIDTH-1:0] rfa_adr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] rfa_o;	// From mor1kx_rf_espresso of mor1kx_rf_espresso.v
-   wire [OPTION_RF_ADDR_WIDTH-1:0] rfb_adr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] rfb_o;	// From mor1kx_rf_espresso of mor1kx_rf_espresso.v
-   wire [OPTION_RF_ADDR_WIDTH-1:0] rfd_adr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_npc_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_ppc_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire			stepping_o;		// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
@@ -269,6 +269,7 @@ module mor1kx_cpu_espresso
     .flag_i				(spr_sr_o[`OR1K_SPR_SR_F]),
     .flag_set_i				(flag_set_o),
     .flag_clear_i			(flag_clear_o),
+    .execute_rfd_adr_o			(),
     .decode_branch_o			(),
     .decode_branch_target_o		(),
     .decode_except_ibus_err_i		(decode_except_ibus_err_o),
@@ -312,9 +313,10 @@ module mor1kx_cpu_espresso
       .opc_alu_secondary_o		(opc_alu_secondary_o[`OR1K_ALU_OPC_WIDTH-1:0]),
       .imm16_o				(imm16_o[`OR1K_IMM_WIDTH-1:0]),
       .immjbr_upper_o			(immjbr_upper_o[9:0]),
-      .rfd_adr_o			(rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .rfa_adr_o			(rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .rfb_adr_o			(rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .execute_rfd_adr_o		(),			 // Templated
+      .decode_rfd_adr_o			(decode_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .decode_rfa_adr_o			(decode_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .decode_rfb_adr_o			(decode_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .execute_jal_result_o		(execute_jal_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .rf_wb_o				(rf_wb_o),
       .op_jbr_o				(op_jbr_o),
@@ -499,7 +501,7 @@ module mor1kx_cpu_espresso
    /* mor1kx_rf_espresso AUTO_TEMPLATE (
     .rf_we_i    			(rf_we_o),
     .rf_re_i    			(fetch_advancing_o),
-    .rfd_adr_i  			(rfd_adr_o),
+    .rfd_adr_i  			(decode_rfd_adr_o),
     .rfa_adr_i  			(fetch_rfa_adr_o),
     .rfb_adr_i  			(fetch_rfb_adr_o),
     .result_i				(rf_result_o),
@@ -518,7 +520,7 @@ module mor1kx_cpu_espresso
       // Inputs
       .clk				(clk),
       .rst				(rst),
-      .rfd_adr_i			(rfd_adr_o),		 // Templated
+      .rfd_adr_i			(decode_rfd_adr_o),	 // Templated
       .rfa_adr_i			(fetch_rfa_adr_o),	 // Templated
       .rfb_adr_i			(fetch_rfb_adr_o),	 // Templated
       .rf_we_i				(rf_we_o),		 // Templated

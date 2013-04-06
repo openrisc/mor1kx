@@ -190,6 +190,9 @@ module mor1kx_cpu_cappuccino
    wire			decode_except_ibus_err_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			decode_except_ipagefault_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			decode_except_itlb_miss_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfa_adr_o;// From mor1kx_decode of mor1kx_decode.v
+   wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfb_adr_o;// From mor1kx_decode of mor1kx_decode.v
+   wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfd_adr_o;// From mor1kx_decode of mor1kx_decode.v
    wire			decode_valid_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			doing_rfe_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			du_restart_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
@@ -203,6 +206,7 @@ module mor1kx_cpu_cappuccino
    wire			execute_except_syscall_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_trap_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] execute_jal_result_o;// From mor1kx_decode of mor1kx_decode.v
+   wire [OPTION_RF_ADDR_WIDTH-1:0] execute_rfd_adr_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_valid_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			execute_waiting_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			fetch_branch_taken_o;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
@@ -237,11 +241,8 @@ module mor1kx_cpu_cappuccino
    wire			pipeline_flush_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] rf_result_o;	// From mor1kx_wb_mux_cappuccino of mor1kx_wb_mux_cappuccino.v
    wire			rf_wb_o;		// From mor1kx_decode of mor1kx_decode.v
-   wire [OPTION_RF_ADDR_WIDTH-1:0] rfa_adr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] rfa_o;	// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
-   wire [OPTION_RF_ADDR_WIDTH-1:0] rfb_adr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] rfb_o;	// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
-   wire [OPTION_RF_ADDR_WIDTH-1:0] rfd_adr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			spr_bus_ack_dc_i;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire			spr_bus_ack_dmmu_i;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire			spr_bus_ack_ic_i;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
@@ -377,9 +378,10 @@ module mor1kx_cpu_cappuccino
       .opc_alu_secondary_o		(opc_alu_secondary_o[`OR1K_ALU_OPC_WIDTH-1:0]),
       .imm16_o				(imm16_o[`OR1K_IMM_WIDTH-1:0]),
       .immjbr_upper_o			(immjbr_upper_o[9:0]),
-      .rfd_adr_o			(rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .rfa_adr_o			(rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .rfb_adr_o			(rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .execute_rfd_adr_o		(execute_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .decode_rfd_adr_o			(decode_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .decode_rfa_adr_o			(decode_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .decode_rfb_adr_o			(decode_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .execute_jal_result_o		(execute_jal_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .rf_wb_o				(rf_wb_o),
       .op_jbr_o				(op_jbr_o),
@@ -600,9 +602,9 @@ module mor1kx_cpu_cappuccino
     .padv_execute_i			(padv_execute_o),
     .padv_decode_i			(padv_decode_o),
     .decode_valid_i			(decode_valid_o),
-    .rfa_adr_i  			(rfa_adr_o),
-    .rfb_adr_i  			(rfb_adr_o),
-    .exec_rfd_adr_i			(rfd_adr_o),
+    .rfa_adr_i  			(decode_rfa_adr_o),
+    .rfb_adr_i  			(decode_rfb_adr_o),
+    .exec_rfd_adr_i			(execute_rfd_adr_o),
     .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),
     .wb_rfd_adr_i  			(wb_rfd_adr_o),
     .exec_rf_wb_i			(rf_wb_o),
@@ -629,9 +631,9 @@ module mor1kx_cpu_cappuccino
       .padv_execute_i			(padv_execute_o),	 // Templated
       .padv_decode_i			(padv_decode_o),	 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
-      .rfa_adr_i			(rfa_adr_o),		 // Templated
-      .rfb_adr_i			(rfb_adr_o),		 // Templated
-      .exec_rfd_adr_i			(rfd_adr_o),		 // Templated
+      .rfa_adr_i			(decode_rfa_adr_o),	 // Templated
+      .rfb_adr_i			(decode_rfb_adr_o),	 // Templated
+      .exec_rfd_adr_i			(execute_rfd_adr_o),	 // Templated
       .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),	 // Templated
       .wb_rfd_adr_i			(wb_rfd_adr_o),		 // Templated
       .exec_rf_wb_i			(rf_wb_o),		 // Templated
@@ -704,7 +706,7 @@ module mor1kx_cpu_cappuccino
     .flag_clear_i			(flag_clear_o),
     .pc_execute_i			(pc_decode_to_execute),
     .exec_rf_wb_i			(rf_wb_o),
-    .exec_rfd_adr_i			(rfd_adr_o),
+    .exec_rfd_adr_i			(execute_rfd_adr_o),
     .ctrl_mfspr_we_i			(ctrl_mfspr_we_o),
     .pipeline_flush_i			(pipeline_flush_o),
     .pc_ctrl_o                          (pc_execute_to_ctrl),
@@ -794,7 +796,7 @@ module mor1kx_cpu_cappuccino
       .overflow_clear_i			(overflow_clear_o),	 // Templated
       .pc_execute_i			(pc_decode_to_execute),	 // Templated
       .exec_rf_wb_i			(rf_wb_o),		 // Templated
-      .exec_rfd_adr_i			(rfd_adr_o),		 // Templated
+      .exec_rfd_adr_i			(execute_rfd_adr_o),	 // Templated
       .exec_bubble_i			(exec_bubble_o),	 // Templated
       .ctrl_mfspr_we_i			(ctrl_mfspr_we_o));	 // Templated
 
