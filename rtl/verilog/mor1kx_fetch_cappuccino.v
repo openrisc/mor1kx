@@ -104,6 +104,7 @@ module mor1kx_fetch_cappuccino
    wire					  stall_fetch_valid;
    wire					  stall_adv;
    wire 				  addr_valid;
+   reg 					  flushing;
 
    reg 					  fake_ack;
 
@@ -167,6 +168,14 @@ module mor1kx_fetch_cappuccino
    assign except_ipagefault = pagefault & immu_enable_i & bus_access_done &
 			      !doing_rfe_i & !kill_fetch;
 
+   // Signal to indicate that the ongoing bus access should be flushed
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       flushing <= 0;
+     else if (bus_access_done & padv_i | fetch_valid_o & !padv_i)
+       flushing <= 0;
+     else if (pipeline_flush_i)
+       flushing <= 1;
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
 	branch_occur_r <= 1'b0;
@@ -220,8 +229,9 @@ module mor1kx_fetch_cappuccino
    // Register instruction coming in
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       decode_insn_o <= 0;
-     else if (imem_err | except_ipagefault | except_itlb_miss)
+       decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
+     else if (imem_err | except_ipagefault | except_itlb_miss |
+	      pipeline_flush_i | flushing)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
      else if (imem_ack & padv_i | stall_adv)
        decode_insn_o <= imem_dat;
