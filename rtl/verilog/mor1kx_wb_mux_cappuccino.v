@@ -31,7 +31,6 @@ module mor1kx_wb_mux_cappuccino
 
     output reg [OPTION_OPERAND_WIDTH-1:0] rf_result_o,
 
-    input 				  op_jal_i,
     input 				  op_lsu_load_i,
     input 				  op_mfspr_i,
     input 				  lsu_valid_i
@@ -42,9 +41,6 @@ module mor1kx_wb_mux_cappuccino
        rf_result_o <= 0;
      else if (op_mfspr_i)
        rf_result_o <= spr_i;
-     else if (op_jal_i)
-       /* TODO - maybe eliminate this adder */
-       rf_result_o <= pc_i + 8;
      else if (op_lsu_load_i & lsu_valid_i)
        rf_result_o <= lsu_result_i;
      else if (!op_lsu_load_i)

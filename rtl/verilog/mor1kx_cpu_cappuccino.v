@@ -572,7 +572,6 @@ module mor1kx_cpu_cappuccino
     .lsu_result_i			(lsu_result_o),
     .lsu_valid_i			(lsu_valid_o),
     .spr_i				(mfspr_dat_o),
-    .op_jal_i				(ctrl_op_jal_o),
     .op_lsu_load_i			(ctrl_op_lsu_load_o),
     .pc_i				(pc_execute_to_ctrl),
     .op_mfspr_i			        (ctrl_op_mfspr_o),
@@ -592,7 +591,6 @@ module mor1kx_cpu_cappuccino
       .lsu_result_i			(lsu_result_o),		 // Templated
       .pc_i				(pc_execute_to_ctrl),	 // Templated
       .spr_i				(mfspr_dat_o),		 // Templated
-      .op_jal_i				(ctrl_op_jal_o),	 // Templated
       .op_lsu_load_i			(ctrl_op_lsu_load_o),	 // Templated
       .op_mfspr_i			(ctrl_op_mfspr_o),	 // Templated
       .lsu_valid_i			(lsu_valid_o));		 // Templated
@@ -698,6 +696,7 @@ module mor1kx_cpu_cappuccino
     .lsu_valid_i			(lsu_valid_o),
     .alu_result_i			(alu_result_o),
     .adder_result_i			(adder_result_o),
+    .execute_jal_result_i		(execute_jal_result_o),
     .op_jr_i				(op_jr_o),
     .op_jal_i				(op_jal_o),
     .rfb_i				(rfb_o),
@@ -786,6 +785,7 @@ module mor1kx_cpu_cappuccino
       .alu_result_i			(alu_result_o),		 // Templated
       .adder_result_i			(adder_result_o),	 // Templated
       .rfb_i				(rfb_o),		 // Templated
+      .execute_jal_result_i		(execute_jal_result_o),	 // Templated
       .flag_set_i			(flag_set_o),		 // Templated
       .flag_clear_i			(flag_clear_o),		 // Templated
       .carry_set_i			(carry_set_o),		 // Templated

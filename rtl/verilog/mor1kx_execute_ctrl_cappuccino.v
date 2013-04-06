@@ -62,6 +62,7 @@ module mor1kx_execute_ctrl_cappuccino
     input [OPTION_OPERAND_WIDTH-1:0] 	  alu_result_i,
     input [OPTION_OPERAND_WIDTH-1:0] 	  adder_result_i,
     input [OPTION_OPERAND_WIDTH-1:0] 	  rfb_i,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  execute_jal_result_i,
     input 				  flag_set_i,
     input 				  flag_clear_i,
     input 				  carry_set_i,
@@ -190,6 +191,8 @@ module mor1kx_execute_ctrl_cappuccino
      end else if (padv_i) begin
 	if (op_lsu_load_i | op_lsu_store_i)
 	  ctrl_lsu_adr_o <= adder_result_i;
+	else if (op_jal_i)
+	  ctrl_alu_result_o <= execute_jal_result_i;
 	else
 	  ctrl_alu_result_o <= alu_result_i;
      end
