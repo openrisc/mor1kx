@@ -169,6 +169,7 @@ module mor1kx_cpu_prontoespresso
    wire			execute_except_itlb_miss_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_syscall_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_trap_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire [OPTION_OPERAND_WIDTH-1:0] execute_jal_result_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_waiting_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			fetch_ready_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
    wire			fetch_rf_re_o;		// From mor1kx_fetch_prontoespresso of mor1kx_fetch_tcm_prontoespresso.v, ...
@@ -390,6 +391,7 @@ module mor1kx_cpu_prontoespresso
       .rfd_adr_o			(rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .rfa_adr_o			(rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .rfb_adr_o			(rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .execute_jal_result_o		(execute_jal_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .rf_wb_o				(rf_wb_o),
       .op_jbr_o				(op_jbr_o),
       .op_jr_o				(op_jr_o),

@@ -51,6 +51,8 @@ module mor1kx_decode
     parameter FEATURE_CUST7 = "NONE",
     parameter FEATURE_CUST8 = "NONE",
 
+    parameter FEATURE_DELAY_SLOT = "ENABLED",
+
     parameter REGISTERED_DECODE = "ENABLED",
     parameter PIPELINE_BUBBLE = "NONE",
     parameter FEATURE_INBUILT_CHECKERS = "ENABLED"
@@ -86,6 +88,7 @@ module mor1kx_decode
     output reg [OPTION_RF_ADDR_WIDTH-1:0] rfd_adr_o,
     output [OPTION_RF_ADDR_WIDTH-1:0] 	  rfa_adr_o,
     output [OPTION_RF_ADDR_WIDTH-1:0] 	  rfb_adr_o,
+    output reg [OPTION_OPERAND_WIDTH-1:0] execute_jal_result_o,
 
     output reg 				  rf_wb_o,
 
@@ -278,6 +281,15 @@ module mor1kx_decode
 
    assign decode_branch_target_o = pc_decode_i + {{4{immjbr_upper[9]}},
 						  immjbr_upper,imm16,2'b00};
+   // Calculate the link register result
+   // TODO: investigate if the ALU adder can be used for this without
+   // introducing critical paths
+   always @(posedge clk)
+     if (padv_i)
+       execute_jal_result_o <= FEATURE_DELAY_SLOT == "ENABLED" ?
+			       pc_decode_i + 8 :
+			       pc_decode_i + 4;
+
 generate
 /* verilator lint_off WIDTH */
 if (PIPELINE_BUBBLE=="ENABLED") begin : pipeline_bubble
