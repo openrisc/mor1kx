@@ -37,12 +37,12 @@ module mor1kx_rf_cappuccino
     input [OPTION_RF_ADDR_WIDTH-1:0]  rfa_adr_i,
     input [OPTION_RF_ADDR_WIDTH-1:0]  rfb_adr_i,
 
-    input [OPTION_RF_ADDR_WIDTH-1:0]  exec_rfd_adr_i,
+    input [OPTION_RF_ADDR_WIDTH-1:0]  execute_rfd_adr_i,
     input [OPTION_RF_ADDR_WIDTH-1:0]  ctrl_rfd_adr_i,
     input [OPTION_RF_ADDR_WIDTH-1:0]  wb_rfd_adr_i,
 
     // Write back signal indications
-    input 			      exec_rf_wb_i,
+    input 			      execute_rf_wb_i,
     input 			      ctrl_rf_wb_i,
     input 			      wb_rf_wb_i,
 
@@ -68,10 +68,10 @@ module mor1kx_rf_cappuccino
    reg 				      flushing;
 
    // Keep track of the flush signal, this is needed to not wrongly assert
-   // exec_hazard after an exception (or rfe) has happened.
+   // execute_hazard after an exception (or rfe) has happened.
    // What happens in that case is that the instruction in execute stage is
-   // invalid until the next padv_decode, so it's exec_rfd_adr can not be used
-   // to evaluate the exec_hazard.
+   // invalid until the next padv_decode, so it's execute_rfd_adr can not be
+   // used to evaluate the execute_hazard.
    always @(posedge clk)
      if (pipeline_flush_i)
        flushing <= 1;
@@ -79,25 +79,25 @@ module mor1kx_rf_cappuccino
        flushing <= 0;
 
    // Detect hazards
-   reg exec_hazard_a;
-   reg exec_hazard_b;
+   reg execute_hazard_a;
+   reg execute_hazard_b;
    always @(posedge clk)
      if (pipeline_flush_i) begin
-	exec_hazard_a <= 0;
-	exec_hazard_b <= 0;
+	execute_hazard_a <= 0;
+	execute_hazard_b <= 0;
      end else if (padv_decode_i & !flushing) begin
-	exec_hazard_a <= exec_rf_wb_i & (exec_rfd_adr_i == rfa_adr_i);
-	exec_hazard_b <= exec_rf_wb_i & (exec_rfd_adr_i == rfb_adr_i);
+	execute_hazard_a <= execute_rf_wb_i & (execute_rfd_adr_i == rfa_adr_i);
+	execute_hazard_b <= execute_rf_wb_i & (execute_rfd_adr_i == rfb_adr_i);
      end
 
-   reg [OPTION_OPERAND_WIDTH-1:0] exec_hazard_result_r;
+   reg [OPTION_OPERAND_WIDTH-1:0] execute_hazard_result_r;
    always @(posedge clk)
      if (decode_valid_i)
-       exec_hazard_result_r <= ctrl_alu_result_i;
+       execute_hazard_result_r <= ctrl_alu_result_i;
 
-   wire [OPTION_OPERAND_WIDTH-1:0] exec_hazard_result;
-   assign exec_hazard_result = decode_valid_i ? ctrl_alu_result_i :
-			       exec_hazard_result_r;
+   wire [OPTION_OPERAND_WIDTH-1:0] execute_hazard_result;
+   assign execute_hazard_result = decode_valid_i ? ctrl_alu_result_i :
+				  execute_hazard_result_r;
 
    reg ctrl_hazard_a;
    reg ctrl_hazard_b;
@@ -129,12 +129,12 @@ module mor1kx_rf_cappuccino
      else if (padv_decode_i)
        wb_hazard_result <= result_i;
 
-   assign rfa_o = exec_hazard_a ? exec_hazard_result :
+   assign rfa_o = execute_hazard_a ? execute_hazard_result :
 		  ctrl_hazard_a ? ctrl_hazard_result :
 		  wb_hazard_a ? wb_hazard_result :
 		  rfa_ram_o;
 
-   assign rfb_o = exec_hazard_b ? exec_hazard_result :
+   assign rfb_o = execute_hazard_b ? execute_hazard_result :
 		  ctrl_hazard_b ? ctrl_hazard_result :
 		  wb_hazard_b ? wb_hazard_result :
 		  rfb_ram_o;

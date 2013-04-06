@@ -604,10 +604,10 @@ module mor1kx_cpu_cappuccino
     .decode_valid_i			(decode_valid_o),
     .rfa_adr_i  			(decode_rfa_adr_o),
     .rfb_adr_i  			(decode_rfb_adr_o),
-    .exec_rfd_adr_i			(execute_rfd_adr_o),
+    .execute_rfd_adr_i			(execute_rfd_adr_o),
     .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),
     .wb_rfd_adr_i  			(wb_rfd_adr_o),
-    .exec_rf_wb_i			(rf_wb_o),
+    .execute_rf_wb_i			(rf_wb_o),
     .ctrl_rf_wb_i			(ctrl_rf_wb_o),
     .wb_rf_wb_i				(wb_rf_wb_o),
     .result_i				(rf_result_o),
@@ -633,10 +633,10 @@ module mor1kx_cpu_cappuccino
       .decode_valid_i			(decode_valid_o),	 // Templated
       .rfa_adr_i			(decode_rfa_adr_o),	 // Templated
       .rfb_adr_i			(decode_rfb_adr_o),	 // Templated
-      .exec_rfd_adr_i			(execute_rfd_adr_o),	 // Templated
+      .execute_rfd_adr_i		(execute_rfd_adr_o),	 // Templated
       .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),	 // Templated
       .wb_rfd_adr_i			(wb_rfd_adr_o),		 // Templated
-      .exec_rf_wb_i			(rf_wb_o),		 // Templated
+      .execute_rf_wb_i			(rf_wb_o),		 // Templated
       .ctrl_rf_wb_i			(ctrl_rf_wb_o),		 // Templated
       .wb_rf_wb_i			(wb_rf_wb_o),		 // Templated
       .result_i				(rf_result_o),		 // Templated
@@ -650,8 +650,8 @@ module mor1kx_cpu_cappuccino
       input [4:0] 		   gpr_num;
       begin
 	 // TODO: handle load ops
-	 if ((mor1kx_rf_cappuccino.exec_rfd_adr_i == gpr_num) &
-	     mor1kx_rf_cappuccino.exec_rf_wb_i)
+	 if ((mor1kx_rf_cappuccino.execute_rfd_adr_i == gpr_num) &
+	     mor1kx_rf_cappuccino.execute_rf_wb_i)
 	   get_gpr = alu_result_o;
 	 else if ((mor1kx_rf_cappuccino.ctrl_rfd_adr_i == gpr_num) &
 		  mor1kx_rf_cappuccino.ctrl_rf_wb_i)
