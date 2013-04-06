@@ -326,6 +326,8 @@ endgenerate
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        execute_bubble_o <= 0;
+     else if (pipeline_flush_i)
+       execute_bubble_o <= 0;
      else if (padv_i)
        execute_bubble_o <= decode_bubble_o;
 
