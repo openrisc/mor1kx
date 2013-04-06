@@ -160,6 +160,7 @@ module mor1kx_decode
    wire 				 op_jr;
    wire 				 op_jal;
    wire 				 op_mfspr;
+   wire 				 op_rfe;
 
    wire 				 flag;
 
@@ -201,6 +202,8 @@ module mor1kx_decode
 		   decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JAL;
 
    assign op_mfspr = decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_MFSPR;
+
+   assign op_rfe = decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_RFE;
 
    // Which instructions cause writeback?
    assign rf_wb = (decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JAL |
@@ -302,10 +305,15 @@ if (PIPELINE_BUBBLE=="ENABLED") begin : pipeline_bubble
     * Detect the situation where there is an instruction in execute stage
     * that will produce it's result in control stage (i.e. load and mfspr),
     * and an instruction currently in decode stage needing it's result as input.
+    *
+    * A bubble is also inserted when an rfe instruction is in decode stage,
+    * the main purpose of this is to stall fetch while the rfe is propagating up
+    * to ctrl stage.
     */
    assign decode_bubble_o = padv_i & ((op_lsu_load_o | op_mfspr_o) &
 				      (decode_rfa_adr_o == execute_rfd_adr_o ||
 				       decode_rfb_adr_o == execute_rfd_adr_o) |
+				      op_rfe |
 				      /*
 				       * FIXME: ugly hack to prevent branches
 				       * in exe stage from being stalled by
@@ -592,7 +600,13 @@ endgenerate
 	     opc_insn_o <= `OR1K_OPCODE_NOP;
 	   else if (padv_i) begin
 	      opc_insn_o <= opc_insn;
-	      if (decode_bubble_o)
+	      // rfe is a special case, instead of pushing the pipeline full
+	      // of nops, we push it full of rfes.
+	      // The reason for this is that we need the rfe to reach control
+	      // stage so it will cause the branch.
+	      // It will clear itself by the pipeline_flush_i that the rfe will
+	      // generate.
+	      if (decode_bubble_o & !op_rfe)
 		opc_insn_o <= `OR1K_OPCODE_NOP;
 	   end
 
