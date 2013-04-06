@@ -139,11 +139,11 @@ module mor1kx_decode
    wire [9:0] 				immjbr_upper;
 
    reg 					execute_except_illegal;
-   wire 				execute_except_ibus_err,
-					execute_except_itlb_miss,
-					execute_except_ipagefault,
-					execute_except_syscall,
-					execute_except_trap;
+   wire 				execute_except_ibus_err;
+   wire 				execute_except_itlb_miss;
+   wire 				execute_except_ipagefault;
+   wire 				execute_except_syscall;
+   wire 				execute_except_trap;
 
    wire [OPTION_OPERAND_WIDTH-1:0] 	 pc_execute;
    wire [`OR1K_OPCODE_WIDTH-1:0] 	 opc_insn;
