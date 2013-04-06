@@ -34,8 +34,8 @@ module mor1kx_rf_cappuccino
     input 			      decode_valid_i,
 
     // GPR numbers
-    input [OPTION_RF_ADDR_WIDTH-1:0]  rfa_adr_i,
-    input [OPTION_RF_ADDR_WIDTH-1:0]  rfb_adr_i,
+    input [OPTION_RF_ADDR_WIDTH-1:0]  decode_rfa_adr_i,
+    input [OPTION_RF_ADDR_WIDTH-1:0]  decode_rfb_adr_i,
 
     input [OPTION_RF_ADDR_WIDTH-1:0]  execute_rfd_adr_i,
     input [OPTION_RF_ADDR_WIDTH-1:0]  ctrl_rfd_adr_i,
@@ -86,8 +86,8 @@ module mor1kx_rf_cappuccino
 	execute_hazard_a <= 0;
 	execute_hazard_b <= 0;
      end else if (padv_decode_i & !flushing) begin
-	execute_hazard_a <= execute_rf_wb_i & (execute_rfd_adr_i == rfa_adr_i);
-	execute_hazard_b <= execute_rf_wb_i & (execute_rfd_adr_i == rfb_adr_i);
+	execute_hazard_a <= execute_rf_wb_i & (execute_rfd_adr_i == decode_rfa_adr_i);
+	execute_hazard_b <= execute_rf_wb_i & (execute_rfd_adr_i == decode_rfb_adr_i);
      end
 
    reg [OPTION_OPERAND_WIDTH-1:0] execute_hazard_result_r;
@@ -103,8 +103,8 @@ module mor1kx_rf_cappuccino
    reg ctrl_hazard_b;
    always @(posedge clk)
       if (padv_decode_i) begin
-	 ctrl_hazard_a <= ctrl_rf_wb_i & (ctrl_rfd_adr_i == rfa_adr_i);
-	 ctrl_hazard_b <= ctrl_rf_wb_i & (ctrl_rfd_adr_i == rfb_adr_i);
+	 ctrl_hazard_a <= ctrl_rf_wb_i & (ctrl_rfd_adr_i == decode_rfa_adr_i);
+	 ctrl_hazard_b <= ctrl_rf_wb_i & (ctrl_rfd_adr_i == decode_rfb_adr_i);
      end
 
    reg [OPTION_OPERAND_WIDTH-1:0] ctrl_hazard_result_r;
@@ -119,8 +119,8 @@ module mor1kx_rf_cappuccino
    reg wb_hazard_b;
    always @(posedge clk)
      if (padv_decode_i) begin
-	wb_hazard_a <= wb_rf_wb_i & (wb_rfd_adr_i == rfa_adr_i);
-	wb_hazard_b <= wb_rf_wb_i & (wb_rfd_adr_i == rfb_adr_i);
+	wb_hazard_a <= wb_rf_wb_i & (wb_rfd_adr_i == decode_rfa_adr_i);
+	wb_hazard_b <= wb_rf_wb_i & (wb_rfd_adr_i == decode_rfb_adr_i);
      end
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -154,7 +154,7 @@ module mor1kx_rf_cappuccino
      (
       .clk(clk),
       .rst(rst),
-      .rdad_i(rfa_adr_i),
+      .rdad_i(decode_rfa_adr_i),
       .rden_i(rfa_rden),
       .rdda_o(rfa_ram_o),
       .wrad_i(wb_rfd_adr_i),
@@ -172,7 +172,7 @@ module mor1kx_rf_cappuccino
      (
       .clk(clk),
       .rst(rst),
-      .rdad_i(rfb_adr_i),
+      .rdad_i(decode_rfb_adr_i),
       .rden_i(rfb_rden),
       .rdda_o(rfb_ram_o),
       .wrad_i(wb_rfd_adr_i),

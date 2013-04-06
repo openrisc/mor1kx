@@ -602,8 +602,8 @@ module mor1kx_cpu_cappuccino
     .padv_execute_i			(padv_execute_o),
     .padv_decode_i			(padv_decode_o),
     .decode_valid_i			(decode_valid_o),
-    .rfa_adr_i  			(decode_rfa_adr_o),
-    .rfb_adr_i  			(decode_rfb_adr_o),
+    .decode_rfa_adr_i  			(decode_rfa_adr_o),
+    .decode_rfb_adr_i  			(decode_rfb_adr_o),
     .execute_rfd_adr_i			(execute_rfd_adr_o),
     .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),
     .wb_rfd_adr_i  			(wb_rfd_adr_o),
@@ -631,8 +631,8 @@ module mor1kx_cpu_cappuccino
       .padv_execute_i			(padv_execute_o),	 // Templated
       .padv_decode_i			(padv_decode_o),	 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
-      .rfa_adr_i			(decode_rfa_adr_o),	 // Templated
-      .rfb_adr_i			(decode_rfb_adr_o),	 // Templated
+      .decode_rfa_adr_i			(decode_rfa_adr_o),	 // Templated
+      .decode_rfb_adr_i			(decode_rfb_adr_o),	 // Templated
       .execute_rfd_adr_i		(execute_rfd_adr_o),	 // Templated
       .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),	 // Templated
       .wb_rfd_adr_i			(wb_rfd_adr_o),		 // Templated
