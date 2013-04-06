@@ -510,7 +510,7 @@ endgenerate
 		op_jr_o <= 0;
 		op_jal_o <= 0;
 	     end
-	   else if (padv_i ) begin
+	   else if (padv_i) begin
 	      op_jbr_o <= op_jbr;
 	      op_jr_o <= op_jr;
 	      op_jal_o <= op_jal;
