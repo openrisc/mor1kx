@@ -127,7 +127,7 @@ module mor1kx_decode
     output reg 				  decode_valid_o,
 
     output 				  decode_bubble_o,
-    output reg 				  exec_bubble_o,
+    output reg 				  execute_bubble_o,
 
     output reg [`OR1K_OPCODE_WIDTH-1:0]   opc_insn_o
     );
@@ -325,9 +325,9 @@ endgenerate
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       exec_bubble_o <= 0;
+       execute_bubble_o <= 0;
      else if (padv_i)
-       exec_bubble_o <= decode_bubble_o;
+       execute_bubble_o <= decode_bubble_o;
 
    // Illegal instruction decode
    always @*

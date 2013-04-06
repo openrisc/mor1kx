@@ -163,7 +163,7 @@ module mor1kx_cpu_espresso
    wire			du_restart_o;		// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire			exception_taken_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
-   wire			exec_bubble_o;		// From mor1kx_decode of mor1kx_decode.v
+   wire			execute_bubble_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_ibus_err_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_illegal_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_ipagefault_o;// From mor1kx_decode of mor1kx_decode.v
@@ -337,7 +337,7 @@ module mor1kx_cpu_espresso
       .pc_execute_o			(),			 // Templated
       .decode_valid_o			(decode_valid_o),
       .decode_bubble_o			(decode_bubble_o),
-      .exec_bubble_o			(exec_bubble_o),
+      .execute_bubble_o			(execute_bubble_o),
       .opc_insn_o			(opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]),
       // Inputs
       .clk				(clk),

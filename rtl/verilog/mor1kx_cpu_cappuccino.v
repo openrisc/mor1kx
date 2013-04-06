@@ -197,7 +197,7 @@ module mor1kx_cpu_cappuccino
    wire			doing_rfe_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			du_restart_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			exec_bubble_o;		// From mor1kx_decode of mor1kx_decode.v
+   wire			execute_bubble_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_ibus_align_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			execute_except_ibus_err_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_illegal_o;// From mor1kx_decode of mor1kx_decode.v
@@ -402,7 +402,7 @@ module mor1kx_cpu_cappuccino
       .pc_execute_o			(pc_decode_to_execute),	 // Templated
       .decode_valid_o			(decode_valid_o),
       .decode_bubble_o			(decode_bubble_o),
-      .exec_bubble_o			(exec_bubble_o),
+      .execute_bubble_o			(execute_bubble_o),
       .opc_insn_o			(opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]),
       // Inputs
       .clk				(clk),
@@ -710,7 +710,7 @@ module mor1kx_cpu_cappuccino
     .ctrl_mfspr_we_i			(ctrl_mfspr_we_o),
     .pipeline_flush_i			(pipeline_flush_o),
     .pc_ctrl_o                          (pc_execute_to_ctrl),
-    .exec_bubble_i			(exec_bubble_o),
+    .exec_bubble_i			(execute_bubble_o),
     .carry_set_i		        (carry_set_o),
     .carry_clear_i		        (carry_clear_o),
     .overflow_set_i		        (overflow_set_o),
@@ -797,7 +797,7 @@ module mor1kx_cpu_cappuccino
       .pc_execute_i			(pc_decode_to_execute),	 // Templated
       .exec_rf_wb_i			(rf_wb_o),		 // Templated
       .exec_rfd_adr_i			(execute_rfd_adr_o),	 // Templated
-      .exec_bubble_i			(exec_bubble_o),	 // Templated
+      .exec_bubble_i			(execute_bubble_o),	 // Templated
       .ctrl_mfspr_we_i			(ctrl_mfspr_we_o));	 // Templated
 
    /* mor1kx_ctrl_branch_cappuccino AUTO_TEMPLATE (
@@ -873,7 +873,7 @@ module mor1kx_cpu_cappuccino
     .execute_opc_insn_i		(opc_insn_o),
     .fetch_branch_taken_i	(fetch_branch_taken_o),
     .decode_bubble_i		(decode_bubble_o),
-    .exec_bubble_i		(exec_bubble_o),
+    .exec_bubble_i		(execute_bubble_o),
     .ctrl_carry_set_i		(ctrl_carry_set_o),
     .ctrl_carry_clear_i		(ctrl_carry_clear_o),
     .ctrl_overflow_set_i       (ctrl_overflow_set_o),
@@ -965,7 +965,7 @@ module mor1kx_cpu_cappuccino
       .execute_waiting_i		(execute_waiting_o),	 // Templated
       .fetch_branch_taken_i		(fetch_branch_taken_o),	 // Templated
       .decode_bubble_i			(decode_bubble_o),	 // Templated
-      .exec_bubble_i			(exec_bubble_o),	 // Templated
+      .exec_bubble_i			(execute_bubble_o),	 // Templated
       .irq_i				(irq_i[31:0]),
       .ctrl_carry_set_i			(ctrl_carry_set_o),	 // Templated
       .ctrl_carry_clear_i		(ctrl_carry_clear_o),	 // Templated
