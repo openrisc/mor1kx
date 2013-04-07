@@ -212,7 +212,7 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_RF_ADDR_WIDTH-1:0] execute_rfd_adr_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_valid_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			execute_waiting_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			fetch_branch_taken_o;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire			fetch_exception_taken_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			fetch_rf_adr_valid_o;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			fetch_valid_o;		// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
@@ -312,7 +312,7 @@ module mor1kx_cpu_cappuccino
       .decode_except_ibus_err_o		(decode_except_ibus_err_o),
       .decode_except_itlb_miss_o	(decode_except_itlb_miss_o),
       .decode_except_ipagefault_o	(decode_except_ipagefault_o),
-      .fetch_branch_taken_o		(fetch_branch_taken_o),
+      .fetch_exception_taken_o		(fetch_exception_taken_o),
       // Inputs
       .clk				(clk),
       .rst				(rst),
@@ -883,7 +883,7 @@ module mor1kx_cpu_cappuccino
     .execute_valid_i		(execute_valid_o),
     .execute_waiting_i		(execute_waiting_o),
     .execute_opc_insn_i		(opc_insn_o),
-    .fetch_branch_taken_i	(fetch_branch_taken_o),
+    .fetch_exception_taken_i	(fetch_exception_taken_o),
     .decode_bubble_i		(decode_bubble_o),
     .execute_bubble_i		(execute_bubble_o),
     .ctrl_carry_set_i		(ctrl_carry_set_o),
@@ -975,7 +975,7 @@ module mor1kx_cpu_cappuccino
       .decode_valid_i			(decode_valid_o),	 // Templated
       .execute_valid_i			(execute_valid_o),	 // Templated
       .execute_waiting_i		(execute_waiting_o),	 // Templated
-      .fetch_branch_taken_i		(fetch_branch_taken_o),	 // Templated
+      .fetch_exception_taken_i		(fetch_exception_taken_o), // Templated
       .decode_bubble_i			(decode_bubble_o),	 // Templated
       .execute_bubble_i			(execute_bubble_o),	 // Templated
       .irq_i				(irq_i[31:0]),

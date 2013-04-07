@@ -89,7 +89,7 @@ module mor1kx_fetch_cappuccino
     output reg 				  decode_except_itlb_miss_o,
     output reg 				  decode_except_ipagefault_o,
 
-    output reg 				  fetch_branch_taken_o
+    output reg 				  fetch_exception_taken_o
    );
 
    // registers
@@ -167,12 +167,12 @@ module mor1kx_fetch_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        flush <= 0;
-     else if (fetch_branch_taken_o)
+     else if (fetch_exception_taken_o)
        flush <= 0;
      else if (pipeline_flush_i)
        flush <= 1;
 
-   assign flushing = pipeline_flush_i | flush & !fetch_branch_taken_o;
+   assign flushing = pipeline_flush_i | flush & !fetch_exception_taken_o;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
@@ -189,7 +189,7 @@ module mor1kx_fetch_cappuccino
 	pc_addr = OPTION_RESET_PC;
       else if (du_restart_i)
 	pc_addr = du_restart_pc_i;
-      else if (branch_occur_i & !fetch_branch_taken_o)
+      else if (branch_occur_i & !fetch_exception_taken_o)
 	pc_addr = branch_dest_i;
       else
 	pc_addr = pc_fetch + 4;
@@ -201,17 +201,17 @@ module mor1kx_fetch_cappuccino
       else if (addr_valid | du_restart_i)
 	pc_fetch <= pc_addr;
 
-   // fetch_branch_taken_o generation
+   // fetch_exception_taken_o generation
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       fetch_branch_taken_o <= 1'b0;
-     else if (fetch_branch_taken_o)
-       fetch_branch_taken_o <= 1'b0;
+       fetch_exception_taken_o <= 1'b0;
+     else if (fetch_exception_taken_o)
+       fetch_exception_taken_o <= 1'b0;
      else if ((branch_except_occur_i) & (bus_access_done & padv_i |
 					 fetch_valid_o & !padv_i))
-       fetch_branch_taken_o <= 1'b1;
+       fetch_exception_taken_o <= 1'b1;
      else
-       fetch_branch_taken_o <= 1'b0;
+       fetch_exception_taken_o <= 1'b0;
 
    // fetch_valid_o generation
    always @(posedge clk `OR_ASYNC_RST)

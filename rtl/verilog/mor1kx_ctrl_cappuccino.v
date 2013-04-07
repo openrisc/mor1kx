@@ -118,7 +118,7 @@ module mor1kx_ctrl_cappuccino
     input 			      execute_valid_i,
     input 			      execute_waiting_i,
 
-    input 			      fetch_branch_taken_i,
+    input 			      fetch_exception_taken_i,
 
     input 			      decode_bubble_i,
     input 			      execute_bubble_i,
@@ -329,7 +329,7 @@ module mor1kx_ctrl_cappuccino
 			 (spr_sr[`OR1K_SPR_SR_OV] | ctrl_overflow_set_i) &
 			 !doing_rfe : 0;
 
-   assign deassert_decode_execute_halt = fetch_branch_taken_i &
+   assign deassert_decode_execute_halt = fetch_exception_taken_i &
 					 decode_execute_halt;
 
    assign ctrl_branch_except_pc_o = (op_rfe | doing_rfe) ? spr_epcr :
@@ -416,7 +416,7 @@ module mor1kx_ctrl_cappuccino
 
    assign padv_execute_o = ((decode_valid_i & !execute_waiting_i &
 			     /* Stop fetch before exception branch continuing */
-			     !(exception_r & fetch_branch_taken_i)) |
+			     !(exception_r & fetch_exception_taken_i)) |
 			    (!execute_waiting_i & execute_waiting_r &
 			     fetch_valid_i) |
 			    // Case where execute became ready before fetch
@@ -484,7 +484,7 @@ module mor1kx_ctrl_cappuccino
        exception_taken <= 0;
      else if (exception_taken)
        exception_taken <= 0;
-     else if (exception_r & fetch_branch_taken_i)
+     else if (exception_r & fetch_exception_taken_i)
        exception_taken <= 1;
 
    wire execute_branch_insn = execute_opc_insn_i <  `OR1K_OPCODE_NOP  |
@@ -523,7 +523,7 @@ module mor1kx_ctrl_cappuccino
 
    assign doing_rfe_o = doing_rfe;
 
-   assign deassert_doing_rfe = fetch_branch_taken_i & doing_rfe_r;
+   assign deassert_doing_rfe = fetch_exception_taken_i & doing_rfe_r;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
