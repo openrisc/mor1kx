@@ -1,17 +1,17 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
   Description: mor1kx processor Wishbone bus bridge
-  
+
   For now, very simple, not registering,  assumes 32-bit data, addressing
 
   Copyright (C) 2012 Authors
- 
+
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
+
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
@@ -27,7 +27,7 @@ module mor1kx_bus_if_wb32
    );
 
    input clk, rst;
-   
+
    output cpu_err_o;
    output cpu_ack_o;
    output [31:0] cpu_dat_o;
@@ -36,7 +36,7 @@ module mor1kx_bus_if_wb32
    input 	 cpu_req_i;
    input [3:0] 	 cpu_bsel_i;
    input  	 cpu_we_i;
-   
+
    output [31:0] wbm_adr_o;
    output 	 wbm_stb_o;
    output 	 wbm_cyc_o;
@@ -59,7 +59,7 @@ module mor1kx_bus_if_wb32
 
    initial
      $display("%m: Wishbone bus IF is %s",BUS_IF_TYPE);
-   
+
    generate
       /* verilator lint_off WIDTH */
       if (BUS_IF_TYPE=="B3_READ_BURSTING") begin : b3_read_bursting
@@ -73,7 +73,7 @@ module mor1kx_bus_if_wb32
 	 reg [baddr_with-1:0]	      burst_wrap_start;
 	 wire [baddr_with-1:0]	      burst_wrap_finish;
 	 wire 			      address_differs;
-	 	 
+
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
 	     bursting <= 0;
@@ -117,24 +117,23 @@ module mor1kx_bus_if_wb32
 	     finish_burst_r <= finish_burst;
 	   else
 	     finish_burst_r <= 0;
-	 
+
 	 assign wbm_adr_o = bursting ? {burst_address,2'b00} : cpu_adr_i;
 	 assign wbm_stb_o = bursting & !finish_burst_r;
 	 assign wbm_cyc_o = bursting & !finish_burst_r;
 	 assign wbm_sel_o = cpu_bsel_i;
 	 assign wbm_we_o = cpu_we_i;
-	 assign wbm_cti_o = bursting ? (finish_burst ? 3'b111 : 3'b010) : 
+	 assign wbm_cti_o = bursting ? (finish_burst ? 3'b111 : 3'b010) :
 			    3'b000;
 	 assign wbm_bte_o = burst_length==4  ? 2'b01 :
 			    burst_length==8  ? 2'b10 :
-			    burst_length==16 ? 2'b11 : 
+			    burst_length==16 ? 2'b11 :
 			    2'b00; // Linear burst
-			    
+
 	 assign wbm_dat_o = cpu_dat_i;
-	 
 
 	 assign cpu_err_o = wbm_err_i;
-	 assign cpu_ack_o = (wbm_ack_i) & 
+	 assign cpu_ack_o = (wbm_ack_i) &
 			    !(bursting & address_differs) & cpu_req_i;
 	 assign cpu_dat_o = wbm_err_i ? 0 :  wbm_dat_i;
 
@@ -142,8 +141,8 @@ module mor1kx_bus_if_wb32
       else begin : classic // CLASSIC only
 
 	 // Only classic, single cycle accesses
-	 
-	 // A register to force de-assertion of access request signals after 
+
+	 // A register to force de-assertion of access request signals after
 	 // each ack
 	 reg 				      cycle_end;
 
@@ -152,7 +151,7 @@ module mor1kx_bus_if_wb32
 	     cycle_end <= 1;
 	   else
 	     cycle_end <= wbm_ack_i | wbm_err_i;
-	 
+
 	 assign cpu_err_o = wbm_err_i;
 	 assign cpu_ack_o = wbm_ack_i;
 	 assign cpu_dat_o = wbm_dat_i;
@@ -165,11 +164,8 @@ module mor1kx_bus_if_wb32
 	 assign wbm_cti_o = 0;
 	 assign wbm_bte_o = 0;
 	 assign wbm_dat_o = cpu_dat_i;
-	 
+
       end // else: !if(BUS_IF_TYPE=="READ_B3_BURSTING")
    endgenerate
-   
+
 endmodule // mor1kx_bus_if_wb
-
-
-
