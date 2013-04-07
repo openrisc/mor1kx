@@ -72,17 +72,17 @@ module mor1kx_execute_ctrl_cappuccino
 
     input [OPTION_OPERAND_WIDTH-1:0] 	  pc_execute_i,
 
-    input 				  exec_rf_wb_i,
+    input 				  execute_rf_wb_i,
     output reg 				  ctrl_rf_wb_o,
     output reg 				  wb_rf_wb_o,
 
 
     // address of destination register from execute stage
-    input [OPTION_RF_ADDR_WIDTH-1:0] 	  exec_rfd_adr_i,
+    input [OPTION_RF_ADDR_WIDTH-1:0] 	  execute_rfd_adr_i,
     output reg [OPTION_RF_ADDR_WIDTH-1:0] ctrl_rfd_adr_o,
     output reg [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd_adr_o,
 
-    input 				  exec_bubble_i,
+    input 				  execute_bubble_i,
 
     // Input from control stage for mfspr WE
     input 				  ctrl_mfspr_we_i,
@@ -228,7 +228,7 @@ module mor1kx_execute_ctrl_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        pc_ctrl_o <= OPTION_RESET_PC;
-     else if (padv_i & !exec_bubble_i)
+     else if (padv_i & !execute_bubble_i)
        pc_ctrl_o <= pc_execute_i;
 
    // The pipeline flush comes when the instruction that has caused
@@ -284,8 +284,8 @@ module mor1kx_execute_ctrl_cappuccino
 	ctrl_rf_wb_o <= 0;
 	ctrl_rfd_adr_o <= 0;
      end else if (padv_i) begin
-	ctrl_rf_wb_o <= exec_rf_wb_i;
-	ctrl_rfd_adr_o <= exec_rfd_adr_i;
+	ctrl_rf_wb_o <= execute_rf_wb_i;
+	ctrl_rfd_adr_o <= execute_rfd_adr_i;
      end else if (pipeline_flush_i & !du_stall_i) begin
 	ctrl_rf_wb_o <= 0;
 	ctrl_rfd_adr_o <= 0;

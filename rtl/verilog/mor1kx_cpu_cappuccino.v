@@ -705,12 +705,12 @@ module mor1kx_cpu_cappuccino
     .flag_set_i 			(flag_set_o),
     .flag_clear_i			(flag_clear_o),
     .pc_execute_i			(pc_decode_to_execute),
-    .exec_rf_wb_i			(rf_wb_o),
-    .exec_rfd_adr_i			(execute_rfd_adr_o),
+    .execute_rf_wb_i			(rf_wb_o),
+    .execute_rfd_adr_i			(execute_rfd_adr_o),
     .ctrl_mfspr_we_i			(ctrl_mfspr_we_o),
     .pipeline_flush_i			(pipeline_flush_o),
     .pc_ctrl_o                          (pc_execute_to_ctrl),
-    .exec_bubble_i			(execute_bubble_o),
+    .execute_bubble_i			(execute_bubble_o),
     .carry_set_i		        (carry_set_o),
     .carry_clear_i		        (carry_clear_o),
     .overflow_set_i		        (overflow_set_o),
@@ -795,9 +795,9 @@ module mor1kx_cpu_cappuccino
       .overflow_set_i			(overflow_set_o),	 // Templated
       .overflow_clear_i			(overflow_clear_o),	 // Templated
       .pc_execute_i			(pc_decode_to_execute),	 // Templated
-      .exec_rf_wb_i			(rf_wb_o),		 // Templated
-      .exec_rfd_adr_i			(execute_rfd_adr_o),	 // Templated
-      .exec_bubble_i			(execute_bubble_o),	 // Templated
+      .execute_rf_wb_i			(rf_wb_o),		 // Templated
+      .execute_rfd_adr_i		(execute_rfd_adr_o),	 // Templated
+      .execute_bubble_i			(execute_bubble_o),	 // Templated
       .ctrl_mfspr_we_i			(ctrl_mfspr_we_o));	 // Templated
 
    /* mor1kx_ctrl_branch_cappuccino AUTO_TEMPLATE (
