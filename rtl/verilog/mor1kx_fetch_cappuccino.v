@@ -167,12 +167,15 @@ module mor1kx_fetch_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        flush <= 0;
-     else if (fetch_exception_taken_o)
+     else if (bus_access_done & padv_i | fetch_valid_o & !padv_i)
        flush <= 0;
      else if (pipeline_flush_i)
        flush <= 1;
 
-   assign flushing = pipeline_flush_i | flush & !fetch_exception_taken_o;
+   // pipeline_flush_i comes on the same edge as branch_except_occur during
+   // rfe, but on an edge later when an exception occurs, but we always need
+   // to keep on flushing when the branch signal comes in.
+   assign flushing = pipeline_flush_i | branch_except_occur_edge | flush;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
