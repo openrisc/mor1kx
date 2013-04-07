@@ -102,7 +102,6 @@ module mor1kx_fetch_cappuccino
    wire 				  bus_access_done;
    wire 				  branch_occur_edge;
    wire 				  branch_except_occur_edge;
-   wire					  delay_slot;
    wire					  stall_fetch_valid;
    wire					  stall_adv;
    wire 				  addr_valid;
@@ -143,12 +142,6 @@ module mor1kx_fetch_cappuccino
    assign branch_occur_edge = branch_occur_i & !branch_occur_r;
    assign branch_except_occur_edge = branch_except_occur_i &
 				     !branch_except_occur_r;
-
-   /*
-    * Detect when we are doing a delay slot,
-    * in fetch stage we do them on all branches,
-    * even on exceptions and rfe (will be discarded later)
-    */
 
    /* used to keep fetch_valid_o high during stall */
    assign stall_fetch_valid = !padv_i & fetch_valid_o;
