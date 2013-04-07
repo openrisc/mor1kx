@@ -121,7 +121,7 @@ module mor1kx_ctrl_cappuccino
     input 			      fetch_branch_taken_i,
 
     input 			      decode_bubble_i,
-    input 			      exec_bubble_i,
+    input 			      execute_bubble_i,
 
     // External IRQ lines in
     input [31:0] 		      irq_i,
@@ -487,15 +487,15 @@ module mor1kx_ctrl_cappuccino
      else if (exception_r & fetch_branch_taken_i)
        exception_taken <= 1;
 
-   wire exec_branch_insn = execute_opc_insn_i <  `OR1K_OPCODE_NOP  |
-			   execute_opc_insn_i == `OR1K_OPCODE_JR   |
-			   execute_opc_insn_i == `OR1K_OPCODE_JALR |
-			   execute_opc_insn_i == `OR1K_OPCODE_JAL;
+   wire execute_branch_insn = execute_opc_insn_i <  `OR1K_OPCODE_NOP  |
+			      execute_opc_insn_i == `OR1K_OPCODE_JR   |
+			      execute_opc_insn_i == `OR1K_OPCODE_JALR |
+			      execute_opc_insn_i == `OR1K_OPCODE_JAL;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        last_branch_insn_pc <= 0;
-     else if (padv_execute_o & exec_branch_insn)
+     else if (padv_execute_o & execute_branch_insn)
        last_branch_insn_pc <= pc_execute_i;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -503,7 +503,7 @@ module mor1kx_ctrl_cappuccino
        last_branch_target_pc <= 0;
      else if (padv_execute_o & ctrl_branch_occur_i)
        last_branch_target_pc <= ctrl_branch_target_i;
-     else if (padv_execute_o & exec_branch_insn)
+     else if (padv_execute_o & execute_branch_insn)
        last_branch_target_pc <= pc_execute_i + 8; // TODO: use pc_fetch_i
 
    // Used to gate execute stage's advance signal in the case where a LSU op has
@@ -653,7 +653,7 @@ module mor1kx_ctrl_cappuccino
      if (rst)
        ctrl_bubble <= 0;
      else if (padv_execute_o)
-       ctrl_bubble <= exec_bubble_i;
+       ctrl_bubble <= execute_bubble_i;
 
    // Exception PC
    always @(posedge clk `OR_ASYNC_RST)
@@ -707,7 +707,7 @@ module mor1kx_ctrl_cappuccino
      if (rst)
        execute_delay_slot <= 0;
      else if (padv_execute_o)
-       execute_delay_slot <= exec_branch_insn;
+       execute_delay_slot <= execute_branch_insn;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -890,7 +890,7 @@ module mor1kx_ctrl_cappuccino
 			     !op_mtspr & !doing_rfe &
 			     // Stops back-to-back branch addresses going to
 			     // fetch stage
-			     !exec_branch_insn &
+			     !execute_branch_insn &
 			     // Stops issues with PC when branching
 			     !execute_delay_slot;
       end
@@ -935,7 +935,7 @@ module mor1kx_ctrl_cappuccino
 				   !op_mtspr & !doing_rfe &
 				   // Stops back-to-back branch addresses to
 				   // fetch  stage.
-				   !exec_branch_insn &
+				   !execute_branch_insn &
 				   // Stops issues with PC when branching
 				   !execute_delay_slot;
 

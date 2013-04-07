@@ -192,13 +192,14 @@ module mor1kx_cpu_cappuccino
    wire			decode_except_itlb_miss_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfa_adr_o;// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfb_adr_o;// From mor1kx_decode of mor1kx_decode.v
+   wire [OPTION_OPERAND_WIDTH-1:0] decode_rfb_o;// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfd_adr_o;// From mor1kx_decode of mor1kx_decode.v
    wire			decode_valid_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			doing_rfe_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			du_restart_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			execute_bubble_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			execute_except_ibus_align_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire			execute_except_ibus_align_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_ibus_err_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_illegal_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_ipagefault_o;// From mor1kx_decode of mor1kx_decode.v
@@ -212,6 +213,8 @@ module mor1kx_cpu_cappuccino
    wire			execute_valid_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			execute_waiting_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			fetch_branch_taken_o;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire			fetch_rf_adr_valid_o;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			fetch_valid_o;		// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			flag_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			flag_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
@@ -304,6 +307,8 @@ module mor1kx_cpu_cappuccino
       .pc_decode_o			(pc_fetch_to_decode),	 // Templated
       .decode_insn_o			(insn_fetch_to_decode),	 // Templated
       .fetch_valid_o			(fetch_valid_o),
+      .fetch_rfb_adr_o			(fetch_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .fetch_rf_adr_valid_o		(fetch_rf_adr_valid_o),
       .decode_except_ibus_err_o		(decode_except_ibus_err_o),
       .decode_except_itlb_miss_o	(decode_except_itlb_miss_o),
       .decode_except_ipagefault_o	(decode_except_ipagefault_o),
@@ -338,6 +343,11 @@ module mor1kx_cpu_cappuccino
     .decode_except_ibus_err_i		(decode_except_ibus_err_o),
     .decode_except_itlb_miss_i		(decode_except_itlb_miss_o),
     .decode_except_ipagefault_i		(decode_except_ipagefault_o),
+    .decode_rfb_i			(decode_rfb_o),
+    .execute_rfb_i			(execute_rfb_o),
+    .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),
+    .ctrl_op_lsu_load_i			(ctrl_op_lsu_load_o),
+    .ctrl_op_mfspr_i			(ctrl_op_mfspr_o),
     .flag_i				(spr_sr_o[`OR1K_SPR_SR_F]),
     .flag_set_i				(flag_set_o),
     .flag_clear_i			(flag_clear_o),
@@ -397,6 +407,7 @@ module mor1kx_cpu_cappuccino
       .execute_except_itlb_miss_o	(execute_except_itlb_miss_o),
       .execute_except_ipagefault_o	(execute_except_ipagefault_o),
       .execute_except_illegal_o		(execute_except_illegal_o),
+      .execute_except_ibus_align_o	(execute_except_ibus_align_o),
       .execute_except_syscall_o		(execute_except_syscall_o),
       .execute_except_trap_o		(execute_except_trap_o),
       .pc_execute_o			(pc_decode_to_execute),	 // Templated
@@ -410,10 +421,15 @@ module mor1kx_cpu_cappuccino
       .padv_i				(padv_decode_o),	 // Templated
       .pc_decode_i			(pc_fetch_to_decode),	 // Templated
       .decode_insn_i			(insn_fetch_to_decode),	 // Templated
+      .decode_rfb_i			(decode_rfb_o),		 // Templated
+      .execute_rfb_i			(execute_rfb_o),	 // Templated
       .flag_i				(spr_sr_o[`OR1K_SPR_SR_F]), // Templated
       .flag_set_i			(flag_set_o),		 // Templated
       .flag_clear_i			(flag_clear_o),		 // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
+      .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),	 // Templated
+      .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),	 // Templated
+      .ctrl_op_mfspr_i			(ctrl_op_mfspr_o),	 // Templated
       .decode_except_ibus_err_i		(decode_except_ibus_err_o), // Templated
       .decode_except_itlb_miss_i	(decode_except_itlb_miss_o), // Templated
       .decode_except_ipagefault_i	(decode_except_ipagefault_o)); // Templated
@@ -599,8 +615,11 @@ module mor1kx_cpu_cappuccino
 
 
    /* mor1kx_rf_cappuccino AUTO_TEMPLATE (
-    .padv_execute_i			(padv_execute_o),
     .padv_decode_i			(padv_decode_o),
+    .padv_execute_i			(padv_execute_o),
+    .padv_ctrl_i			(padv_ctrl_o),
+    .fetch_rf_adr_valid_i		(fetch_rf_adr_valid_o),
+    .fetch_rfb_adr_i			(fetch_rfb_adr_o),
     .decode_valid_i			(decode_valid_o),
     .decode_rfa_adr_i  			(decode_rfa_adr_o),
     .decode_rfb_adr_i  			(decode_rfb_adr_o),
@@ -610,8 +629,11 @@ module mor1kx_cpu_cappuccino
     .execute_rf_wb_i			(rf_wb_o),
     .ctrl_rf_wb_i			(ctrl_rf_wb_o),
     .wb_rf_wb_i				(wb_rf_wb_o),
+    .execute_op_jal_i			(op_jal_o),
+    .ctrl_op_jal_i			(ctrl_op_jal_o),
     .result_i				(rf_result_o),
     .ctrl_alu_result_i			(ctrl_alu_result_o),
+    .execute_jal_result_i		(execute_jal_result_o),
     .pipeline_flush_i			(pipeline_flush_o),
     ); */
    mor1kx_rf_cappuccino
@@ -623,14 +645,18 @@ module mor1kx_cpu_cappuccino
      mor1kx_rf_cappuccino
      (/*AUTOINST*/
       // Outputs
+      .decode_rfb_o			(decode_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
       .execute_rfa_o			(execute_rfa_o[OPTION_OPERAND_WIDTH-1:0]),
       .execute_rfb_o			(execute_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
       // Inputs
       .clk				(clk),
       .rst				(rst),
-      .padv_execute_i			(padv_execute_o),	 // Templated
       .padv_decode_i			(padv_decode_o),	 // Templated
+      .padv_execute_i			(padv_execute_o),	 // Templated
+      .padv_ctrl_i			(padv_ctrl_o),		 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
+      .fetch_rf_adr_valid_i		(fetch_rf_adr_valid_o),	 // Templated
+      .fetch_rfb_adr_i			(fetch_rfb_adr_o),	 // Templated
       .decode_rfa_adr_i			(decode_rfa_adr_o),	 // Templated
       .decode_rfb_adr_i			(decode_rfb_adr_o),	 // Templated
       .execute_rfd_adr_i		(execute_rfd_adr_o),	 // Templated
@@ -639,8 +665,11 @@ module mor1kx_cpu_cappuccino
       .execute_rf_wb_i			(rf_wb_o),		 // Templated
       .ctrl_rf_wb_i			(ctrl_rf_wb_o),		 // Templated
       .wb_rf_wb_i			(wb_rf_wb_o),		 // Templated
+      .execute_op_jal_i			(op_jal_o),		 // Templated
+      .ctrl_op_jal_i			(ctrl_op_jal_o),	 // Templated
       .result_i				(rf_result_o),		 // Templated
       .ctrl_alu_result_i		(ctrl_alu_result_o),	 // Templated
+      .execute_jal_result_i		(execute_jal_result_o),	 // Templated
       .pipeline_flush_i			(pipeline_flush_o));	 // Templated
 
 
@@ -684,6 +713,7 @@ module mor1kx_cpu_cappuccino
     .execute_except_itlb_miss_i		(execute_except_itlb_miss_o),
     .execute_except_ipagefault_i	(execute_except_ipagefault_o),
     .execute_except_illegal_i		(execute_except_illegal_o),
+    .execute_except_ibus_align_i	(execute_except_ibus_align_o),
     .execute_except_syscall_i		(execute_except_syscall_o),
     .execute_except_trap_i		(execute_except_trap_o),
     .lsu_except_dbus_i  		(lsu_except_dbus_o),
@@ -729,7 +759,6 @@ module mor1kx_cpu_cappuccino
       .wb_rf_wb_o			(wb_rf_wb_o),
       .ctrl_rfd_adr_o			(ctrl_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .wb_rfd_adr_o			(wb_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .execute_except_ibus_align_o	(execute_except_ibus_align_o),
       .ctrl_alu_result_o		(ctrl_alu_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .ctrl_lsu_adr_o			(ctrl_lsu_adr_o[OPTION_OPERAND_WIDTH-1:0]),
       .ctrl_rfb_o			(ctrl_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -768,6 +797,7 @@ module mor1kx_cpu_cappuccino
       .execute_except_itlb_miss_i	(execute_except_itlb_miss_o), // Templated
       .execute_except_ipagefault_i	(execute_except_ipagefault_o), // Templated
       .execute_except_illegal_i		(execute_except_illegal_o), // Templated
+      .execute_except_ibus_align_i	(execute_except_ibus_align_o), // Templated
       .execute_except_syscall_i		(execute_except_syscall_o), // Templated
       .lsu_except_dbus_i		(lsu_except_dbus_o),	 // Templated
       .lsu_except_align_i		(lsu_except_align_o),	 // Templated
@@ -801,20 +831,11 @@ module mor1kx_cpu_cappuccino
       .ctrl_mfspr_we_i			(ctrl_mfspr_we_o));	 // Templated
 
    /* mor1kx_ctrl_branch_cappuccino AUTO_TEMPLATE (
-    .ex_rfb_i				(execute_rfb_o),
-    .op_jr_i				(op_jr_o),
     .decode_branch_i			(decode_branch_o),
     .decode_branch_target_i		(decode_branch_target_o),
-    .padv_decode_i			(padv_decode_o),
-    .decode_bubble_i			(decode_bubble_o),
-    .pipeline_flush_i			(pipeline_flush_o),
-    .execute_opc_insn_i			(opc_insn_o),
-    .ctrl_flag_i			(ctrl_flag_o),
     .ctrl_branch_exception_i		(ctrl_branch_exception_o),
     .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o),
-    .ctrl_except_ibus_align_i		(ctrl_except_ibus_align_o),
     .ctrl_except_syscall_i		(ctrl_except_syscall_o),
-    .execute_except_ibus_align_i	(execute_except_ibus_align_o),
     ); */
    mor1kx_ctrl_branch_cappuccino
      #(
@@ -828,19 +849,10 @@ module mor1kx_cpu_cappuccino
       // Inputs
       .clk				(clk),
       .rst				(rst),
-      .ex_rfb_i				(execute_rfb_o),	 // Templated
-      .op_jr_i				(op_jr_o),		 // Templated
       .decode_branch_i			(decode_branch_o),	 // Templated
       .decode_branch_target_i		(decode_branch_target_o), // Templated
-      .padv_decode_i			(padv_decode_o),	 // Templated
-      .decode_bubble_i			(decode_bubble_o),	 // Templated
-      .pipeline_flush_i			(pipeline_flush_o),	 // Templated
-      .execute_opc_insn_i		(opc_insn_o),		 // Templated
-      .ctrl_flag_i			(ctrl_flag_o),		 // Templated
       .ctrl_branch_exception_i		(ctrl_branch_exception_o), // Templated
       .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o), // Templated
-      .execute_except_ibus_align_i	(execute_except_ibus_align_o), // Templated
-      .ctrl_except_ibus_align_i		(ctrl_except_ibus_align_o), // Templated
       .ctrl_except_syscall_i		(ctrl_except_syscall_o)); // Templated
 
 
@@ -873,7 +885,7 @@ module mor1kx_cpu_cappuccino
     .execute_opc_insn_i		(opc_insn_o),
     .fetch_branch_taken_i	(fetch_branch_taken_o),
     .decode_bubble_i		(decode_bubble_o),
-    .exec_bubble_i		(execute_bubble_o),
+    .execute_bubble_i		(execute_bubble_o),
     .ctrl_carry_set_i		(ctrl_carry_set_o),
     .ctrl_carry_clear_i		(ctrl_carry_clear_o),
     .ctrl_overflow_set_i       (ctrl_overflow_set_o),
@@ -965,7 +977,7 @@ module mor1kx_cpu_cappuccino
       .execute_waiting_i		(execute_waiting_o),	 // Templated
       .fetch_branch_taken_i		(fetch_branch_taken_o),	 // Templated
       .decode_bubble_i			(decode_bubble_o),	 // Templated
-      .exec_bubble_i			(execute_bubble_o),	 // Templated
+      .execute_bubble_i			(execute_bubble_o),	 // Templated
       .irq_i				(irq_i[31:0]),
       .ctrl_carry_set_i			(ctrl_carry_set_o),	 // Templated
       .ctrl_carry_clear_i		(ctrl_carry_clear_o),	 // Templated

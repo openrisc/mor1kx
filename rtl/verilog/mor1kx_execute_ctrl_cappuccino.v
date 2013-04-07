@@ -38,6 +38,7 @@ module mor1kx_execute_ctrl_cappuccino
     input 				  execute_except_itlb_miss_i,
     input 				  execute_except_ipagefault_i,
     input 				  execute_except_illegal_i,
+    input 				  execute_except_ibus_align_i,
     input 				  execute_except_syscall_i,
     input 				  lsu_except_dbus_i,
     input 				  lsu_except_align_i,
@@ -87,9 +88,6 @@ module mor1kx_execute_ctrl_cappuccino
     // Input from control stage for mfspr WE
     input 				  ctrl_mfspr_we_i,
 
-    // Combinatorial output of instruction fetch align error
-    output 				  execute_except_ibus_align_o,
-
     output reg [OPTION_OPERAND_WIDTH-1:0] ctrl_alu_result_o,
     output reg [OPTION_OPERAND_WIDTH-1:0] ctrl_lsu_adr_o,
     output reg [OPTION_OPERAND_WIDTH-1:0] ctrl_rfb_o,
@@ -136,9 +134,6 @@ module mor1kx_execute_ctrl_cappuccino
 			  ctrl_mfspr_we_i & (!op_alu_i | alu_valid_i) :
 			  op_alu_i ? alu_valid_i : 1'b1;
 
-   // Check for unaligned jump address from register
-   assign execute_except_ibus_align_o = op_jr_i & (|rfb_i[1:0]);
-
    always @*
      begin
 	execute_valid_o = execute_valid;
@@ -173,7 +168,7 @@ module mor1kx_execute_ctrl_cappuccino
 	   ctrl_except_ibus_err_o <= execute_except_ibus_err_i;
 	   ctrl_except_itlb_miss_o <= execute_except_itlb_miss_i;
 	   ctrl_except_ipagefault_o <= execute_except_ipagefault_i;
-	   ctrl_except_ibus_align_o <= execute_except_ibus_align_o;
+	   ctrl_except_ibus_align_o <= execute_except_ibus_align_i;
 	   ctrl_except_illegal_o <= execute_except_illegal_i;
 	   ctrl_except_syscall_o <= execute_except_syscall_i;
 	   ctrl_except_trap_o <= execute_except_trap_i;

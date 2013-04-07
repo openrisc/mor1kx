@@ -68,6 +68,10 @@ module mor1kx_decode
     input [OPTION_OPERAND_WIDTH-1:0] 	  pc_decode_i,
     input [`OR1K_INSN_WIDTH-1:0] 	  decode_insn_i,
 
+    // input from register file
+    input [OPTION_OPERAND_WIDTH-1:0] 	  decode_rfb_i,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  execute_rfb_i,
+
     // input from execute stage
     input 				  flag_i,
     input 				  flag_set_i,
@@ -89,6 +93,10 @@ module mor1kx_decode
     output [OPTION_RF_ADDR_WIDTH-1:0] 	  decode_rfd_adr_o,
     output [OPTION_RF_ADDR_WIDTH-1:0] 	  decode_rfa_adr_o,
     output [OPTION_RF_ADDR_WIDTH-1:0] 	  decode_rfb_adr_o,
+    input [OPTION_RF_ADDR_WIDTH-1:0] 	  ctrl_rfd_adr_i,
+    input 				  ctrl_op_lsu_load_i,
+    input 				  ctrl_op_mfspr_i,
+
     output reg [OPTION_OPERAND_WIDTH-1:0] execute_jal_result_o,
 
     output reg 				  rf_wb_o,
@@ -118,6 +126,7 @@ module mor1kx_decode
     output reg				  execute_except_itlb_miss_o,
     output reg				  execute_except_ipagefault_o,
     output reg 				  execute_except_illegal_o,
+    output reg 				  execute_except_ibus_align_o,
     output reg 				  execute_except_syscall_o,
     output reg 				  execute_except_trap_o,
 
@@ -138,6 +147,7 @@ module mor1kx_decode
    wire [`OR1K_IMM_WIDTH-1:0] 		imm16;
    wire [9:0] 				immjbr_upper;
 
+   wire 				decode_except_ibus_align;
    reg 					execute_except_illegal;
    wire 				execute_except_ibus_err;
    wire 				execute_except_itlb_miss;
@@ -279,14 +289,34 @@ module mor1kx_decode
 		 (!flag_clear_i & flag_r) | flag_set_i;
 
    // Branch detection
-   assign decode_branch_o = (op_jbr &
-			     // l.j/l.jal
-			     (!(|opc_insn[2:1]) |
-			      // l.bf/bnf and flag is right
-			      (opc_insn[2] == flag)));
+   wire 				 ctrl_to_decode_interlock;
+   assign ctrl_to_decode_interlock = (ctrl_op_lsu_load_i | ctrl_op_mfspr_i) &
+				     (decode_rfb_adr_o == ctrl_rfd_adr_i);
 
-   assign decode_branch_target_o = pc_decode_i + {{4{immjbr_upper[9]}},
-						  immjbr_upper,imm16,2'b00};
+   wire imm_branch = (op_jbr &
+		      // l.j/l.jal
+		      (!(|opc_insn[2:1]) |
+		       // l.bf/bnf and flag is right
+		       (opc_insn[2] == flag)));
+
+   wire reg_branch = op_jr & !ctrl_to_decode_interlock;
+
+   assign decode_branch_o = (imm_branch | reg_branch) & !pipeline_flush_i &
+			    !decode_bubble_o;
+   assign decode_branch_target_o = imm_branch ?
+				   pc_decode_i + {{4{immjbr_upper[9]}},
+						  immjbr_upper,imm16,2'b00} :
+				   // If a bubble have been pushed out to get
+				   // the instruction that will write the
+				   // branch target to control stage, then we
+				   // need to use the register result from
+				   // execute stage instead of decode stage.
+				   execute_bubble_o | op_jr_o ?
+				   execute_rfb_i : decode_rfb_i;
+
+   assign decode_except_ibus_align = decode_branch_o &
+				     (|decode_branch_target_o[1:0]);
+
    // Calculate the link register result
    // TODO: investigate if the ALU adder can be used for this without
    // introducing critical paths
@@ -301,30 +331,35 @@ generate
 if (PIPELINE_BUBBLE=="ENABLED") begin : pipeline_bubble
 /* verilator lint_on WIDTH */
 
-   /*
-    * Detect the situation where there is an instruction in execute stage
-    * that will produce it's result in control stage (i.e. load and mfspr),
-    * and an instruction currently in decode stage needing it's result as input.
-    *
-    * A bubble is also inserted when an rfe instruction is in decode stage,
-    * the main purpose of this is to stall fetch while the rfe is propagating up
-    * to ctrl stage.
-    */
-   assign decode_bubble_o = padv_i & ((op_lsu_load_o | op_mfspr_o) &
-				      (decode_rfa_adr_o == execute_rfd_adr_o ||
-				       decode_rfb_adr_o == execute_rfd_adr_o) |
-				      op_rfe |
-				      /*
-				       * FIXME: ugly hack to prevent branches
-				       * in exe stage from being stalled by
-				       * load/stores in ctrl/mem stage.
-				       * This is needed since fetch et al
-				       * assumes that branches are stall-free
-				       * operations, so some lecturing to
-				       * teach them that that's not the case.
-				       */
-				      (op_lsu_load_o | op_lsu_store_o) &
-				      (op_jbr | op_jr | op_jal));
+   // Detect the situation where there is an instruction in execute stage
+   // that will produce it's result in control stage (i.e. load and mfspr),
+   // and an instruction currently in decode stage needing it's result as
+   // input in execute stage.
+   // Also detect the situation where there is a jump to register in decode
+   // stage and an instruction in execute stage that will write to that
+   // register.
+   //
+   // A bubble is also inserted when an rfe instruction is in decode stage,
+   // the main purpose of this is to stall fetch while the rfe is propagating
+   // up to ctrl stage.
+
+   assign decode_bubble_o = ((op_lsu_load_o | op_mfspr_o) &
+			     (decode_rfa_adr_o == execute_rfd_adr_o ||
+			      decode_rfb_adr_o == execute_rfd_adr_o) |
+			     op_jr &
+			     (ctrl_to_decode_interlock |
+			      (decode_rfb_adr_o == execute_rfd_adr_o)) |
+			     op_rfe |
+			     // FIXME: ugly hack to prevent branches
+			     // in exe stage from being stalled by
+			     // load/stores in ctrl/mem stage.
+			     // This is needed since fetch et al
+			     // assumes that branches are stall-free
+			     // operations, so some lecturing to
+			     // teach them that that's not the case
+			     // is needed.
+			     (op_lsu_load_o | op_lsu_store_o) &
+			     (op_jbr | op_jr | op_jal)) & padv_i;
 
 end else begin
    assign decode_bubble_o = 0;
@@ -604,8 +639,8 @@ endgenerate
 	      // of nops, we push it full of rfes.
 	      // The reason for this is that we need the rfe to reach control
 	      // stage so it will cause the branch.
-	      // It will clear itself by the pipeline_flush_i that the rfe will
-	      // generate.
+	      // It will clear itself by the pipeline_flush_i that the rfe
+	      // will generate.
 	      if (decode_bubble_o & !op_rfe)
 		opc_insn_o <= `OR1K_OPCODE_NOP;
 	   end
@@ -648,6 +683,12 @@ endgenerate
 	     execute_except_ipagefault_o <= 1'b0;
 	   else if (padv_i )
 	     execute_except_ipagefault_o <= execute_except_ipagefault;
+
+	 always @(posedge clk `OR_ASYNC_RST)
+	   if (rst)
+	     execute_except_ibus_align_o <= 1'b0;
+	   else if (padv_i )
+	     execute_except_ibus_align_o <= decode_except_ibus_align;
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
@@ -694,6 +735,7 @@ endgenerate
 	      execute_except_ibus_err_o = execute_except_ibus_err;
 	      execute_except_itlb_miss_o  = execute_except_itlb_miss;
 	      execute_except_ipagefault_o = execute_except_ipagefault;
+	      execute_except_ibus_align_o = decode_except_ibus_align;
 
 	      decode_valid_o		= padv_i ;
 

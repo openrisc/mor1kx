@@ -23,6 +23,7 @@ module mor1kx_fetch_cappuccino
     parameter OPTION_OPERAND_WIDTH = 32,
     parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
 				 `OR1K_RESET_VECTOR,8'd0},
+    parameter OPTION_RF_ADDR_WIDTH = 5,
     parameter FEATURE_INSTRUCTIONCACHE = "NONE",
     parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
     parameter OPTION_ICACHE_SET_WIDTH = 9,
@@ -65,6 +66,8 @@ module mor1kx_fetch_cappuccino
     output reg [OPTION_OPERAND_WIDTH-1:0] pc_decode_o,
     output reg [`OR1K_INSN_WIDTH-1:0] 	  decode_insn_o,
     output reg 				  fetch_valid_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0] 	  fetch_rfb_adr_o,
+    output 				  fetch_rf_adr_valid_o,
 
     // branch/jump indication
     input 				  branch_occur_i,
@@ -100,11 +103,11 @@ module mor1kx_fetch_cappuccino
    wire 				  branch_occur_edge;
    wire 				  branch_except_occur_edge;
    wire					  delay_slot;
-   wire					  kill_fetch;
    wire					  stall_fetch_valid;
    wire					  stall_adv;
    wire 				  addr_valid;
-   reg 					  flushing;
+   reg 					  flush;
+   wire					  flushing;
 
    reg 					  fake_ack;
 
@@ -146,9 +149,6 @@ module mor1kx_fetch_cappuccino
     * in fetch stage we do them on all branches,
     * even on exceptions and rfe (will be discarded later)
     */
-   assign delay_slot = branch_occur_i & fetch_valid_o;
-
-   assign kill_fetch = branch_occur_edge & delay_slot;
 
    /* used to keep fetch_valid_o high during stall */
    assign stall_fetch_valid = !padv_i & fetch_valid_o;
@@ -158,24 +158,29 @@ module mor1kx_fetch_cappuccino
 
    assign addr_valid = (bus_access_done & padv_i | stall_adv) &
 		       !(except_itlb_miss | except_ipagefault) |
-		       kill_fetch |
 		       decode_except_itlb_miss_o & branch_except_occur_i |
 		       decode_except_ipagefault_o & branch_except_occur_i |
 		       doing_rfe_i & branch_occur_i;
 
    assign except_itlb_miss = tlb_miss & immu_enable_i & bus_access_done &
-			      !doing_rfe_i & !kill_fetch;
+			      !doing_rfe_i;
    assign except_ipagefault = pagefault & immu_enable_i & bus_access_done &
-			      !doing_rfe_i & !kill_fetch;
+			      !doing_rfe_i;
+
+   assign fetch_rfb_adr_o = imem_dat[`OR1K_RB_SELECT];
+   assign fetch_rf_adr_valid_o = imem_ack & padv_i | stall_adv;
 
    // Signal to indicate that the ongoing bus access should be flushed
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       flushing <= 0;
-     else if (bus_access_done & padv_i | fetch_valid_o & !padv_i)
-       flushing <= 0;
+       flush <= 0;
+     else if (fetch_branch_taken_o)
+       flush <= 0;
      else if (pipeline_flush_i)
-       flushing <= 1;
+       flush <= 1;
+
+   assign flushing = pipeline_flush_i | flush & !fetch_branch_taken_o;
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
 	branch_occur_r <= 1'b0;
@@ -209,7 +214,8 @@ module mor1kx_fetch_cappuccino
        fetch_branch_taken_o <= 1'b0;
      else if (fetch_branch_taken_o)
        fetch_branch_taken_o <= 1'b0;
-     else if ((branch_occur_i | delay_slot) & bus_access_done & padv_i)
+     else if ((branch_except_occur_i) & (bus_access_done & padv_i |
+					 fetch_valid_o & !padv_i))
        fetch_branch_taken_o <= 1'b1;
      else
        fetch_branch_taken_o <= 1'b0;
@@ -218,7 +224,7 @@ module mor1kx_fetch_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        fetch_valid_o <= 1'b0;
-     else if (kill_fetch | pipeline_flush_i)
+     else if (pipeline_flush_i)
        fetch_valid_o <= 1'b0;
      else if (bus_access_done | stall_fetch_valid |
 	      (except_itlb_miss | except_ipagefault) & !branch_except_occur_i)
@@ -230,8 +236,7 @@ module mor1kx_fetch_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
-     else if (imem_err | except_ipagefault | except_itlb_miss |
-	      pipeline_flush_i | flushing)
+     else if (imem_err | except_ipagefault | except_itlb_miss | flushing)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
      else if (imem_ack & padv_i | stall_adv)
        decode_insn_o <= imem_dat;
@@ -293,8 +298,7 @@ module mor1kx_fetch_cappuccino
        fake_ack <= 0;
      else
        fake_ack <= padv_i & ((immu_enable_i & (tlb_miss | pagefault)) |
-		   branch_except_occur_edge) & !bus_access_done & !ibus_req &
-		   !kill_fetch;
+		   branch_except_occur_edge) & !bus_access_done & !ibus_req;
 
    assign ibus_access = !ic_access & !ic_refill;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
@@ -355,8 +359,8 @@ module mor1kx_fetch_cappuccino
    assign ic_addr = addr_valid ? pc_addr : pc_fetch;
    assign ic_addr_match = immu_enable_i ? immu_phys_addr : pc_fetch;
    assign ic_refill_allowed = !((tlb_miss | pagefault) & immu_enable_i) &
-			      !branch_except_occur_i & !pipeline_flush_i &
-			      !kill_fetch | doing_rfe_i;
+			      !branch_except_occur_i & !pipeline_flush_i |
+			      doing_rfe_i;
    assign ic_req = padv_i & !decode_except_ibus_err_o &
 		   !decode_except_itlb_miss_o & !except_itlb_miss &
 		   !decode_except_ipagefault_o & !except_ipagefault &
