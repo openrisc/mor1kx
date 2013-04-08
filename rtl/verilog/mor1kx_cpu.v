@@ -1,19 +1,19 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
   Description: CPU wrapper module
- 
+
   Allows selection of CPU pipeline implementation based on parameter.
- 
+
   Also provides some API-like hooks into the pipeline for monitors.
-  
+
   Copyright (C) 2012 Authors
- 
+
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
+
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
@@ -34,13 +34,13 @@ module mor1kx_cpu(/*AUTOARG*/
    spr_bus_ack_fpu_i
    );
 
-   
+
    input clk, rst;
 
    parameter OPTION_OPERAND_WIDTH	= 32;
 
    parameter OPTION_CPU			= "CAPPUCCINO";
-   
+
    parameter FEATURE_DATACACHE		= "NONE";
    parameter OPTION_DCACHE_BLOCK_WIDTH	= 5;
    parameter OPTION_DCACHE_SET_WIDTH	= 9;
@@ -53,7 +53,7 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter OPTION_ICACHE_BLOCK_WIDTH	= 5;
    parameter OPTION_ICACHE_SET_WIDTH	= 9;
    parameter OPTION_ICACHE_WAYS		= 2;
-   parameter OPTION_ICACHE_LIMIT_WIDTH  = 32;   
+   parameter OPTION_ICACHE_LIMIT_WIDTH  = 32;
    parameter FEATURE_IMMU		= "NONE";
    parameter OPTION_IMMU_SET_WIDTH	= 6;
    parameter OPTION_IMMU_WAYS		= 1;
@@ -80,7 +80,7 @@ module mor1kx_cpu(/*AUTOARG*/
 					   `OR1K_RESET_VECTOR,8'd0};
 
    parameter OPTION_TCM_FETCHER = "DISABLED";
-   
+
    parameter FEATURE_MULTIPLIER		= "THREESTAGE";
    parameter FEATURE_DIVIDER		= "NONE";
 
@@ -90,7 +90,7 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter FEATURE_EXT		= "NONE";
    parameter FEATURE_CMOV		= "NONE";
    parameter FEATURE_FFL1		= "NONE";
-   
+
    parameter FEATURE_CUST1		= "NONE";
    parameter FEATURE_CUST2		= "NONE";
    parameter FEATURE_CUST3		= "NONE";
@@ -99,9 +99,9 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter FEATURE_CUST6		= "NONE";
    parameter FEATURE_CUST7		= "NONE";
    parameter FEATURE_CUST8		= "NONE";
-   
+
    parameter OPTION_SHIFTER		= "ENABLED";
-   
+
    // Instruction bus
    input ibus_err_i;
    input ibus_ack_i;
@@ -118,10 +118,10 @@ module mor1kx_cpu(/*AUTOARG*/
    output 			     dbus_req_o;
    output [3:0] 		     dbus_bsel_o;
    output 			     dbus_we_o;
-   
+
    // Interrupts
    input [31:0] 		     irq_i;
-   
+
    // Debug interface
    input [15:0] 		     du_addr_i;
    input 			     du_stb_i;
@@ -139,17 +139,17 @@ module mor1kx_cpu(/*AUTOARG*/
    output 			     spr_bus_stb_o;
    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i;
-   input 			     spr_bus_ack_dmmu_i;   
+   input 			     spr_bus_ack_dmmu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i;
-   input 			     spr_bus_ack_immu_i;   
+   input 			     spr_bus_ack_immu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_mac_i;
-   input 			     spr_bus_ack_mac_i;   
+   input 			     spr_bus_ack_mac_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pmu_i;
-   input 			     spr_bus_ack_pmu_i;   
+   input 			     spr_bus_ack_pmu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pcu_i;
-   input 			     spr_bus_ack_pcu_i;   
+   input 			     spr_bus_ack_pcu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i;
-   input 			     spr_bus_ack_fpu_i;   
+   input 			     spr_bus_ack_fpu_i;
    output [15:0] 		     spr_sr_o;
 
    wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_execute_insn/* verilator public */;   
@@ -166,7 +166,7 @@ module mor1kx_cpu(/*AUTOARG*/
    wire [OPTION_OPERAND_WIDTH-1:0]   monitor_spr_eear/* verilator public */;
    wire [OPTION_OPERAND_WIDTH-1:0]   monitor_spr_esr/* verilator public */;
 
-   
+
    generate
       /* verilator lint_off WIDTH */
       if (OPTION_CPU=="CAPPUCCINO") begin : cappuccino
@@ -265,12 +265,11 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
 
-	 
 	 // synthesis translate_off
-`ifndef SYNTHESIS	 
+`ifndef SYNTHESIS
 
 	 assign monitor_flag =  monitor_flag_set ? 1 :
-			        monitor_flag_clear ? 0 : 
+			        monitor_flag_clear ? 0 :
 				monitor_flag_sr;
 	 assign monitor_clk = clk;
 
@@ -288,13 +287,13 @@ module mor1kx_cpu(/*AUTOARG*/
         always @(posedge clk)
           if (cappuccino.mor1kx_cpu.mor1kx_decode.padv_i)
             monitor_execute_insn_reg <= cappuccino.mor1kx_cpu.mor1kx_decode.decode_insn_i;
-        
+
         assign monitor_execute_insn = monitor_execute_insn_reg;
 
 `endif
 	 // synthesis translate_on
 
-	 
+
       end // block: cappuccino
       /* verilator lint_off WIDTH */
       if (OPTION_CPU=="ESPRESSO") begin : espresso
@@ -392,9 +391,9 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
 
 	 // synthesis translate_off
-`ifndef SYNTHESIS	 
+`ifndef SYNTHESIS
 	 assign monitor_flag =  monitor_flag_set ? 1 :
-			        monitor_flag_clear ? 0 : 
+			        monitor_flag_clear ? 0 :
 				monitor_flag_sr;
 	 assign monitor_clk = clk;
 	 assign monitor_execute_insn = espresso.mor1kx_cpu.mor1kx_fetch_espresso.decode_insn_o;
@@ -414,7 +413,6 @@ module mor1kx_cpu(/*AUTOARG*/
 `endif
 	 // synthesis translate_on
 
-	 
       end // block: espresso
       /* verilator lint_off WIDTH */
       if (OPTION_CPU=="PRONTO_ESPRESSO") begin : prontoespresso
@@ -513,9 +511,9 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
 
 	 // synthesis translate_off
-`ifndef SYNTHESIS	 
+`ifndef SYNTHESIS
 	 assign monitor_flag =  monitor_flag_set ? 1 :
-			        monitor_flag_clear ? 0 : 
+			        monitor_flag_clear ? 0 :
 				monitor_flag_sr;
 	 assign monitor_clk = clk;
 	 assign monitor_execute_insn = prontoespresso.mor1kx_cpu.insn_fetch_to_decode;
@@ -535,10 +533,9 @@ module mor1kx_cpu(/*AUTOARG*/
 `endif
 	 // synthesis translate_on
 
-	 
       end
       /* verilator lint_off WIDTH */
-      if (OPTION_CPU!="CAPPUCCINO" && OPTION_CPU!="ESPRESSO" && 
+      if (OPTION_CPU!="CAPPUCCINO" && OPTION_CPU!="ESPRESSO" &&
 	  OPTION_CPU!="PRONTO_ESPRESSO")
 	/* verilator lint_on WIDTH */
 	begin
