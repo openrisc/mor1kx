@@ -166,6 +166,7 @@ module mor1kx_cpu_prontoespresso
    wire [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			exception_taken_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			execute_bubble_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			execute_except_ibus_align_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_ibus_err_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_illegal_o;// From mor1kx_decode of mor1kx_decode.v
    wire			execute_except_ipagefault_o;// From mor1kx_decode of mor1kx_decode.v
@@ -346,12 +347,17 @@ module mor1kx_cpu_prontoespresso
     .flag_set_i				(flag_set_o),
     .flag_clear_i			(flag_clear_o),
     .execute_rfd_adr_o			(),
+    .decode_rfb_i			(0),
+    .execute_rfb_i			(0),
     .decode_branch_o			(),
     .decode_branch_target_o		(),
     .decode_except_ibus_err_i		(decode_except_ibus_err_o),
     .pipeline_flush_i			(pipeline_flush_o),
+    .ctrl_rfd_adr_i			(0),
+    .ctrl_op_lsu_load_i			(0),
+    .ctrl_op_mfspr_i			(0),
     .pc_execute_o                       (),
-    .pc_decode_i                        (),
+    .pc_decode_i                        (0),
     .decode_except_itlb_miss_i          (0),
     .decode_except_ipagefault_i         (0),
     ); */
@@ -408,6 +414,7 @@ module mor1kx_cpu_prontoespresso
       .execute_except_itlb_miss_o	(execute_except_itlb_miss_o),
       .execute_except_ipagefault_o	(execute_except_ipagefault_o),
       .execute_except_illegal_o		(execute_except_illegal_o),
+      .execute_except_ibus_align_o	(execute_except_ibus_align_o),
       .execute_except_syscall_o		(execute_except_syscall_o),
       .execute_except_trap_o		(execute_except_trap_o),
       .pc_execute_o			(),			 // Templated
@@ -419,12 +426,17 @@ module mor1kx_cpu_prontoespresso
       .clk				(clk),
       .rst				(rst),
       .padv_i				(padv_decode_o),	 // Templated
-      .pc_decode_i			(),			 // Templated
+      .pc_decode_i			(0),			 // Templated
       .decode_insn_i			(insn_fetch_to_decode),	 // Templated
+      .decode_rfb_i			(0),			 // Templated
+      .execute_rfb_i			(0),			 // Templated
       .flag_i				(spr_sr_o[`OR1K_SPR_SR_F]), // Templated
       .flag_set_i			(flag_set_o),		 // Templated
       .flag_clear_i			(flag_clear_o),		 // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
+      .ctrl_rfd_adr_i			(0),			 // Templated
+      .ctrl_op_lsu_load_i		(0),			 // Templated
+      .ctrl_op_mfspr_i			(0),			 // Templated
       .decode_except_ibus_err_i		(decode_except_ibus_err_o), // Templated
       .decode_except_itlb_miss_i	(0),			 // Templated
       .decode_except_ipagefault_i	(0));			 // Templated
