@@ -24,6 +24,7 @@ module mor1kx_lsu_espresso
    // Outputs
    lsu_result_o, lsu_valid_o, lsu_except_dbus_o, lsu_except_align_o,
    dbus_adr_o, dbus_req_o, dbus_dat_o, dbus_bsel_o, dbus_we_o,
+   dbus_burst_o,
    // Inputs
    clk, rst, padv_fetch_i, lsu_adr_i, rfb_i, opc_insn_i,
    op_lsu_load_i, op_lsu_store_i, exception_taken_i, du_restart_i,
@@ -65,6 +66,7 @@ module mor1kx_lsu_espresso
    output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o;
    output [3:0] 		     dbus_bsel_o;
    output 			     dbus_we_o;
+   output 			     dbus_burst_o;
    input 			     dbus_err_i;
    input 			     dbus_ack_i;
    input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i;
@@ -272,6 +274,8 @@ module mor1kx_lsu_espresso
    always @(posedge clk)
      if (dbus_ack_i & op_lsu_load_i)
        lsu_result_r <= dbus_dat_extended;
+
+   assign dbus_burst_o = 0;
 
    // Break up paths of signals which are usually pretty long
    generate

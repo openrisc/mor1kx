@@ -93,6 +93,9 @@ module mor1kx
 
    parameter BUS_IF_TYPE		= "WISHBONE32";
 
+   parameter IBUS_WB_TYPE		= "B3_READ_BURST";
+   parameter DBUS_WB_TYPE		= "CLASSIC";
+
    input clk, rst;
 
    output [31:0] iwbm_adr_o;
@@ -139,10 +142,12 @@ module mor1kx
    // Beginning of automatic wires (for undeclared instantiated-module outputs)
    wire [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o;	// From mor1kx_cpu of mor1kx_cpu.v
    wire [3:0]		dbus_bsel_o;		// From mor1kx_cpu of mor1kx_cpu.v
+   wire			dbus_burst_o;		// From mor1kx_cpu of mor1kx_cpu.v
    wire [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o;	// From mor1kx_cpu of mor1kx_cpu.v
    wire			dbus_req_o;		// From mor1kx_cpu of mor1kx_cpu.v
    wire			dbus_we_o;		// From mor1kx_cpu of mor1kx_cpu.v
    wire [OPTION_OPERAND_WIDTH-1:0] ibus_adr_o;	// From mor1kx_cpu of mor1kx_cpu.v
+   wire			ibus_burst_o;		// From mor1kx_cpu of mor1kx_cpu.v
    wire			ibus_req_o;		// From mor1kx_cpu of mor1kx_cpu.v
    wire [15:0]		spr_bus_addr_o;		// From mor1kx_cpu of mor1kx_cpu.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;// From mor1kx_cpu of mor1kx_cpu.v
@@ -180,6 +185,7 @@ module mor1kx
 	  .cpu_req_i			(ibus_req_o),
 	  .cpu_we_i			(1'b0),
 	  .cpu_bsel_i			(4'b1111),
+	  .cpu_burst_i			(ibus_burst_o),
 	  .wbm_err_i			(iwbm_err_i),
 	  .wbm_ack_i			(iwbm_ack_i),
 	  .wbm_dat_i			(iwbm_dat_i),
@@ -187,8 +193,7 @@ module mor1kx
 	  ); */
 
 	 mor1kx_bus_if_wb32
-//		      #(.BUS_IF_TYPE("CLASSIC"))
-		      #(.BUS_IF_TYPE("B3_READ_BURSTING"))
+	   	      #(.BUS_IF_TYPE(IBUS_WB_TYPE))
 	 ibus_bridge
 		      (/*AUTOINST*/
 		       // Outputs
@@ -211,6 +216,7 @@ module mor1kx
 		       .cpu_req_i	(ibus_req_o),		 // Templated
 		       .cpu_bsel_i	(4'b1111),		 // Templated
 		       .cpu_we_i	(1'b0),			 // Templated
+		       .cpu_burst_i	(ibus_burst_o),		 // Templated
 		       .wbm_err_i	(iwbm_err_i),		 // Templated
 		       .wbm_ack_i	(iwbm_ack_i),		 // Templated
 		       .wbm_dat_i	(iwbm_dat_i),		 // Templated
@@ -234,6 +240,7 @@ module mor1kx
 	  .cpu_req_i			(dbus_req_o),
 	  .cpu_we_i			(dbus_we_o),
 	  .cpu_bsel_i			(dbus_bsel_o),
+	  .cpu_burst_i			(dbus_burst_o),
 	  .wbm_err_i			(dwbm_err_i),
 	  .wbm_ack_i			(dwbm_ack_i),
 	  .wbm_dat_i			(dwbm_dat_i),
@@ -241,7 +248,7 @@ module mor1kx
 	  ); */
 
 	 mor1kx_bus_if_wb32
-	   #(.BUS_IF_TYPE("CLASSIC"))
+	   #(.BUS_IF_TYPE(DBUS_WB_TYPE))
 	 dbus_bridge
 	   (/*AUTOINST*/
 	    // Outputs
@@ -264,6 +271,7 @@ module mor1kx
 	    .cpu_req_i			(dbus_req_o),		 // Templated
 	    .cpu_bsel_i			(dbus_bsel_o),		 // Templated
 	    .cpu_we_i			(dbus_we_o),		 // Templated
+	    .cpu_burst_i		(dbus_burst_o),		 // Templated
 	    .wbm_err_i			(dwbm_err_i),		 // Templated
 	    .wbm_ack_i			(dwbm_ack_i),		 // Templated
 	    .wbm_dat_i			(dwbm_dat_i),		 // Templated
@@ -278,7 +286,6 @@ module mor1kx
 	   end
 	end // else: !if(BUS_IF_TYPE=="WISHBONE32")
    endgenerate
-
 
    /* mor1kx_cpu AUTO_TEMPLATE
     (
@@ -353,11 +360,13 @@ module mor1kx
       // Outputs
       .ibus_adr_o			(ibus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
       .ibus_req_o			(ibus_req_o),
+      .ibus_burst_o			(ibus_burst_o),
       .dbus_adr_o			(dbus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
       .dbus_dat_o			(dbus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
       .dbus_req_o			(dbus_req_o),
       .dbus_bsel_o			(dbus_bsel_o[3:0]),
       .dbus_we_o			(dbus_we_o),
+      .dbus_burst_o			(dbus_burst_o),
       .du_dat_o				(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
       .du_ack_o				(du_ack_o),
       .du_stall_o			(du_stall_o),

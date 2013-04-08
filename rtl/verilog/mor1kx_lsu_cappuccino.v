@@ -86,6 +86,7 @@ module mor1kx_lsu_cappuccino
     output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
     output [3:0] 		      dbus_bsel_o,
     output 			      dbus_we_o,
+    output 			      dbus_burst_o,
     input 			      dbus_err_i,
     input 			      dbus_ack_i,
     input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
@@ -141,6 +142,7 @@ module mor1kx_lsu_cappuccino
 
    wire 			     dc_access;
    wire 			     dc_refill;
+   wire 			     dc_refill_done;
 
    reg 				     dc_enable_r;
    wire 			     dc_enabled;
@@ -342,6 +344,7 @@ module mor1kx_lsu_cappuccino
    assign dbus_we_o = dbus_access ? dbus_we : dc_dbus_we;
    assign dbus_bsel_o = dbus_access ? dbus_bsel : dc_dbus_bsel;
    assign dbus_dat_o = dbus_access ? dbus_sdat : dc_dbus_sdat;
+   assign dbus_burst_o = dc_refill & !dc_refill_done;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -381,6 +384,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 
    /* mor1kx_dcache AUTO_TEMPLATE (
 	    .refill_o			(dc_refill),
+	    .refill_done_o		(dc_refill_done),
 	    .cpu_err_o			(dc_err),
 	    .cpu_ack_o			(dc_ack),
 	    .cpu_dat_o			(dc_ldat),
@@ -416,6 +420,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	   (/*AUTOINST*/
 	    // Outputs
 	    .refill_o			(dc_refill),		 // Templated
+	    .refill_done_o		(dc_refill_done),	 // Templated
 	    .cpu_err_o			(dc_err),		 // Templated
 	    .cpu_ack_o			(dc_ack),		 // Templated
 	    .cpu_dat_o			(dc_ldat),		 // Templated
@@ -446,6 +451,8 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .spr_bus_dat_i		(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
 end else begin
    assign dc_access = 0;
+   assign dc_refill = 0;
+   assign dc_refill_done = 0;
    assign dc_err = 0;
    assign dc_ack = 0;
    assign dc_sdat = 0;

@@ -26,6 +26,7 @@ module mor1kx_icache
 
     input 			      ic_access_i,
     output 			      refill_o,
+    output 			      refill_done_o,
 
     // CPU Interface
     output 			      cpu_err_o,
@@ -165,6 +166,7 @@ module mor1kx_icache
 			  {ibus_adr[31:5], ibus_adr[4:0] + 5'd4} : // 32 byte
 			  {ibus_adr[31:4], ibus_adr[3:0] + 4'd4};  // 16 byte
 
+   assign refill_done_o = refill_done;
    assign refill_done = refill_valid[next_ibus_adr[OPTION_ICACHE_BLOCK_WIDTH-1:2]];
    assign refill_hit = refill_valid[cpu_adr_match_i[OPTION_ICACHE_BLOCK_WIDTH-1:2]] &
 		       cpu_adr_match_i[OPTION_ICACHE_LIMIT_WIDTH-1:

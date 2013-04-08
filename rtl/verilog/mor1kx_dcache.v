@@ -27,6 +27,7 @@ module mor1kx_dcache
     input 			      dc_enable_i,
     input 			      dc_access_i,
     output 			      refill_o,
+    output 			      refill_done_o,
 
     // CPU Interface
     output reg 			      cpu_err_o,
@@ -181,6 +182,7 @@ module mor1kx_dcache
 			  {dbus_adr[31:5], dbus_adr[4:0] + 5'd4} : // 32 byte
 			  {dbus_adr[31:4], dbus_adr[3:0] + 4'd4};  // 16 byte
 
+   assign refill_done_o = refill_done;
    assign refill_done = refill_valid[next_dbus_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]];
    assign refill_hit = refill_valid[cpu_adr_match_i[OPTION_DCACHE_BLOCK_WIDTH-1:2]] &
 		       cpu_adr_match_i[OPTION_DCACHE_LIMIT_WIDTH-1:

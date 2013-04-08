@@ -23,7 +23,7 @@ module mor1kx_bus_if_wb32
    wbm_sel_o, wbm_we_o, wbm_cti_o, wbm_bte_o, wbm_dat_o,
    // Inputs
    clk, rst, cpu_adr_i, cpu_dat_i, cpu_req_i, cpu_bsel_i, cpu_we_i,
-   wbm_err_i, wbm_ack_i, wbm_dat_i, wbm_rty_i
+   cpu_burst_i, wbm_err_i, wbm_ack_i, wbm_dat_i, wbm_rty_i
    );
 
    input clk, rst;
@@ -36,6 +36,7 @@ module mor1kx_bus_if_wb32
    input 	 cpu_req_i;
    input [3:0] 	 cpu_bsel_i;
    input  	 cpu_we_i;
+   input 	 cpu_burst_i;
 
    output [31:0] wbm_adr_o;
    output 	 wbm_stb_o;
@@ -137,8 +138,27 @@ module mor1kx_bus_if_wb32
 			    !(bursting & address_differs) & cpu_req_i;
 	 assign cpu_dat_o = wbm_err_i ? 0 :  wbm_dat_i;
 
-      end
-      else begin : classic // CLASSIC only
+      /* verilator lint_off WIDTH */
+      end else if (BUS_IF_TYPE=="B3_REGISTERED_FEEDBACK") begin : b3_registered_feedback
+	 /* verilator lint_on WIDTH */
+
+	 assign wbm_adr_o = cpu_adr_i;
+	 assign wbm_stb_o = cpu_req_i;
+	 assign wbm_cyc_o = cpu_req_i;
+	 assign wbm_sel_o = cpu_bsel_i;
+	 assign wbm_we_o = cpu_we_i;
+	 assign wbm_cti_o = cpu_burst_i ? 3'b010 : 3'b111;
+	 assign wbm_bte_o = burst_length==4  ? 2'b01 :
+			    burst_length==8  ? 2'b10 :
+			    burst_length==16 ? 2'b11 :
+			    2'b00; // Linear burst
+
+	 assign wbm_dat_o = cpu_dat_i;
+	 assign cpu_err_o = wbm_err_i;
+	 assign cpu_ack_o = wbm_ack_i;
+	 assign cpu_dat_o = wbm_dat_i;
+
+      end else begin : classic // CLASSIC only
 
 	 // Only classic, single cycle accesses
 

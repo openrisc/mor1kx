@@ -17,10 +17,10 @@
 module mor1kx_cpu_prontoespresso
   (/*AUTOARG*/
    // Outputs
-   ibus_adr_o, ibus_req_o, dbus_adr_o, dbus_dat_o, dbus_req_o,
-   dbus_bsel_o, dbus_we_o, du_dat_o, du_ack_o, du_stall_o,
-   spr_bus_addr_o, spr_bus_we_o, spr_bus_stb_o, spr_bus_dat_o,
-   spr_sr_o,
+   ibus_adr_o, ibus_req_o, ibus_burst_o, dbus_adr_o, dbus_dat_o,
+   dbus_req_o, dbus_bsel_o, dbus_we_o, dbus_burst_o, du_dat_o,
+   du_ack_o, du_stall_o, spr_bus_addr_o, spr_bus_we_o, spr_bus_stb_o,
+   spr_bus_dat_o, spr_sr_o,
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, dbus_err_i,
    dbus_ack_i, dbus_dat_i, irq_i, du_addr_i, du_stb_i, du_dat_i,
@@ -96,6 +96,7 @@ module mor1kx_cpu_prontoespresso
    input [`OR1K_INSN_WIDTH-1:0] ibus_dat_i;
    output [OPTION_OPERAND_WIDTH-1:0] ibus_adr_o;
    output 			     ibus_req_o;
+   output 			     ibus_burst_o;
 
    // Data bus
    input 			     dbus_err_i;
@@ -106,7 +107,8 @@ module mor1kx_cpu_prontoespresso
    output 			     dbus_req_o;
    output [3:0] 		     dbus_bsel_o;
    output 			     dbus_we_o;
-   
+   output 			     dbus_burst_o;
+
    // Interrupts
    input [31:0] 		     irq_i;
    
@@ -310,6 +312,7 @@ module mor1kx_cpu_prontoespresso
 	      // Outputs
 	      .ibus_adr_o		(ibus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
 	      .ibus_req_o		(ibus_req_o),
+	      .ibus_burst_o		(ibus_burst_o),
 	      .decode_insn_o		(insn_fetch_to_decode),	 // Templated
 	      .fetched_pc_o		(fetched_pc_o[OPTION_OPERAND_WIDTH-1:0]),
 	      .fetch_ready_o		(fetch_ready_o),
@@ -537,6 +540,7 @@ module mor1kx_cpu_prontoespresso
       .dbus_dat_o			(dbus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
       .dbus_bsel_o			(dbus_bsel_o[3:0]),
       .dbus_we_o			(dbus_we_o),
+      .dbus_burst_o			(dbus_burst_o),
       // Inputs
       .clk				(clk),
       .rst				(rst),

@@ -57,6 +57,7 @@ module mor1kx_fetch_cappuccino
     input [`OR1K_INSN_WIDTH-1:0] 	  ibus_dat_i,
     output 				  ibus_req_o,
     output [OPTION_OPERAND_WIDTH-1:0] 	  ibus_adr_o,
+    output 				  ibus_burst_o,
 
     // pipeline control input
     input 				  padv_i,
@@ -121,6 +122,7 @@ module mor1kx_fetch_cappuccino
    wire 				  ic_req;
    wire 				  ic_refill_allowed;
    wire 				  ic_refill;
+   wire 				  ic_refill_done;
    wire [OPTION_OPERAND_WIDTH-1:0] 	  ic_addr;
    wire [OPTION_OPERAND_WIDTH-1:0] 	  ic_addr_match;
 
@@ -303,6 +305,7 @@ module mor1kx_fetch_cappuccino
 		     ibus_access ? ibus_dat : ic_dat;
    assign ibus_adr_o = ibus_access ? ibus_adr : ic_ibus_adr;
    assign ibus_req_o = ibus_access ? ibus_req : ic_ibus_req;
+   assign ibus_burst_o = ic_refill & !ic_refill_done;
 
    always @(posedge clk) begin
       ibus_ack <= 0;
@@ -389,6 +392,7 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
     .spr_bus_dat_o		(spr_bus_dat_ic_o),
     .spr_bus_ack_o		(spr_bus_ack_ic_o),
     .refill_o			(ic_refill),
+    .refill_done_o		(ic_refill_done),
     // Inputs
     .ic_access_i		(ic_access),
     .cpu_adr_i			(ic_addr),
@@ -407,6 +411,7 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
      (/*AUTOINST*/
       // Outputs
       .refill_o				(ic_refill),		 // Templated
+      .refill_done_o			(ic_refill_done),	 // Templated
       .cpu_err_o			(ic_err),		 // Templated
       .cpu_ack_o			(ic_ack),		 // Templated
       .cpu_dat_o			(ic_dat[OPTION_OPERAND_WIDTH-1:0]), // Templated
@@ -430,6 +435,8 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
       .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
 end else begin // block: icache_gen
    assign ic_access = 0;
+   assign ic_refill = 0;
+   assign ic_refill_done = 0;
    assign ic_ack = 0;
    assign ic_err = 0;
    assign ic_ibus_req = 0;

@@ -24,9 +24,9 @@
 module mor1kx_fetch_prontoespresso
   (/*AUTOARG*/
    // Outputs
-   ibus_adr_o, ibus_req_o, decode_insn_o, fetched_pc_o, fetch_ready_o,
-   fetch_rfa_adr_o, fetch_rfb_adr_o, fetch_rf_re_o, pc_fetch_next_o,
-   decode_except_ibus_err_o, fetch_sleep_o,
+   ibus_adr_o, ibus_req_o, ibus_burst_o, decode_insn_o, fetched_pc_o,
+   fetch_ready_o, fetch_rfa_adr_o, fetch_rfb_adr_o, fetch_rf_re_o,
+   pc_fetch_next_o, decode_except_ibus_err_o, fetch_sleep_o,
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, padv_i,
    branch_occur_i, branch_dest_i, du_restart_i, du_restart_pc_i,
@@ -44,6 +44,7 @@ module mor1kx_fetch_prontoespresso
    // interface to ibus
    output [OPTION_OPERAND_WIDTH-1:0] ibus_adr_o;
    output 			     ibus_req_o;
+   output 			     ibus_burst_o;
    input 			     ibus_err_i;
    input 			     ibus_ack_i;
    input [`OR1K_INSN_WIDTH-1:0]      ibus_dat_i;
@@ -135,6 +136,7 @@ module mor1kx_fetch_prontoespresso
 				  //    causes req to go low, after which fetch_req is deasserted
 				  //    and should handle it
 				  & !(execute_waiting_i & fetch_req);
+   assign ibus_burst_o		= 0;
 
    assign fetch_ready_o		= ibus_ack_i | jump_insn_in_decode;
 
