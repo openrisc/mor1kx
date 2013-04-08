@@ -1,16 +1,16 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
   Description: mor1kx processor top level
-  
+
   Copyright (C) 2012 Authors
- 
+
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
              Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
- 
+
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
@@ -79,7 +79,7 @@ module mor1kx
    parameter FEATURE_EXT		= "NONE";
    parameter FEATURE_CMOV		= "ENABLED";
    parameter FEATURE_FFL1		= "ENABLED";
-   
+
    parameter FEATURE_CUST1		= "NONE";
    parameter FEATURE_CUST2		= "NONE";
    parameter FEATURE_CUST3		= "NONE";
@@ -88,13 +88,13 @@ module mor1kx
    parameter FEATURE_CUST6		= "NONE";
    parameter FEATURE_CUST7		= "NONE";
    parameter FEATURE_CUST8		= "NONE";
-   
+
    parameter OPTION_SHIFTER		= "BARREL";
 
    parameter BUS_IF_TYPE		= "WISHBONE32";
-   
+
    input clk, rst;
-   
+
    output [31:0] iwbm_adr_o;
    output 	 iwbm_stb_o;
    output 	 iwbm_cyc_o;
@@ -133,7 +133,7 @@ module mor1kx
    // Stall control from debug interface
    input 			     du_stall_i;
    output 			     du_stall_o;
-   
+
 
    /*AUTOWIRE*/
    // Beginning of automatic wires (for undeclared instantiated-module outputs)
@@ -185,8 +185,8 @@ module mor1kx
 	  .wbm_dat_i			(iwbm_dat_i),
 	  .wbm_rty_i			(iwbm_rty_i),
 	  ); */
-	 
-	 mor1kx_bus_if_wb32 
+
+	 mor1kx_bus_if_wb32
 //		      #(.BUS_IF_TYPE("CLASSIC"))
 		      #(.BUS_IF_TYPE("B3_READ_BURSTING"))
 	 ibus_bridge
@@ -215,7 +215,7 @@ module mor1kx
 		       .wbm_ack_i	(iwbm_ack_i),		 // Templated
 		       .wbm_dat_i	(iwbm_dat_i),		 // Templated
 		       .wbm_rty_i	(iwbm_rty_i));		 // Templated
-	 
+
 	 /* mor1kx_bus_if_wb32 AUTO_TEMPLATE (
 	  .cpu_err_o			(dbus_err_i),
 	  .cpu_ack_o			(dbus_ack_i),
@@ -268,7 +268,7 @@ module mor1kx
 	    .wbm_ack_i			(dwbm_ack_i),		 // Templated
 	    .wbm_dat_i			(dwbm_dat_i),		 // Templated
 	    .wbm_rty_i			(dwbm_rty_i));		 // Templated
-	 
+
       end // if (BUS_IF_TYPE=="WISHBONE32")
       else
 	begin
@@ -295,7 +295,7 @@ module mor1kx
     .spr_bus_dat_fpu_i		(),
     .spr_bus_ack_fpu_i		(),
     ); */
-   mor1kx_cpu  
+   mor1kx_cpu
      	   #(
 	     .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
 	     .OPTION_CPU(OPTION_CPU0),
@@ -393,5 +393,5 @@ module mor1kx
       .spr_bus_ack_pcu_i		(),			 // Templated
       .spr_bus_dat_fpu_i		(),			 // Templated
       .spr_bus_ack_fpu_i		());			 // Templated
-   
+
 endmodule // mor1kx
