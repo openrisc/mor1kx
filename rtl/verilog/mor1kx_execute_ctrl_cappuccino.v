@@ -120,25 +120,18 @@ module mor1kx_execute_ctrl_cappuccino
     output reg 				  ctrl_except_align_o,
     output reg 				  ctrl_except_trap_o,
 
-    output reg 				  execute_waiting_o,
+    output 				  execute_waiting_o,
 
-    output reg 				  execute_valid_o
+    output 				  execute_valid_o
     );
 
-   wire 				  execute_valid;
+   // ALU, LSU or MFSPR stall execution, nothing else can
+   assign execute_waiting_o = (ctrl_op_lsu_load_o | ctrl_op_lsu_store_o) &
+			      !lsu_valid_i |
+			      ctrl_op_mfspr_o & !ctrl_mfspr_we_i |
+			      op_alu_i & !alu_valid_i;
 
-   // ALU or LSU stall execution, nothing else can
-   assign execute_valid = (ctrl_op_lsu_load_o | ctrl_op_lsu_store_o) ?
-			  lsu_valid_i & (!op_alu_i | alu_valid_i) :
-			  ctrl_op_mfspr_o ?
-			  ctrl_mfspr_we_i & (!op_alu_i | alu_valid_i) :
-			  op_alu_i ? alu_valid_i : 1'b1;
-
-   always @*
-     begin
-	execute_valid_o = execute_valid;
-	execute_waiting_o = !execute_valid;
-     end
+   assign execute_valid_o = !execute_waiting_o;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
