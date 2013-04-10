@@ -99,6 +99,7 @@ module mor1kx_execute_alu
    wire                                   adder_carryout;
    wire 				  adder_signed_overflow;
    wire 				  adder_unsigned_overflow;
+   wire 				  adder_result_sign;
 
    wire [OPTION_OPERAND_WIDTH-1:0]        b_neg;
    wire [OPTION_OPERAND_WIDTH-1:0]        b_mux;
@@ -192,6 +193,8 @@ module mor1kx_execute_alu
    assign {adder_carryout, adder_result} = a + b_mux +
                                            {{OPTION_OPERAND_WIDTH-1{1'b0}},
                                             carry_in};
+
+   assign adder_result_sign = adder_result[OPTION_OPERAND_WIDTH-1];
 
    assign adder_signed_overflow = // Input signs are same and ...
 				  (a[OPTION_OPERAND_WIDTH-1] ==
@@ -528,24 +531,11 @@ module mor1kx_execute_alu
    endgenerate
 
    // Adder result is zero if equal
-   assign a_eq_b = !(|adder_result);
+   assign a_eq_b = !(|xor_result);
    assign a_lt_b = opc_alu_secondary_i[3] ? // Signed compare
-                   ((a[OPTION_OPERAND_WIDTH-1] &
-                     !b[OPTION_OPERAND_WIDTH-1]) |
-                    (!a[OPTION_OPERAND_WIDTH-1] &
-                     !b[OPTION_OPERAND_WIDTH-1] &
-                     adder_result[OPTION_OPERAND_WIDTH-1]) |
-                    (a[OPTION_OPERAND_WIDTH-1] &
-                     b[OPTION_OPERAND_WIDTH-1] &
-                     adder_result[OPTION_OPERAND_WIDTH-1])) :
-                   (a < b);
-   /*
+		   !(adder_result_sign == adder_signed_overflow) :
                    // Unsigned compare
-                   // check for a < b: if result of a - b has wrapped
-                   adder_result[OPTION_OPERAND_WIDTH-1] &&
-                   // and check that a >>> b
-                   !(a[OPTION_OPERAND_WIDTH-1] & !b[OPTION_OPERAND_WIDTH-1]);
-   */
+                   !adder_carryout;
 
    assign shift_op = (opc_alu_i == `OR1K_ALU_OPC_SHRT ||
                       opc_insn_i == `OR1K_OPCODE_SHRTI) ;
