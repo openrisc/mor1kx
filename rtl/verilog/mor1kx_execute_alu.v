@@ -98,7 +98,7 @@ module mor1kx_execute_alu
    wire [OPTION_OPERAND_WIDTH-1:0]        adder_result;
    wire                                   adder_carryout;
    wire 				  adder_signed_overflow;
-   wire 				  adder_unsigned_overflow;   
+   wire 				  adder_unsigned_overflow;
 
    wire [OPTION_OPERAND_WIDTH-1:0]        b_neg;
    wire [OPTION_OPERAND_WIDTH-1:0]        b_mux;
@@ -108,7 +108,7 @@ module mor1kx_execute_alu
    wire                                   a_lt_b;
    wire                                   adder_do_sub;
    wire 				  adder_do_carry_in;
-   
+
    // Shifter wires
    wire [`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0] opc_alu_shr;
    wire                                   shift_op;
@@ -138,7 +138,7 @@ module mor1kx_execute_alu
    wire [OPTION_OPERAND_WIDTH-1:0]        div_result;
    wire                                   div_valid;
    wire 				  div_by_zero;
-   
+
 
    wire [OPTION_OPERAND_WIDTH-1:0]        ffl1_result;
 
@@ -183,7 +183,7 @@ module mor1kx_execute_alu
 			      ((opc_insn_i==`OR1K_OPCODE_ALU &
 			       opc_alu_i==`OR1K_ALU_OPC_ADDC) ||
 			       (opc_insn_i==`OR1K_OPCODE_ADDIC)) & carry_i;
-   
+
    // Adder/subtractor inputs
    assign b_neg = ~b;
    assign carry_in = adder_do_sub | adder_do_carry_in;
@@ -194,15 +194,14 @@ module mor1kx_execute_alu
                                             carry_in};
 
    assign adder_signed_overflow = // Input signs are same and ...
-				  (a[OPTION_OPERAND_WIDTH-1] == 
+				  (a[OPTION_OPERAND_WIDTH-1] ==
 				   b_mux[OPTION_OPERAND_WIDTH-1]) &
 				  // result sign is different to input signs
-				  (a[OPTION_OPERAND_WIDTH-1] ^ 
+				  (a[OPTION_OPERAND_WIDTH-1] ^
 				   adder_result[OPTION_OPERAND_WIDTH-1]);
 
    assign adder_unsigned_overflow = adder_carryout;
-   
-				   
+
    assign mul_op = (opc_insn_i==`OR1K_OPCODE_ALU &&
                     (opc_alu_i == `OR1K_ALU_OPC_MUL ||
                      opc_alu_i == `OR1K_ALU_OPC_MULU)) ||
@@ -219,7 +218,10 @@ module mor1kx_execute_alu
       if (FEATURE_MULTIPLIER=="THREESTAGE") begin : threestagemultiply
 	 /* verilator lint_on WIDTH */
          // 32-bit multiplier with three registering stages to help with timing
-         reg [OPTION_OPERAND_WIDTH-1:0]           mul_opa, mul_opb, mul_result1, mul_result2;
+         reg [OPTION_OPERAND_WIDTH-1:0]           mul_opa;
+         reg [OPTION_OPERAND_WIDTH-1:0]           mul_opb;
+         reg [OPTION_OPERAND_WIDTH-1:0]           mul_result1;
+         reg [OPTION_OPERAND_WIDTH-1:0]           mul_result2;
          reg [2:0]                                mul_valid_shr;
 
          always @(posedge clk)
@@ -234,7 +236,8 @@ module mor1kx_execute_alu
                 end
 
               if (mul_valid_shr==3'b001)
-                mul_result1   <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
+                mul_result1   <= (mul_opa * mul_opb) &
+				 {OPTION_OPERAND_WIDTH{1'b1}};
               mul_result2 <= mul_result1;
            end
 
@@ -261,7 +264,8 @@ module mor1kx_execute_alu
          reg         mul_done;
 	 wire [OPTION_OPERAND_WIDTH-1:0] mul_a, mul_b;
 
-	 // Check if it's a signed multiply and operand b is negative, convert to positive
+	 // Check if it's a signed multiply and operand b is negative,
+	 // convert to positive
 	 assign mul_a = mul_op_signed & a[OPTION_OPERAND_WIDTH-1] ?
 					  ~a + 1 : a;
 	 assign mul_b = mul_op_signed & b[OPTION_OPERAND_WIDTH-1] ?
@@ -319,8 +323,10 @@ module mor1kx_execute_alu
 
 	   if (((a*b) & {OPTION_OPERAND_WIDTH{1'b1}}) != mul_result)
 	     begin
-		$display("%t incorrect serial multiply result at pc %08h", $time, pc_execute_i);
-		$display("a=%08h b=%08h, mul_result=%08h, expected %08h",a, b, mul_result, ((a*b) & {OPTION_OPERAND_WIDTH{1'b1}}));
+		$display("%t incorrect serial multiply result at pc %08h",
+			 $time, pc_execute_i);
+		$display("a=%08h b=%08h, mul_result=%08h, expected %08h",
+			 a, b, mul_result, ((a*b) & {OPTION_OPERAND_WIDTH{1'b1}}));
 	     end
 	   end
 	 `endif
@@ -332,10 +338,10 @@ module mor1kx_execute_alu
 	 wire [(OPTION_OPERAND_WIDTH*2)-1:0] mul_full_result;
 	 assign mul_full_result = a * b;
          assign mul_result = mul_full_result[OPTION_OPERAND_WIDTH-1:0];
-	 
+
 	 assign mul_unsigned_overflow =  OPTION_OPERAND_WIDTH==64 ? 0 :
 	       |mul_full_result[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH];
-	 
+
          assign mul_valid = 1;
       end
       else if (FEATURE_MULTIPLIER=="NONE") begin
@@ -416,7 +422,7 @@ module mor1kx_execute_alu
                div_neg <= 1'b0;
                div_done <= 1'b0;
 	       div_by_zero_r <= !(|b);
-	       
+
                /*
                 * Convert negative operands in the case of signed division.
                 * If only one of the operands is negative, the result is
@@ -455,9 +461,9 @@ module mor1kx_execute_alu
       /* verilator lint_on WIDTH */
          assign div_result = a / b;
          assign div_valid = 1;
-	 assign div_by_zero = (opc_alu_i == `OR1K_ALU_OPC_DIV || 
+	 assign div_by_zero = (opc_alu_i == `OR1K_ALU_OPC_DIV ||
 				 opc_alu_i == `OR1K_ALU_OPC_DIVU) && !(|b);
-	 
+
       end
       else if (FEATURE_DIVIDER=="NONE") begin
          assign div_result = adder_result;
@@ -682,7 +688,7 @@ module mor1kx_execute_alu
    assign and_result = a & b;
    assign or_result = a | b;
    assign xor_result = a ^ b;
-   
+
    // Result muxing - result is registered in RF
    always @*
      case(opc_insn_i)
@@ -834,7 +840,7 @@ module mor1kx_execute_alu
 	    carry_clear_o	= 0;
 	 end
      endcase // case (opc_insn_i)
-   
+
    // ALU finished/valid MUXing
    always @*
      case(opc_insn_i)
