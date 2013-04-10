@@ -167,7 +167,7 @@ module mor1kx_lsu_cappuccino
    assign align_err_short = ctrl_lsu_adr_i[0];
 
 
-   assign lsu_valid_o = dbus_ack | access_done;
+   assign lsu_valid_o = !dbus_access & dbus_ack | access_done;
    assign lsu_except_dbus_o = dbus_err | except_dbus;
 
    assign load_align_err = ((ctrl_opc_insn_i==`OR1K_OPCODE_LWZ |
@@ -326,7 +326,8 @@ module mor1kx_lsu_cappuccino
      if (dbus_ack & ctrl_op_lsu_load_i)
        lsu_result_r <= dbus_dat_extended;
 
-   assign lsu_result_o = access_done ? lsu_result_r : dbus_dat_extended;
+   assign lsu_result_o = (access_done | dbus_access) ?
+			 lsu_result_r : dbus_dat_extended;
 
    assign dbus_req = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) &
 		     !except_align & !(except_dtlb_miss | except_dtlb_miss_r) &
