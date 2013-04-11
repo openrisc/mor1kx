@@ -578,6 +578,8 @@ module mor1kx_cpu_espresso
       end
    endfunction
    
+`ifndef SYNTHESIS
+// synthesis translate_off
    task set_gpr;
       // verilator public
       input [4:0] gpr_num;
@@ -587,6 +589,8 @@ module mor1kx_cpu_espresso
 	 mor1kx_rf_espresso.rfb.ram[gpr_num] = gpr_value;
       end
    endtask
+// synthesis translate_on
+`endif
 
    /* mor1kx_ctrl_espresso AUTO_TEMPLATE (   
     .ctrl_alu_result_i		(alu_result_o),

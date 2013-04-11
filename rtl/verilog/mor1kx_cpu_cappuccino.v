@@ -695,6 +695,8 @@ module mor1kx_cpu_cappuccino
       .pipeline_flush_i			(pipeline_flush_o));	 // Templated
 
 
+`ifndef SYNTHESIS
+// synthesis translate_off
    /* Debug signals required for the debug monitor */
    function [OPTION_OPERAND_WIDTH-1:0] get_gpr;
       // verilator public
@@ -725,6 +727,8 @@ module mor1kx_cpu_cappuccino
 	 mor1kx_rf_cappuccino.rfb.ram[gpr_num] = gpr_value;
       end
    endtask
+// synthesis translate_on
+`endif
 
 
    /* mor1kx_execute_ctrl_cappuccino AUTO_TEMPLATE (
