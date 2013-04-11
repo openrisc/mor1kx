@@ -835,7 +835,7 @@ module mor1kx_ctrl_cappuccino
        default: begin
 	  /* GPR read */
 	  if (spr_addr >= `OR1K_SPR_GPR0_ADDR &&
-	      spr_addr <= (`OR1K_SPR_GPR0_ADDR + 32))
+	      spr_addr < (`OR1K_SPR_GPR0_ADDR + 32))
 	    spr_sys_group_read = b; /* Register file */
 	  else
 	    /* Invalid address - read as zero*/
