@@ -238,7 +238,6 @@ module mor1kx_ctrl_cappuccino
    wire 			     exception, exception_pending;
 
    reg 				     ctrl_stage_exceptions;
-   wire 			     decode_stage_exceptions;
 
    wire 			     exception_re;
 
@@ -320,8 +319,6 @@ module mor1kx_ctrl_cappuccino
 
    assign exception = exception_pending &
 		      (padv_ctrl & !ctrl_bubble | ctrl_stage_exceptions);
-
-   assign decode_stage_exceptions = except_trap_i | except_illegal_i;
 
    assign exception_re = exception & !exception_r & !exception_taken;
 
