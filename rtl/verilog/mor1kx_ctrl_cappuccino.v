@@ -503,8 +503,6 @@ module mor1kx_ctrl_cappuccino
        last_branch_target_pc <= 0;
      else if (padv_execute_o & ctrl_branch_occur_i)
        last_branch_target_pc <= ctrl_branch_target_i;
-     else if (padv_execute_o & execute_branch_insn)
-       last_branch_target_pc <= pc_execute_i + 8; // TODO: use pc_fetch_i
 
    // Used to gate execute stage's advance signal in the case where a LSU op has
    // finished before the next instruction has been fetched. Typically this
