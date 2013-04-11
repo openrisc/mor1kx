@@ -1059,9 +1059,7 @@ module mor1kx_ctrl_cappuccino
 
 	 /* goes out to the debug interface and comes back 1 cycle later
 	  via du_stall_i */
-	 assign du_stall_o = /* execute stage */
-			     (stepping & pstep[4]/*(padv_ctrl |
-					  ctrl_stage_exceptions)*/);
+	 assign du_stall_o = stepping & pstep[4];
 
 	 /* Pulse to indicate we're restarting after a stall */
 	 assign du_restart_from_stall = du_stall_r & !du_stall_i;
