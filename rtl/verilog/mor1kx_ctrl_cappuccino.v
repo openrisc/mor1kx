@@ -89,8 +89,8 @@ module mor1kx_ctrl_cappuccino
     input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i,
 
     // Indicate if branch will be taken based on instruction currently in
-    // execute stage. Combinatorially generated, uses signals from both
-    // execute and ctrl stage.
+    // decode stage. Combinatorially generated, uses signals from both
+    // decode and ctrl stage.
     input 			      ctrl_branch_occur_i,
     input [OPTION_OPERAND_WIDTH-1:0]  ctrl_branch_target_i,
 
