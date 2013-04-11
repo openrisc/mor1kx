@@ -662,9 +662,7 @@ module mor1kx_ctrl_cappuccino
 	  if (except_ibus_err_i)
 	    spr_epcr <= last_branch_insn_pc;
 	  else if (except_syscall_i)
-	    spr_epcr <= ctrl_delay_slot ? last_branch_target_pc :
-			execute_delay_slot ? pc_ctrl_i :
-			pc_ctrl_i + 4;
+	    spr_epcr <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i + 4;
 	  else
 	    spr_epcr <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i;
        end
