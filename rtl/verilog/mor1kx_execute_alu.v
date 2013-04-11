@@ -106,7 +106,8 @@ module mor1kx_execute_alu
    wire                                   carry_in;
 
    wire                                   a_eq_b;
-   wire                                   a_lt_b;
+   wire                                   a_lts_b;
+   wire                                   a_ltu_b;
    wire                                   adder_do_sub;
    wire 				  adder_do_carry_in;
 
@@ -530,12 +531,12 @@ module mor1kx_execute_alu
       end
    endgenerate
 
-   // Adder result is zero if equal
+   // Xor result is zero if equal
    assign a_eq_b = !(|xor_result);
-   assign a_lt_b = opc_alu_secondary_i[3] ? // Signed compare
-		   !(adder_result_sign == adder_signed_overflow) :
-                   // Unsigned compare
-                   !adder_carryout;
+   // Signed compare
+   assign a_lts_b = !(adder_result_sign == adder_signed_overflow);
+   // Unsigned compare
+   assign a_ltu_b = !adder_carryout;
 
    assign shift_op = (opc_alu_i == `OR1K_ALU_OPC_SHRT ||
                       opc_insn_i == `OR1K_OPCODE_SHRTI) ;
@@ -657,18 +658,22 @@ module mor1kx_execute_alu
          flag_set = a_eq_b;
        `OR1K_COMP_OPC_NE:
          flag_set = !a_eq_b;
-       `OR1K_COMP_OPC_GTU,
-         `OR1K_COMP_OPC_GTS:
-           flag_set = !(a_eq_b | a_lt_b);
-       `OR1K_COMP_OPC_GEU,
-         `OR1K_COMP_OPC_GES:
-           flag_set = !a_lt_b;
-       `OR1K_COMP_OPC_LTU,
-         `OR1K_COMP_OPC_LTS:
-           flag_set = a_lt_b;
-       `OR1K_COMP_OPC_LEU,
-         `OR1K_COMP_OPC_LES:
-           flag_set = a_eq_b | a_lt_b;
+       `OR1K_COMP_OPC_GTU:
+         flag_set = !(a_eq_b | a_ltu_b);
+       `OR1K_COMP_OPC_GTS:
+         flag_set = !(a_eq_b | a_lts_b);
+       `OR1K_COMP_OPC_GEU:
+         flag_set = !a_ltu_b;
+       `OR1K_COMP_OPC_GES:
+         flag_set = !a_lts_b;
+       `OR1K_COMP_OPC_LTU:
+         flag_set = a_ltu_b;
+       `OR1K_COMP_OPC_LTS:
+         flag_set = a_lts_b;
+       `OR1K_COMP_OPC_LEU:
+         flag_set = a_eq_b | a_ltu_b;
+       `OR1K_COMP_OPC_LES:
+         flag_set = a_eq_b | a_lts_b;
        default:
          flag_set = 0;
      endcase // case (opc_alu_secondary_i)
