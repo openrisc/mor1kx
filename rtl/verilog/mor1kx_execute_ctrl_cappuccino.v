@@ -274,14 +274,17 @@ module mor1kx_execute_ctrl_cappuccino
      end else if (padv_i) begin
 	ctrl_rf_wb_o <= execute_rf_wb_i;
 	ctrl_rfd_adr_o <= execute_rfd_adr_i;
+     end else if (ctrl_op_mfspr_o & ctrl_mfspr_we_i |
+		  ctrl_op_lsu_load_o & lsu_valid_i) begin
+	// Deassert the write enable when the "bus" access is done, to avoid:
+	// 1) Writing multiple times to RF
+	// 2) Signaling a need to bypass from control stage, when it really
+	//    should be a bypass from wb stage.
+	ctrl_rf_wb_o <= 0;
      end else if (pipeline_flush_i & !du_stall_i) begin
 	ctrl_rf_wb_o <= 0;
 	ctrl_rfd_adr_o <= 0;
      end
-
-   reg ctrl_mfspr_we_r;
-   always @(posedge clk)
-     ctrl_mfspr_we_r <= ctrl_mfspr_we_i;
 
    // load and mfpsr can stall from ctrl stage, so we have to hold off the
    // write back on them
@@ -290,10 +293,13 @@ module mor1kx_execute_ctrl_cappuccino
 	wb_rf_wb_o <= 0;
 	wb_rfd_adr_o <= 0;
      end else if (ctrl_op_mfspr_o) begin
-	wb_rf_wb_o <= ctrl_mfspr_we_i & (padv_ctrl_i | !ctrl_mfspr_we_r);
+	wb_rf_wb_o <= ctrl_rf_wb_o & ctrl_mfspr_we_i;
 	wb_rfd_adr_o <= ctrl_rfd_adr_o;
-     end else if (!ctrl_op_lsu_load_o | lsu_valid_i) begin
-	wb_rf_wb_o <= ctrl_rf_wb_o & (padv_ctrl_i | lsu_valid_i);
+     end else if (ctrl_op_lsu_load_o) begin
+	wb_rf_wb_o <= ctrl_rf_wb_o & lsu_valid_i;
+	wb_rfd_adr_o <= ctrl_rfd_adr_o;
+     end else begin
+	wb_rf_wb_o <= ctrl_rf_wb_o & padv_ctrl_i;
 	wb_rfd_adr_o <= ctrl_rfd_adr_o;
      end
 
