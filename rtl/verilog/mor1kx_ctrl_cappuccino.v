@@ -885,12 +885,7 @@ module mor1kx_ctrl_cappuccino
 
 
 	 assign except_pic = (|spr_picsr) & spr_sr[`OR1K_SPR_SR_IEE] &
-			     !op_mtspr & !doing_rfe &
-			     // Stops back-to-back branch addresses going to
-			     // fetch stage
-			     !execute_branch_insn &
-			     // Stops issues with PC when branching
-			     !execute_delay_slot;
+			     !op_mtspr & !doing_rfe;
       end
       else begin
 	 assign except_pic = 0;
@@ -930,12 +925,7 @@ module mor1kx_ctrl_cappuccino
 			  .spr_dat_i		(spr_write_dat)); // Templated
 
 	 assign except_ticktimer = spr_ttmr[28] & spr_sr[`OR1K_SPR_SR_TEE] &
-				   !op_mtspr & !doing_rfe &
-				   // Stops back-to-back branch addresses to
-				   // fetch  stage.
-				   !execute_branch_insn &
-				   // Stops issues with PC when branching
-				   !execute_delay_slot;
+				   !op_mtspr & !doing_rfe;
 
       end // if (FEATURE_TIMER!="NONE")
       else begin
