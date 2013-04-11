@@ -573,7 +573,7 @@ module mor1kx_ctrl_cappuccino
 	       spr_sr[`OR1K_SPR_SR_SM  ] <= spr_write_dat[`OR1K_SPR_SR_SM  ];
 
 	       spr_sr[`OR1K_SPR_SR_F  ] <= spr_write_dat[`OR1K_SPR_SR_F  ];
-	       
+
 	       if (FEATURE_TIMER!="NONE")
 		 spr_sr[`OR1K_SPR_SR_TEE ] <= spr_write_dat[`OR1K_SPR_SR_TEE ];
 
