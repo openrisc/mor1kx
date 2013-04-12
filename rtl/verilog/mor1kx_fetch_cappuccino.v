@@ -104,7 +104,6 @@ module mor1kx_fetch_cappuccino
    wire 				  branch_occur_edge;
    wire 				  branch_except_occur_edge;
    wire					  stall_fetch_valid;
-   wire					  stall_adv;
    wire 				  addr_valid;
    reg 					  flush;
    wire					  flushing;
@@ -148,10 +147,7 @@ module mor1kx_fetch_cappuccino
    /* used to keep fetch_valid_o high during stall */
    assign stall_fetch_valid = !padv_i & fetch_valid_o;
 
-   /* signal to determine if we should advance during a stall */
-   assign stall_adv = !padv_i & bus_access_done & !fetch_valid_o;
-
-   assign addr_valid = (bus_access_done & padv_i | stall_adv) &
+   assign addr_valid = bus_access_done & padv_i &
 		       !(except_itlb_miss | except_ipagefault) |
 		       decode_except_itlb_miss_o & branch_except_occur_i |
 		       decode_except_ipagefault_o & branch_except_occur_i |
@@ -163,13 +159,13 @@ module mor1kx_fetch_cappuccino
 			      !doing_rfe_i;
 
    assign fetch_rfb_adr_o = imem_dat[`OR1K_RB_SELECT];
-   assign fetch_rf_adr_valid_o = imem_ack & padv_i | stall_adv;
+   assign fetch_rf_adr_valid_o = imem_ack & padv_i;
 
    // Signal to indicate that the ongoing bus access should be flushed
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        flush <= 0;
-     else if (bus_access_done & padv_i | fetch_valid_o & !padv_i)
+     else if (bus_access_done & padv_i)
        flush <= 0;
      else if (pipeline_flush_i)
        flush <= 1;
@@ -212,8 +208,7 @@ module mor1kx_fetch_cappuccino
        fetch_exception_taken_o <= 1'b0;
      else if (fetch_exception_taken_o)
        fetch_exception_taken_o <= 1'b0;
-     else if ((branch_except_occur_i) & (bus_access_done & padv_i |
-					 fetch_valid_o & !padv_i))
+     else if (branch_except_occur_i & bus_access_done & padv_i)
        fetch_exception_taken_o <= 1'b1;
      else
        fetch_exception_taken_o <= 1'b0;
@@ -224,7 +219,7 @@ module mor1kx_fetch_cappuccino
        fetch_valid_o <= 1'b0;
      else if (pipeline_flush_i)
        fetch_valid_o <= 1'b0;
-     else if (bus_access_done | stall_fetch_valid |
+     else if (bus_access_done & padv_i | stall_fetch_valid |
 	      (except_itlb_miss | except_ipagefault) & !branch_except_occur_i)
        fetch_valid_o <= 1'b1;
      else
@@ -236,14 +231,14 @@ module mor1kx_fetch_cappuccino
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
      else if (imem_err | except_ipagefault | except_itlb_miss | flushing)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
-     else if (imem_ack & padv_i | stall_adv)
+     else if (imem_ack & padv_i)
        decode_insn_o <= imem_dat;
 
    // Register PC for later stages
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        pc_decode_o <= OPTION_RESET_PC;
-     else if (bus_access_done & padv_i | stall_adv |
+     else if (bus_access_done & padv_i |
 	      (except_itlb_miss | except_ipagefault) & !branch_except_occur_i)
        pc_decode_o <= pc_fetch;
 
