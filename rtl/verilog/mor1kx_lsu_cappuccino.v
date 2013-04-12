@@ -347,6 +347,15 @@ module mor1kx_lsu_cappuccino
    assign dbus_dat_o = dbus_access ? dbus_sdat : dc_dbus_sdat;
    assign dbus_burst_o = dc_refill & !dc_refill_done;
 
+`ifndef SYNTHESIS
+   /* synthesis translate_off */
+   always @(posedge clk)
+     if (dc_enable_i & !dbus_req & !dc_enable_r)
+       $display("mor1kx dcache enabled at %t", $time);
+
+   /* synthesis translate_on */
+`endif
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        dc_enable_r <= 0;
