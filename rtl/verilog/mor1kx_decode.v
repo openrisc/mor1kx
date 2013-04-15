@@ -349,17 +349,7 @@ if (PIPELINE_BUBBLE=="ENABLED") begin : pipeline_bubble
 			     op_jr &
 			     (ctrl_to_decode_interlock |
 			      (decode_rfb_adr_o == execute_rfd_adr_o)) |
-			     op_rfe |
-			     // FIXME: ugly hack to prevent branches
-			     // in exe stage from being stalled by
-			     // load/stores in ctrl/mem stage.
-			     // This is needed since fetch et al
-			     // assumes that branches are stall-free
-			     // operations, so some lecturing to
-			     // teach them that that's not the case
-			     // is needed.
-			     (op_lsu_load_o | op_lsu_store_o) &
-			     (op_jbr | op_jr | op_jal)) & padv_i;
+			     op_rfe) & padv_i;
 
 end else begin
    assign decode_bubble_o = 0;
