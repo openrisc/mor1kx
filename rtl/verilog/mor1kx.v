@@ -93,7 +93,7 @@ module mor1kx
 
    parameter BUS_IF_TYPE		= "WISHBONE32";
 
-   parameter IBUS_WB_TYPE		= "B3_READ_BURST";
+   parameter IBUS_WB_TYPE		= "B3_READ_BURSTING";
    parameter DBUS_WB_TYPE		= "CLASSIC";
 
    input clk, rst;
