@@ -219,8 +219,7 @@ module mor1kx_fetch_cappuccino
        fetch_valid_o <= 1'b0;
      else if (pipeline_flush_i)
        fetch_valid_o <= 1'b0;
-     else if (bus_access_done & padv_i | stall_fetch_valid |
-	      (except_itlb_miss | except_ipagefault) & !branch_except_occur_i)
+     else if (bus_access_done & padv_i | stall_fetch_valid)
        fetch_valid_o <= 1'b1;
      else
        fetch_valid_o <= 1'b0;
@@ -229,17 +228,16 @@ module mor1kx_fetch_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
-     else if (imem_err | except_ipagefault | except_itlb_miss | flushing)
+     else if (imem_err | flushing)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
-     else if (imem_ack & padv_i)
+     else if (bus_access_done & padv_i)
        decode_insn_o <= imem_dat;
 
    // Register PC for later stages
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        pc_decode_o <= OPTION_RESET_PC;
-     else if (bus_access_done & padv_i |
-	      (except_itlb_miss | except_ipagefault) & !branch_except_occur_i)
+     else if (bus_access_done & padv_i)
        pc_decode_o <= pc_fetch;
 
    always @(posedge clk `OR_ASYNC_RST)
