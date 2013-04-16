@@ -165,7 +165,7 @@ module mor1kx_fetch_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        flush <= 0;
-     else if (bus_access_done & padv_i)
+     else if (bus_access_done & padv_i | du_restart_i)
        flush <= 0;
      else if (pipeline_flush_i)
        flush <= 1;
