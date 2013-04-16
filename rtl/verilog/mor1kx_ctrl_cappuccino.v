@@ -1127,7 +1127,10 @@ module mor1kx_ctrl_cappuccino
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
 	     branch_step <= 0;
+	   else if (du_npc_written)
+	     branch_step <= 0;
 	   else if (stepping & pstep[2])
+	     // Should this really include exceptions?
 	     branch_step <= {branch_step[0], ctrl_branch_occur_i};
 	   else if (!stepping & padv_ctrl)
 	     branch_step <= {branch_step[0], execute_delay_slot};
