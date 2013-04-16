@@ -633,10 +633,8 @@ module mor1kx_cpu_cappuccino
     .execute_rf_wb_i			(rf_wb_o),
     .ctrl_rf_wb_i			(ctrl_rf_wb_o),
     .wb_rf_wb_i				(wb_rf_wb_o),
-    .execute_op_jal_i			(op_jal_o),
     .result_i				(rf_result_o),
     .ctrl_alu_result_i			(ctrl_alu_result_o),
-    .execute_jal_result_i		(execute_jal_result_o),
     .pipeline_flush_i			(pipeline_flush_o),
     ); */
    mor1kx_rf_cappuccino
@@ -668,10 +666,8 @@ module mor1kx_cpu_cappuccino
       .execute_rf_wb_i			(rf_wb_o),		 // Templated
       .ctrl_rf_wb_i			(ctrl_rf_wb_o),		 // Templated
       .wb_rf_wb_i			(wb_rf_wb_o),		 // Templated
-      .execute_op_jal_i			(op_jal_o),		 // Templated
       .result_i				(rf_result_o),		 // Templated
       .ctrl_alu_result_i		(ctrl_alu_result_o),	 // Templated
-      .execute_jal_result_i		(execute_jal_result_o),	 // Templated
       .pipeline_flush_i			(pipeline_flush_o));	 // Templated
 
 

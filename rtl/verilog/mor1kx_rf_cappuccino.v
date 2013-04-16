@@ -52,11 +52,8 @@ module mor1kx_rf_cappuccino
     input 			      ctrl_rf_wb_i,
     input 			      wb_rf_wb_i,
 
-    input 			      execute_op_jal_i,
-
     input [OPTION_OPERAND_WIDTH-1:0]  result_i,
     input [OPTION_OPERAND_WIDTH-1:0]  ctrl_alu_result_i,
-    input [OPTION_OPERAND_WIDTH-1:0]  execute_jal_result_i,
 
     input 			      pipeline_flush_i,
 
@@ -169,13 +166,6 @@ module mor1kx_rf_cappuccino
 	end
      end
 
-   // This bypass can probably be omitted.
-   // For this to happen, a 'l.jr r9' has to be in a delay slot of a 'l.jal(r)'.
-   // (Remember, only 'l.jal(r)' produces a register result in decode stage)
-   wire decode_to_decode_bypass_b;
-   assign decode_to_decode_bypass_b = execute_op_jal_i &
-				      (decode_rfb_adr_i == 9);
-
    wire execute_to_decode_bypass_b;
    assign execute_to_decode_bypass_b = ctrl_rf_wb_i &
 				       (ctrl_rfd_adr_i == decode_rfb_adr_i);
@@ -188,8 +178,7 @@ module mor1kx_rf_cappuccino
    assign ctrl_to_decode_result = use_last_wb_b ?
 				  wb_to_decode_result : result_i;
 
-   assign decode_rfb_o = decode_to_decode_bypass_b ? execute_jal_result_i :
-			 execute_to_decode_bypass_b ? ctrl_alu_result_i :
+   assign decode_rfb_o = execute_to_decode_bypass_b ? ctrl_alu_result_i :
 			 ctrl_to_decode_bypass_b ? ctrl_to_decode_result :
 			 wb_to_decode_bypass_b ? wb_to_decode_result :
 			 rfb_ram_o;
