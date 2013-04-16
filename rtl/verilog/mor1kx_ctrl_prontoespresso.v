@@ -1429,11 +1429,12 @@ module mor1kx_ctrl_prontoespresso
 		   just_branched = 0;
 	       endcase // case (`EXECUTE_STAGE_INSN[`OR1K_OPCODE_POS])
 	       
-	    end
+	    end // if (execute_done & !stepping)
+	    else if (du_npc_write)
+	      just_branched = 1;
 	 end // always @ (posedge `CPU_clk)
       end
    endgenerate
    // synthesis translate_on
    
 endmodule // mor1kx_ctrl
- 
