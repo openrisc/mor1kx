@@ -106,8 +106,6 @@ module mor1kx_execute_ctrl_cappuccino
 
     output reg 				  ctrl_op_mfspr_o,
 
-    output reg 				  ctrl_op_jal_o,
-
     output reg 				  ctrl_except_ibus_err_o,
     output reg 				  ctrl_except_itlb_miss_o,
     output reg 				  ctrl_except_ipagefault_o,
@@ -240,16 +238,12 @@ module mor1kx_execute_ctrl_cappuccino
        ctrl_opc_insn_o <= `OR1K_OPCODE_NOP;
 
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	ctrl_op_mfspr_o <= 0;
-	ctrl_op_jal_o <= 0;
-    end else if (padv_i) begin
-	ctrl_op_mfspr_o <= op_mfspr_i;
-	ctrl_op_jal_o <= op_jal_i;
-    end else if (pipeline_flush_i & !du_stall_i) begin
-	ctrl_op_mfspr_o <= 0;
-	ctrl_op_jal_o <= 0;
-    end
+     if (rst)
+       ctrl_op_mfspr_o <= 0;
+     else if (padv_i)
+       ctrl_op_mfspr_o <= op_mfspr_i;
+     else if (pipeline_flush_i & !du_stall_i)
+       ctrl_op_mfspr_o <= 0;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin

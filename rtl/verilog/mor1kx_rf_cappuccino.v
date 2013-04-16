@@ -53,7 +53,6 @@ module mor1kx_rf_cappuccino
     input 			      wb_rf_wb_i,
 
     input 			      execute_op_jal_i,
-    input 			      ctrl_op_jal_i,
 
     input [OPTION_OPERAND_WIDTH-1:0]  result_i,
     input [OPTION_OPERAND_WIDTH-1:0]  ctrl_alu_result_i,
