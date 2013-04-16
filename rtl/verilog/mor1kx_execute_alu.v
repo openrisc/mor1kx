@@ -702,13 +702,11 @@ endgenerate
      case(opc_insn_i)
        `OR1K_OPCODE_ALU:
          case(opc_alu_i)
-/*
            `OR1K_ALU_OPC_ADDC,
            `OR1K_ALU_OPC_ADD:
              alu_result = adder_result;
            `OR1K_ALU_OPC_SUB:
              alu_result = adder_result;
-*/
            `OR1K_ALU_OPC_AND:
              alu_result = and_result;
            `OR1K_ALU_OPC_OR:
@@ -766,8 +764,7 @@ endgenerate
          `OR1K_OPCODE_JALR:
            alu_result = adder_result;
        default:
-         // Default out is b - for jump reg instructions
-         alu_result = b;
+         alu_result = adder_result;
        endcase // case (opc_insn_i)
 
    assign alu_result_valid = 1'b1; // ALU (adder, logic ops) always ready
