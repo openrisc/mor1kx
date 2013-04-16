@@ -127,18 +127,18 @@ module mor1kx_rf_cappuccino
 
    reg wb_hazard_a;
    reg wb_hazard_b;
-   always @(posedge clk)
-     if (padv_decode_i) begin
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst) begin
+	wb_hazard_a <= 0;
+	wb_hazard_b <= 0;
+     end else if (padv_decode_i) begin
 	wb_hazard_a <= wb_rf_wb_i & (wb_rfd_adr_i == decode_rfa_adr_i);
 	wb_hazard_b <= wb_rf_wb_i & (wb_rfd_adr_i == decode_rfb_adr_i);
      end
 
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       wb_hazard_result <= 0;
-     else if (padv_decode_i)
+   always @(posedge clk)
+     if (padv_decode_i)
        wb_hazard_result <= result_i;
-
 
    // Bypassing to decode stage
    //
