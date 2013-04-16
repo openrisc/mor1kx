@@ -472,7 +472,8 @@ module mor1kx_cpu_cappuccino
        .FEATURE_CUST6(FEATURE_CUST6),
        .FEATURE_CUST7(FEATURE_CUST7),
        .FEATURE_CUST8(FEATURE_CUST8),
-       .OPTION_SHIFTER(OPTION_SHIFTER)
+       .OPTION_SHIFTER(OPTION_SHIFTER),
+       .CALCULATE_BRANCH_DEST("FALSE")
        )
      mor1kx_execute_alu
      (/*AUTOINST*/
