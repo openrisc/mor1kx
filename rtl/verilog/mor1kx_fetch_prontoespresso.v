@@ -317,9 +317,9 @@ module mor1kx_fetch_prontoespresso
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        sleep <= 1'b0;
-     else if (fetch_take_exception_branch_i)
+     else if (fetch_take_exception_branch_i | du_stall_i)
        sleep <= 1'b0;
-     else if (will_go_to_sleep)
+     else if (will_go_to_sleep & !stepping_i)
        sleep <= 1'b1;
    
 endmodule // mor1kx_fetch_prontoespresso
