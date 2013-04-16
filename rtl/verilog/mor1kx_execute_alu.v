@@ -40,7 +40,10 @@ module mor1kx_execute_alu
     parameter FEATURE_CUST7 = "NONE",
     parameter FEATURE_CUST8 = "NONE",
 
-    parameter OPTION_SHIFTER = "BARREL"
+    parameter OPTION_SHIFTER = "BARREL",
+
+    // Pipeline specific internal parameters
+    parameter CALCULATE_BRANCH_DEST = "TRUE"
     )
    (
     input 			      clk,
@@ -163,12 +166,22 @@ module mor1kx_execute_alu
                                (opc_insn_i==`OR1K_OPCODE_ANDI))) |
                              (opc_insn_i==`OR1K_OPCODE_MTSPR);
 
+generate
+if (CALCULATE_BRANCH_DEST=="TRUE") begin : calculate_branch_dest
    assign a = (op_jbr_i | op_jr_i) ? pc_execute_i : rfa_i;
    assign b = operandb_sext_imm ? {{16{imm16_i[15]}},imm16_i[15:0]} :
               operandb_zext_imm ? {{16{1'b0}},imm16_i[15:0]} :
               (opc_insn_i==`OR1K_OPCODE_MOVHI) ? {imm16_i,16'd0} :
               op_jbr_i ? {{4{immjbr_upper_i[9]}},immjbr_upper_i,imm16_i,2'b00} :
-              rfb_i ;
+              rfb_i;
+end else begin
+   assign a = rfa_i;
+   assign b = operandb_sext_imm ? {{16{imm16_i[15]}},imm16_i[15:0]} :
+              operandb_zext_imm ? {{16{1'b0}},imm16_i[15:0]} :
+              (opc_insn_i==`OR1K_OPCODE_MOVHI) ? {imm16_i,16'd0} :
+              rfb_i;
+end
+endgenerate
 
    assign comp_op = opc_insn_i==`OR1K_OPCODE_SF ||
                     opc_insn_i==`OR1K_OPCODE_SFIMM;
