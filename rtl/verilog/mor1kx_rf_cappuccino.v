@@ -143,26 +143,32 @@ module mor1kx_rf_cappuccino
      else if (padv_decode_i)
        wb_hazard_result <= result_i;
 
-   // Since the decode stage doesn't read from the register file, we have to
-   // save any writes to the current read addresses in decode stage until
-   // fetch latch in new values.
-   reg 				  use_last_wb_b;
-   reg [OPTION_OPERAND_WIDTH-1:0] last_wb_result_b;
-   always @(posedge clk)
-     if (fetch_rf_adr_valid_i) begin
-	use_last_wb_b <= 0;
-     end else if (wb_rf_wb_i) begin
-	if (decode_rfb_adr_i == wb_rfd_adr_i) begin
-	   last_wb_result_b <= result_i;
-	   use_last_wb_b <= 1;
-	end
-     end
 
    // Bypassing to decode stage
    //
    // Bypassing is only done to port B, since the only instructions
    // that need register output in decode stage is the jump to register
    // instructions, which all use port B as its input.
+
+   // Since the decode stage doesn't read from the register file, we have to
+   // save any writes to the current read addresses in decode stage until
+   // fetch latch in new values.
+   // When fetch latch in the new values, and a writeback happens at the
+   // same time, we bypass that value too.
+   reg 				  use_last_wb_b;
+   reg 				  wb_to_decode_bypass_b;
+   reg [OPTION_OPERAND_WIDTH-1:0] wb_to_decode_result;
+   always @(posedge clk)
+     if (fetch_rf_adr_valid_i) begin
+	wb_to_decode_result <= result_i;
+	wb_to_decode_bypass_b <= wb_rf_wb_i & (wb_rfd_adr_i == fetch_rfb_adr_i);
+	use_last_wb_b <= 0;
+     end else if (wb_rf_wb_i) begin
+	if (decode_rfb_adr_i == wb_rfd_adr_i) begin
+	   wb_to_decode_result <= result_i;
+	   use_last_wb_b <= 1;
+	end
+     end
 
    // This bypass can probably be omitted.
    // For this to happen, a 'l.jr r9' has to be in a delay slot of a 'l.jal(r)'.
@@ -180,21 +186,8 @@ module mor1kx_rf_cappuccino
 				    (wb_rfd_adr_i == decode_rfb_adr_i);
 
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_to_decode_result;
-   assign ctrl_to_decode_result = use_last_wb_b ? last_wb_result_b : result_i;
-
-   // TODO: Can this be combined with 'use_last_wb_b' to save a 32 bit register?
-   reg wb_to_decode_bypass_b;
-   always @(posedge clk)
-     if (fetch_rf_adr_valid_i) begin
-	wb_to_decode_bypass_b <= wb_rf_wb_i & (wb_rfd_adr_i == fetch_rfb_adr_i);
-     end
-
-   reg [OPTION_OPERAND_WIDTH-1:0] wb_to_decode_result;
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       wb_to_decode_result <= 0;
-     else if (fetch_rf_adr_valid_i)
-       wb_to_decode_result <= result_i;
+   assign ctrl_to_decode_result = use_last_wb_b ?
+				  wb_to_decode_result : result_i;
 
    assign decode_rfb_o = decode_to_decode_bypass_b ? execute_jal_result_i :
 			 execute_to_decode_bypass_b ? ctrl_alu_result_i :
