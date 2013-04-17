@@ -552,6 +552,46 @@ module mor1kx_ctrl_cappuccino
 	  if (FEATURE_OVERFLOW!="NONE")
 	    spr_sr[`OR1K_SPR_SR_OVE ] <= 1'b0;
        end
+     else if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] & padv_ctrl | du_access)) &&
+	      spr_addr==`OR1K_SPR_SR_ADDR)
+       begin
+	  spr_sr[`OR1K_SPR_SR_SM  ] <= spr_write_dat[`OR1K_SPR_SR_SM  ];
+
+	  spr_sr[`OR1K_SPR_SR_F  ] <= spr_write_dat[`OR1K_SPR_SR_F  ];
+
+	  if (FEATURE_TIMER!="NONE")
+	    spr_sr[`OR1K_SPR_SR_TEE ] <= spr_write_dat[`OR1K_SPR_SR_TEE ];
+
+	  if (FEATURE_PIC!="NONE")
+	    spr_sr[`OR1K_SPR_SR_IEE ] <= spr_write_dat[`OR1K_SPR_SR_IEE ];
+
+	  if (FEATURE_DATACACHE!="NONE")
+	    spr_sr[`OR1K_SPR_SR_DCE ] <= spr_write_dat[`OR1K_SPR_SR_DCE ];
+
+	  if (FEATURE_INSTRUCTIONCACHE!="NONE")
+	    spr_sr[`OR1K_SPR_SR_ICE ] <= spr_write_dat[`OR1K_SPR_SR_ICE ];
+
+	  if (FEATURE_DMMU!="NONE")
+	    spr_sr[`OR1K_SPR_SR_DME ] <= spr_write_dat[`OR1K_SPR_SR_DME ];
+
+	  if (FEATURE_IMMU!="NONE")
+	    spr_sr[`OR1K_SPR_SR_IME ] <= spr_write_dat[`OR1K_SPR_SR_IME ];
+
+	  if (FEATURE_FASTCONTEXTS!="NONE")
+	    spr_sr[`OR1K_SPR_SR_CE  ] <= spr_write_dat[`OR1K_SPR_SR_CE  ];
+
+	  spr_sr[`OR1K_SPR_SR_CY  ] <= spr_write_dat[`OR1K_SPR_SR_CY  ];
+
+	  if (FEATURE_OVERFLOW!="NONE") begin
+	     spr_sr[`OR1K_SPR_SR_OV  ] <= spr_write_dat[`OR1K_SPR_SR_OV  ];
+	     spr_sr[`OR1K_SPR_SR_OVE ] <= spr_write_dat[`OR1K_SPR_SR_OVE ];
+	  end
+
+	  if (FEATURE_DSX!="NONE")
+	    spr_sr[`OR1K_SPR_SR_DSX ] <= spr_write_dat[`OR1K_SPR_SR_DSX ];
+
+	  spr_sr[`OR1K_SPR_SR_EPH ] <= spr_write_dat[`OR1K_SPR_SR_EPH ];
+       end
      else if (padv_ctrl)
        begin
 	  spr_sr[`OR1K_SPR_SR_F   ] <= ctrl_flag_set_i ? 1 :
@@ -564,51 +604,10 @@ module mor1kx_ctrl_cappuccino
 	    spr_sr[`OR1K_SPR_SR_OV   ] <= ctrl_overflow_set_i ? 1 :
 				ctrl_overflow_clear_i ? 0 :
 				spr_sr[`OR1K_SPR_SR_OV   ];
-
-	  if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) &&
-	      spr_addr==`OR1K_SPR_SR_ADDR)
-	    begin
-	       spr_sr[`OR1K_SPR_SR_SM  ] <= spr_write_dat[`OR1K_SPR_SR_SM  ];
-
-	       spr_sr[`OR1K_SPR_SR_F  ] <= spr_write_dat[`OR1K_SPR_SR_F  ];
-
-	       if (FEATURE_TIMER!="NONE")
-		 spr_sr[`OR1K_SPR_SR_TEE ] <= spr_write_dat[`OR1K_SPR_SR_TEE ];
-
-	       if (FEATURE_PIC!="NONE")
-		 spr_sr[`OR1K_SPR_SR_IEE ] <= spr_write_dat[`OR1K_SPR_SR_IEE ];
-
-	       if (FEATURE_DATACACHE!="NONE")
-		 spr_sr[`OR1K_SPR_SR_DCE ] <= spr_write_dat[`OR1K_SPR_SR_DCE ];
-
-	       if (FEATURE_INSTRUCTIONCACHE!="NONE")
-		 spr_sr[`OR1K_SPR_SR_ICE ] <= spr_write_dat[`OR1K_SPR_SR_ICE ];
-
-	       if (FEATURE_DMMU!="NONE")
-		 spr_sr[`OR1K_SPR_SR_DME ] <= spr_write_dat[`OR1K_SPR_SR_DME ];
-
-	       if (FEATURE_IMMU!="NONE")
-		 spr_sr[`OR1K_SPR_SR_IME ] <= spr_write_dat[`OR1K_SPR_SR_IME ];
-
-	       if (FEATURE_FASTCONTEXTS!="NONE")
-		 spr_sr[`OR1K_SPR_SR_CE  ] <= spr_write_dat[`OR1K_SPR_SR_CE  ];
-
-	       spr_sr[`OR1K_SPR_SR_CY  ] <= spr_write_dat[`OR1K_SPR_SR_CY  ];
-
-	       if (FEATURE_OVERFLOW!="NONE") begin
-		  spr_sr[`OR1K_SPR_SR_OV  ] <= spr_write_dat[`OR1K_SPR_SR_OV  ];
-		  spr_sr[`OR1K_SPR_SR_OVE ] <= spr_write_dat[`OR1K_SPR_SR_OVE ];
-	       end
-
-	       if (FEATURE_DSX!="NONE")
-		 spr_sr[`OR1K_SPR_SR_DSX ] <= spr_write_dat[`OR1K_SPR_SR_DSX ];
-
-	       spr_sr[`OR1K_SPR_SR_EPH ] <= spr_write_dat[`OR1K_SPR_SR_EPH ];
-	    end
-	  else if (op_rfe)
+	  if (op_rfe)
 	    spr_sr <= spr_esr;
+       end
 
-       end // if (padv_ctrl)
 
    // Exception SR
    always @(posedge clk `OR_ASYNC_RST)
