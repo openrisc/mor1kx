@@ -211,7 +211,7 @@ module mor1kx_ctrl_cappuccino
    wire [31:0] 			     spr_ttcr;
 
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
-   wire [OPTION_OPERAND_WIDTH-1:0]   spr_npc;
+   reg [OPTION_OPERAND_WIDTH-1:0]    spr_npc;
    reg 				     execute_delay_slot;
    reg 				     ctrl_delay_slot;
 
@@ -273,9 +273,10 @@ module mor1kx_ctrl_cappuccino
    wire [5:0] 			     pstep;
    wire 			     stepping;
    wire 			     stepped_into_delay_slot;
+   reg 				     stepped_into_exception;
+   reg 				     stepped_into_rfe;
    wire 			     du_npc_write;
    reg 				     du_npc_written;
-   reg [OPTION_OPERAND_WIDTH-1:0]    du_spr_npc;
 
    /* Wires for SPR management */
    wire 			     spr_group_present;
@@ -685,8 +686,22 @@ module mor1kx_ctrl_cappuccino
      else if (padv_ctrl)
        spr_ppc <= pc_ctrl_i;
 
-   // assign the NPC for SPR accesses
-   assign spr_npc = du_npc_written ? du_spr_npc : pc_ctrl_i;
+   // Generate the NPC for SPR accesses
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       spr_npc <= OPTION_RESET_PC;
+     else if (du_npc_write)
+       spr_npc <= du_dat_i;
+     else if (du_npc_written)
+       spr_npc <= spr_npc;
+     else if (stepped_into_rfe)
+       spr_npc <= spr_epcr;
+     else if (stepped_into_delay_slot)
+       spr_npc <= last_branch_target_pc;
+     else if (stepped_into_exception)
+       spr_npc <= exception_pc_addr;
+     else
+       spr_npc <= pc_ctrl_i + 4;
 
    // Exception Vector Address
    always @(posedge clk `OR_ASYNC_RST)
@@ -1014,8 +1029,6 @@ module mor1kx_ctrl_cappuccino
 	 reg 				du_stall_r;
 	 reg [5:0] 			pstep_r;
 	 reg [1:0] 			branch_step;
-	 reg 				stepped_into_exception;
-	 reg 				stepped_into_rfe;
 
 	 assign du_access = du_stb_i;
 
@@ -1075,12 +1088,6 @@ module mor1kx_ctrl_cappuccino
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
-	     du_spr_npc <= 0;
-	   else if (du_npc_write)
-	     du_spr_npc <= du_dat_i;
-
-	 always @(posedge clk `OR_ASYNC_RST)
-	   if (rst)
 	     stepped_into_exception <= 0;
 	   else if (du_restart_from_stall)
 	     stepped_into_exception <= 0;
@@ -1095,12 +1102,7 @@ module mor1kx_ctrl_cappuccino
 	   else if (stepping & padv_ctrl)
 	     stepped_into_rfe <= op_rfe;
 
-	 assign du_restart_pc_o = du_npc_written ? du_spr_npc :
-				  stepped_into_rfe ? spr_epcr :
-				  stepped_into_delay_slot ?
-				  last_branch_target_pc :
-				  stepped_into_exception ? exception_pc_addr :
-				  pc_ctrl_i + 4;
+	 assign du_restart_pc_o = spr_npc;
 
 	 assign du_restart_o = du_restart_from_stall;
 
