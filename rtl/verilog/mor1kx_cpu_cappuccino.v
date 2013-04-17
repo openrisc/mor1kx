@@ -155,8 +155,6 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_alu_result_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc_o;// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			ctrl_branch_exception_o;// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			ctrl_branch_occur_o;	// From mor1kx_ctrl_branch_cappuccino of mor1kx_ctrl_branch_cappuccino.v
-   wire [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o;// From mor1kx_ctrl_branch_cappuccino of mor1kx_ctrl_branch_cappuccino.v
    wire			ctrl_carry_clear_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_carry_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			ctrl_carry_set_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
@@ -828,30 +826,6 @@ module mor1kx_cpu_cappuccino
       .execute_rfd_adr_i		(execute_rfd_adr_o),	 // Templated
       .execute_bubble_i			(execute_bubble_o),	 // Templated
       .ctrl_mfspr_we_i			(ctrl_mfspr_we_o));	 // Templated
-
-   /* mor1kx_ctrl_branch_cappuccino AUTO_TEMPLATE (
-    .decode_branch_i			(decode_branch_o),
-    .decode_branch_target_i		(decode_branch_target_o),
-    .ctrl_branch_exception_i		(ctrl_branch_exception_o),
-    .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o),
-    ); */
-   mor1kx_ctrl_branch_cappuccino
-     #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
-       )
-     mor1kx_ctrl_branch_cappuccino
-     (/*AUTOINST*/
-      // Outputs
-      .ctrl_branch_occur_o		(ctrl_branch_occur_o),
-      .ctrl_branch_target_o		(ctrl_branch_target_o[OPTION_OPERAND_WIDTH-1:0]),
-      // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .decode_branch_i			(decode_branch_o),	 // Templated
-      .decode_branch_target_i		(decode_branch_target_o), // Templated
-      .ctrl_branch_exception_i		(ctrl_branch_exception_o), // Templated
-      .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o)); // Templated
-
 
    /* mor1kx_ctrl_cappuccino AUTO_TEMPLATE (
     .ctrl_alu_result_i		(ctrl_alu_result_o),
