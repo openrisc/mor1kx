@@ -89,10 +89,9 @@ module mor1kx_ctrl_cappuccino
     input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i,
 
     // Indicate if branch will be taken based on instruction currently in
-    // decode stage. Combinatorially generated, uses signals from both
-    // decode and ctrl stage.
-    input 			      ctrl_branch_occur_i,
-    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_branch_target_i,
+    // decode stage.
+    input 			      decode_branch_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  decode_branch_target_i,
 
     // PC of execute stage (NPC)
     input [OPTION_OPERAND_WIDTH-1:0]  pc_execute_i,
@@ -499,8 +498,8 @@ module mor1kx_ctrl_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        last_branch_target_pc <= 0;
-     else if (padv_execute_o & ctrl_branch_occur_i)
-       last_branch_target_pc <= ctrl_branch_target_i;
+     else if (padv_execute_o & decode_branch_i)
+       last_branch_target_pc <= decode_branch_target_i;
 
    // Used to gate execute stage's advance signal in the case where a LSU op has
    // finished before the next instruction has been fetched. Typically this
@@ -1131,8 +1130,7 @@ module mor1kx_ctrl_cappuccino
 	   else if (du_npc_written)
 	     branch_step <= 0;
 	   else if (stepping & pstep[2])
-	     // Should this really include exceptions?
-	     branch_step <= {branch_step[0], ctrl_branch_occur_i};
+	     branch_step <= {branch_step[0], decode_branch_i};
 	   else if (!stepping & padv_ctrl)
 	     branch_step <= {branch_step[0], execute_delay_slot};
 

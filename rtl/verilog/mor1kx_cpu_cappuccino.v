@@ -862,8 +862,8 @@ module mor1kx_cpu_cappuccino
     .pc_ctrl_i			(pc_execute_to_ctrl),
     .pc_execute_i		(pc_decode_to_execute),
     .ctrl_opc_insn_i		(ctrl_opc_insn_o),
-    .ctrl_branch_occur_i	(ctrl_branch_occur_o),
-    .ctrl_branch_target_i	(ctrl_branch_target_o),
+    .decode_branch_i		(decode_branch_o),
+    .decode_branch_target_i	(decode_branch_target_o),
     .except_ibus_err_i		(ctrl_except_ibus_err_o),
     .except_itlb_miss_i		(ctrl_except_itlb_miss_o),
     .except_ipagefault_i	(ctrl_except_ipagefault_o),
@@ -953,8 +953,8 @@ module mor1kx_cpu_cappuccino
       .ctrl_flag_clear_i		(ctrl_flag_clear_o),	 // Templated
       .pc_ctrl_i			(pc_execute_to_ctrl),	 // Templated
       .ctrl_opc_insn_i			(ctrl_opc_insn_o),	 // Templated
-      .ctrl_branch_occur_i		(ctrl_branch_occur_o),	 // Templated
-      .ctrl_branch_target_i		(ctrl_branch_target_o),	 // Templated
+      .decode_branch_i			(decode_branch_o),	 // Templated
+      .decode_branch_target_i		(decode_branch_target_o), // Templated
       .pc_execute_i			(pc_decode_to_execute),	 // Templated
       .execute_opc_insn_i		(opc_insn_o),		 // Templated
       .except_ibus_err_i		(ctrl_except_ibus_err_o), // Templated
