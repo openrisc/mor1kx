@@ -97,11 +97,9 @@ module mor1kx_fetch_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch;
    reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_addr;
    reg 					  branch_fetch_valid;
-   reg 					  branch_occur_r;
    reg 					  branch_except_occur_r;
 
    wire 				  bus_access_done;
-   wire 				  branch_occur_edge;
    wire 				  branch_except_occur_edge;
    wire					  stall_fetch_valid;
    wire 				  addr_valid;
@@ -140,7 +138,6 @@ module mor1kx_fetch_cappuccino
    wire 				  except_ipagefault;
 
    assign bus_access_done =  imem_ack | imem_err | fake_ack;
-   assign branch_occur_edge = branch_occur_i & !branch_occur_r;
    assign branch_except_occur_edge = branch_except_occur_i &
 				     !branch_except_occur_r;
 
@@ -176,13 +173,10 @@ module mor1kx_fetch_cappuccino
    assign flushing = pipeline_flush_i | branch_except_occur_edge | flush;
 
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	branch_occur_r <= 1'b0;
-	branch_except_occur_r <= 1'b0;
-     end else begin
-	branch_occur_r <= branch_occur_i;
-	branch_except_occur_r <= branch_except_occur_i;
-     end
+     if (rst)
+       branch_except_occur_r <= 1'b0;
+     else
+       branch_except_occur_r <= branch_except_occur_i;
 
    // calculate address stage pc
    always @(*)
