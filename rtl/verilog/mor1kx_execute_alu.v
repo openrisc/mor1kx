@@ -241,22 +241,14 @@ endgenerate
          reg [OPTION_OPERAND_WIDTH-1:0]           mul_result2;
          reg [2:0]                                mul_valid_shr;
 
-         always @(posedge clk)
-	   if (rst)
-	     mul_result1 <= {OPTION_OPERAND_WIDTH{1'b0}};
-	   else
-           begin
-              if (decode_valid_i && mul_op)
-                begin
-                   mul_opa       <= a;
-                   mul_opb       <= b;
-                end
-
-              if (mul_valid_shr==3'b001)
-                mul_result1   <= (mul_opa * mul_opb) &
-				 {OPTION_OPERAND_WIDTH{1'b1}};
-              mul_result2 <= mul_result1;
-           end
+	 always @(posedge clk) begin
+	    if (mul_op) begin
+	       mul_opa <= a;
+	       mul_opb <= b;
+	    end
+	    mul_result1 <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
+	    mul_result2 <= mul_result1;
+	 end
 
          assign mul_result = mul_result2;
 
