@@ -123,6 +123,7 @@ module mor1kx_lsu_cappuccino
    wire 			     dbus_req;
    reg [3:0] 			     dbus_bsel;
    wire 			     dbus_we;
+   wire 			     dbus_access;
 
    wire 			     dc_err;
    wire 			     dc_ack;
@@ -336,7 +337,7 @@ module mor1kx_lsu_cappuccino
    assign dbus_we = ctrl_op_lsu_store_i;
    assign dbus_adr = dmmu_enable_i ? dmmu_phys_addr : ctrl_lsu_adr_i;
 
-   wire dbus_access = !dc_access & !dc_refill;
+   assign dbus_access = !dc_access & !dc_refill;
    assign dbus_ack = dbus_access ? dbus_ack_i : dc_ack;
    assign dbus_err = dbus_access ? dbus_err_i : dc_err;
    assign dbus_ldat = dbus_access ? dbus_dat_i : dc_ldat;
