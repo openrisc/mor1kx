@@ -96,7 +96,6 @@ module mor1kx_fetch_cappuccino
    // registers
    reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch;
    reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_addr;
-   reg 					  branch_fetch_valid;
    reg 					  branch_except_occur_r;
 
    wire 				  bus_access_done;
