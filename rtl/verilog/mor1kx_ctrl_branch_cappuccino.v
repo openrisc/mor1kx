@@ -32,8 +32,6 @@ module mor1kx_ctrl_branch_cappuccino
     input 			      ctrl_branch_exception_i,
     input [OPTION_OPERAND_WIDTH-1:0]  ctrl_branch_except_pc_i,
 
-    input 			      ctrl_except_syscall_i,
-
     output 			      ctrl_branch_occur_o,
     output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o
     );
@@ -41,12 +39,7 @@ module mor1kx_ctrl_branch_cappuccino
 
 
    // Exceptions take precedence
-   assign ctrl_branch_occur_o = ctrl_branch_exception_i |
-				/* we have to prevent branches when we have
-				 * syscall exception in control stage
-				 * TODO: check if there are other exceptions
-				 * that need this too */
-				!ctrl_except_syscall_i & decode_branch_i;
+   assign ctrl_branch_occur_o = ctrl_branch_exception_i | decode_branch_i;
 
 
    assign ctrl_branch_target_o = ctrl_branch_exception_i ?

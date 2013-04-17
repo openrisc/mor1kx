@@ -832,7 +832,6 @@ module mor1kx_cpu_cappuccino
     .decode_branch_target_i		(decode_branch_target_o),
     .ctrl_branch_exception_i		(ctrl_branch_exception_o),
     .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o),
-    .ctrl_except_syscall_i		(ctrl_except_syscall_o),
     ); */
    mor1kx_ctrl_branch_cappuccino
      #(
@@ -849,8 +848,7 @@ module mor1kx_cpu_cappuccino
       .decode_branch_i			(decode_branch_o),	 // Templated
       .decode_branch_target_i		(decode_branch_target_o), // Templated
       .ctrl_branch_exception_i		(ctrl_branch_exception_o), // Templated
-      .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o), // Templated
-      .ctrl_except_syscall_i		(ctrl_except_syscall_o)); // Templated
+      .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o)); // Templated
 
 
    /* mor1kx_ctrl_cappuccino AUTO_TEMPLATE (
