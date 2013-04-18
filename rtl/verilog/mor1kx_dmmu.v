@@ -67,23 +67,19 @@ module mor1kx_dmmu
    wire 			      sre;
    wire 			      swe;
 
-   reg 				      spr_bus_read_ack;
-   wire				      spr_bus_write_ack;
+   reg 				      spr_bus_ack;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       spr_bus_read_ack <= 0;
+       spr_bus_ack <= 0;
      else if (dtlb_match_spr_cs | dtlb_trans_spr_cs)
-       spr_bus_read_ack <= 1;
+       spr_bus_ack <= 1;
      else
-       spr_bus_read_ack <= 0;
+       spr_bus_ack <= 0;
 
-   assign spr_bus_write_ack = dtlb_match_we | dtlb_trans_we;
-   assign spr_bus_ack_o = spr_bus_write_ack |
-			  (spr_bus_read_ack & (dtlb_match_spr_cs |
-					       dtlb_trans_spr_cs));
+   assign spr_bus_ack_o = spr_bus_ack & (dtlb_match_spr_cs | dtlb_trans_spr_cs);
 
-  assign cache_inhibit_o = dtlb_trans_dout[1];
+   assign cache_inhibit_o = dtlb_trans_dout[1];
    assign ure = dtlb_trans_dout[6];
    assign uwe = dtlb_trans_dout[7];
    assign sre = dtlb_trans_dout[8];
