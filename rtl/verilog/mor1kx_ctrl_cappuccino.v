@@ -86,9 +86,9 @@ module mor1kx_ctrl_cappuccino
 
     input [OPTION_OPERAND_WIDTH-1:0]  pc_ctrl_i,
 
-    input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i,
     input 			      ctrl_op_mfspr_i,
     input 			      ctrl_op_mtspr_i,
+    input 			      ctrl_op_rfe_i,
 
     // Indicate if branch will be taken based on instruction currently in
     // decode stage.
@@ -252,8 +252,6 @@ module mor1kx_ctrl_cappuccino
 
    wire [15:0] 			     spr_addr;
 
-   wire 			     op_rfe;
-
    wire [OPTION_OPERAND_WIDTH-1:0]   b;
 
    wire 			     deassert_decode_execute_halt;
@@ -306,7 +304,7 @@ module mor1kx_ctrl_cappuccino
 
    assign  b = ctrl_rfb_i;
 
-   assign ctrl_branch_exception_o = (exception_r | (op_rfe | doing_rfe)) &
+   assign ctrl_branch_exception_o = (exception_r | ctrl_op_rfe_i | doing_rfe) &
 				    !exception_taken;
    assign exception_pending = (except_ibus_err_i | except_ibus_align_i |
 			       except_illegal_i | except_syscall_i |
@@ -328,7 +326,7 @@ module mor1kx_ctrl_cappuccino
    assign deassert_decode_execute_halt = fetch_exception_taken_i &
 					 decode_execute_halt;
 
-   assign ctrl_branch_except_pc_o = (op_rfe | doing_rfe) ? spr_epcr :
+   assign ctrl_branch_except_pc_o = (ctrl_op_rfe_i | doing_rfe) ? spr_epcr :
 				    exception_pc_addr;
 
    always @(posedge clk)
@@ -398,9 +396,6 @@ module mor1kx_ctrl_cappuccino
 				{19'd0,`OR1K_TT_VECTOR,8'd0};
        endcase // casex (...
 
-   // TODO: use already existing signals from execute_ctrl
-   assign op_rfe = ctrl_opc_insn_i==`OR1K_OPCODE_RFE;
-
    assign padv_fetch_o = !execute_waiting_i & !cpu_stall & !decode_bubble_i
 			 & (!stepping | (stepping & pstep[0] & !fetch_valid_i));
 
@@ -417,7 +412,7 @@ module mor1kx_ctrl_cappuccino
 			    // after delay in execute stage
 			    (waiting_for_fetch & fetch_valid_i)) &
 			   // Not exceptions occurring
-			   !decode_execute_halt & !exception_re & !op_rfe
+			   !decode_execute_halt & !exception_re & !ctrl_op_rfe_i
 			   & !cpu_stall & (!stepping | (stepping & pstep[2]));
 
    assign padv_ctrl_o = padv_ctrl;
@@ -427,7 +422,7 @@ module mor1kx_ctrl_cappuccino
    assign ctrl_mtspr_ack_o = spr_access_ack[spr_group];
 
    // Pipeline flush
-   assign pipeline_flush_o = (padv_ctrl & op_rfe) |
+   assign pipeline_flush_o = (padv_ctrl & ctrl_op_rfe_i) |
 			     (exception_re) |
 			     cpu_stall;
 
@@ -461,7 +456,8 @@ module mor1kx_ctrl_cappuccino
        decode_execute_halt <= 0;
      else if (decode_execute_halt & deassert_decode_execute_halt)
        decode_execute_halt <= 0;
-     else if ((op_rfe | exception) & !decode_execute_halt & !exception_taken)
+     else if ((ctrl_op_rfe_i | exception) & !decode_execute_halt &
+	      !exception_taken)
        decode_execute_halt <= 1;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -511,7 +507,7 @@ module mor1kx_ctrl_cappuccino
        waiting_for_fetch <= 1;
 
 
-   assign doing_rfe = ((padv_ctrl & op_rfe) | doing_rfe_r) &
+   assign doing_rfe = ((padv_ctrl & ctrl_op_rfe_i) | doing_rfe_r) &
 		      !deassert_doing_rfe;
 
    assign doing_rfe_o = doing_rfe;
@@ -524,7 +520,7 @@ module mor1kx_ctrl_cappuccino
      else if (deassert_doing_rfe)
        doing_rfe_r <= 0;
      else if (padv_ctrl)
-       doing_rfe_r <= op_rfe;
+       doing_rfe_r <= ctrl_op_rfe_i;
 
    assign spr_sr_o = spr_sr;
 
@@ -601,7 +597,7 @@ module mor1kx_ctrl_cappuccino
 	    spr_sr[`OR1K_SPR_SR_OV   ] <= ctrl_overflow_set_i ? 1 :
 				ctrl_overflow_clear_i ? 0 :
 				spr_sr[`OR1K_SPR_SR_OV   ];
-	  if (op_rfe)
+	  if (ctrl_op_rfe_i)
 	    spr_sr <= spr_esr;
        end
 
@@ -1096,7 +1092,7 @@ module mor1kx_ctrl_cappuccino
 	   else if (du_restart_from_stall)
 	     stepped_into_rfe <= 0;
 	   else if (stepping & padv_ctrl)
-	     stepped_into_rfe <= op_rfe;
+	     stepped_into_rfe <= ctrl_op_rfe_i;
 
 	 assign du_restart_pc_o = spr_npc;
 

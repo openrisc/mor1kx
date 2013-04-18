@@ -113,19 +113,21 @@ module mor1kx_decode
     output reg 				  op_mfspr_o,
     output reg 				  op_mtspr_o,
 
+    output reg 				  op_rfe_o,
+
     // branch detection
     output 				  decode_branch_o,
     output [OPTION_OPERAND_WIDTH-1:0] 	  decode_branch_target_o,
 
     // exceptions in
     input 				  decode_except_ibus_err_i,
-    input				  decode_except_itlb_miss_i,
-    input				  decode_except_ipagefault_i,
+    input 				  decode_except_itlb_miss_i,
+    input 				  decode_except_ipagefault_i,
 
     // exception output -
     output reg 				  execute_except_ibus_err_o,
-    output reg				  execute_except_itlb_miss_o,
-    output reg				  execute_except_ipagefault_o,
+    output reg 				  execute_except_itlb_miss_o,
+    output reg 				  execute_except_ipagefault_o,
     output reg 				  execute_except_illegal_o,
     output reg 				  execute_except_ibus_align_o,
     output reg 				  execute_except_syscall_o,
@@ -555,6 +557,20 @@ endgenerate
 	      end
 	   end
 
+	 // rfe is a special case, instead of pushing the pipeline full
+	 // of nops, we push it full of rfes.
+	 // The reason for this is that we need the rfe to reach control
+	 // stage so it will cause the branch.
+	 // It will clear itself by the pipeline_flush_i that the rfe
+	 // will generate.
+	 always @(posedge clk `OR_ASYNC_RST)
+	   if (rst)
+	     op_rfe_o <= 0;
+	   else if (pipeline_flush_i)
+	     op_rfe_o <= 0;
+	   else if (padv_i)
+	     op_rfe_o <= op_rfe;
+
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
 	     op_alu_o <= 1'b0;
@@ -630,13 +646,7 @@ endgenerate
 	     opc_insn_o <= `OR1K_OPCODE_NOP;
 	   else if (padv_i) begin
 	      opc_insn_o <= opc_insn;
-	      // rfe is a special case, instead of pushing the pipeline full
-	      // of nops, we push it full of rfes.
-	      // The reason for this is that we need the rfe to reach control
-	      // stage so it will cause the branch.
-	      // It will clear itself by the pipeline_flush_i that the rfe
-	      // will generate.
-	      if (decode_bubble_o & !op_rfe)
+	      if (decode_bubble_o)
 		opc_insn_o <= `OR1K_OPCODE_NOP;
 	   end
 
@@ -707,6 +717,7 @@ endgenerate
 	      op_jbr_o			= op_jbr;
 	      op_jr_o			= op_jr;
 	      op_jal_o			= op_jal;
+	      op_rfe_o			= op_rfe;
 
 
 	      op_alu_o			= op_alu;

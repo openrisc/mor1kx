@@ -61,6 +61,7 @@ module mor1kx_execute_ctrl_cappuccino
 
     input 				  op_jr_i,
     input 				  op_jal_i,
+    input 				  op_rfe_i,
 
     input [OPTION_OPERAND_WIDTH-1:0] 	  alu_result_i,
     input [OPTION_OPERAND_WIDTH-1:0] 	  adder_result_i,
@@ -109,6 +110,8 @@ module mor1kx_execute_ctrl_cappuccino
 
     output reg 				  ctrl_op_mfspr_o,
     output reg 				  ctrl_op_mtspr_o,
+
+    output reg 				  ctrl_op_rfe_o,
 
     output reg 				  ctrl_except_ibus_err_o,
     output reg 				  ctrl_except_itlb_miss_o,
@@ -250,6 +253,14 @@ module mor1kx_execute_ctrl_cappuccino
 	ctrl_op_mfspr_o <= 0;
 	ctrl_op_mtspr_o <= 0;
      end
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       ctrl_op_rfe_o <= 0;
+     else if (padv_i)
+       ctrl_op_rfe_o <= op_rfe_i;
+     else if (pipeline_flush_i & !du_stall_i)
+       ctrl_op_rfe_o <= 0;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
