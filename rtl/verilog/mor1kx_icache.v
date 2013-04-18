@@ -347,7 +347,8 @@ module mor1kx_icache
 	 mor1kx_spram
 	       #(
 		 .ADDR_WIDTH(WAY_WIDTH-2),
-		 .DATA_WIDTH(OPTION_OPERAND_WIDTH)
+		 .DATA_WIDTH(OPTION_OPERAND_WIDTH),
+		 .ENABLE_BYPASS("TRUE")
 		 )
 	 way_data_ram
 	       (/*AUTOINST*/
@@ -375,7 +376,8 @@ module mor1kx_icache
    mor1kx_spram
      #(
        .ADDR_WIDTH(OPTION_ICACHE_SET_WIDTH),
-       .DATA_WIDTH(TAG_WIDTH)
+       .DATA_WIDTH(TAG_WIDTH),
+       .ENABLE_BYPASS("TRUE")
      )
    tag_ram
      (/*AUTOINST*/
