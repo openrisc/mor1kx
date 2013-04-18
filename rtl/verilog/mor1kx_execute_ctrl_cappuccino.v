@@ -54,6 +54,7 @@ module mor1kx_execute_ctrl_cappuccino
     input 				  op_lsu_store_i,
 
     input 				  op_mfspr_i,
+    input 				  op_mtspr_i,
     input 				  alu_valid_i,
     input 				  lsu_valid_i,
 
@@ -85,8 +86,9 @@ module mor1kx_execute_ctrl_cappuccino
 
     input 				  execute_bubble_i,
 
-    // Input from control stage for mfspr WE
+    // Input from control stage for mfspr/mtspr ack
     input 				  ctrl_mfspr_ack_i,
+    input 				  ctrl_mtspr_ack_i,
 
     output reg [OPTION_OPERAND_WIDTH-1:0] ctrl_alu_result_o,
     output reg [OPTION_OPERAND_WIDTH-1:0] ctrl_lsu_adr_o,
@@ -105,6 +107,7 @@ module mor1kx_execute_ctrl_cappuccino
     output reg 				  ctrl_op_lsu_store_o,
 
     output reg 				  ctrl_op_mfspr_o,
+    output reg 				  ctrl_op_mtspr_o,
 
     output reg 				  ctrl_except_ibus_err_o,
     output reg 				  ctrl_except_itlb_miss_o,
@@ -123,10 +126,11 @@ module mor1kx_execute_ctrl_cappuccino
     output 				  execute_valid_o
     );
 
-   // ALU, LSU or MFSPR stall execution, nothing else can
+   // ALU, LSU or MTSPR/MFSPR stall execution, nothing else can
    assign execute_waiting_o = (ctrl_op_lsu_load_o | ctrl_op_lsu_store_o) &
 			      !lsu_valid_i |
 			      ctrl_op_mfspr_o & !ctrl_mfspr_ack_i |
+			      ctrl_op_mtspr_o & !ctrl_mtspr_ack_i |
 			      op_alu_i & !alu_valid_i;
 
    assign execute_valid_o = !execute_waiting_o;
@@ -238,12 +242,16 @@ module mor1kx_execute_ctrl_cappuccino
        ctrl_opc_insn_o <= `OR1K_OPCODE_NOP;
 
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       ctrl_op_mfspr_o <= 0;
-     else if (padv_i)
-       ctrl_op_mfspr_o <= op_mfspr_i;
-     else if (pipeline_flush_i & !du_stall_i)
-       ctrl_op_mfspr_o <= 0;
+     if (rst) begin
+	ctrl_op_mfspr_o <= 0;
+	ctrl_op_mtspr_o <= 0;
+     end else if (padv_i) begin
+	ctrl_op_mfspr_o <= op_mfspr_i;
+	ctrl_op_mtspr_o <= op_mtspr_i;
+     end else if (pipeline_flush_i & !du_stall_i) begin
+	ctrl_op_mfspr_o <= 0;
+	ctrl_op_mtspr_o <= 0;
+     end
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin

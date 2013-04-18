@@ -111,6 +111,7 @@ module mor1kx_decode
     output reg 				  op_lsu_store_o,
 
     output reg 				  op_mfspr_o,
+    output reg 				  op_mtspr_o,
 
     // branch detection
     output 				  decode_branch_o,
@@ -594,6 +595,12 @@ endgenerate
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
+	     op_mtspr_o <= 1'b0;
+	   else if (padv_i)
+	     op_mtspr_o <= opc_mtspr;
+
+	 always @(posedge clk `OR_ASYNC_RST)
+	   if (rst)
 	     imm16_o <= 0;
 	   else if (padv_i)
 	     imm16_o <= imm16;
@@ -710,6 +717,7 @@ endgenerate
 	      op_lsu_store_o		= op_store;
 
 	      op_mfspr_o		= op_mfspr;
+	      op_mtspr_o		= opc_mtspr;
 
 	      imm16_o			= imm16;
 	      immjbr_upper_o		= immjbr_upper;

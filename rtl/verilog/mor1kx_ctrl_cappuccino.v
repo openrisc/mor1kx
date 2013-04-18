@@ -130,6 +130,7 @@ module mor1kx_ctrl_cappuccino
 
     // WE to RF for l.mfspr
     output 			      ctrl_mfspr_ack_o,
+    output 			      ctrl_mtspr_ack_o,
 
     // Flag out to branch control, combinatorial
     output 			      ctrl_flag_o,
@@ -399,6 +400,7 @@ module mor1kx_ctrl_cappuccino
 				{19'd0,`OR1K_TT_VECTOR,8'd0};
        endcase // casex (...
 
+   // TODO: use already existing signals from execute_ctrl
    assign op_mtspr = ctrl_opc_insn_i==`OR1K_OPCODE_MTSPR;
    assign op_mfspr = ctrl_opc_insn_i==`OR1K_OPCODE_MFSPR;
    assign execute_op_mfspr = execute_opc_insn_i==`OR1K_OPCODE_MFSPR;
@@ -427,6 +429,7 @@ module mor1kx_ctrl_cappuccino
 
    assign spr_addr = du_access ? du_addr_i : ctrl_alu_result_i[15:0];
    assign ctrl_mfspr_ack_o = spr_access_ack[spr_group];
+   assign ctrl_mtspr_ack_o = spr_access_ack[spr_group];
 
    // Pipeline flush
    assign pipeline_flush_o = (padv_ctrl & op_rfe) |
