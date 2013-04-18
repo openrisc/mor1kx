@@ -13,7 +13,8 @@
 module mor1kx_spram
   #(
     parameter ADDR_WIDTH = 32,
-    parameter DATA_WIDTH = 32
+    parameter DATA_WIDTH = 32,
+    parameter ENABLE_BYPASS = "TRUE"
     )
    (
     input 		    clk,
@@ -26,17 +27,13 @@ module mor1kx_spram
 
    reg [DATA_WIDTH-1:0]     mem[(1<<ADDR_WIDTH)-1:0];
    reg [DATA_WIDTH-1:0]     rdata;
-   reg [DATA_WIDTH-1:0]     din_r;
 
+generate
+if (ENABLE_BYPASS == "TRUE") begin : bypass_gen
+   reg [DATA_WIDTH-1:0]     din_r;
    reg 			    bypass;
 
    assign dout = bypass ? din_r : rdata;
-
-   always @(posedge clk) begin
-      if (we)
-	mem[waddr] <= din;
-      rdata <= mem[raddr];
-   end
 
    always @(posedge clk)
      din_r <= din;
@@ -46,5 +43,15 @@ module mor1kx_spram
        bypass <= 1;
      else
        bypass <= 0;
+end else begin
+   assign dout = rdata;
+end
+endgenerate
+
+   always @(posedge clk) begin
+      if (we)
+	mem[waddr] <= din;
+      rdata <= mem[raddr];
+   end
 
 endmodule
