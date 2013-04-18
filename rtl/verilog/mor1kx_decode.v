@@ -585,19 +585,17 @@ endgenerate
 	   end
 
 	 always @(posedge clk `OR_ASYNC_RST)
-	   if (rst)
-	     op_mfspr_o <= 1'b0;
-	   else if (padv_i) begin
-	     op_mfspr_o <= op_mfspr;
-	     if (decode_bubble_o)
-	       op_mfspr_o <= 0;
+	   if (rst) begin
+	      op_mfspr_o <= 1'b0;
+	      op_mtspr_o <= 1'b0;
+	   end else if (padv_i) begin
+	      op_mfspr_o <= op_mfspr;
+	      op_mtspr_o <= opc_mtspr;
+	      if (decode_bubble_o) begin
+		 op_mtspr_o <= 1'b0;
+		 op_mfspr_o <= 1'b0;
+	      end
 	   end
-
-	 always @(posedge clk `OR_ASYNC_RST)
-	   if (rst)
-	     op_mtspr_o <= 1'b0;
-	   else if (padv_i)
-	     op_mtspr_o <= opc_mtspr;
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
