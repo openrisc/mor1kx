@@ -256,8 +256,6 @@ module mor1kx_ctrl_cappuccino
 
    wire [OPTION_OPERAND_WIDTH-1:0]   b;
 
-   wire 			     execute_op_mfspr;
-
    wire 			     deassert_decode_execute_halt;
 
    /* Debug SPRs */
@@ -403,7 +401,6 @@ module mor1kx_ctrl_cappuccino
    // TODO: use already existing signals from execute_ctrl
    assign op_mtspr = ctrl_opc_insn_i==`OR1K_OPCODE_MTSPR;
    assign op_mfspr = ctrl_opc_insn_i==`OR1K_OPCODE_MFSPR;
-   assign execute_op_mfspr = execute_opc_insn_i==`OR1K_OPCODE_MFSPR;
    assign op_rfe = ctrl_opc_insn_i==`OR1K_OPCODE_RFE;
 
    assign padv_fetch_o = !execute_waiting_i & !cpu_stall & !decode_bubble_i
