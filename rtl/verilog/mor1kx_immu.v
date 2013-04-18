@@ -67,21 +67,17 @@ module mor1kx_immu
    wire 			      sxe;
    wire 			      uxe;
 
-   reg 				      spr_bus_read_ack;
-   wire				      spr_bus_write_ack;
+   reg 				      spr_bus_ack;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       spr_bus_read_ack <= 0;
+       spr_bus_ack <= 0;
      else if (itlb_match_spr_cs | itlb_trans_spr_cs)
-       spr_bus_read_ack <= 1;
+       spr_bus_ack <= 1;
      else
-       spr_bus_read_ack <= 0;
+       spr_bus_ack <= 0;
 
-   assign spr_bus_write_ack = itlb_match_spr_we | itlb_trans_spr_we;
-   assign spr_bus_ack_o = spr_bus_write_ack |
-			  (spr_bus_read_ack & (itlb_match_spr_cs |
-					       itlb_trans_spr_cs));
+   assign spr_bus_ack_o = spr_bus_ack & (itlb_match_spr_cs | itlb_trans_spr_cs);
 
    assign cache_inhibit_o = itlb_trans_dout[1];
    assign sxe = itlb_trans_dout[6];
