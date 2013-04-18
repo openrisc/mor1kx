@@ -86,7 +86,7 @@ module mor1kx_execute_ctrl_cappuccino
     input 				  execute_bubble_i,
 
     // Input from control stage for mfspr WE
-    input 				  ctrl_mfspr_we_i,
+    input 				  ctrl_mfspr_ack_i,
 
     output reg [OPTION_OPERAND_WIDTH-1:0] ctrl_alu_result_o,
     output reg [OPTION_OPERAND_WIDTH-1:0] ctrl_lsu_adr_o,
@@ -126,7 +126,7 @@ module mor1kx_execute_ctrl_cappuccino
    // ALU, LSU or MFSPR stall execution, nothing else can
    assign execute_waiting_o = (ctrl_op_lsu_load_o | ctrl_op_lsu_store_o) &
 			      !lsu_valid_i |
-			      ctrl_op_mfspr_o & !ctrl_mfspr_we_i |
+			      ctrl_op_mfspr_o & !ctrl_mfspr_ack_i |
 			      op_alu_i & !alu_valid_i;
 
    assign execute_valid_o = !execute_waiting_o;
@@ -266,7 +266,7 @@ module mor1kx_execute_ctrl_cappuccino
 	ctrl_rf_wb_o <= 0;
      else if (padv_i)
 	ctrl_rf_wb_o <= execute_rf_wb_i;
-     else if (ctrl_op_mfspr_o & ctrl_mfspr_we_i |
+     else if (ctrl_op_mfspr_o & ctrl_mfspr_ack_i |
 	      ctrl_op_lsu_load_o & lsu_valid_i)
        // Deassert the write enable when the "bus" access is done, to avoid:
        // 1) Writing multiple times to RF
@@ -286,7 +286,7 @@ module mor1kx_execute_ctrl_cappuccino
      if (rst | (pipeline_flush_i & !du_stall_i))
        wb_rf_wb_o <= 0;
      else if (ctrl_op_mfspr_o)
-       wb_rf_wb_o <= ctrl_rf_wb_o & ctrl_mfspr_we_i;
+       wb_rf_wb_o <= ctrl_rf_wb_o & ctrl_mfspr_ack_i;
      else if (ctrl_op_lsu_load_o)
        wb_rf_wb_o <= ctrl_rf_wb_o & lsu_valid_i;
      else

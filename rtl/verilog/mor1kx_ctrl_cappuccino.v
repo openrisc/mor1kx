@@ -129,7 +129,7 @@ module mor1kx_ctrl_cappuccino
     output [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o,
 
     // WE to RF for l.mfspr
-    output 			      ctrl_mfspr_we_o,
+    output 			      ctrl_mfspr_ack_o,
 
     // Flag out to branch control, combinatorial
     output 			      ctrl_flag_o,
@@ -426,7 +426,7 @@ module mor1kx_ctrl_cappuccino
    assign padv_ctrl_o = padv_ctrl;
 
    assign spr_addr = du_access ? du_addr_i : ctrl_alu_result_i[15:0];
-   assign ctrl_mfspr_we_o = spr_access_ack[spr_group];
+   assign ctrl_mfspr_ack_o = spr_access_ack[spr_group];
 
    // Pipeline flush
    assign pipeline_flush_o = (padv_ctrl & op_rfe) |
