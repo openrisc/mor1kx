@@ -135,12 +135,12 @@ module mor1kx_ctrl_cappuccino
     // Flag out to branch control, combinatorial
     output 			      ctrl_flag_o,
 
-   // Arithmetic flags to and from ALU
-    output 			     ctrl_carry_o,
-    input 			     ctrl_carry_set_i,
-    input 			     ctrl_carry_clear_i,
-    input 			     ctrl_overflow_set_i,
-    input 			     ctrl_overflow_clear_i,
+    // Arithmetic flags to and from ALU
+    output 			      ctrl_carry_o,
+    input 			      ctrl_carry_set_i,
+    input 			      ctrl_carry_clear_i,
+    input 			      ctrl_overflow_set_i,
+    input 			      ctrl_overflow_clear_i,
 
     // Branch indicator from control unit (l.rfe/exception)
     output 			      ctrl_branch_exception_o,
