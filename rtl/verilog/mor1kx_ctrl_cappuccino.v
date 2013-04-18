@@ -87,6 +87,8 @@ module mor1kx_ctrl_cappuccino
     input [OPTION_OPERAND_WIDTH-1:0]  pc_ctrl_i,
 
     input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i,
+    input 			      ctrl_op_mfspr_i,
+    input 			      ctrl_op_mtspr_i,
 
     // Indicate if branch will be taken based on instruction currently in
     // decode stage.
@@ -250,8 +252,6 @@ module mor1kx_ctrl_cappuccino
 
    wire [15:0] 			     spr_addr;
 
-   wire 			     op_mtspr;
-   wire 			     op_mfspr;
    wire 			     op_rfe;
 
    wire [OPTION_OPERAND_WIDTH-1:0]   b;
@@ -399,8 +399,6 @@ module mor1kx_ctrl_cappuccino
        endcase // casex (...
 
    // TODO: use already existing signals from execute_ctrl
-   assign op_mtspr = ctrl_opc_insn_i==`OR1K_OPCODE_MTSPR;
-   assign op_mfspr = ctrl_opc_insn_i==`OR1K_OPCODE_MFSPR;
    assign op_rfe = ctrl_opc_insn_i==`OR1K_OPCODE_RFE;
 
    assign padv_fetch_o = !execute_waiting_i & !cpu_stall & !decode_bubble_i
@@ -893,7 +891,7 @@ module mor1kx_ctrl_cappuccino
 
 
 	 assign except_pic = (|spr_picsr) & spr_sr[`OR1K_SPR_SR_IEE] &
-			     !op_mtspr & !doing_rfe;
+			     !ctrl_op_mtspr_i & !doing_rfe;
       end
       else begin
 	 assign except_pic = 0;
@@ -933,7 +931,7 @@ module mor1kx_ctrl_cappuccino
 			  .spr_dat_i		(spr_write_dat)); // Templated
 
 	 assign except_ticktimer = spr_ttmr[28] & spr_sr[`OR1K_SPR_SR_TEE] &
-				   !op_mtspr & !doing_rfe;
+				   !ctrl_op_mtspr_i & !doing_rfe;
 
       end // if (FEATURE_TIMER!="NONE")
       else begin
@@ -947,8 +945,8 @@ module mor1kx_ctrl_cappuccino
 
    /* SPR access control - allow accesses from either the instructions or from
     the debug interface */
-   assign spr_read_access = (op_mfspr | (du_access & !du_we_i));
-   assign spr_write_access = (op_mtspr | (du_access & du_we_i));
+   assign spr_read_access = (ctrl_op_mfspr_i | (du_access & !du_we_i));
+   assign spr_write_access = (ctrl_op_mtspr_i | (du_access & du_we_i));
 
    assign spr_write_dat = du_access ? du_dat_i : b;
    assign spr_we = spr_write_access & spr_group_present;

@@ -178,6 +178,7 @@ module mor1kx_cpu_cappuccino
    wire			ctrl_op_lsu_load_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_op_lsu_store_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_op_mfspr_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire			ctrl_op_mtspr_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [`OR1K_OPCODE_WIDTH-1:0] ctrl_opc_insn_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_overflow_clear_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_overflow_set_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
@@ -776,6 +777,7 @@ module mor1kx_cpu_cappuccino
       .ctrl_op_lsu_load_o		(ctrl_op_lsu_load_o),
       .ctrl_op_lsu_store_o		(ctrl_op_lsu_store_o),
       .ctrl_op_mfspr_o			(ctrl_op_mfspr_o),
+      .ctrl_op_mtspr_o			(ctrl_op_mtspr_o),
       .ctrl_except_ibus_err_o		(ctrl_except_ibus_err_o),
       .ctrl_except_itlb_miss_o		(ctrl_except_itlb_miss_o),
       .ctrl_except_ipagefault_o		(ctrl_except_ipagefault_o),
@@ -843,6 +845,8 @@ module mor1kx_cpu_cappuccino
     .pc_ctrl_i			(pc_execute_to_ctrl),
     .pc_execute_i		(pc_decode_to_execute),
     .ctrl_opc_insn_i		(ctrl_opc_insn_o),
+    .ctrl_op_mfspr_i		(ctrl_op_mfspr_o),
+    .ctrl_op_mtspr_i		(ctrl_op_mtspr_o),
     .decode_branch_i		(decode_branch_o),
     .decode_branch_target_i	(decode_branch_target_o),
     .except_ibus_err_i		(ctrl_except_ibus_err_o),
@@ -935,6 +939,8 @@ module mor1kx_cpu_cappuccino
       .ctrl_flag_clear_i		(ctrl_flag_clear_o),	 // Templated
       .pc_ctrl_i			(pc_execute_to_ctrl),	 // Templated
       .ctrl_opc_insn_i			(ctrl_opc_insn_o),	 // Templated
+      .ctrl_op_mfspr_i			(ctrl_op_mfspr_o),	 // Templated
+      .ctrl_op_mtspr_i			(ctrl_op_mtspr_o),	 // Templated
       .decode_branch_i			(decode_branch_o),	 // Templated
       .decode_branch_target_i		(decode_branch_target_o), // Templated
       .pc_execute_i			(pc_decode_to_execute),	 // Templated
