@@ -230,11 +230,8 @@ module mor1kx_execute_ctrl_cappuccino
    // The tail of the pipeline should also not be flushed when the
    // pipeline_flush have been caused by a debug unit stall.
 
-   wire op_rfe = ctrl_opc_insn_o==`OR1K_OPCODE_RFE;
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       ctrl_opc_insn_o <= `OR1K_OPCODE_NOP;
-     else if (padv_ctrl_i & op_rfe)
        ctrl_opc_insn_o <= `OR1K_OPCODE_NOP;
      else if (padv_i)
        ctrl_opc_insn_o <= opc_insn_i;
