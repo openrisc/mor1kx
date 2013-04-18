@@ -138,8 +138,9 @@ module mor1kx_dmmu
     */
    mor1kx_spram
      #(
-       .ADDR_WIDTH(6),
-       .DATA_WIDTH(OPTION_OPERAND_WIDTH)
+       .ADDR_WIDTH(OPTION_DMMU_SET_WIDTH),
+       .DATA_WIDTH(OPTION_OPERAND_WIDTH),
+       .ENABLE_BYPASS("FALSE")
        )
    dtlb_match_regs
      (/*AUTOINST*/
@@ -166,8 +167,9 @@ module mor1kx_dmmu
     */
    mor1kx_spram
      #(
-       .ADDR_WIDTH(6),
-       .DATA_WIDTH(OPTION_OPERAND_WIDTH)
+       .ADDR_WIDTH(OPTION_DMMU_SET_WIDTH),
+       .DATA_WIDTH(OPTION_OPERAND_WIDTH),
+       .ENABLE_BYPASS("FALSE")
        )
    dtlb_translate_regs
      (/*AUTOINST*/
