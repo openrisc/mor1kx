@@ -203,6 +203,7 @@ module mor1kx_cpu_prontoespresso
    wire			op_lsu_store_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_mfspr_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_mtspr_o;		// From mor1kx_decode of mor1kx_decode.v
+   wire			op_rfe_o;		// From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_secondary_o;// From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_OPCODE_WIDTH-1:0] opc_insn_o;	// From mor1kx_decode of mor1kx_decode.v
@@ -413,6 +414,7 @@ module mor1kx_cpu_prontoespresso
       .op_lsu_store_o			(op_lsu_store_o),
       .op_mfspr_o			(op_mfspr_o),
       .op_mtspr_o			(op_mtspr_o),
+      .op_rfe_o				(op_rfe_o),
       .decode_branch_o			(),			 // Templated
       .decode_branch_target_o		(),			 // Templated
       .execute_except_ibus_err_o	(execute_except_ibus_err_o),
