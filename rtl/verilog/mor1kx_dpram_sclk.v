@@ -29,22 +29,22 @@ module mor1kx_dpram_sclk
 
    reg [DATA_WIDTH-1:0]     mem[(1<<ADDR_WIDTH)-1:0];
 
-   reg [ADDR_WIDTH-1:0]     addr_a_r;
-   reg [ADDR_WIDTH-1:0]     addr_b_r;
+   reg [DATA_WIDTH-1:0]     rdata_a;
+   reg [DATA_WIDTH-1:0]     rdata_b;
 
-   assign dout_a = mem[addr_a_r];
-   assign dout_b = mem[addr_b_r];
+   assign dout_a = rdata_a;
+   assign dout_b = rdata_b;
 
    always @(posedge clk) begin
       if (we_a)
 	mem[addr_a] <= din_a;
-      addr_a_r <= addr_a;
+      rdata_a <= mem[addr_a];
    end
 
    always @(posedge clk) begin
       if (we_b)
 	mem[addr_b] <= din_b;
-      addr_b_r <= addr_b;
+      rdata_b <= mem[addr_b];
    end
 
 endmodule
