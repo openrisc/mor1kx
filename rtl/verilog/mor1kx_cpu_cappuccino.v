@@ -182,7 +182,6 @@ module mor1kx_cpu_cappuccino
    wire			ctrl_op_mfspr_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_op_mtspr_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_op_rfe_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire [`OR1K_OPCODE_WIDTH-1:0] ctrl_opc_insn_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_overflow_clear_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_overflow_set_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_rf_wb_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
@@ -525,7 +524,6 @@ module mor1kx_cpu_cappuccino
     .exec_lsu_adr_i			(adder_result_o),
     .ctrl_lsu_adr_i			(ctrl_lsu_adr_o),
     .ctrl_rfb_i				(ctrl_rfb_o),
-    .ctrl_opc_insn_i			(ctrl_opc_insn_o),
     .exec_op_lsu_load_i			(op_lsu_load_o),
     .exec_op_lsu_store_i		(op_lsu_store_o),
     .ctrl_op_lsu_load_i			(ctrl_op_lsu_load_o),
@@ -585,7 +583,6 @@ module mor1kx_cpu_cappuccino
       .exec_lsu_adr_i			(adder_result_o),	 // Templated
       .ctrl_lsu_adr_i			(ctrl_lsu_adr_o),	 // Templated
       .ctrl_rfb_i			(ctrl_rfb_o),		 // Templated
-      .ctrl_opc_insn_i			(ctrl_opc_insn_o),	 // Templated
       .exec_op_lsu_load_i		(op_lsu_load_o),	 // Templated
       .exec_op_lsu_store_i		(op_lsu_store_o),	 // Templated
       .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),	 // Templated
@@ -723,7 +720,6 @@ module mor1kx_cpu_cappuccino
    /* mor1kx_execute_ctrl_cappuccino AUTO_TEMPLATE (
     .padv_i				(padv_execute_o),
     .padv_ctrl_i			(padv_ctrl_o),
-    .opc_insn_i 			(opc_insn_o),
     .execute_except_ibus_err_i		(execute_except_ibus_err_o),
     .execute_except_itlb_miss_i		(execute_except_itlb_miss_o),
     .execute_except_ipagefault_i	(execute_except_ipagefault_o),
@@ -789,7 +785,6 @@ module mor1kx_cpu_cappuccino
       .ctrl_overflow_set_o		(ctrl_overflow_set_o),
       .ctrl_overflow_clear_o		(ctrl_overflow_clear_o),
       .pc_ctrl_o			(pc_execute_to_ctrl),	 // Templated
-      .ctrl_opc_insn_o			(ctrl_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]),
       .ctrl_op_lsu_load_o		(ctrl_op_lsu_load_o),
       .ctrl_op_lsu_store_o		(ctrl_op_lsu_store_o),
       .ctrl_lsu_length_o		(ctrl_lsu_length_o[1:0]),
@@ -815,7 +810,6 @@ module mor1kx_cpu_cappuccino
       .rst				(rst),
       .padv_i				(padv_execute_o),	 // Templated
       .padv_ctrl_i			(padv_ctrl_o),		 // Templated
-      .opc_insn_i			(opc_insn_o),		 // Templated
       .execute_except_ibus_err_i	(execute_except_ibus_err_o), // Templated
       .execute_except_itlb_miss_i	(execute_except_itlb_miss_o), // Templated
       .execute_except_ipagefault_i	(execute_except_ipagefault_o), // Templated

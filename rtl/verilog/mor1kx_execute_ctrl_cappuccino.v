@@ -32,9 +32,6 @@ module mor1kx_execute_ctrl_cappuccino
     input 				  padv_i,
     input 				  padv_ctrl_i,
 
-    // insn opcode, indicating what's going on
-    input [`OR1K_OPCODE_WIDTH-1:0] 	  opc_insn_i,
-
     input 				  execute_except_ibus_err_i,
     input 				  execute_except_itlb_miss_i,
     input 				  execute_except_ipagefault_i,
@@ -105,7 +102,6 @@ module mor1kx_execute_ctrl_cappuccino
     output reg 				  ctrl_overflow_clear_o,
 
     output reg [OPTION_OPERAND_WIDTH-1:0] pc_ctrl_o,
-    output reg [`OR1K_OPCODE_WIDTH-1:0]   ctrl_opc_insn_o,
 
     output reg 				  ctrl_op_lsu_load_o,
     output reg 				  ctrl_op_lsu_store_o,
@@ -237,14 +233,6 @@ module mor1kx_execute_ctrl_cappuccino
    //
    // The tail of the pipeline should also not be flushed when the
    // pipeline_flush have been caused by a debug unit stall.
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       ctrl_opc_insn_o <= `OR1K_OPCODE_NOP;
-     else if (padv_i)
-       ctrl_opc_insn_o <= opc_insn_i;
-     else if (pipeline_flush_i & !du_stall_i)
-       ctrl_opc_insn_o <= `OR1K_OPCODE_NOP;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin

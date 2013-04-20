@@ -50,8 +50,7 @@ module mor1kx_lsu_cappuccino
 
     // register file B in (store operand)
     input [OPTION_OPERAND_WIDTH-1:0]  ctrl_rfb_i,
-    // insn opcode, indicating what's going on
-    input [`OR1K_OPCODE_WIDTH-1:0]    ctrl_opc_insn_i,
+
     // from decode stage regs, indicate if load or store
     input 			      exec_op_lsu_load_i,
     input 			      exec_op_lsu_store_i,
