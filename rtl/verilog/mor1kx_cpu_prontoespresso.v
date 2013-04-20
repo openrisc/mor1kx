@@ -192,8 +192,10 @@ module mor1kx_cpu_prontoespresso
    wire [OPTION_OPERAND_WIDTH-1:0] link_addr_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			lsu_except_align_o;	// From mor1kx_lsu_espresso of mor1kx_lsu_espresso.v
    wire			lsu_except_dbus_o;	// From mor1kx_lsu_espresso of mor1kx_lsu_espresso.v
+   wire [1:0]		lsu_length_o;		// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] lsu_result_o;// From mor1kx_lsu_espresso of mor1kx_lsu_espresso.v
    wire			lsu_valid_o;		// From mor1kx_lsu_espresso of mor1kx_lsu_espresso.v
+   wire			lsu_zext_o;		// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			op_alu_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_jal_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -412,6 +414,8 @@ module mor1kx_cpu_prontoespresso
       .op_alu_o				(op_alu_o),
       .op_lsu_load_o			(op_lsu_load_o),
       .op_lsu_store_o			(op_lsu_store_o),
+      .lsu_length_o			(lsu_length_o[1:0]),
+      .lsu_zext_o			(lsu_zext_o),
       .op_mfspr_o			(op_mfspr_o),
       .op_mtspr_o			(op_mtspr_o),
       .op_rfe_o				(op_rfe_o),
