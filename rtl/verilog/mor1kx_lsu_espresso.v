@@ -26,9 +26,10 @@ module mor1kx_lsu_espresso
    dbus_adr_o, dbus_req_o, dbus_dat_o, dbus_bsel_o, dbus_we_o,
    dbus_burst_o,
    // Inputs
-   clk, rst, padv_fetch_i, lsu_adr_i, rfb_i, opc_insn_i,
-   op_lsu_load_i, op_lsu_store_i, exception_taken_i, du_restart_i,
-   stepping_i, next_fetch_done_i, dbus_err_i, dbus_ack_i, dbus_dat_i
+   clk, rst, padv_fetch_i, lsu_adr_i, rfb_i, op_lsu_load_i,
+   op_lsu_store_i, lsu_length_i, lsu_zext_i, exception_taken_i,
+   du_restart_i, stepping_i, next_fetch_done_i, dbus_err_i,
+   dbus_ack_i, dbus_dat_i
    );
 
    parameter OPTION_OPERAND_WIDTH = 32;
@@ -42,11 +43,11 @@ module mor1kx_lsu_espresso
 
    // register file B in (store operand)
    input [OPTION_OPERAND_WIDTH-1:0] rfb_i;
-   // insn opcode, indicating what's going on
-   input [`OR1K_OPCODE_WIDTH-1:0]   opc_insn_i;
    // from decode stage regs, indicate if load or store
    input 			    op_lsu_load_i;
    input 			    op_lsu_store_i;
+   input [1:0] 			    lsu_length_i;
+   input 			    lsu_zext_i;
 
    input 			    exception_taken_i;
    input 			    du_restart_i;
@@ -90,12 +91,7 @@ module mor1kx_lsu_espresso
    wire 			     align_err_word;
    wire 			     align_err_short;
 
-   wire 			     load_align_err;
-   wire 			     store_align_err;
-
-   wire 			     load_sext = !opc_insn_i[0];
-   wire 			     load_zext = opc_insn_i[0];
-
+   wire 			     align_err;
 
    wire 			     except_align;
    reg 				     except_align_r;
@@ -103,13 +99,11 @@ module mor1kx_lsu_espresso
    reg 				     except_dbus;
    reg 				     execute_go;
 
-   assign dbus_dat_o = (opc_insn_i[1:0]==2'b10) ?        // l.sb
+   assign dbus_dat_o = (lsu_length_i == 2'b00) ? // byte access
 		       {rfb_i[7:0],rfb_i[7:0],rfb_i[7:0],rfb_i[7:0]} :
-		       (opc_insn_i[1:0]==2'b11) ?        // l.sh
+		       (lsu_length_i == 2'b01) ? // halfword access
 		       {rfb_i[15:0],rfb_i[15:0]} :
-		       rfb_i;                         // l.sw
-
-
+		       rfb_i;                    // word access
 
    assign align_err_word = |dbus_adr_o[1:0];
    assign align_err_short = dbus_adr_o[0];
@@ -118,13 +112,8 @@ module mor1kx_lsu_espresso
    assign lsu_valid_o = dbus_ack_i | dbus_err_r| access_done;
    assign lsu_except_dbus_o = dbus_err_r | except_dbus;
 
-   assign load_align_err = ((opc_insn_i==`OR1K_OPCODE_LWZ |
-			     opc_insn_i==`OR1K_OPCODE_LWS) & align_err_word) |
-			   ((opc_insn_i==`OR1K_OPCODE_LHZ |
-			     opc_insn_i==`OR1K_OPCODE_LHS) & align_err_short);
-
-   assign store_align_err = (opc_insn_i==`OR1K_OPCODE_SW & align_err_word) |
-			    (opc_insn_i==`OR1K_OPCODE_SH & align_err_short);
+   assign align_err = (lsu_length_i == 2'b10) & align_err_word |
+		      (lsu_length_i == 2'b01) & align_err_short;
 
    assign lsu_except_align_o = except_align_r;
 
@@ -171,59 +160,30 @@ module mor1kx_lsu_espresso
        dbus_adr_r <= lsu_adr_i;
 
    // Big endian bus mapping
-   always @*
-     if (op_lsu_load_i) begin
-	case(opc_insn_i[2:0])
-	  3'b101,
-	  3'b110: // load halfword
+   always @(*)
+     case (lsu_length_i)
+       2'b00: // byte access
+	 case(dbus_adr_o[1:0])
+	   2'b00:
+	     dbus_bsel = 4'b1000;
+	   2'b01:
+	     dbus_bsel = 4'b0100;
+	   2'b10:
+	     dbus_bsel = 4'b0010;
+	   2'b11:
+	     dbus_bsel = 4'b0001;
+	 endcase
+       2'b01: // halfword access
 	    case(dbus_adr_o[1])
 	      1'b0:
 		dbus_bsel = 4'b1100;
 	      1'b1:
 		dbus_bsel = 4'b0011;
-	    endcase // case (dbus_adr_o[1])
-	  3'b011,
-	      3'b100: // load byte
-		case(dbus_adr_o[1:0])
-		  2'b00:
-		    dbus_bsel = 4'b1000;
-		  2'b01:
-		    dbus_bsel = 4'b0100;
-		  2'b10:
-		    dbus_bsel = 4'b0010;
-		  2'b11:
-		    dbus_bsel = 4'b0001;
-		endcase // case (dbus_adr_o[1:0])
-	  default:
-	    dbus_bsel = 4'b1111;
-	endcase // case (opc_insn_i[1:0])
-     end
-     else if (op_lsu_store_i) begin
-	case(opc_insn_i[1:0])
-	  2'b11: // Store halfword
-	    case(dbus_adr_o[1])
-	      1'b0:
-		dbus_bsel = 4'b1100;
-	      1'b1:
-		dbus_bsel = 4'b0011;
-	    endcase // case (dbus_adr_o[1])
-	  2'b10: // Store byte
-	    case(dbus_adr_o[1:0])
-	      2'b00:
-		dbus_bsel = 4'b1000;
-	      2'b01:
-		dbus_bsel = 4'b0100;
-	      2'b10:
-		dbus_bsel = 4'b0010;
-	      2'b11:
-		dbus_bsel = 4'b0001;
-	    endcase // case (dbus_adr_o[1:0])
-	  default:
-	    dbus_bsel = 4'b1111;
-	endcase // case (opc_insn_i[1:0])
-     end // if (op_lsu_store_i)
-     else
-       dbus_bsel = 4'b0000;
+	    endcase
+       2'b10,
+       2'b11:
+	 dbus_bsel = 4'b1111;
+     endcase
 
    assign dbus_bsel_o = dbus_bsel;
 
@@ -245,29 +205,21 @@ module mor1kx_lsu_espresso
      endcase // case (dbus_adr_r[1:0])
 
    // Do appropriate extension
-   always @*
-     case(opc_insn_i[0])// zero or sign-extended
-       1'b1: // zero extended
-	 case(opc_insn_i[2:1])
-	   2'b01: // lbz
-	     dbus_dat_extended = {24'd0,dbus_dat_aligned[31:24]};
-	   2'b10: // lhz
-	     dbus_dat_extended = {16'd0,dbus_dat_aligned[31:16]};
-	   default:
-	     dbus_dat_extended = dbus_dat_aligned;
-	 endcase // case (opc_insn_i[2:1])
-       1'b0: // sign extended
-	 case(opc_insn_i[2:1])
-	   2'b10: // lbs
-	     dbus_dat_extended = {{24{dbus_dat_aligned[31]}},
-				  dbus_dat_aligned[31:24]};
-	   2'b11: // lhz
-	     dbus_dat_extended = {{16{dbus_dat_aligned[31]}},
-				  dbus_dat_aligned[31:16]};
-	   default:
-	     dbus_dat_extended = dbus_dat_aligned;
-	 endcase // case (opc_insn_i[2:1])
-     endcase // case (opc_insn_i[0])
+   always @(*)
+     case({lsu_zext_i, lsu_length_i})
+       3'b100: // lbz
+	 dbus_dat_extended = {24'd0,dbus_dat_aligned[31:24]};
+       3'b101: // lhz
+	 dbus_dat_extended = {16'd0,dbus_dat_aligned[31:16]};
+       3'b000: // lbs
+	 dbus_dat_extended = {{24{dbus_dat_aligned[31]}},
+			      dbus_dat_aligned[31:24]};
+       3'b001: // lhs
+	 dbus_dat_extended = {{16{dbus_dat_aligned[31]}},
+			      dbus_dat_aligned[31:16]};
+       default:
+	 dbus_dat_extended = dbus_dat_aligned;
+     endcase
 
    // Register result incase writeback doesn't occur for a few cycles
    // TODO - remove this - we should write straight into the RF!
@@ -296,9 +248,8 @@ module mor1kx_lsu_espresso
 			       !(except_align | except_align_r) &
 			       !access_done;
 
-	   assign except_align = op_lsu & ((op_lsu_load_i & load_align_err) |
-					   (op_lsu_store_i & store_align_err)) &
-				 !execute_go;
+	   assign except_align = op_lsu & (op_lsu_load_i | op_lsu_store_i) &
+				 align_err & !execute_go;
 
 	end
       else
@@ -314,8 +265,7 @@ module mor1kx_lsu_espresso
 
 	   assign dbus_req_o = op_lsu & !except_align & !access_done;
 
-	   assign except_align = op_lsu & ((op_lsu_load_i & load_align_err) |
-					   (op_lsu_store_i & store_align_err));
+	   assign except_align = op_lsu & align_err;
 
 	end
    endgenerate

@@ -448,9 +448,10 @@ module mor1kx_cpu_espresso
     .padv_fetch_i			(padv_fetch_o),
     .lsu_adr_i				(adder_result_o),
     .rfb_i				(rfb_o),
-    .opc_insn_i			        (opc_insn_o),
     .op_lsu_load_i			(op_lsu_load_o),
     .op_lsu_store_i			(op_lsu_store_o),
+    .lsu_length_i			(lsu_length_o),
+    .lsu_zext_i				(lsu_zext_o),
     .exception_taken_i                  (exception_taken_o),
     .du_restart_i                       (du_restart_o),
     .stepping_i                         (stepping_o),
@@ -479,9 +480,10 @@ module mor1kx_cpu_espresso
       .padv_fetch_i			(padv_fetch_o),		 // Templated
       .lsu_adr_i			(adder_result_o),	 // Templated
       .rfb_i				(rfb_o),		 // Templated
-      .opc_insn_i			(opc_insn_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
       .op_lsu_store_i			(op_lsu_store_o),	 // Templated
+      .lsu_length_i			(lsu_length_o),		 // Templated
+      .lsu_zext_i			(lsu_zext_o),		 // Templated
       .exception_taken_i		(exception_taken_o),	 // Templated
       .du_restart_i			(du_restart_o),		 // Templated
       .stepping_i			(stepping_o),		 // Templated
