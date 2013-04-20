@@ -57,6 +57,8 @@ module mor1kx_lsu_cappuccino
     input 			      exec_op_lsu_store_i,
     input 			      ctrl_op_lsu_load_i,
     input 			      ctrl_op_lsu_store_i,
+    input [1:0] 		      ctrl_lsu_length_i,
+    input 			      ctrl_lsu_zext_i,
 
     output [OPTION_OPERAND_WIDTH-1:0] lsu_result_o,
     output 			      lsu_valid_o,
@@ -104,12 +106,7 @@ module mor1kx_lsu_cappuccino
    wire 			     align_err_word;
    wire 			     align_err_short;
 
-   wire 			     load_align_err;
-   wire 			     store_align_err;
-
-   wire 			     load_sext = !ctrl_opc_insn_i[0];
-   wire 			     load_zext = ctrl_opc_insn_i[0];
-
+   wire 			     align_err;
 
    wire 			     except_align;
 
@@ -158,11 +155,12 @@ module mor1kx_lsu_cappuccino
    reg 				     except_dpagefault_r;
    wire 			     dmmu_cache_inhibit;
 
-   assign dbus_sdat = (ctrl_opc_insn_i[1:0]==2'b10) ?        // l.sb
-		      {ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],ctrl_rfb_i[7:0]} :
-		      (ctrl_opc_insn_i[1:0]==2'b11) ?        // l.sh
+   assign dbus_sdat = (ctrl_lsu_length_i == 2'b00) ? // byte access
+		      {ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],
+		       ctrl_rfb_i[7:0],ctrl_rfb_i[7:0]} :
+		      (ctrl_lsu_length_i == 2'b01) ? // halfword access
 		      {ctrl_rfb_i[15:0],ctrl_rfb_i[15:0]} :
-		      ctrl_rfb_i;                         // l.sw
+		      ctrl_rfb_i;                    // word access
 
    assign align_err_word = |ctrl_lsu_adr_i[1:0];
    assign align_err_short = ctrl_lsu_adr_i[0];
@@ -171,18 +169,11 @@ module mor1kx_lsu_cappuccino
    assign lsu_valid_o = !dbus_access & dbus_ack | access_done;
    assign lsu_except_dbus_o = dbus_err | except_dbus;
 
-   assign load_align_err = ((ctrl_opc_insn_i==`OR1K_OPCODE_LWZ |
-			     ctrl_opc_insn_i==`OR1K_OPCODE_LWS) &
-			    align_err_word) |
-			   ((ctrl_opc_insn_i==`OR1K_OPCODE_LHZ |
-			     ctrl_opc_insn_i==`OR1K_OPCODE_LHS) &
-			    align_err_short);
 
-   assign store_align_err = (ctrl_opc_insn_i==`OR1K_OPCODE_SW & align_err_word) |
-			    (ctrl_opc_insn_i==`OR1K_OPCODE_SH & align_err_short);
+   assign align_err = (ctrl_lsu_length_i == 2'b10) & align_err_word |
+		      (ctrl_lsu_length_i == 2'b01) & align_err_short;
 
-   assign except_align = (ctrl_op_lsu_load_i & load_align_err) |
-			 (ctrl_op_lsu_store_i & store_align_err) ;
+   assign except_align = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) & align_err;
 
    assign lsu_except_align_o = except_align;
 
@@ -230,59 +221,30 @@ module mor1kx_lsu_cappuccino
        except_dpagefault_r <= 1;
 
    // Big endian bus mapping
-   always @*
-     if (ctrl_op_lsu_load_i) begin
-	case(ctrl_opc_insn_i[2:0])
-	  3'b101,
-	  3'b110: // load halfword
+   always @(*)
+     case (ctrl_lsu_length_i)
+       2'b00: // byte access
+	 case(ctrl_lsu_adr_i[1:0])
+	   2'b00:
+	     dbus_bsel = 4'b1000;
+	   2'b01:
+	     dbus_bsel = 4'b0100;
+	   2'b10:
+	     dbus_bsel = 4'b0010;
+	   2'b11:
+	     dbus_bsel = 4'b0001;
+	 endcase
+       2'b01: // halfword access
 	    case(ctrl_lsu_adr_i[1])
 	      1'b0:
 		dbus_bsel = 4'b1100;
 	      1'b1:
 		dbus_bsel = 4'b0011;
-	    endcase // case (ctrl_lsu_adr_i[1])
-	  3'b011,
-	      3'b100: // load byte
-		case(ctrl_lsu_adr_i[1:0])
-		  2'b00:
-		    dbus_bsel = 4'b1000;
-		  2'b01:
-		    dbus_bsel = 4'b0100;
-		  2'b10:
-		    dbus_bsel = 4'b0010;
-		  2'b11:
-		    dbus_bsel = 4'b0001;
-		endcase // case (ctrl_lsu_adr_i[1:0])
-	  default:
-	    dbus_bsel = 4'b1111;
-	endcase // case (opc_insn_i[1:0])
-     end
-     else if (ctrl_op_lsu_store_i) begin
-	case(ctrl_opc_insn_i[1:0])
-	  2'b11: // Store halfword
-	    case(ctrl_lsu_adr_i[1])
-	      1'b0:
-		dbus_bsel = 4'b1100;
-	      1'b1:
-		dbus_bsel = 4'b0011;
-	    endcase // case (ctrl_lsu_adr_i[1])
-	  2'b10: // Store byte
-	    case(ctrl_lsu_adr_i[1:0])
-	      2'b00:
-		dbus_bsel = 4'b1000;
-	      2'b01:
-		dbus_bsel = 4'b0100;
-	      2'b10:
-		dbus_bsel = 4'b0010;
-	      2'b11:
-		dbus_bsel = 4'b0001;
-	    endcase // case (ctrl_lsu_adr_i[1:0])
-	  default:
-	    dbus_bsel = 4'b1111;
-	endcase // case (ctrl_opc_insn_i[1:0])
-     end // if (ctrl_op_lsu_store_i)
-     else
-       dbus_bsel = 4'b0000;
+	    endcase
+       2'b10,
+       2'b11:
+	 dbus_bsel = 4'b1111;
+     endcase
 
    // Select part of read word
    always @*
@@ -298,29 +260,21 @@ module mor1kx_lsu_cappuccino
      endcase // case (ctrl_lsu_adr_i[1:0])
 
    // Do appropriate extension
-   always @*
-     case(ctrl_opc_insn_i[0])// zero or sign-extended
-       1'b1: // zero extended
-	 case(ctrl_opc_insn_i[2:1])
-	   2'b01: // lbz
-	     dbus_dat_extended = {24'd0,dbus_dat_aligned[31:24]};
-	   2'b10: // lhz
-	     dbus_dat_extended = {16'd0,dbus_dat_aligned[31:16]};
-	   default:
-	     dbus_dat_extended = dbus_dat_aligned;
-	 endcase // case (opc_insn_i[2:1])
-       1'b0: // sign extended
-	 case(ctrl_opc_insn_i[2:1])
-	   2'b10: // lbs
-	     dbus_dat_extended = {{24{dbus_dat_aligned[31]}},
-				  dbus_dat_aligned[31:24]};
-	   2'b11: // lhz
-	     dbus_dat_extended = {{16{dbus_dat_aligned[31]}},
-				  dbus_dat_aligned[31:16]};
-	   default:
-	     dbus_dat_extended = dbus_dat_aligned;
-	 endcase // case (opc_insn_i[2:1])
-     endcase // case (opc_insn_i[0])
+   always @(*)
+     case({ctrl_lsu_zext_i, ctrl_lsu_length_i})
+       3'b100: // lbz
+	 dbus_dat_extended = {24'd0,dbus_dat_aligned[31:24]};
+       3'b101: // lhz
+	 dbus_dat_extended = {16'd0,dbus_dat_aligned[31:16]};
+       3'b000: // lbs
+	 dbus_dat_extended = {{24{dbus_dat_aligned[31]}},
+			      dbus_dat_aligned[31:24]};
+       3'b001: // lhs
+	 dbus_dat_extended = {{16{dbus_dat_aligned[31]}},
+			      dbus_dat_aligned[31:16]};
+       default:
+	 dbus_dat_extended = dbus_dat_aligned;
+     endcase
 
    // Register result incase writeback doesn't occur for a few cycles
    always @(posedge clk)

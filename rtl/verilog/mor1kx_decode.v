@@ -109,6 +109,8 @@ module mor1kx_decode
 
     output reg 				  op_lsu_load_o,
     output reg 				  op_lsu_store_o,
+    output reg [1:0] 			  lsu_length_o,
+    output reg 				  lsu_zext_o,
 
     output reg 				  op_mfspr_o,
     output reg 				  op_mtspr_o,
@@ -166,6 +168,8 @@ module mor1kx_decode
 
    wire 				 op_load;
    wire 				 op_store;
+   reg [1:0] 				 lsu_length;
+   wire 				 lsu_zext;
    wire 				 opc_mtspr;
    wire 				 opc_setflag;
    wire 				 op_alu;
@@ -185,6 +189,30 @@ module mor1kx_decode
    assign op_store = (decode_insn_i[`OR1K_OPCODE_SELECT] == `OR1K_OPCODE_SW) ||
 		     (decode_insn_i[`OR1K_OPCODE_SELECT] == `OR1K_OPCODE_SB) ||
 		     (decode_insn_i[`OR1K_OPCODE_SELECT] == `OR1K_OPCODE_SH);
+
+   // Decode length of load/store operation
+   always @(*)
+     case (opc_insn)
+       `OR1K_OPCODE_SB,
+       `OR1K_OPCODE_LBZ,
+       `OR1K_OPCODE_LBS:
+	 lsu_length = 2'b00;
+
+       `OR1K_OPCODE_SH,
+       `OR1K_OPCODE_LHZ,
+       `OR1K_OPCODE_LHS:
+	 lsu_length = 2'b01;
+
+       `OR1K_OPCODE_SW,
+       `OR1K_OPCODE_LWZ,
+       `OR1K_OPCODE_LWS:
+	 lsu_length = 2'b10;
+
+       default:
+	 lsu_length = 2'b10;
+     endcase
+
+   assign lsu_zext = opc_insn[0];
 
    assign opc_mtspr = (decode_insn_i[`OR1K_OPCODE_SELECT] ==
 		       `OR1K_OPCODE_MTSPR);
@@ -600,6 +628,12 @@ endgenerate
 	      end
 	   end
 
+	 always @(posedge clk)
+	   if (padv_i) begin
+	      lsu_length_o <= lsu_length;
+	      lsu_zext_o <= lsu_zext;
+	   end
+
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst) begin
 	      op_mfspr_o <= 1'b0;
@@ -724,6 +758,8 @@ endgenerate
 
        	      op_lsu_load_o		= op_load;
 	      op_lsu_store_o		= op_store;
+	      lsu_length_o		= lsu_length;
+	      lsu_zext_o		= lsu_zext;
 
 	      op_mfspr_o		= op_mfspr;
 	      op_mtspr_o		= opc_mtspr;

@@ -173,6 +173,8 @@ module mor1kx_cpu_cappuccino
    wire			ctrl_flag_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			ctrl_flag_set_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_lsu_adr_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire [1:0]		ctrl_lsu_length_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire			ctrl_lsu_zext_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_mfspr_ack_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			ctrl_mtspr_ack_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			ctrl_op_lsu_load_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
@@ -226,8 +228,10 @@ module mor1kx_cpu_cappuccino
    wire			lsu_except_dbus_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire			lsu_except_dpagefault_o;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire			lsu_except_dtlb_miss_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire [1:0]		lsu_length_o;		// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] lsu_result_o;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire			lsu_valid_o;		// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire			lsu_zext_o;		// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			op_alu_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_jal_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -407,6 +411,8 @@ module mor1kx_cpu_cappuccino
       .op_alu_o				(op_alu_o),
       .op_lsu_load_o			(op_lsu_load_o),
       .op_lsu_store_o			(op_lsu_store_o),
+      .lsu_length_o			(lsu_length_o[1:0]),
+      .lsu_zext_o			(lsu_zext_o),
       .op_mfspr_o			(op_mfspr_o),
       .op_mtspr_o			(op_mtspr_o),
       .op_rfe_o				(op_rfe_o),
@@ -524,6 +530,8 @@ module mor1kx_cpu_cappuccino
     .exec_op_lsu_store_i		(op_lsu_store_o),
     .ctrl_op_lsu_load_i			(ctrl_op_lsu_load_o),
     .ctrl_op_lsu_store_i		(ctrl_op_lsu_store_o),
+    .ctrl_lsu_length_i			(ctrl_lsu_length_o),
+    .ctrl_lsu_zext_i			(ctrl_lsu_zext_o),
     .pipeline_flush_i			(pipeline_flush_o),
     .dc_enable_i			(spr_sr_o[`OR1K_SPR_SR_DCE]),
     .dmmu_enable_i			(spr_sr_o[`OR1K_SPR_SR_DME]),
@@ -582,6 +590,8 @@ module mor1kx_cpu_cappuccino
       .exec_op_lsu_store_i		(op_lsu_store_o),	 // Templated
       .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),	 // Templated
       .ctrl_op_lsu_store_i		(ctrl_op_lsu_store_o),	 // Templated
+      .ctrl_lsu_length_i		(ctrl_lsu_length_o),	 // Templated
+      .ctrl_lsu_zext_i			(ctrl_lsu_zext_o),	 // Templated
       .spr_bus_addr_i			(spr_bus_addr_o[15:0]),	 // Templated
       .spr_bus_we_i			(spr_bus_we_o),		 // Templated
       .spr_bus_stb_i			(spr_bus_stb_o),	 // Templated
@@ -728,6 +738,8 @@ module mor1kx_cpu_cappuccino
     .op_alu_i				(op_alu_o),
     .op_lsu_load_i			(op_lsu_load_o),
     .op_lsu_store_i			(op_lsu_store_o),
+    .lsu_length_i			(lsu_length_o),
+    .lsu_zext_i				(lsu_zext_o),
     .op_mfspr_i				(op_mfspr_o),
     .op_mtspr_i				(op_mtspr_o),
     .alu_valid_i			(alu_valid_o),
@@ -780,6 +792,8 @@ module mor1kx_cpu_cappuccino
       .ctrl_opc_insn_o			(ctrl_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]),
       .ctrl_op_lsu_load_o		(ctrl_op_lsu_load_o),
       .ctrl_op_lsu_store_o		(ctrl_op_lsu_store_o),
+      .ctrl_lsu_length_o		(ctrl_lsu_length_o[1:0]),
+      .ctrl_lsu_zext_o			(ctrl_lsu_zext_o),
       .ctrl_op_mfspr_o			(ctrl_op_mfspr_o),
       .ctrl_op_mtspr_o			(ctrl_op_mtspr_o),
       .ctrl_op_rfe_o			(ctrl_op_rfe_o),
@@ -818,6 +832,8 @@ module mor1kx_cpu_cappuccino
       .op_alu_i				(op_alu_o),		 // Templated
       .op_lsu_load_i			(op_lsu_load_o),	 // Templated
       .op_lsu_store_i			(op_lsu_store_o),	 // Templated
+      .lsu_length_i			(lsu_length_o),		 // Templated
+      .lsu_zext_i			(lsu_zext_o),		 // Templated
       .op_mfspr_i			(op_mfspr_o),		 // Templated
       .op_mtspr_i			(op_mtspr_o),		 // Templated
       .alu_valid_i			(alu_valid_o),		 // Templated
