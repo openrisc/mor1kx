@@ -405,12 +405,12 @@ endgenerate
                div_done <= 1'b0;
 	       div_by_zero_r <= 1'b0;
             end else if (decode_valid_i & div_op) begin
-	       div_n <= a;
-               div_d <= b;
+	       div_n <= rfa_i;
+               div_d <= rfb_i;
                div_r <= 0;
                div_neg <= 1'b0;
                div_done <= 1'b0;
-	       div_by_zero_r <= !(|b);
+	       div_by_zero_r <= !(|rfb_i);
 
                /*
                 * Convert negative operands in the case of signed division.
@@ -418,14 +418,15 @@ endgenerate
                 * converted back to negative later on
                 */
                if (divs_op) begin
-                  if (a[OPTION_OPERAND_WIDTH-1] ^ b[OPTION_OPERAND_WIDTH-1])
+                  if (rfa_i[OPTION_OPERAND_WIDTH-1] ^
+		      rfb_i[OPTION_OPERAND_WIDTH-1])
                     div_neg <= 1'b1;
 
-                  if (a[OPTION_OPERAND_WIDTH-1])
-                    div_n <= ~a + 1;
+                  if (rfa_i[OPTION_OPERAND_WIDTH-1])
+                    div_n <= ~rfa_i + 1;
 
-                  if (b[OPTION_OPERAND_WIDTH-1])
-                    div_d <= ~b + 1;
+                  if (rfb_i[OPTION_OPERAND_WIDTH-1])
+                    div_d <= ~rfb_i + 1;
                end
             end else if (!div_done) begin
                if (!div_sub[OPTION_OPERAND_WIDTH]) begin // div_sub >= 0
