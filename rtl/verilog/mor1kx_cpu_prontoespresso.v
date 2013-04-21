@@ -200,6 +200,7 @@ module mor1kx_cpu_prontoespresso
    wire			lsu_zext_o;		// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o;	// From mor1kx_ctrl_prontoespresso of mor1kx_ctrl_prontoespresso.v
    wire			op_alu_o;		// From mor1kx_decode of mor1kx_decode.v
+   wire			op_branch_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_jal_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_jbr_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_jr_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -415,6 +416,7 @@ module mor1kx_cpu_prontoespresso
       .op_jbr_o				(op_jbr_o),
       .op_jr_o				(op_jr_o),
       .op_jal_o				(op_jal_o),
+      .op_branch_o			(op_branch_o),
       .op_alu_o				(op_alu_o),
       .op_lsu_load_o			(op_lsu_load_o),
       .op_lsu_store_o			(op_lsu_store_o),
