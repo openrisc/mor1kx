@@ -1126,7 +1126,7 @@ module mor1kx_ctrl_cappuccino
 	   else if (stepping & pstep[2])
 	     branch_step <= {branch_step[0], decode_branch_i};
 	   else if (!stepping & padv_ctrl)
-	     branch_step <= {branch_step[0], execute_delay_slot};
+	     branch_step <= {branch_step[0], ctrl_delay_slot};
 
 	 assign stepped_into_delay_slot = branch_step[1];
 
