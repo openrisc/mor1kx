@@ -84,6 +84,8 @@ module mor1kx_decode
     output reg [`OR1K_ALU_OPC_WIDTH-1:0]  opc_alu_secondary_o,
 
     output reg [`OR1K_IMM_WIDTH-1:0] 	  imm16_o,
+    output reg [OPTION_OPERAND_WIDTH-1:0] immediate_o,
+    output reg 				  immediate_sel_o,
 
     // Upper 10 bits of immediate for jumps and branches
     output reg [9:0] 			  immjbr_upper_o,
@@ -150,7 +152,9 @@ module mor1kx_decode
    wire [`OR1K_ALU_OPC_WIDTH-1:0] 	opc_alu_secondary;
 
    wire [`OR1K_IMM_WIDTH-1:0] 		imm16;
+   wire [OPTION_OPERAND_WIDTH-1:0] 	immediate;
    wire [9:0] 				immjbr_upper;
+   wire 				immediate_sel;
 
    wire 				decode_except_ibus_align;
    reg 					execute_except_illegal;
@@ -180,6 +184,10 @@ module mor1kx_decode
    wire 				 op_rfe;
 
    wire 				 flag;
+
+   wire 				 imm_sext_sel;
+   wire 				 imm_zext_sel;
+   wire 				 imm_high_sel;
 
    // load opcodes are 6'b10_0000 to 6'b10_0110, 0 to 6, so check for 7 and up
    assign op_load = (decode_insn_i[31:30]==2'b10) & !(&decode_insn_i[28:26])&
@@ -258,7 +266,6 @@ module mor1kx_decode
 		   !(decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_SF |
 		     opc_mtspr | op_store));
 
-
    // Register file addresses are not registered here, but rather go
    // straight out to RF so read is done when execute stage is ready
    assign decode_rfa_adr_o = decode_insn_i[`OR1K_RA_SELECT];
@@ -277,6 +284,25 @@ module mor1kx_decode
    // Upper 10 bits for jump/branch instructions
    assign immjbr_upper = decode_insn_i[25:16];
 
+   assign imm_sext_sel = ((opc_insn[5:4] == 2'b10) &
+                          ~(opc_insn==`OR1K_OPCODE_ORI) &
+                          ~(opc_insn==`OR1K_OPCODE_ANDI)) |
+                         (opc_insn==`OR1K_OPCODE_SW) |
+                         (opc_insn==`OR1K_OPCODE_SH) |
+                         (opc_insn==`OR1K_OPCODE_SB);
+
+   assign imm_zext_sel = ((opc_insn[5:4] == 2'b10) &
+                          ((opc_insn==`OR1K_OPCODE_ORI) |
+			   (opc_insn==`OR1K_OPCODE_ANDI))) |
+                         (opc_insn==`OR1K_OPCODE_MTSPR);
+
+   assign imm_high_sel = opc_insn == `OR1K_OPCODE_MOVHI;
+
+   assign immediate = imm_sext_sel ? {{16{imm16[15]}},imm16[15:0]} :
+		      imm_zext_sel ? {{16{1'b0}},imm16[15:0]} :
+		      {imm16,16'd0}; // imm_high_sel
+
+   assign immediate_sel = imm_sext_sel | imm_zext_sel | imm_high_sel;
 
    // ALU opcode
    assign opc_alu = (op_jbr | op_jal) ? `OR1K_ALU_OPC_ADD :
@@ -647,11 +673,12 @@ endgenerate
 	      end
 	   end
 
-	 always @(posedge clk `OR_ASYNC_RST)
-	   if (rst)
-	     imm16_o <= 0;
-	   else if (padv_i)
-	     imm16_o <= imm16;
+	 always @(posedge clk)
+	   if (padv_i) begin
+	      imm16_o <= imm16;
+	      immediate_o <= immediate;
+	      immediate_sel_o <= immediate_sel;
+	   end
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
@@ -766,6 +793,8 @@ endgenerate
 
 	      imm16_o			= imm16;
 	      immjbr_upper_o		= immjbr_upper;
+	      immediate_o		= immediate;
+	      immediate_sel_o		= immediate_sel;
 
 	      opc_alu_o			= opc_alu;
 	      opc_alu_secondary_o	= opc_alu_secondary;

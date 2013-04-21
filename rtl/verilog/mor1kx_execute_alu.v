@@ -57,6 +57,8 @@ module mor1kx_execute_alu
     input [`OR1K_ALU_OPC_WIDTH-1:0]   opc_alu_secondary_i,
 
     input [`OR1K_IMM_WIDTH-1:0]       imm16_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  immediate_i,
+    input 			      immediate_sel_i,
 
     input [`OR1K_OPCODE_WIDTH-1:0]    opc_insn_i,
 
@@ -77,12 +79,12 @@ module mor1kx_execute_alu
     output 			      flag_set_o,
     output 			      flag_clear_o,
 
-    input                             carry_i,
-    output reg                        carry_set_o,
-    output reg                        carry_clear_o,
+    input 			      carry_i,
+    output reg 			      carry_set_o,
+    output reg 			      carry_clear_o,
 
-    output reg                        overflow_set_o,
-    output reg                        overflow_clear_o,
+    output reg 			      overflow_set_o,
+    output reg 			      overflow_clear_o,
 
     output [OPTION_OPERAND_WIDTH-1:0] alu_result_o,
     output 			      alu_valid_o,
@@ -149,37 +151,15 @@ module mor1kx_execute_alu
 
    wire [OPTION_OPERAND_WIDTH-1:0]        cmov_result;
 
-
-   // First stage signals - detect which operands we should take
-   wire                                   operandb_sext_imm;
-   wire                                   operandb_zext_imm;
-
-   assign operandb_sext_imm = ((opc_insn_i[5:4] == 2'b10) &
-                             ~(opc_insn_i==`OR1K_OPCODE_ORI) &
-                             ~(opc_insn_i==`OR1K_OPCODE_ANDI)) |
-                             (opc_insn_i==`OR1K_OPCODE_SW) |
-                             (opc_insn_i==`OR1K_OPCODE_SH) |
-                             (opc_insn_i==`OR1K_OPCODE_SB);
-
-   assign operandb_zext_imm = ((opc_insn_i[5:4] == 2'b10) &
-                              ((opc_insn_i==`OR1K_OPCODE_ORI) |
-                               (opc_insn_i==`OR1K_OPCODE_ANDI))) |
-                             (opc_insn_i==`OR1K_OPCODE_MTSPR);
-
 generate
 if (CALCULATE_BRANCH_DEST=="TRUE") begin : calculate_branch_dest
    assign a = (op_jbr_i | op_jr_i) ? pc_execute_i : rfa_i;
-   assign b = operandb_sext_imm ? {{16{imm16_i[15]}},imm16_i[15:0]} :
-              operandb_zext_imm ? {{16{1'b0}},imm16_i[15:0]} :
-              (opc_insn_i==`OR1K_OPCODE_MOVHI) ? {imm16_i,16'd0} :
+   assign b = immediate_sel_i ? immediate_i :
               op_jbr_i ? {{4{immjbr_upper_i[9]}},immjbr_upper_i,imm16_i,2'b00} :
               rfb_i;
 end else begin
    assign a = rfa_i;
-   assign b = operandb_sext_imm ? {{16{imm16_i[15]}},imm16_i[15:0]} :
-              operandb_zext_imm ? {{16{1'b0}},imm16_i[15:0]} :
-              (opc_insn_i==`OR1K_OPCODE_MOVHI) ? {imm16_i,16'd0} :
-              rfb_i;
+   assign b = immediate_sel_i ? immediate_i : rfb_i;
 end
 endgenerate
 

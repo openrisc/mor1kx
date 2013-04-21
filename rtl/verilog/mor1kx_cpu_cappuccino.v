@@ -222,6 +222,8 @@ module mor1kx_cpu_cappuccino
    wire			flag_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			flag_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire [`OR1K_IMM_WIDTH-1:0] imm16_o;		// From mor1kx_decode of mor1kx_decode.v
+   wire [OPTION_OPERAND_WIDTH-1:0] immediate_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			immediate_sel_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [9:0]		immjbr_upper_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			lsu_except_align_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire			lsu_except_dbus_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
@@ -397,6 +399,8 @@ module mor1kx_cpu_cappuccino
       .opc_alu_o			(opc_alu_o[`OR1K_ALU_OPC_WIDTH-1:0]),
       .opc_alu_secondary_o		(opc_alu_secondary_o[`OR1K_ALU_OPC_WIDTH-1:0]),
       .imm16_o				(imm16_o[`OR1K_IMM_WIDTH-1:0]),
+      .immediate_o			(immediate_o[OPTION_OPERAND_WIDTH-1:0]),
+      .immediate_sel_o			(immediate_sel_o),
       .immjbr_upper_o			(immjbr_upper_o[9:0]),
       .execute_rfd_adr_o		(execute_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .decode_rfd_adr_o			(decode_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
@@ -453,6 +457,8 @@ module mor1kx_cpu_cappuccino
     .opc_alu_i			        (opc_alu_o),
     .opc_alu_secondary_i		(opc_alu_secondary_o),
     .imm16_i				(imm16_o),
+    .immediate_i			(immediate_o),
+    .immediate_sel_i			(immediate_sel_o),
     .opc_insn_i			        (opc_insn_o),
     .decode_valid_i			(decode_valid_o),
     .op_jbr_i				(op_jbr_o),
@@ -505,6 +511,8 @@ module mor1kx_cpu_cappuccino
       .opc_alu_i			(opc_alu_o),		 // Templated
       .opc_alu_secondary_i		(opc_alu_secondary_o),	 // Templated
       .imm16_i				(imm16_o),		 // Templated
+      .immediate_i			(immediate_o),		 // Templated
+      .immediate_sel_i			(immediate_sel_o),	 // Templated
       .opc_insn_i			(opc_insn_o),		 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
       .op_jbr_i				(op_jbr_o),		 // Templated
