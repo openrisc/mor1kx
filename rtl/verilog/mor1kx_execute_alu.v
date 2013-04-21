@@ -550,7 +550,7 @@ endgenerate
       /* verilator lint_off WIDTH */
       else if (OPTION_SHIFTER=="BARREL" &&
                FEATURE_SRA=="ENABLED" &&
-               FEATURE_ROR!="ENABLED") begin : bull_barrel_shifter_no_ror
+               FEATURE_ROR!="ENABLED") begin : full_barrel_shifter_no_ror
 	 /* verilator lint_on WIDTH */
          assign shift_valid = 1;
          assign shift_result =
@@ -566,7 +566,7 @@ endgenerate
       /* verilator lint_off WIDTH */
       else if (OPTION_SHIFTER=="BARREL" &&
                FEATURE_SRA!="ENABLED" &&
-               FEATURE_ROR!="ENABLED") begin : bull_barrel_shifter_no_ror_sra
+               FEATURE_ROR!="ENABLED") begin : full_barrel_shifter_no_ror_sra
 	 /* verilator lint_on WIDTH */
          assign shift_valid = 1;
          assign shift_result =
