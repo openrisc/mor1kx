@@ -106,6 +106,7 @@ module mor1kx_decode
     output reg 				  op_jbr_o,
     output reg 				  op_jr_o,
     output reg 				  op_jal_o,
+    output reg 				  op_branch_o,
 
     output reg 				  op_alu_o,
 
@@ -180,6 +181,7 @@ module mor1kx_decode
    wire 				 op_jbr;
    wire 				 op_jr;
    wire 				 op_jal;
+   wire 				 op_branch;
    wire 				 op_mfspr;
    wire 				 op_rfe;
 
@@ -249,6 +251,9 @@ module mor1kx_decode
 
    assign op_jal = decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JALR |
 		   decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JAL;
+
+   // All branch instructions combined
+   assign op_branch = op_jbr | op_jr | op_jal;
 
    assign op_mfspr = decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_MFSPR;
 
@@ -593,21 +598,25 @@ endgenerate
 	      op_jbr_o <= 0;
 	      op_jr_o <= 0;
 	      op_jal_o <= 0;
+	      op_branch_o <= 0;
 	   end
 	   else if (pipeline_flush_i)
 	     begin
 		op_jbr_o <= 0;
 		op_jr_o <= 0;
 		op_jal_o <= 0;
+		op_branch_o <= 0;
 	     end
 	   else if (padv_i) begin
 	      op_jbr_o <= op_jbr;
 	      op_jr_o <= op_jr;
 	      op_jal_o <= op_jal;
+	      op_branch_o <= op_branch;
 	      if (decode_bubble_o) begin
 		 op_jbr_o <= 0;
 		 op_jr_o <= 0;
 		 op_jal_o <= 0;
+		 op_branch_o <= 0;
 	      end
 	   end
 
@@ -778,6 +787,7 @@ endgenerate
 	      op_jbr_o			= op_jbr;
 	      op_jr_o			= op_jr;
 	      op_jal_o			= op_jal;
+	      op_branch_o		= op_branch;
 	      op_rfe_o			= op_rfe;
 
 

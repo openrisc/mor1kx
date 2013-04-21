@@ -97,8 +97,8 @@ module mor1kx_ctrl_cappuccino
 
     // PC of execute stage (NPC)
     input [OPTION_OPERAND_WIDTH-1:0]  pc_execute_i,
-    // Opcode of execute stage instruction
-    input [`OR1K_OPCODE_WIDTH-1:0]    execute_opc_insn_i,
+
+    input 			      execute_op_branch_i,
 
     // Exception inputs, registered on output of execute stage
     input 			      except_ibus_err_i,
@@ -478,15 +478,10 @@ module mor1kx_ctrl_cappuccino
      else if (exception_r & fetch_exception_taken_i)
        exception_taken <= 1;
 
-   wire execute_branch_insn = execute_opc_insn_i <  `OR1K_OPCODE_NOP  |
-			      execute_opc_insn_i == `OR1K_OPCODE_JR   |
-			      execute_opc_insn_i == `OR1K_OPCODE_JALR |
-			      execute_opc_insn_i == `OR1K_OPCODE_JAL;
-
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        last_branch_insn_pc <= 0;
-     else if (padv_execute_o & execute_branch_insn)
+     else if (padv_execute_o & execute_op_branch_i)
        last_branch_insn_pc <= pc_execute_i;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -707,7 +702,7 @@ module mor1kx_ctrl_cappuccino
      if (rst)
        execute_delay_slot <= 0;
      else if (padv_execute_o)
-       execute_delay_slot <= execute_branch_insn;
+       execute_delay_slot <= execute_op_branch_i;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)

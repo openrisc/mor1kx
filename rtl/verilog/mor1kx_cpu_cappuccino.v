@@ -235,6 +235,7 @@ module mor1kx_cpu_cappuccino
    wire			lsu_zext_o;		// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			op_alu_o;		// From mor1kx_decode of mor1kx_decode.v
+   wire			op_branch_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_jal_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_jbr_o;		// From mor1kx_decode of mor1kx_decode.v
    wire			op_jr_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -411,6 +412,7 @@ module mor1kx_cpu_cappuccino
       .op_jbr_o				(op_jbr_o),
       .op_jr_o				(op_jr_o),
       .op_jal_o				(op_jal_o),
+      .op_branch_o			(op_branch_o),
       .op_alu_o				(op_alu_o),
       .op_lsu_load_o			(op_lsu_load_o),
       .op_lsu_store_o			(op_lsu_store_o),
@@ -868,6 +870,7 @@ module mor1kx_cpu_cappuccino
     .ctrl_flag_clear_i		(ctrl_flag_clear_o),
     .pc_ctrl_i			(pc_execute_to_ctrl),
     .pc_execute_i		(pc_decode_to_execute),
+    .execute_op_branch_i	(op_branch_o),
     .ctrl_op_mfspr_i		(ctrl_op_mfspr_o),
     .ctrl_op_mtspr_i		(ctrl_op_mtspr_o),
     .ctrl_op_rfe_i		(ctrl_op_rfe_o),
@@ -968,7 +971,7 @@ module mor1kx_cpu_cappuccino
       .decode_branch_i			(decode_branch_o),	 // Templated
       .decode_branch_target_i		(decode_branch_target_o), // Templated
       .pc_execute_i			(pc_decode_to_execute),	 // Templated
-      .execute_opc_insn_i		(opc_insn_o),		 // Templated
+      .execute_op_branch_i		(op_branch_o),		 // Templated
       .except_ibus_err_i		(ctrl_except_ibus_err_o), // Templated
       .except_itlb_miss_i		(ctrl_except_itlb_miss_o), // Templated
       .except_ipagefault_i		(ctrl_except_ipagefault_o), // Templated
