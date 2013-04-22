@@ -84,6 +84,7 @@ module mor1kx_icache
    wire 			      refill_done;
    wire 			      refill_hit;
    reg [(1<<(OPTION_ICACHE_BLOCK_WIDTH-2))-1:0] refill_valid;
+   reg [(1<<(OPTION_ICACHE_BLOCK_WIDTH-2))-1:0] refill_valid_r;
    wire				      invalidate;
    wire				      invalidate_edge;
    reg				      invalidate_r;
@@ -168,7 +169,7 @@ module mor1kx_icache
 
    assign refill_done_o = refill_done;
    assign refill_done = refill_valid[next_ibus_adr[OPTION_ICACHE_BLOCK_WIDTH-1:2]];
-   assign refill_hit = refill_valid[cpu_adr_match_i[OPTION_ICACHE_BLOCK_WIDTH-1:2]] &
+   assign refill_hit = refill_valid_r[cpu_adr_match_i[OPTION_ICACHE_BLOCK_WIDTH-1:2]] &
 		       cpu_adr_match_i[OPTION_ICACHE_LIMIT_WIDTH-1:
 				       OPTION_ICACHE_BLOCK_WIDTH] ==
 		       ibus_adr[OPTION_ICACHE_LIMIT_WIDTH-1:
@@ -200,8 +201,10 @@ module mor1kx_icache
     * Cache FSM
     */
    always @(posedge clk `OR_ASYNC_RST) begin
+      refill_valid_r <= refill_valid;
       case (state)
 	IDLE: begin
+	   ibus_adr <= cpu_adr_i;
 	   if (cpu_req_i)
 	     state <= READ;
 	end
@@ -213,6 +216,7 @@ module mor1kx_icache
 		 ibus_adr <= cpu_adr_i;
 	      end else if (cpu_req_i) begin
 		 refill_valid <= 0;
+		 refill_valid_r <= 0;
 		 ibus_adr <= cpu_adr_match_i;
 		 tag_save_lru <= lru;
 		 if (OPTION_ICACHE_WAYS == 2) begin
@@ -234,7 +238,7 @@ module mor1kx_icache
 	      refill_valid[ibus_adr[OPTION_ICACHE_BLOCK_WIDTH-1:2]] <= 1;
 
 	      if (refill_done)
-		state <= READ;
+		state <= IDLE;
 	   end
 	end
 
@@ -348,7 +352,7 @@ module mor1kx_icache
 	       #(
 		 .ADDR_WIDTH(WAY_WIDTH-2),
 		 .DATA_WIDTH(OPTION_OPERAND_WIDTH),
-		 .ENABLE_BYPASS("TRUE")
+		 .ENABLE_BYPASS("FALSE")
 		 )
 	 way_data_ram
 	       (/*AUTOINST*/
@@ -377,7 +381,7 @@ module mor1kx_icache
      #(
        .ADDR_WIDTH(OPTION_ICACHE_SET_WIDTH),
        .DATA_WIDTH(TAG_WIDTH),
-       .ENABLE_BYPASS("TRUE")
+       .ENABLE_BYPASS("FALSE")
      )
    tag_ram
      (/*AUTOINST*/
