@@ -94,6 +94,7 @@ module mor1kx_dcache
    wire 			      refill_done;
    wire 			      refill_hit;
    reg [(1<<(OPTION_DCACHE_BLOCK_WIDTH-2))-1:0] refill_valid;
+   reg [(1<<(OPTION_DCACHE_BLOCK_WIDTH-2))-1:0] refill_valid_r;
    wire				      invalidate;
    wire				      invalidate_edge;
    reg				      invalidate_r;
@@ -184,7 +185,7 @@ module mor1kx_dcache
 
    assign refill_done_o = refill_done;
    assign refill_done = refill_valid[next_dbus_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]];
-   assign refill_hit = refill_valid[cpu_adr_match_i[OPTION_DCACHE_BLOCK_WIDTH-1:2]] &
+   assign refill_hit = refill_valid_r[cpu_adr_match_i[OPTION_DCACHE_BLOCK_WIDTH-1:2]] &
 		       cpu_adr_match_i[OPTION_DCACHE_LIMIT_WIDTH-1:
 				       OPTION_DCACHE_BLOCK_WIDTH] ==
 		       dbus_adr[OPTION_DCACHE_LIMIT_WIDTH-1:
@@ -238,6 +239,7 @@ module mor1kx_dcache
       else if (!cpu_req_i)
 	write_pending <= 0;
 
+      refill_valid_r <= refill_valid;
       case (state)
 	IDLE: begin
 	   if (cpu_req_i) begin
@@ -252,6 +254,7 @@ module mor1kx_dcache
 	   if (dc_access_i | cpu_we_i & dc_enable_i) begin
 	      if (!hit & cpu_req_i & !write_pending) begin
 		 refill_valid <= 0;
+		 refill_valid_r <= 0;
 		 dbus_adr <= cpu_adr_match_i;
 		 tag_save_lru <= lru;
 		 if (OPTION_DCACHE_WAYS == 2) begin
@@ -275,14 +278,14 @@ module mor1kx_dcache
 	      refill_valid[dbus_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]] <= 1;
 
 	      if (refill_done)
-		state <= READ;
+		state <= IDLE;
 	   end
 	end
 
 	WRITE: begin
 	   if (dc_access_i) begin
 	      if ((dbus_ack_i | !cpu_req_i) & !cpu_we_i)
-		state <= READ;
+		state <= IDLE;
 	   end else begin
 	      state <= IDLE;
 	   end
@@ -427,7 +430,7 @@ module mor1kx_dcache
 	       #(
 		 .ADDR_WIDTH(WAY_WIDTH-2),
 		 .DATA_WIDTH(OPTION_OPERAND_WIDTH),
-		 .ENABLE_BYPASS("TRUE")
+		 .ENABLE_BYPASS("FALSE")
 		 )
 	 way_data_ram
 	       (/*AUTOINST*/
@@ -456,7 +459,7 @@ module mor1kx_dcache
      #(
        .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
        .DATA_WIDTH(TAG_WIDTH),
-       .ENABLE_BYPASS("TRUE")
+       .ENABLE_BYPASS("FALSE")
      )
    tag_ram
      (/*AUTOINST*/
