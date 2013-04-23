@@ -148,7 +148,7 @@ module mor1kx_fetch_cappuccino
 		       !(except_itlb_miss | except_ipagefault) |
 		       decode_except_itlb_miss_o & ctrl_branch_exception_i |
 		       decode_except_ipagefault_o & ctrl_branch_exception_i |
-		       doing_rfe_i & ctrl_branch_exception_i;
+		       doing_rfe_i;
 
    assign except_itlb_miss = tlb_miss & immu_enable_i & bus_access_done &
 			      !doing_rfe_i;
