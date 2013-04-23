@@ -112,7 +112,7 @@ module mor1kx_lsu_cappuccino
    reg 				     except_dbus;
 
    wire 			     dbus_ack;
-   wire 			     dbus_err;
+   reg 				     dbus_err;
    wire [OPTION_OPERAND_WIDTH-1:0]   dbus_ldat;
    wire [OPTION_OPERAND_WIDTH-1:0]   dbus_sdat;
    wire [OPTION_OPERAND_WIDTH-1:0]   dbus_adr;
@@ -292,7 +292,6 @@ module mor1kx_lsu_cappuccino
 
    assign dbus_access = !dc_access & !dc_refill;
    assign dbus_ack = dbus_access ? dbus_ack_i : dc_ack;
-   assign dbus_err = dbus_access ? dbus_err_i : dc_err;
    assign dbus_ldat = dbus_access ? dbus_dat_i : dc_ldat;
    assign dbus_adr_o = dbus_access ? dbus_adr : dc_dbus_adr;
    assign dbus_req_o = dbus_access ? dbus_req : dc_dbus_req;
@@ -300,6 +299,9 @@ module mor1kx_lsu_cappuccino
    assign dbus_bsel_o = dbus_access ? dbus_bsel : dc_dbus_bsel;
    assign dbus_dat_o = dbus_access ? dbus_sdat : dc_dbus_sdat;
    assign dbus_burst_o = dc_refill & !dc_refill_done;
+
+   always @(posedge clk)
+     dbus_err <= dbus_err_i;
 
 `ifndef SYNTHESIS
    /* synthesis translate_off */

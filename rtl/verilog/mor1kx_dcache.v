@@ -30,7 +30,7 @@ module mor1kx_dcache
     output 			      refill_done_o,
 
     // CPU Interface
-    output reg 			      cpu_err_o,
+    output 			      cpu_err_o,
     output 			      cpu_ack_o,
     output [31:0] 		      cpu_dat_o,
     input [31:0] 		      cpu_dat_i,
@@ -123,6 +123,7 @@ module mor1kx_dcache
 
    genvar 			      i;
 
+   assign cpu_err_o = dbus_err_i;
    assign cpu_ack_o = ((read | refill) & hit & !write_pending |
 		       refill_hit |
 		       write & dbus_ack_i) & cpu_req_i;
@@ -214,12 +215,6 @@ module mor1kx_dcache
        invalidate_r <= 1'b0;
      else
        invalidate_r <= invalidate;
-
-    always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       cpu_err_o <= 0;
-     else
-       cpu_err_o <= dbus_err_i;
 
    /*
     * Cache FSM
