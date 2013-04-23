@@ -191,14 +191,17 @@ module mor1kx_decode
    wire 				 imm_zext_sel;
    wire 				 imm_high_sel;
 
+   // Insn opcode
+   assign opc_insn = decode_insn_i[`OR1K_OPCODE_SELECT];
+
    // load opcodes are 6'b10_0000 to 6'b10_0110, 0 to 6, so check for 7 and up
-   assign op_load = (decode_insn_i[31:30]==2'b10) & !(&decode_insn_i[28:26])&
+   assign op_load = (decode_insn_i[31:30] == 2'b10) & !(&decode_insn_i[28:26]) &
 		    !decode_insn_i[29];
 
    // Detect when instruction is store
-   assign op_store = (decode_insn_i[`OR1K_OPCODE_SELECT] == `OR1K_OPCODE_SW) ||
-		     (decode_insn_i[`OR1K_OPCODE_SELECT] == `OR1K_OPCODE_SB) ||
-		     (decode_insn_i[`OR1K_OPCODE_SELECT] == `OR1K_OPCODE_SH);
+   assign op_store = (opc_insn == `OR1K_OPCODE_SW) ||
+		     (opc_insn == `OR1K_OPCODE_SB) ||
+		     (opc_insn == `OR1K_OPCODE_SH);
 
    // Decode length of load/store operation
    always @(*)
@@ -224,51 +227,49 @@ module mor1kx_decode
 
    assign lsu_zext = opc_insn[0];
 
-   assign opc_mtspr = (decode_insn_i[`OR1K_OPCODE_SELECT] ==
-		       `OR1K_OPCODE_MTSPR);
+   assign opc_mtspr = opc_insn == `OR1K_OPCODE_MTSPR;
 
    // Detect when setflag instruction
-   assign opc_setflag = decode_insn_i[`OR1K_OPCODE_SELECT] == `OR1K_OPCODE_SF ||
-			decode_insn_i[`OR1K_OPCODE_SELECT] ==
-			`OR1K_OPCODE_SFIMM;
+   assign opc_setflag = opc_insn == `OR1K_OPCODE_SF ||
+			opc_insn == `OR1K_OPCODE_SFIMM;
 
    // Detect which instructions will be generating a result from the ALU
-   assign op_alu = ((decode_insn_i[31:30]==2'b10) &
+   assign op_alu = ((decode_insn_i[31:30] == 2'b10) &
 		    //l.addi and the rest...
-		    (decode_insn_i[28:26]==3'b111 | decode_insn_i[29])) |
+		    (decode_insn_i[28:26] == 3'b111 | decode_insn_i[29])) |
 		   // all normal ALU ops, and l.cust5-8
-		   decode_insn_i[31:29]==3'b111 |
+		   decode_insn_i[31:29] == 3'b111 |
 		   // l.mt/fspr - need address out of ALU
 		   opc_mtspr |
-		   (decode_insn_i[`OR1K_OPCODE_SELECT] == `OR1K_OPCODE_MFSPR) |
-		   (decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_MOVHI);
+		   (opc_insn == `OR1K_OPCODE_MFSPR) |
+		   (opc_insn == `OR1K_OPCODE_MOVHI);
 
    // Bottom 4 opcodes branch against an immediate
-   assign op_jbr = decode_insn_i[`OR1K_OPCODE_SELECT] < `OR1K_OPCODE_NOP;
+   assign op_jbr = opc_insn < `OR1K_OPCODE_NOP;
 
-   assign op_jr = decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JR |
-		  decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JALR;
+   assign op_jr = opc_insn == `OR1K_OPCODE_JR |
+		  opc_insn == `OR1K_OPCODE_JALR;
 
-   assign op_jal = decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JALR |
-		   decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JAL;
+   assign op_jal = opc_insn == `OR1K_OPCODE_JALR |
+		   opc_insn == `OR1K_OPCODE_JAL;
 
    // All branch instructions combined
    assign op_branch = op_jbr | op_jr | op_jal;
 
-   assign op_mfspr = decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_MFSPR;
+   assign op_mfspr = opc_insn == `OR1K_OPCODE_MFSPR;
 
-   assign op_rfe = decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_RFE;
+   assign op_rfe = opc_insn == `OR1K_OPCODE_RFE;
 
    // Which instructions cause writeback?
-   assign rf_wb = (decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JAL |
-		   decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_MOVHI |
-		   decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_JALR) |
+   assign rf_wb = (opc_insn == `OR1K_OPCODE_JAL |
+		   opc_insn == `OR1K_OPCODE_MOVHI |
+		   opc_insn == `OR1K_OPCODE_JALR) |
 		  // All '10????' opcodes except l.sfxxi
-		  (decode_insn_i[31:30]==2'b10 &
-		   !(decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_SFIMM)) |
+		  (decode_insn_i[31:30] == 2'b10 &
+		   !(opc_insn == `OR1K_OPCODE_SFIMM)) |
 		  // All '11????' opcodes except l.sfxx and l.mtspr
-		  (decode_insn_i[31:30]==2'b11 &
-		   !(decode_insn_i[`OR1K_OPCODE_SELECT]==`OR1K_OPCODE_SF |
+		  (decode_insn_i[31:30] == 2'b11 &
+		   !(opc_insn == `OR1K_OPCODE_SF |
 		     opc_mtspr | op_store));
 
    // Register file addresses are not registered here, but rather go
@@ -278,8 +279,6 @@ module mor1kx_decode
 
    assign decode_rfd_adr_o = op_jal ? 9 : decode_insn_i[`OR1K_RD_SELECT];
 
-   // Insn opcode
-   assign opc_insn = decode_insn_i[`OR1K_OPCODE_SELECT];
    // Immediate in l.mtspr is broken up, reassemble
    assign imm16 = (opc_mtspr | op_store) ?
 		  {decode_insn_i[25:21],decode_insn_i[10:0]} :
@@ -290,16 +289,16 @@ module mor1kx_decode
    assign immjbr_upper = decode_insn_i[25:16];
 
    assign imm_sext_sel = ((opc_insn[5:4] == 2'b10) &
-                          ~(opc_insn==`OR1K_OPCODE_ORI) &
-                          ~(opc_insn==`OR1K_OPCODE_ANDI)) |
-                         (opc_insn==`OR1K_OPCODE_SW) |
-                         (opc_insn==`OR1K_OPCODE_SH) |
-                         (opc_insn==`OR1K_OPCODE_SB);
+                          ~(opc_insn == `OR1K_OPCODE_ORI) &
+                          ~(opc_insn == `OR1K_OPCODE_ANDI)) |
+                         (opc_insn == `OR1K_OPCODE_SW) |
+                         (opc_insn == `OR1K_OPCODE_SH) |
+                         (opc_insn == `OR1K_OPCODE_SB);
 
    assign imm_zext_sel = ((opc_insn[5:4] == 2'b10) &
-                          ((opc_insn==`OR1K_OPCODE_ORI) |
-			   (opc_insn==`OR1K_OPCODE_ANDI))) |
-                         (opc_insn==`OR1K_OPCODE_MTSPR);
+                          ((opc_insn == `OR1K_OPCODE_ORI) |
+			   (opc_insn == `OR1K_OPCODE_ANDI))) |
+                         (opc_insn == `OR1K_OPCODE_MTSPR);
 
    assign imm_high_sel = opc_insn == `OR1K_OPCODE_MOVHI;
 
@@ -321,12 +320,10 @@ module mor1kx_decode
    assign execute_except_itlb_miss = decode_except_itlb_miss_i;
    assign execute_except_ipagefault = decode_except_ipagefault_i;
 
-   assign execute_except_syscall = decode_insn_i[`OR1K_OPCODE_SELECT] ==
-				   `OR1K_OPCODE_SYSTRAPSYNC &&
+   assign execute_except_syscall = opc_insn == `OR1K_OPCODE_SYSTRAPSYNC &&
 				   decode_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
 				   `OR1K_SYSTRAPSYNC_OPC_SYSCALL;
-   assign execute_except_trap = decode_insn_i[`OR1K_OPCODE_SELECT] ==
-				`OR1K_OPCODE_SYSTRAPSYNC &&
+   assign execute_except_trap = opc_insn == `OR1K_OPCODE_SYSTRAPSYNC &&
 				decode_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
 				`OR1K_SYSTRAPSYNC_OPC_TRAP;
 
@@ -428,7 +425,7 @@ endgenerate
 
    // Illegal instruction decode
    always @*
-     case (decode_insn_i[`OR1K_OPCODE_SELECT])
+     case (opc_insn)
        `OR1K_OPCODE_J,
        `OR1K_OPCODE_JAL,
        `OR1K_OPCODE_BNF,
