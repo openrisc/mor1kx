@@ -108,7 +108,7 @@ module mor1kx_fetch_cappuccino
 
    reg 					  fake_ack;
 
-   wire 				  imem_err;
+   reg 					  imem_err;
    wire 				  imem_ack;
    wire [`OR1K_INSN_WIDTH-1:0] 		  imem_dat;
 
@@ -276,7 +276,6 @@ module mor1kx_fetch_cappuccino
    reg [`OR1K_INSN_WIDTH-1:0] 	  ibus_dat;
    reg 				  ibus_req;
    reg 				  ibus_ack;
-   reg 				  ibus_err;
 
    wire 			  ibus_access;
 
@@ -289,20 +288,21 @@ module mor1kx_fetch_cappuccino
 
    assign ibus_access = !ic_access & !ic_refill;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
-   assign imem_err = ibus_access ? ibus_err : ic_err;
    assign imem_dat = fake_ack ? {`OR1K_OPCODE_NOP,26'd0} :
 		     ibus_access ? ibus_dat : ic_dat;
    assign ibus_adr_o = ibus_access ? ibus_adr : ic_ibus_adr;
    assign ibus_req_o = ibus_access ? ibus_req : ic_ibus_req;
    assign ibus_burst_o = ic_refill & !ic_refill_done;
 
+   always @(posedge clk)
+     imem_err <= ibus_err_i;
+
    always @(posedge clk) begin
       ibus_ack <= 0;
-      ibus_err <= 0;
       case (state)
 	IDLE: begin
 	   ibus_req <= 0;
-	   if (padv_i & ibus_access & !ibus_ack & !ibus_err & !fake_ack) begin
+	   if (padv_i & ibus_access & !ibus_ack & !imem_err & !fake_ack) begin
 	      if (immu_enable_i) begin
 		 ibus_adr <= immu_phys_addr;
 		 if (!tlb_miss & !pagefault) begin
@@ -319,7 +319,6 @@ module mor1kx_fetch_cappuccino
 
 	READ: begin
 	   ibus_ack <= ibus_ack_i;
-	   ibus_err <= ibus_err_i;
 	   ibus_dat <= ibus_dat_i;
 	   if (ibus_ack_i | ibus_err_i) begin
 	      ibus_req <= 0;
