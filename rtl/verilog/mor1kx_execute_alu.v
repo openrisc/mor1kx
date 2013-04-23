@@ -91,8 +91,7 @@ module mor1kx_execute_alu
     output [OPTION_OPERAND_WIDTH-1:0] adder_result_o
     );
 
-   reg                                   alu_valid; /* combinatorial */
-
+   wire                                   alu_stall;
 
    wire                                   comp_op;
 
@@ -122,7 +121,6 @@ module mor1kx_execute_alu
    wire [OPTION_OPERAND_WIDTH-1:0]        shift_result;
    wire                                   shift_valid;
 
-   wire                                   alu_result_valid;
    reg [OPTION_OPERAND_WIDTH-1:0]         alu_result;  // comb.
 
 
@@ -142,11 +140,15 @@ module mor1kx_execute_alu
    wire 				  mul_signed_overflow;
    wire 				  mul_unsigned_overflow;
 
+   wire 				  divs_op;
+   wire 				  divu_op;
+   wire 				  div_op;
    wire [OPTION_OPERAND_WIDTH-1:0]        div_result;
    wire                                   div_valid;
    wire 				  div_by_zero;
 
 
+   wire 				  ffl1_op;
    wire [OPTION_OPERAND_WIDTH-1:0]        ffl1_result;
 
    wire [OPTION_OPERAND_WIDTH-1:0]        cmov_result;
@@ -336,7 +338,7 @@ endgenerate
       else if (FEATURE_MULTIPLIER=="NONE") begin
          // No multiplier
          assign mul_result = adder_result;
-         assign mul_valid = alu_result_valid;
+         assign mul_valid = 1'b1;
 	 assign mul_unsigned_overflow = 0;
       end
       else begin
@@ -362,6 +364,12 @@ endgenerate
 				  b[OPTION_OPERAND_WIDTH-1]) &&
 				 !mul_result[OPTION_OPERAND_WIDTH-1]);
 
+   assign divs_op = opc_insn_i==`OR1K_OPCODE_ALU &&
+		    opc_alu_i == `OR1K_ALU_OPC_DIV;
+   assign divu_op = opc_insn_i==`OR1K_OPCODE_ALU &&
+		    opc_alu_i == `OR1K_ALU_OPC_DIVU;
+   assign div_op = divs_op | divu_op;
+
    generate
       /* verilator lint_off WIDTH */
       if (FEATURE_DIVIDER=="SERIAL") begin
@@ -374,13 +382,7 @@ endgenerate
          reg                            div_neg;
          reg                            div_done;
 	 reg 				div_by_zero_r;
-	 wire 				divs_op;
-	 wire 				divu_op;
-	 wire 				div_op;
 
-	 assign divs_op =  opc_alu_i == `OR1K_ALU_OPC_DIV;
-	 assign divu_op =  opc_alu_i == `OR1K_ALU_OPC_DIVU;
-	 assign div_op = divs_op | divu_op;
 
          assign div_sub = {div_r[OPTION_OPERAND_WIDTH-2:0],
                            div_n[OPTION_OPERAND_WIDTH-1]} - div_d;
@@ -457,7 +459,7 @@ endgenerate
       end
       else if (FEATURE_DIVIDER=="NONE") begin
          assign div_result = adder_result;
-         assign div_valid = alu_result_valid;
+         assign div_valid = 1'b1;
 	 assign div_by_zero = 0;
       end
       else begin
@@ -470,6 +472,8 @@ endgenerate
       end
    endgenerate
 
+   assign ffl1_op = opc_insn_i==`OR1K_OPCODE_ALU &&
+		    opc_alu_i == `OR1K_ALU_OPC_FFL1;
    wire ffl1_valid;
    generate
       if (FEATURE_FFL1!="NONE") begin
@@ -513,7 +517,7 @@ endgenerate
       end
       else begin
 	 assign ffl1_result = adder_result;
-	 assign ffl1_valid = alu_result_valid;
+	 assign ffl1_valid = 1'b1;
       end
    endgenerate
 
@@ -524,8 +528,9 @@ endgenerate
    // Unsigned compare
    assign a_ltu_b = !adder_carryout;
 
-   assign shift_op = (opc_alu_i == `OR1K_ALU_OPC_SHRT ||
-                      opc_insn_i == `OR1K_OPCODE_SHRTI) ;
+   assign shift_op = opc_insn_i==`OR1K_OPCODE_ALU &&
+		     opc_alu_i == `OR1K_ALU_OPC_SHRT ||
+                      opc_insn_i == `OR1K_OPCODE_SHRTI;
 
    generate
       /* verilator lint_off WIDTH */
@@ -740,7 +745,6 @@ endgenerate
          alu_result = adder_result;
        endcase // case (opc_insn_i)
 
-   assign alu_result_valid = 1'b1; // ALU (adder, logic ops) always ready
    assign alu_result_o = alu_result;
 
 
@@ -819,39 +823,12 @@ endgenerate
 	 end
      endcase // case (opc_insn_i)
 
-   // ALU finished/valid MUXing
-   always @*
-     case(opc_insn_i)
-       `OR1K_OPCODE_ALU:
-         case(opc_alu_i)
-           `OR1K_ALU_OPC_MUL,
-             `OR1K_ALU_OPC_MULU:
-               alu_valid = mul_valid;
+   // Stall logic for multicycle ALU operations
+   assign alu_stall = div_op & !div_valid |
+		      mul_op & !mul_valid |
+		      shift_op & !shift_valid |
+		      ffl1_op & !ffl1_valid;
 
-           `OR1K_ALU_OPC_DIV,
-             `OR1K_ALU_OPC_DIVU:
-               alu_valid = div_valid;
-
-           `OR1K_ALU_OPC_FFL1:
-             alu_valid = ffl1_valid;
-
-           `OR1K_ALU_OPC_SHRT:
-             alu_valid = shift_valid;
-
-           default:
-             alu_valid = alu_result_valid;
-         endcase // case (opc_alu_i)
-
-       `OR1K_OPCODE_MULI:
-         alu_valid = mul_valid;
-
-       `OR1K_OPCODE_SHRTI:
-         alu_valid = shift_valid;
-       default:
-         alu_valid = alu_result_valid;
-     endcase // case (opc_insn_i)
-
-
-   assign alu_valid_o = alu_valid;
+   assign alu_valid_o = !alu_stall;
 
 endmodule // mor1kx_execute_alu
