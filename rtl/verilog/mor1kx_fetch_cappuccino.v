@@ -296,11 +296,6 @@ module mor1kx_fetch_cappuccino
    assign ibus_req_o = ibus_access ? ibus_req : ic_ibus_req;
    assign ibus_burst_o = ic_refill & !ic_refill_done;
 
-   // SJK DEBUG
-   always @(posedge clk)
-     if (imem_err)
-       $display("SJK DEBUG: imem_err! (ibus_adr_o = %d)", ibus_adr_o);
-
    always @(posedge clk) begin
       ibus_ack <= 0;
       ibus_err <= 0;
