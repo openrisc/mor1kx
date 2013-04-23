@@ -601,33 +601,20 @@ module mor1kx_ctrl_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_esr <= SPR_SR_RESET_VALUE;
-     else if (/*padv_ctrl & exception*/ exception_re)
+     else if (exception_re)
        begin
 	  spr_esr <= spr_sr;
-	  /*
-	   A bit odd, but if we had a l.sf instruction on an exception rising
-	   edge, EPCR will point to the insn past the l.sf but the flag will
-	   not have been saved to the SR properly. So we must put it in here
-	   so it can be restored correctly.
-	   */
-	  if (padv_ctrl)
+	  if (FEATURE_OVERFLOW!="NONE")
 	    begin
-	       if (ctrl_flag_set_i)
-		 spr_esr[`OR1K_SPR_SR_F   ] <= 1'b1;
-	       else if (ctrl_flag_clear_i)
-		 spr_esr[`OR1K_SPR_SR_F   ] <= 1'b0;
-	       if (FEATURE_OVERFLOW!="NONE")
-		 begin
-		    if (ctrl_overflow_set_i)
-		      spr_esr[`OR1K_SPR_SR_OV   ] <= 1'b1;
-		    else if (ctrl_overflow_clear_i)
-		      spr_esr[`OR1K_SPR_SR_OV   ] <= 1'b0;
-		 end
-	       if (ctrl_carry_set_i)
-		 spr_esr[`OR1K_SPR_SR_CY   ] <= 1'b1;
-	       else if (ctrl_carry_clear_i)
-		 spr_esr[`OR1K_SPR_SR_CY   ] <= 1'b0;
+	       if (ctrl_overflow_set_i)
+		 spr_esr[`OR1K_SPR_SR_OV] <= 1'b1;
+	       else if (ctrl_overflow_clear_i)
+		 spr_esr[`OR1K_SPR_SR_OV] <= 1'b0;
 	    end
+	  if (ctrl_carry_set_i)
+	    spr_esr[`OR1K_SPR_SR_CY] <= 1'b1;
+	  else if (ctrl_carry_clear_i)
+	    spr_esr[`OR1K_SPR_SR_CY] <= 1'b0;
        end
      else if (spr_we & spr_addr==`OR1K_SPR_ESR0_ADDR)
        spr_esr <= spr_write_dat[SPR_SR_WIDTH-1:0];
