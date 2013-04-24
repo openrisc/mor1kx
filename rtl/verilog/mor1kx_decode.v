@@ -352,17 +352,19 @@ module mor1kx_decode
    assign ctrl_to_decode_interlock = (ctrl_op_lsu_load_i | ctrl_op_mfspr_i) &
 				     (decode_rfb_adr_o == ctrl_rfd_adr_i);
 
-   wire imm_branch = (op_jbr &
-		      // l.j/l.jal
-		      (!(|opc_insn[2:1]) |
-		       // l.bf/bnf and flag is right
-		       (opc_insn[2] == flag)));
+   wire 				 branch_to_imm;
+   assign branch_to_imm = (op_jbr &
+			   // l.j/l.jal
+			   (!(|opc_insn[2:1]) |
+			    // l.bf/bnf and flag is right
+			    (opc_insn[2] == flag)));
 
-   wire reg_branch = op_jr & !ctrl_to_decode_interlock;
+   wire 				 branch_to_reg;
+   assign branch_to_reg = op_jr & !ctrl_to_decode_interlock;
 
-   assign decode_branch_o = (imm_branch | reg_branch) & !pipeline_flush_i &
-			    !decode_bubble_o;
-   assign decode_branch_target_o = imm_branch ?
+   assign decode_branch_o = (branch_to_imm | branch_to_reg) &
+			    !pipeline_flush_i & !decode_bubble_o;
+   assign decode_branch_target_o = branch_to_imm ?
 				   pc_decode_i + {{4{immjbr_upper[9]}},
 						  immjbr_upper,imm16,2'b00} :
 				   // If a bubble have been pushed out to get
