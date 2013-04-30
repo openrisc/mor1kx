@@ -19,7 +19,7 @@ SPEC_HTML=$(patsubst %.asciidoc,%.html,$(SPEC_TXT))
 SPEC_XML=$(patsubst %.asciidoc,%.xml,$(SPEC_TXT))
 SPEC_PDF=$(patsubst %.asciidoc,%.pdf,$(SPEC_TXT))
 
-SPEC_DOCINFO=$(patsubst %.txt,%-docinfo.xml,$(SPEC_TXT))
+SPEC_DOCINFO=$(patsubst %.asciidoc,%-docinfo.xml,$(SPEC_TXT))
 
 ifneq ($(findstring $(MAKEFLAGS),s),s)
 ifndef V
