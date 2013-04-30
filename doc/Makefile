@@ -14,10 +14,10 @@ endif
 
 ASCIIDOC_EXTRA += -a docinfo
 
-SPEC_TXT=mor1kx.txt
-SPEC_HTML=$(patsubst %.txt,%.html,$(SPEC_TXT))
-SPEC_XML=$(patsubst %.txt,%.xml,$(SPEC_TXT))
-SPEC_PDF=$(patsubst %.txt,%.pdf,$(SPEC_TXT))
+SPEC_TXT=mor1kx.asciidoc
+SPEC_HTML=$(patsubst %.asciidoc,%.html,$(SPEC_TXT))
+SPEC_XML=$(patsubst %.asciidoc,%.xml,$(SPEC_TXT))
+SPEC_PDF=$(patsubst %.asciidoc,%.pdf,$(SPEC_TXT))
 
 SPEC_DOCINFO=$(patsubst %.txt,%-docinfo.xml,$(SPEC_TXT))
 
