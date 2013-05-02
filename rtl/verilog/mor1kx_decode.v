@@ -243,7 +243,7 @@ module mor1kx_decode
    assign decode_opc_alu_secondary_o = decode_op_setflag_o ?
 				       decode_insn_i[`OR1K_COMP_OPC_SELECT]:
 				       {1'b0,
-					decode_insn_i[`OR1K_ALU_OPC_SECONDAY_SELECT]};
+					decode_insn_i[`OR1K_ALU_OPC_SECONDARY_SELECT]};
 
    assign decode_except_syscall_o = opc_insn == `OR1K_OPCODE_SYSTRAPSYNC &&
 				    decode_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
@@ -335,7 +335,7 @@ module mor1kx_decode
 	 decode_except_illegal_o = (FEATURE_MULTIPLIER=="NONE");
 
        `OR1K_OPCODE_SHRTI:
-	 case(decode_insn_i[`OR1K_ALU_OPC_SECONDAY_SELECT])
+	 case(decode_insn_i[`OR1K_ALU_OPC_SECONDARY_SELECT])
 	   `OR1K_ALU_OPC_SECONDARY_SHRT_SLL,
 	   `OR1K_ALU_OPC_SECONDARY_SHRT_SRL:
 	     decode_except_illegal_o = 1'b0;
@@ -346,7 +346,7 @@ module mor1kx_decode
 	     decode_except_illegal_o = (FEATURE_ROR=="NONE");
 	   default:
 	     decode_except_illegal_o = 1'b1;
-	 endcase // case (decode_insn_i[`OR1K_ALU_OPC_SECONDAY_SELECT])
+	 endcase // case (decode_insn_i[`OR1K_ALU_OPC_SECONDARY_SELECT])
 
        `OR1K_OPCODE_ALU:
 	 case(decode_insn_i[`OR1K_ALU_OPC_SELECT])
@@ -372,7 +372,7 @@ module mor1kx_decode
 	     `OR1K_ALU_OPC_EXTW:
 	       decode_except_illegal_o = (FEATURE_EXT=="NONE");
 	   `OR1K_ALU_OPC_SHRT:
-	     case(decode_insn_i[`OR1K_ALU_OPC_SECONDAY_SELECT])
+	     case(decode_insn_i[`OR1K_ALU_OPC_SECONDARY_SELECT])
 	       `OR1K_ALU_OPC_SECONDARY_SHRT_SLL,
 	       `OR1K_ALU_OPC_SECONDARY_SHRT_SRL:
 		 decode_except_illegal_o = 1'b0;
@@ -382,7 +382,7 @@ module mor1kx_decode
 		 decode_except_illegal_o = (FEATURE_ROR=="NONE");
 	       default:
 		 decode_except_illegal_o = 1'b1;
-	     endcase // case (decode_insn_i[`OR1K_ALU_OPC_SECONDAY_SELECT])
+	     endcase // case (decode_insn_i[`OR1K_ALU_OPC_SECONDARY_SELECT])
 	   default:
 	     decode_except_illegal_o = 1'b1;
 	 endcase // case (decode_insn_i[`OR1K_ALU_OPC_SELECT])
