@@ -289,7 +289,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	 assign monitor_spr_eear = cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_eear;
         reg [`OR1K_INSN_WIDTH-1:0]          monitor_execute_insn_reg;
         always @(posedge clk)
-          if (cappuccino.mor1kx_cpu.mor1kx_decode.padv_i)
+          if (cappuccino.mor1kx_cpu.padv_decode_o)
             monitor_execute_insn_reg <= cappuccino.mor1kx_cpu.mor1kx_decode.decode_insn_i;
 
         assign monitor_execute_insn = monitor_execute_insn_reg;
