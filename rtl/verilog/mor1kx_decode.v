@@ -105,8 +105,11 @@ module mor1kx_decode
 
    wire [`OR1K_OPCODE_WIDTH-1:0]      opc_insn;
 
+   wire [OPTION_OPERAND_WIDTH-1:0]    imm_sext;
    wire 			      imm_sext_sel;
+   wire [OPTION_OPERAND_WIDTH-1:0]    imm_zext;
    wire 			      imm_zext_sel;
+   wire [OPTION_OPERAND_WIDTH-1:0]    imm_high;
    wire 			      imm_high_sel;
 
    wire 			      decode_except_ibus_align;
@@ -213,6 +216,7 @@ module mor1kx_decode
    // Upper 10 bits for jump/branch instructions
    assign decode_immjbr_upper_o = decode_insn_i[25:16];
 
+   assign imm_sext = {{16{decode_imm16_o[15]}}, decode_imm16_o[15:0]};
    assign imm_sext_sel = ((opc_insn[5:4] == 2'b10) &
                           ~(opc_insn == `OR1K_OPCODE_ORI) &
                           ~(opc_insn == `OR1K_OPCODE_ANDI)) |
@@ -220,18 +224,17 @@ module mor1kx_decode
                          (opc_insn == `OR1K_OPCODE_SH) |
                          (opc_insn == `OR1K_OPCODE_SB);
 
+   assign imm_zext = {{16{1'b0}}, decode_imm16_o[15:0]};
    assign imm_zext_sel = ((opc_insn[5:4] == 2'b10) &
                           ((opc_insn == `OR1K_OPCODE_ORI) |
 			   (opc_insn == `OR1K_OPCODE_ANDI))) |
                          (opc_insn == `OR1K_OPCODE_MTSPR);
 
+   assign imm_high = {decode_imm16_o, 16'd0};
    assign imm_high_sel = opc_insn == `OR1K_OPCODE_MOVHI;
 
-   assign decode_immediate_o = imm_sext_sel ? {{16{decode_imm16_o[15]}},
-					       decode_imm16_o[15:0]} :
-			       imm_zext_sel ? {{16{1'b0}},
-					       decode_imm16_o[15:0]} :
-			       {decode_imm16_o, 16'd0}; // imm_high_sel
+   assign decode_immediate_o = imm_sext_sel ? imm_sext :
+			       imm_zext_sel ? imm_zext : imm_high;
 
    assign decode_immediate_sel_o = imm_sext_sel | imm_zext_sel | imm_high_sel;
 
