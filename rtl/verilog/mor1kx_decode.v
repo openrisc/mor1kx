@@ -239,9 +239,7 @@ module mor1kx_decode
    assign decode_immediate_sel_o = imm_sext_sel | imm_zext_sel | imm_high_sel;
 
    // ALU opcode
-   assign decode_opc_alu_o = (decode_op_jbr_o | decode_op_jal_o) ?
-			     `OR1K_ALU_OPC_ADD :
-			     decode_insn_i[`OR1K_ALU_OPC_SELECT];
+   assign decode_opc_alu_o = decode_insn_i[`OR1K_ALU_OPC_SELECT];
 
    assign decode_opc_alu_secondary_o = decode_op_setflag_o ?
 				       decode_insn_i[`OR1K_COMP_OPC_SELECT]:
