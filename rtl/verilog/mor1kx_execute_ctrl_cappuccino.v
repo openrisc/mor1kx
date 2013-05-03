@@ -190,10 +190,8 @@ module mor1kx_execute_ctrl_cappuccino
 	  ctrl_alu_result_o <= alu_result_i;
      end
 
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       ctrl_rfb_o <= 0;
-     else if (padv_i)
+   always @(posedge clk)
+     if (padv_i)
        ctrl_rfb_o <= rfb_i;
 
    always @(posedge clk `OR_ASYNC_RST)
