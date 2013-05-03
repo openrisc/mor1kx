@@ -240,7 +240,6 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0] execute_jal_result_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [1:0]		execute_lsu_length_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_lsu_zext_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_alu_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_branch_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_jal_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_jbr_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
@@ -464,7 +463,6 @@ module mor1kx_cpu_cappuccino
       .decode_op_jr_i			(decode_op_jr_o),
       .decode_op_jal_i			(decode_op_jal_o),
       .decode_op_branch_i		(decode_op_branch_o),
-      .decode_op_alu_i			(decode_op_alu_o),
       .decode_op_lsu_load_i		(decode_op_lsu_load_o),
       .decode_op_lsu_store_i		(decode_op_lsu_store_o),
       .decode_lsu_length_i		(decode_lsu_length_o[1:0]),
@@ -503,7 +501,6 @@ module mor1kx_cpu_cappuccino
       .execute_op_jr_o			(execute_op_jr_o),
       .execute_op_jal_o			(execute_op_jal_o),
       .execute_op_branch_o		(execute_op_branch_o),
-      .execute_op_alu_o			(execute_op_alu_o),
       .execute_op_lsu_load_o		(execute_op_lsu_load_o),
       .execute_op_lsu_store_o		(execute_op_lsu_store_o),
       .execute_lsu_length_o		(execute_lsu_length_o[1:0]),
@@ -554,7 +551,6 @@ module mor1kx_cpu_cappuccino
       .decode_op_jr_i			(decode_op_jr_o),	 // Templated
       .decode_op_jal_i			(decode_op_jal_o),	 // Templated
       .decode_op_branch_i		(decode_op_branch_o),	 // Templated
-      .decode_op_alu_i			(decode_op_alu_o),	 // Templated
       .decode_op_lsu_load_i		(decode_op_lsu_load_o),	 // Templated
       .decode_op_lsu_store_i		(decode_op_lsu_store_o), // Templated
       .decode_lsu_length_i		(decode_lsu_length_o[1:0]), // Templated
@@ -861,7 +857,6 @@ module mor1kx_cpu_cappuccino
     .lsu_except_align_i			(lsu_except_align_o),
     .lsu_except_dtlb_miss_i		(lsu_except_dtlb_miss_o),
     .lsu_except_dpagefault_i		(lsu_except_dpagefault_o),
-    .op_alu_i				(execute_op_alu_o),
     .op_lsu_load_i			(execute_op_lsu_load_o),
     .op_lsu_store_i			(execute_op_lsu_store_o),
     .lsu_length_i			(execute_lsu_length_o),
@@ -953,7 +948,6 @@ module mor1kx_cpu_cappuccino
       .execute_except_trap_i		(execute_except_trap_o), // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
       .du_stall_i			(du_stall_i),
-      .op_alu_i				(execute_op_alu_o),	 // Templated
       .op_lsu_load_i			(execute_op_lsu_load_o), // Templated
       .op_lsu_store_i			(execute_op_lsu_store_o), // Templated
       .lsu_length_i			(execute_lsu_length_o),	 // Templated

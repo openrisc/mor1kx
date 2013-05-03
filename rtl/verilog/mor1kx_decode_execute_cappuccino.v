@@ -89,8 +89,6 @@ module mor1kx_decode_execute_cappuccino
     input 				  decode_op_jal_i,
     input 				  decode_op_branch_i,
 
-    input 				  decode_op_alu_i,
-
     input 				  decode_op_lsu_load_i,
     input 				  decode_op_lsu_store_i,
     input [1:0] 			  decode_lsu_length_i,
@@ -110,8 +108,6 @@ module mor1kx_decode_execute_cappuccino
     output reg 				  execute_op_jr_o,
     output reg 				  execute_op_jal_o,
     output reg 				  execute_op_branch_o,
-
-    output reg 				  execute_op_alu_o,
 
     output reg 				  execute_op_lsu_load_o,
     output reg 				  execute_op_lsu_store_o,
@@ -222,15 +218,6 @@ module mor1kx_decode_execute_cappuccino
        execute_op_rfe_o <= 0;
      else if (padv_i)
        execute_op_rfe_o <= decode_op_rfe_i;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       execute_op_alu_o <= 1'b0;
-     else if (padv_i) begin
-	execute_op_alu_o <= decode_op_alu_i;
-	if (decode_bubble_o)
-	  execute_op_alu_o <= 0;
-     end
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin

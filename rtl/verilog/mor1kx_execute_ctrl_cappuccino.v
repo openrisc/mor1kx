@@ -47,7 +47,6 @@ module mor1kx_execute_ctrl_cappuccino
     input 				  pipeline_flush_i,
     input 				  du_stall_i,
 
-    input 				  op_alu_i,
     input 				  op_lsu_load_i,
     input 				  op_lsu_store_i,
     input [1:0] 			  lsu_length_i,
@@ -135,7 +134,7 @@ module mor1kx_execute_ctrl_cappuccino
 			      !lsu_valid_i |
 			      ctrl_op_mfspr_o & !ctrl_mfspr_ack_i |
 			      ctrl_op_mtspr_o & !ctrl_mtspr_ack_i |
-			      op_alu_i & !alu_valid_i;
+			      !alu_valid_i;
 
    assign execute_valid_o = !execute_waiting_o;
 
