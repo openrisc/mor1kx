@@ -26,7 +26,6 @@ module mor1kx_wb_mux_cappuccino
 
     input [OPTION_OPERAND_WIDTH-1:0] 	  alu_result_i,
     input [OPTION_OPERAND_WIDTH-1:0] 	  lsu_result_i,
-    input [OPTION_OPERAND_WIDTH-1:0] 	  pc_i,
     input [OPTION_OPERAND_WIDTH-1:0] 	  spr_i,
 
     output reg [OPTION_OPERAND_WIDTH-1:0] rf_result_o,

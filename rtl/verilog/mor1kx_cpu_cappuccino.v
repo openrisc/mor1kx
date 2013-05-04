@@ -747,7 +747,6 @@ module mor1kx_cpu_cappuccino
       .rst				(rst),
       .alu_result_i			(ctrl_alu_result_o),	 // Templated
       .lsu_result_i			(lsu_result_o),		 // Templated
-      .pc_i				(pc_execute_to_ctrl),	 // Templated
       .spr_i				(mfspr_dat_o),		 // Templated
       .op_lsu_load_i			(ctrl_op_lsu_load_o),	 // Templated
       .op_mfspr_i			(ctrl_op_mfspr_o),	 // Templated
