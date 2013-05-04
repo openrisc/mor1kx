@@ -249,6 +249,7 @@ module mor1kx_cpu_cappuccino
    wire			execute_op_mfspr_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_mtspr_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_rfe_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire			execute_op_setflag_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [`OR1K_ALU_OPC_WIDTH-1:0] execute_opc_alu_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [`OR1K_ALU_OPC_WIDTH-1:0] execute_opc_alu_secondary_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [`OR1K_OPCODE_WIDTH-1:0] execute_opc_insn_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
@@ -459,6 +460,7 @@ module mor1kx_cpu_cappuccino
       .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),
       .ctrl_op_mfspr_i			(ctrl_op_mfspr_o),
       .decode_rf_wb_i			(decode_rf_wb_o),
+      .decode_op_setflag_i		(decode_op_setflag_o),
       .decode_op_jbr_i			(decode_op_jbr_o),
       .decode_op_jr_i			(decode_op_jr_o),
       .decode_op_jal_i			(decode_op_jal_o),
@@ -497,6 +499,7 @@ module mor1kx_cpu_cappuccino
       .execute_immjbr_upper_o		(execute_immjbr_upper_o[9:0]),
       .execute_rfd_adr_o		(execute_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .execute_rf_wb_o			(execute_rf_wb_o),
+      .execute_op_setflag_o		(execute_op_setflag_o),
       .execute_op_jbr_o			(execute_op_jbr_o),
       .execute_op_jr_o			(execute_op_jr_o),
       .execute_op_jal_o			(execute_op_jal_o),
@@ -547,6 +550,7 @@ module mor1kx_cpu_cappuccino
       .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),	 // Templated
       .ctrl_op_mfspr_i			(ctrl_op_mfspr_o),	 // Templated
       .decode_rf_wb_i			(decode_rf_wb_o),	 // Templated
+      .decode_op_setflag_i		(decode_op_setflag_o),	 // Templated
       .decode_op_jbr_i			(decode_op_jbr_o),	 // Templated
       .decode_op_jr_i			(decode_op_jr_o),	 // Templated
       .decode_op_jal_i			(decode_op_jal_o),	 // Templated
@@ -575,6 +579,7 @@ module mor1kx_cpu_cappuccino
     .immediate_sel_i			(execute_immediate_sel_o),
     .opc_insn_i			        (execute_opc_insn_o),
     .decode_valid_i			(decode_valid_o),
+    .op_setflag_i			(execute_op_setflag_o),
     .op_jbr_i				(execute_op_jbr_o),
     .op_jr_i				(execute_op_jr_o),
     .immjbr_upper_i			(execute_immjbr_upper_o),
@@ -629,6 +634,7 @@ module mor1kx_cpu_cappuccino
       .immediate_sel_i			(execute_immediate_sel_o), // Templated
       .opc_insn_i			(execute_opc_insn_o),	 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
+      .op_setflag_i			(execute_op_setflag_o),	 // Templated
       .op_jbr_i				(execute_op_jbr_o),	 // Templated
       .op_jr_i				(execute_op_jr_o),	 // Templated
       .immjbr_upper_i			(execute_immjbr_upper_o), // Templated

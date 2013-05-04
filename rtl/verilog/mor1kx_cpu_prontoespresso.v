@@ -416,6 +416,7 @@ module mor1kx_cpu_prontoespresso
     .immediate_sel_i			(decode_immediate_sel_o),
     .opc_insn_i			        (decode_opc_insn_o),
     .decode_valid_i			(padv_decode_o),
+    .op_setflag_i			(decode_op_setflag_o),
     .op_jbr_i				(decode_op_jbr_o),
     .op_jr_i				(decode_op_jr_o),
     .immjbr_upper_i			(decode_immjbr_upper_o),
@@ -469,6 +470,7 @@ module mor1kx_cpu_prontoespresso
       .immediate_sel_i			(decode_immediate_sel_o), // Templated
       .opc_insn_i			(decode_opc_insn_o),	 // Templated
       .decode_valid_i			(padv_decode_o),	 // Templated
+      .op_setflag_i			(decode_op_setflag_o),	 // Templated
       .op_jbr_i				(decode_op_jbr_o),	 // Templated
       .op_jr_i				(decode_op_jr_o),	 // Templated
       .immjbr_upper_i			(decode_immjbr_upper_o), // Templated

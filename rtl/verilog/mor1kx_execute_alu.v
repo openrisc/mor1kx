@@ -64,7 +64,7 @@ module mor1kx_execute_alu
 
     input 			      decode_valid_i,
 
-
+    input 			      op_setflag_i,
     input 			      op_jbr_i,
     input 			      op_jr_i,
     input [9:0] 		      immjbr_upper_i,
@@ -92,8 +92,6 @@ module mor1kx_execute_alu
     );
 
    wire                                   alu_stall;
-
-   wire                                   comp_op;
 
    wire [OPTION_OPERAND_WIDTH-1:0]        a;
    wire [OPTION_OPERAND_WIDTH-1:0]        b;
@@ -165,15 +163,12 @@ end else begin
 end
 endgenerate
 
-   assign comp_op = opc_insn_i==`OR1K_OPCODE_SF ||
-                    opc_insn_i==`OR1K_OPCODE_SFIMM;
-
    assign opc_alu_shr = opc_alu_secondary_i[`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0];
 
    // Subtract when comparing to check if equal
    assign adder_do_sub = (opc_insn_i==`OR1K_OPCODE_ALU &
                           opc_alu_i==`OR1K_ALU_OPC_SUB) |
-                         comp_op;
+                         op_setflag_i;
 
    // Generate carry-in
    assign adder_do_carry_in = (FEATURE_ADDC!="NONE") &&
@@ -639,8 +634,8 @@ endgenerate
    endgenerate
 
    // Comparison logic
-   assign flag_set_o = flag_set & comp_op;
-   assign flag_clear_o = !flag_set & comp_op;
+   assign flag_set_o = flag_set & op_setflag_i;
+   assign flag_clear_o = !flag_set & op_setflag_i;
 
    // Combinatorial block
    always @*

@@ -84,6 +84,8 @@ module mor1kx_decode_execute_cappuccino
     // Control signal inputs from decode stage
     input 				  decode_rf_wb_i,
 
+    input 				  decode_op_setflag_i,
+
     input 				  decode_op_jbr_i,
     input 				  decode_op_jr_i,
     input 				  decode_op_jal_i,
@@ -103,6 +105,8 @@ module mor1kx_decode_execute_cappuccino
 
     // Control signal outputs to execute stage
     output reg 				  execute_rf_wb_o,
+
+    output reg 				  execute_op_setflag_o,
 
     output reg 				  execute_op_jbr_o,
     output reg 				  execute_op_jr_o,
@@ -176,6 +180,17 @@ module mor1kx_decode_execute_cappuccino
 	   execute_rf_wb_o <= 0;
 	   execute_rfd_adr_o <= 0;
 	end
+     end
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst) begin
+	execute_op_setflag_o <= 0;
+     end else if (pipeline_flush_i) begin
+	execute_op_setflag_o <= 0;
+     end else if (padv_i) begin
+	execute_op_setflag_o <= decode_op_setflag_i;
+	if (decode_bubble_o)
+	  execute_op_setflag_o <= 0;
      end
 
    always @(posedge clk `OR_ASYNC_RST)
