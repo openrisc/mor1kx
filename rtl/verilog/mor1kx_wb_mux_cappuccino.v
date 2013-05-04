@@ -35,10 +35,8 @@ module mor1kx_wb_mux_cappuccino
     input 				  lsu_valid_i
     );
 
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       rf_result_o <= 0;
-     else if (op_mfspr_i)
+   always @(posedge clk)
+     if (op_mfspr_i)
        rf_result_o <= spr_i;
      else if (op_lsu_load_i & lsu_valid_i)
        rf_result_o <= lsu_result_i;
