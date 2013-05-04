@@ -4,13 +4,13 @@
  of the OHDL was not distributed with this file, You
  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
- Description: Dual port ram with single clock
+ Description: True dual port ram with single clock
 
  Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
 
  ******************************************************************************/
 
-module mor1kx_dpram_sclk
+module mor1kx_true_dpram_sclk
   #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32

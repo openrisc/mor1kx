@@ -4,13 +4,15 @@
  of the OHDL was not distributed with this file, You
  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
- Description: Single port ram
+ Description:
+ Simple single clocked dual port ram (separate read and write ports),
+ with optional bypass logic.
 
  Copyright (C) 2012 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
 
  ******************************************************************************/
 
-module mor1kx_spram
+module mor1kx_simple_dpram_sclk
   #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,

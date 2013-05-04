@@ -120,7 +120,7 @@ module mor1kx_immu
    assign phys_addr_o = {itlb_trans_dout[31:13], virt_addr_match_i[12:0]};
 
    // ITLB match registers
-   /* mor1kx_dpram_sclk AUTO_TEMPLATE (
+   /* mor1kx_true_dpram_sclk AUTO_TEMPLATE (
       // Outputs
       .dout_a			(itlb_match_dout),
       .dout_b			(itlb_match_spr_dout),
@@ -133,7 +133,7 @@ module mor1kx_immu
       .din_b			(itlb_match_spr_din),
     );
     */
-   mor1kx_dpram_sclk
+   mor1kx_true_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_IMMU_SET_WIDTH),
        .DATA_WIDTH(OPTION_OPERAND_WIDTH)
@@ -154,7 +154,7 @@ module mor1kx_immu
 
 
    // ITLB translate registers
-   /* mor1kx_dpram_sclk AUTO_TEMPLATE (
+   /* mor1kx_true_dpram_sclk AUTO_TEMPLATE (
       // Outputs
       .dout_a			(itlb_trans_dout),
       .dout_b			(itlb_trans_spr_dout),
@@ -167,7 +167,7 @@ module mor1kx_immu
       .din_b			(itlb_trans_spr_din),
     );
     */
-   mor1kx_dpram_sclk
+   mor1kx_true_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_IMMU_SET_WIDTH),
        .DATA_WIDTH(OPTION_OPERAND_WIDTH)

@@ -126,7 +126,7 @@ module mor1kx_dmmu
    assign phys_addr_o = {dtlb_trans_dout[31:13], virt_addr_match_i[12:0]};
 
    // DTLB match registers
-   /* mor1kx_spram AUTO_TEMPLATE (
+   /* mor1kx_simple_dpram_sclk AUTO_TEMPLATE (
       // Outputs
       .dout			(dtlb_match_dout),
       // Inputs
@@ -136,7 +136,7 @@ module mor1kx_dmmu
       .din			(dtlb_match_din),
     );
     */
-   mor1kx_spram
+   mor1kx_simple_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_DMMU_SET_WIDTH),
        .DATA_WIDTH(OPTION_OPERAND_WIDTH),
@@ -155,7 +155,7 @@ module mor1kx_dmmu
 
 
    // DTLB translate registers
-   /* mor1kx_spram AUTO_TEMPLATE (
+   /* mor1kx_simple_dpram_sclk AUTO_TEMPLATE (
       // Outputs
       .dout			(dtlb_trans_dout),
       // Inputs
@@ -165,7 +165,7 @@ module mor1kx_dmmu
       .din			(dtlb_trans_din),
     );
     */
-   mor1kx_spram
+   mor1kx_simple_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_DMMU_SET_WIDTH),
        .DATA_WIDTH(OPTION_OPERAND_WIDTH),

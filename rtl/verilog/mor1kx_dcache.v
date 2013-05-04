@@ -410,7 +410,7 @@ module mor1kx_dcache
       endcase
    end
 
-   /* mor1kx_spram AUTO_TEMPLATE (
+   /* mor1kx_simple_dpram_sclk AUTO_TEMPLATE (
       // Outputs
       .dout			(way_dout[i][OPTION_OPERAND_WIDTH-1:0]),
       // Inputs
@@ -421,7 +421,7 @@ module mor1kx_dcache
     */
    generate
       for (i = 0; i < OPTION_DCACHE_WAYS; i=i+1) begin : way_memories
-	 mor1kx_spram
+	 mor1kx_simple_dpram_sclk
 	       #(
 		 .ADDR_WIDTH(WAY_WIDTH-2),
 		 .DATA_WIDTH(OPTION_OPERAND_WIDTH),
@@ -441,7 +441,7 @@ module mor1kx_dcache
       end
    endgenerate
 
-   /* mor1kx_spram AUTO_TEMPLATE (
+   /* mor1kx_simple_dpram_sclk AUTO_TEMPLATE (
       // Outputs
       .dout			(tag_dout[TAG_WIDTH-1:0]),
       // Inputs
@@ -450,7 +450,7 @@ module mor1kx_dcache
       .we			(tag_we),
       .din			(tag_din));
     */
-   mor1kx_spram
+   mor1kx_simple_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
        .DATA_WIDTH(TAG_WIDTH),
