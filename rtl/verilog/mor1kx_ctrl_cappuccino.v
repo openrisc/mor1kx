@@ -812,12 +812,12 @@ module mor1kx_ctrl_cappuccino
 	 spr_sys_group_read = spr_isr[7];
 
        default: begin
-	  /* GPR read */
+	  // GPR read
 	  if (spr_addr >= `OR1K_SPR_GPR0_ADDR &&
 	      spr_addr < (`OR1K_SPR_GPR0_ADDR + 32))
-	    spr_sys_group_read = b; /* Register file */
+	    spr_sys_group_read = b; // Register file
 	  else
-	    /* Invalid address - read as zero*/
+	    // Invalid address - read as zero
 	    spr_sys_group_read = 0;
        end
      endcase // case (spr_addr)
