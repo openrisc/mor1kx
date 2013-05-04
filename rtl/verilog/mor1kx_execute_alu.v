@@ -64,6 +64,8 @@ module mor1kx_execute_alu
 
     input 			      decode_valid_i,
 
+    input 			      op_mul_i,
+    input 			      op_mul_signed_i,
     input 			      op_setflag_i,
     input 			      op_jbr_i,
     input 			      op_jr_i,
@@ -133,8 +135,6 @@ module mor1kx_execute_alu
    wire [OPTION_OPERAND_WIDTH-1:0]        xor_result;
 
    // Multiplier wires
-   wire                                   mul_op;
-   wire                                   mul_op_signed;
    wire [OPTION_OPERAND_WIDTH-1:0]        mul_result;
    wire                                   mul_valid;
    wire 				  mul_signed_overflow;
@@ -187,15 +187,6 @@ endgenerate
 
    assign adder_unsigned_overflow = adder_carryout;
 
-   assign mul_op = (opc_insn_i==`OR1K_OPCODE_ALU &&
-                    (opc_alu_i == `OR1K_ALU_OPC_MUL ||
-                     opc_alu_i == `OR1K_ALU_OPC_MULU)) ||
-                   opc_insn_i == `OR1K_OPCODE_MULI;
-
-   assign mul_op_signed = (opc_insn_i==`OR1K_OPCODE_ALU &&
-                           opc_alu_i == `OR1K_ALU_OPC_MUL) ||
-                          opc_insn_i == `OR1K_OPCODE_MULI;
-
    assign adder_result_o = adder_result;
 
    generate
@@ -210,7 +201,7 @@ endgenerate
          reg [2:0]                                mul_valid_shr;
 
 	 always @(posedge clk) begin
-	    if (mul_op) begin
+	    if (op_mul_i) begin
 	       mul_opa <= a;
 	       mul_opb <= b;
 	    end
@@ -224,7 +215,7 @@ endgenerate
            if (rst)
              mul_valid_shr <= 3'b000;
            else if (decode_valid_i)
-             mul_valid_shr <= {2'b00, mul_op};
+             mul_valid_shr <= {2'b00, op_mul_i};
            else
              mul_valid_shr <= mul_valid_shr[2] ? mul_valid_shr:
 			      {mul_valid_shr[1:0], 1'b0};
@@ -243,10 +234,10 @@ endgenerate
 
 	 // Check if it's a signed multiply and operand b is negative,
 	 // convert to positive
-	 assign mul_a = mul_op_signed & a[OPTION_OPERAND_WIDTH-1] ?
-					  ~a + 1 : a;
-	 assign mul_b = mul_op_signed & b[OPTION_OPERAND_WIDTH-1] ?
-					  ~b + 1 : b;
+	 assign mul_a = op_mul_signed_i & a[OPTION_OPERAND_WIDTH-1] ?
+			~a + 1 : a;
+	 assign mul_b = op_mul_signed_i & b[OPTION_OPERAND_WIDTH-1] ?
+			~b + 1 : b;
 
          always @(posedge clk)
            if (rst) begin
@@ -270,7 +261,7 @@ endgenerate
                   mul_done <= 1'b1;
 
             end
-            else if (decode_valid_i && mul_op/* && !mul_done*/) begin
+            else if (decode_valid_i && op_mul_i) begin
                mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH] <= 32'd0;
                mul_prod_r[OPTION_OPERAND_WIDTH-1:0] <= mul_b;
                mul_done <= 0;
@@ -282,11 +273,12 @@ endgenerate
 
          assign mul_valid  = mul_done & !decode_valid_i;
 
-         assign mul_result = mul_op_signed ? ((a[OPTION_OPERAND_WIDTH-1] ^
-                                               b[OPTION_OPERAND_WIDTH-1]) ?
-                             ~mul_prod_r[OPTION_OPERAND_WIDTH-1:0] + 1 :
-                             mul_prod_r[OPTION_OPERAND_WIDTH-1:0]) :
-                             mul_prod_r[OPTION_OPERAND_WIDTH-1:0];
+         assign mul_result = op_mul_signed_i ?
+			     ((a[OPTION_OPERAND_WIDTH-1] ^
+			       b[OPTION_OPERAND_WIDTH-1]) ?
+			      ~mul_prod_r[OPTION_OPERAND_WIDTH-1:0] + 1 :
+			      mul_prod_r[OPTION_OPERAND_WIDTH-1:0]) :
+			     mul_prod_r[OPTION_OPERAND_WIDTH-1:0];
 
 	 assign mul_unsigned_overflow =  OPTION_OPERAND_WIDTH==64 ? 0 :
 					 |mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:
@@ -811,7 +803,7 @@ endgenerate
 
    // Stall logic for multicycle ALU operations
    assign alu_stall = div_op & !div_valid |
-		      mul_op & !mul_valid |
+		      op_mul_i & !mul_valid |
 		      shift_op & !shift_valid |
 		      ffl1_op & !ffl1_valid;
 

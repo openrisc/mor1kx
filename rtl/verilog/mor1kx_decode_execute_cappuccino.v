@@ -108,6 +108,8 @@ module mor1kx_decode_execute_cappuccino
     input 				  decode_op_mtspr_i,
 
     input 				  decode_op_rfe_i,
+    input 				  decode_op_mul_i,
+    input 				  decode_op_mul_signed_i,
 
     input [`OR1K_OPCODE_WIDTH-1:0] 	  decode_opc_insn_i,
 
@@ -130,6 +132,8 @@ module mor1kx_decode_execute_cappuccino
     output reg 				  execute_op_mtspr_o,
 
     output reg 				  execute_op_rfe_o,
+    output reg 				  execute_op_mul_o,
+    output reg 				  execute_op_mul_signed_o,
 
     output reg [OPTION_OPERAND_WIDTH-1:0] execute_jal_result_o,
 
@@ -276,6 +280,19 @@ module mor1kx_decode_execute_cappuccino
 	if (decode_bubble_o) begin
 	   execute_op_mtspr_o <= 1'b0;
 	   execute_op_mfspr_o <= 1'b0;
+	end
+     end
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst) begin
+	execute_op_mul_o <= 1'b0;
+	execute_op_mul_signed_o <= 1'b0;
+     end else if (padv_i) begin
+	execute_op_mul_o <= decode_op_mul_i;
+	execute_op_mul_signed_o <= decode_op_mul_signed_i;
+	if (decode_bubble_o) begin
+	   execute_op_mul_o <= 1'b0;
+	   execute_op_mul_signed_o <= 1'b0;
 	end
      end
 

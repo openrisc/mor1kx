@@ -94,6 +94,8 @@ module mor1kx_decode
 
     output 			      decode_op_rfe_o,
     output 			      decode_op_setflag_o,
+    output 			      decode_op_mul_o,
+    output 			      decode_op_mul_signed_o,
 
     // Adder control logic
     output 			      decode_adder_do_sub_o,
@@ -191,6 +193,15 @@ module mor1kx_decode
    assign decode_op_mfspr_o = opc_insn == `OR1K_OPCODE_MFSPR;
 
    assign decode_op_rfe_o = opc_insn == `OR1K_OPCODE_RFE;
+
+   assign decode_op_mul_o = (opc_insn == `OR1K_OPCODE_ALU &&
+			     (decode_opc_alu_o == `OR1K_ALU_OPC_MUL ||
+			      decode_opc_alu_o == `OR1K_ALU_OPC_MULU)) ||
+			    opc_insn == `OR1K_OPCODE_MULI;
+
+   assign decode_op_mul_signed_o = (opc_insn == `OR1K_OPCODE_ALU &&
+				    decode_opc_alu_o == `OR1K_ALU_OPC_MUL) ||
+				   opc_insn == `OR1K_OPCODE_MULI;
 
    // Which instructions cause writeback?
    assign decode_rf_wb_o = (opc_insn == `OR1K_OPCODE_JAL |
