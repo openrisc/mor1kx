@@ -95,6 +95,10 @@ module mor1kx_decode
     output 			      decode_op_rfe_o,
     output 			      decode_op_setflag_o,
 
+    // Adder control logic
+    output 			      decode_adder_do_sub_o,
+    output 			      decode_adder_do_carry_o,
+
     // exception output -
     output reg 			      decode_except_illegal_o,
     output 			      decode_except_syscall_o,
@@ -403,5 +407,17 @@ module mor1kx_decode
 	 decode_except_illegal_o = 1'b1;
 
      endcase // case (decode_insn_i[`OR1K_OPCODE_SELECT])
+
+   // Adder control logic
+   // Subtract when comparing to check if equal
+   assign decode_adder_do_sub_o = (opc_insn == `OR1K_OPCODE_ALU &
+				   decode_opc_alu_o == `OR1K_ALU_OPC_SUB) |
+				  decode_op_setflag_o;
+
+   // Generate carry-in select
+   assign decode_adder_do_carry_o = (FEATURE_ADDC!="NONE") &&
+				    ((opc_insn == `OR1K_OPCODE_ALU &
+				      decode_opc_alu_o == `OR1K_ALU_OPC_ADDC) ||
+				     (opc_insn == `OR1K_OPCODE_ADDIC));
 
 endmodule // mor1kx_decode

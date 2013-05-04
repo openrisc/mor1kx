@@ -68,6 +68,14 @@ module mor1kx_decode_execute_cappuccino
     output reg [OPTION_OPERAND_WIDTH-1:0] execute_immediate_o,
     output reg 				  execute_immediate_sel_o,
 
+    // Adder control logic from decode
+    input 				  decode_adder_do_sub_i,
+    input 				  decode_adder_do_carry_i,
+
+    // Adder control logic to execute
+    output reg 				  execute_adder_do_sub_o,
+    output reg 				  execute_adder_do_carry_o,
+
     // Upper 10 bits of immediate for jumps and branches
     input [9:0] 			  decode_immjbr_upper_i,
     output reg [9:0] 			  execute_immjbr_upper_o,
@@ -307,6 +315,19 @@ module mor1kx_decode_execute_cappuccino
 	execute_opc_insn_o <= decode_opc_insn_i;
 	if (decode_bubble_o)
 	  execute_opc_insn_o <= `OR1K_OPCODE_NOP;
+     end
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst) begin
+	execute_adder_do_sub_o <= 1'b0;
+	execute_adder_do_carry_o <= 1'b0;
+     end else if (padv_i) begin
+	execute_adder_do_sub_o <= decode_adder_do_sub_i;
+	execute_adder_do_carry_o <= decode_adder_do_carry_i;
+	if (decode_bubble_o) begin
+	   execute_adder_do_sub_o <= 1'b0;
+	   execute_adder_do_carry_o <= 1'b0;
+	end
      end
 
    // Decode for system call exception

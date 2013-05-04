@@ -187,6 +187,8 @@ module mor1kx_cpu_cappuccino
    wire			ctrl_rf_wb_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_rfb_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] ctrl_rfd_adr_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire			decode_adder_do_carry_o;// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_adder_do_sub_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_branch_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] decode_branch_target_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			decode_bubble_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
@@ -225,6 +227,8 @@ module mor1kx_cpu_cappuccino
    wire			doing_rfe_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			du_restart_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire			execute_adder_do_carry_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire			execute_adder_do_sub_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_bubble_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_except_ibus_align_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_except_ibus_err_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
@@ -428,6 +432,8 @@ module mor1kx_cpu_cappuccino
       .decode_op_mtspr_o		(decode_op_mtspr_o),
       .decode_op_rfe_o			(decode_op_rfe_o),
       .decode_op_setflag_o		(decode_op_setflag_o),
+      .decode_adder_do_sub_o		(decode_adder_do_sub_o),
+      .decode_adder_do_carry_o		(decode_adder_do_carry_o),
       .decode_except_illegal_o		(decode_except_illegal_o),
       .decode_except_syscall_o		(decode_except_syscall_o),
       .decode_except_trap_o		(decode_except_trap_o),
@@ -453,6 +459,8 @@ module mor1kx_cpu_cappuccino
       .decode_immediate_i		(decode_immediate_o),
       .decode_immediate_sel_i		(decode_immediate_sel_o),
       .decode_immjbr_upper_i		(decode_immjbr_upper_o),
+      .decode_adder_do_sub_i		(decode_adder_do_sub_o),
+      .decode_adder_do_carry_i		(decode_adder_do_carry_o),
       .decode_rfd_adr_i			(decode_rfd_adr_o),
       .decode_rfa_adr_i			(decode_rfa_adr_o),
       .decode_rfb_adr_i			(decode_rfb_adr_o),
@@ -496,6 +504,8 @@ module mor1kx_cpu_cappuccino
       .execute_imm16_o			(execute_imm16_o[`OR1K_IMM_WIDTH-1:0]),
       .execute_immediate_o		(execute_immediate_o[OPTION_OPERAND_WIDTH-1:0]),
       .execute_immediate_sel_o		(execute_immediate_sel_o),
+      .execute_adder_do_sub_o		(execute_adder_do_sub_o),
+      .execute_adder_do_carry_o		(execute_adder_do_carry_o),
       .execute_immjbr_upper_o		(execute_immjbr_upper_o[9:0]),
       .execute_rfd_adr_o		(execute_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .execute_rf_wb_o			(execute_rf_wb_o),
@@ -542,6 +552,8 @@ module mor1kx_cpu_cappuccino
       .decode_imm16_i			(decode_imm16_o),	 // Templated
       .decode_immediate_i		(decode_immediate_o),	 // Templated
       .decode_immediate_sel_i		(decode_immediate_sel_o), // Templated
+      .decode_adder_do_sub_i		(decode_adder_do_sub_o), // Templated
+      .decode_adder_do_carry_i		(decode_adder_do_carry_o), // Templated
       .decode_immjbr_upper_i		(decode_immjbr_upper_o), // Templated
       .decode_rfd_adr_i			(decode_rfd_adr_o),	 // Templated
       .decode_rfa_adr_i			(decode_rfa_adr_o),	 // Templated
@@ -584,6 +596,8 @@ module mor1kx_cpu_cappuccino
     .op_jr_i				(execute_op_jr_o),
     .immjbr_upper_i			(execute_immjbr_upper_o),
     .pc_execute_i			(pc_decode_to_execute),
+    .adder_do_sub_i			(execute_adder_do_sub_o),
+    .adder_do_carry_i			(execute_adder_do_carry_o),
     .rfa_i				(execute_rfa_o),
     .rfb_i				(execute_rfb_o),
     .flag_i				(ctrl_flag_o),
@@ -639,6 +653,8 @@ module mor1kx_cpu_cappuccino
       .op_jr_i				(execute_op_jr_o),	 // Templated
       .immjbr_upper_i			(execute_immjbr_upper_o), // Templated
       .pc_execute_i			(pc_decode_to_execute),	 // Templated
+      .adder_do_sub_i			(execute_adder_do_sub_o), // Templated
+      .adder_do_carry_i			(execute_adder_do_carry_o), // Templated
       .rfa_i				(execute_rfa_o),	 // Templated
       .rfb_i				(execute_rfb_o),	 // Templated
       .flag_i				(ctrl_flag_o),		 // Templated

@@ -156,6 +156,8 @@ module mor1kx_cpu_espresso
    wire			ctrl_branch_occur_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o;// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire			ctrl_mfspr_we_o;	// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
+   wire			decode_adder_do_carry_o;// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_adder_do_sub_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_except_ibus_err_o;// From mor1kx_fetch_espresso of mor1kx_fetch_espresso.v
    wire			decode_except_illegal_o;// From mor1kx_decode of mor1kx_decode.v
    wire			decode_except_syscall_o;// From mor1kx_decode of mor1kx_decode.v
@@ -322,6 +324,8 @@ module mor1kx_cpu_espresso
       .decode_op_mtspr_o		(decode_op_mtspr_o),
       .decode_op_rfe_o			(decode_op_rfe_o),
       .decode_op_setflag_o		(decode_op_setflag_o),
+      .decode_adder_do_sub_o		(decode_adder_do_sub_o),
+      .decode_adder_do_carry_o		(decode_adder_do_carry_o),
       .decode_except_illegal_o		(decode_except_illegal_o),
       .decode_except_syscall_o		(decode_except_syscall_o),
       .decode_except_trap_o		(decode_except_trap_o),
@@ -345,6 +349,8 @@ module mor1kx_cpu_espresso
     .op_jr_i				(decode_op_jr_o),
     .immjbr_upper_i			(decode_immjbr_upper_o),
     .pc_execute_i			(spr_ppc_o),
+    .adder_do_sub_i			(decode_adder_do_sub_o),
+    .adder_do_carry_i			(decode_adder_do_carry_o),
     .rfa_i				(rfa_o),
     .rfb_i				(rfb_o),
     .flag_i				(flag_o),
@@ -399,6 +405,8 @@ module mor1kx_cpu_espresso
       .op_jr_i				(decode_op_jr_o),	 // Templated
       .immjbr_upper_i			(decode_immjbr_upper_o), // Templated
       .pc_execute_i			(spr_ppc_o),		 // Templated
+      .adder_do_sub_i			(decode_adder_do_sub_o), // Templated
+      .adder_do_carry_i			(decode_adder_do_carry_o), // Templated
       .rfa_i				(rfa_o),		 // Templated
       .rfb_i				(rfb_o),		 // Templated
       .flag_i				(flag_o),		 // Templated

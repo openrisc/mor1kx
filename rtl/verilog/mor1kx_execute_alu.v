@@ -70,6 +70,10 @@ module mor1kx_execute_alu
     input [9:0] 		      immjbr_upper_i,
     input [OPTION_OPERAND_WIDTH-1:0]  pc_execute_i,
 
+    // Adder control logic
+    input 			      adder_do_sub_i,
+    input 			      adder_do_carry_i,
+
     input [OPTION_OPERAND_WIDTH-1:0]  rfa_i,
     input [OPTION_OPERAND_WIDTH-1:0]  rfb_i,
 
@@ -110,8 +114,6 @@ module mor1kx_execute_alu
    wire                                   a_eq_b;
    wire                                   a_lts_b;
    wire                                   a_ltu_b;
-   wire                                   adder_do_sub;
-   wire 				  adder_do_carry_in;
 
    // Shifter wires
    wire [`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0] opc_alu_shr;
@@ -165,21 +167,10 @@ endgenerate
 
    assign opc_alu_shr = opc_alu_secondary_i[`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0];
 
-   // Subtract when comparing to check if equal
-   assign adder_do_sub = (opc_insn_i==`OR1K_OPCODE_ALU &
-                          opc_alu_i==`OR1K_ALU_OPC_SUB) |
-                         op_setflag_i;
-
-   // Generate carry-in
-   assign adder_do_carry_in = (FEATURE_ADDC!="NONE") &&
-			      ((opc_insn_i==`OR1K_OPCODE_ALU &
-			       opc_alu_i==`OR1K_ALU_OPC_ADDC) ||
-			       (opc_insn_i==`OR1K_OPCODE_ADDIC)) & carry_i;
-
    // Adder/subtractor inputs
    assign b_neg = ~b;
-   assign carry_in = adder_do_sub | adder_do_carry_in;
-   assign b_mux = adder_do_sub ? b_neg : b;
+   assign carry_in = adder_do_sub_i | adder_do_carry_i & carry_i;
+   assign b_mux = adder_do_sub_i ? b_neg : b;
    // Adder
    assign {adder_carryout, adder_result} = a + b_mux +
                                            {{OPTION_OPERAND_WIDTH-1{1'b0}},
