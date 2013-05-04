@@ -346,9 +346,7 @@ module mor1kx_decode_execute_cappuccino
        decode_valid_o <= padv_i;
 
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       pc_execute_o <= OPTION_RESET_PC;
-     else if (padv_i)
+     if (padv_i)
        pc_execute_o <= pc_decode_i;
 
    // Flag calculation, we get the flag_set_i and flag_clear_i straight from
