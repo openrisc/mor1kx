@@ -230,10 +230,8 @@ module mor1kx_fetch_cappuccino
        decode_insn_o <= imem_dat;
 
    // Register PC for later stages
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       pc_decode_o <= OPTION_RESET_PC;
-     else if (bus_access_done & padv_i)
+   always @(posedge clk)
+     if (bus_access_done & padv_i)
        pc_decode_o <= pc_fetch;
 
    always @(posedge clk `OR_ASYNC_RST)
