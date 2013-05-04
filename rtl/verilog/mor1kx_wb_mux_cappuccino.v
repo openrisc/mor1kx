@@ -40,7 +40,7 @@ module mor1kx_wb_mux_cappuccino
        rf_result_o <= spr_i;
      else if (op_lsu_load_i & lsu_valid_i)
        rf_result_o <= lsu_result_i;
-     else if (!op_lsu_load_i)
+     else
        rf_result_o <= alu_result_i;
 
 endmodule // mor1kx_wb_mux_cappuccino
