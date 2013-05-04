@@ -177,18 +177,16 @@ module mor1kx_execute_ctrl_cappuccino
 	ctrl_except_dpagefault_o <= lsu_except_dpagefault_i;
      end
 
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	ctrl_alu_result_o <= 0;
-	ctrl_lsu_adr_o <= 0;
-     end else if (padv_i) begin
-	if (op_lsu_load_i | op_lsu_store_i)
-	  ctrl_lsu_adr_o <= adder_result_i;
-	else if (op_jal_i)
+   always @(posedge clk)
+     if (padv_i)
+	if (op_jal_i)
 	  ctrl_alu_result_o <= execute_jal_result_i;
 	else
 	  ctrl_alu_result_o <= alu_result_i;
-     end
+
+   always @(posedge clk)
+     if (padv_i & (op_lsu_store_i | op_lsu_load_i))
+       ctrl_lsu_adr_o <= adder_result_i;
 
    always @(posedge clk)
      if (padv_i)
