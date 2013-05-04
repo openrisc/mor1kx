@@ -1021,12 +1021,8 @@ module mor1kx_ctrl_cappuccino
 	 assign du_ack_o = du_ack;
 
 	 /* Data back to the debug bus */
-	 always @(posedge clk `OR_ASYNC_RST)
-	   if (rst)
-	     du_read_dat <= 0;
-	   else if (spr_access_ack[spr_group]) begin
-	      du_read_dat <= spr_internal_read_dat[spr_group];
-	   end
+	 always @(posedge clk)
+	   du_read_dat <= spr_internal_read_dat[spr_group];
 
 	 assign du_dat_o = du_read_dat;
 	 /* TODO: check into only letting stall go high when we've gracefully
