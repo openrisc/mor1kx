@@ -626,20 +626,17 @@ module mor1kx_ctrl_cappuccino
        ctrl_bubble <= execute_bubble_i;
 
    // Exception PC
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       spr_epcr <= OPTION_RESET_PC;
-     else if (/*padv_ctrl & exception*/ exception_re)
-       begin
-	  if (except_ibus_err_i)
-	    spr_epcr <= last_branch_insn_pc;
-	  else if (except_syscall_i)
-	    spr_epcr <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i + 4;
-	  else
-	    spr_epcr <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i;
-       end
-     else if (spr_we && spr_addr==`OR1K_SPR_EPCR0_ADDR)
-       spr_epcr <= spr_write_dat;
+   always @(posedge clk)
+     if (exception_re) begin
+	if (except_ibus_err_i)
+	  spr_epcr <= last_branch_insn_pc;
+	else if (except_syscall_i)
+	  spr_epcr <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i + 4;
+	else
+	  spr_epcr <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i;
+     end else if (spr_we && spr_addr==`OR1K_SPR_EPCR0_ADDR) begin
+	spr_epcr <= spr_write_dat;
+     end
 
    // Exception Effective Address
    always @(posedge clk `OR_ASYNC_RST)
