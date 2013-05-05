@@ -65,8 +65,10 @@ module mor1kx_execute_alu
     input 			      decode_valid_i,
 
     input 			      op_alu_i,
+    input 			      op_add_i,
     input 			      op_mul_i,
     input 			      op_mul_signed_i,
+    input 			      op_mul_unsigned_i,
     input 			      op_div_i,
     input 			      op_div_signed_i,
     input 			      op_div_unsigned_i,
@@ -95,11 +97,11 @@ module mor1kx_execute_alu
     output 			      flag_clear_o,
 
     input 			      carry_i,
-    output reg 			      carry_set_o,
-    output reg 			      carry_clear_o,
+    output 			      carry_set_o,
+    output 			      carry_clear_o,
 
-    output reg 			      overflow_set_o,
-    output reg 			      overflow_clear_o,
+    output 			      overflow_set_o,
+    output 			      overflow_clear_o,
 
     output [OPTION_OPERAND_WIDTH-1:0] alu_result_o,
     output 			      alu_valid_o,
@@ -664,79 +666,21 @@ endgenerate
 			 adder_result;
 
    // Carry and overflow flag generation
-   always @*
-     case(opc_insn_i)
-       `OR1K_OPCODE_ALU:
-         case(opc_alu_i)
-           `OR1K_ALU_OPC_ADDC,
-           `OR1K_ALU_OPC_ADD,
-	   `OR1K_ALU_OPC_SUB:
-	     begin
-		overflow_set_o		= adder_signed_overflow;
-		overflow_clear_o	= !adder_signed_overflow;
-		carry_set_o		= adder_unsigned_overflow;
-		carry_clear_o		= !adder_unsigned_overflow;
-	     end
-           `OR1K_ALU_OPC_MUL:
-	     begin
-		overflow_set_o		= mul_signed_overflow;
-		overflow_clear_o	= !mul_signed_overflow;
-		carry_set_o		= 0;
-		carry_clear_o		= 0;
-	     end
-           `OR1K_ALU_OPC_MULU:
-	     begin
-		overflow_set_o		= 0;
-		overflow_clear_o	= 0;
-		carry_set_o		= mul_unsigned_overflow;
-		carry_clear_o		= !mul_unsigned_overflow;
-	     end
+   assign overflow_set_o = op_add_i & adder_signed_overflow |
+			   op_mul_signed_i & mul_signed_overflow |
+			   op_div_signed_i & div_by_zero;
 
-           `OR1K_ALU_OPC_DIV:
-	     begin
-		overflow_set_o		= div_by_zero;
-		overflow_clear_o	= !div_by_zero;
-		carry_set_o		= 0;
-		carry_clear_o		= 0;
-	     end
-           `OR1K_ALU_OPC_DIVU:
-             begin
-		overflow_set_o		= 0;
-		overflow_clear_o	= 0;
-		carry_set_o		= div_by_zero;
-		carry_clear_o		= !div_by_zero;
-	     end
-	   default:
-	     begin
-		overflow_set_o		= 0;
-		overflow_clear_o	= 0;
-		carry_set_o		= 0;
-		carry_clear_o		= 0;
-	     end
-	 endcase // case (opc_alu_i)
-       `OR1K_OPCODE_ADDIC,
-       `OR1K_OPCODE_ADDI:
-         begin
-	    overflow_set_o	= adder_signed_overflow;
-	    overflow_clear_o	= !adder_signed_overflow;
-	    carry_set_o		= adder_unsigned_overflow;
-	    carry_clear_o	= !adder_unsigned_overflow;
-	 end
-       `OR1K_OPCODE_MULI:
-	 begin
-	    overflow_set_o	= mul_signed_overflow;
-	    overflow_clear_o	= !mul_signed_overflow;
-	    carry_set_o		= 0;
-	    carry_clear_o	= 0;
-	 end
-       default:
-	 begin
-	    overflow_set_o	= 0;
-	    overflow_clear_o	= 0;
-	    carry_set_o		= 0;
-	    carry_clear_o	= 0;
-	 end
-     endcase // case (opc_insn_i)
+   assign overflow_clear_o = op_add_i & !adder_signed_overflow |
+			     op_mul_signed_i & !mul_signed_overflow |
+			     op_div_signed_i & !div_by_zero;
+
+   assign carry_set_o = op_add_i & adder_unsigned_overflow |
+			op_mul_unsigned_i & mul_unsigned_overflow |
+			op_div_unsigned_i & div_by_zero;
+
+   assign carry_clear_o = op_add_i & !adder_unsigned_overflow |
+			  op_mul_unsigned_i & !mul_unsigned_overflow |
+			  op_div_unsigned_i & !div_by_zero;
 
    // Stall logic for multicycle ALU operations
    assign alu_stall = op_div_i & !div_valid |

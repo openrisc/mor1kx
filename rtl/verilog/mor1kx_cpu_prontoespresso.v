@@ -170,6 +170,7 @@ module mor1kx_cpu_prontoespresso
    wire [9:0]		decode_immjbr_upper_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [1:0]		decode_lsu_length_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_lsu_zext_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_add_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_alu_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_branch_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_div_o;	// From mor1kx_decode of mor1kx_decode.v
@@ -186,6 +187,7 @@ module mor1kx_cpu_prontoespresso
    wire			decode_op_mtspr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mul_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mul_signed_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_mul_unsigned_o;// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_rfe_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_setflag_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_shift_o;	// From mor1kx_decode of mor1kx_decode.v
@@ -408,8 +410,10 @@ module mor1kx_cpu_prontoespresso
       .decode_op_mtspr_o		(decode_op_mtspr_o),
       .decode_op_rfe_o			(decode_op_rfe_o),
       .decode_op_setflag_o		(decode_op_setflag_o),
+      .decode_op_add_o			(decode_op_add_o),
       .decode_op_mul_o			(decode_op_mul_o),
       .decode_op_mul_signed_o		(decode_op_mul_signed_o),
+      .decode_op_mul_unsigned_o		(decode_op_mul_unsigned_o),
       .decode_op_div_o			(decode_op_div_o),
       .decode_op_div_signed_o		(decode_op_div_signed_o),
       .decode_op_div_unsigned_o		(decode_op_div_unsigned_o),
@@ -437,8 +441,10 @@ module mor1kx_cpu_prontoespresso
     .opc_insn_i			        (decode_opc_insn_o),
     .decode_valid_i			(padv_decode_o),
     .op_alu_i				(decode_op_alu_o),
+    .op_add_i				(decode_op_add_o),
     .op_mul_i				(decode_op_mul_o),
     .op_mul_signed_i			(decode_op_mul_signed_o),
+    .op_mul_unsigned_i			(decode_op_mul_unsigned_o),
     .op_div_i				(decode_op_div_o),
     .op_div_signed_i			(decode_op_div_signed_o),
     .op_div_unsigned_i			(decode_op_div_unsigned_o),
@@ -504,8 +510,10 @@ module mor1kx_cpu_prontoespresso
       .opc_insn_i			(decode_opc_insn_o),	 // Templated
       .decode_valid_i			(padv_decode_o),	 // Templated
       .op_alu_i				(decode_op_alu_o),	 // Templated
+      .op_add_i				(decode_op_add_o),	 // Templated
       .op_mul_i				(decode_op_mul_o),	 // Templated
       .op_mul_signed_i			(decode_op_mul_signed_o), // Templated
+      .op_mul_unsigned_i		(decode_op_mul_unsigned_o), // Templated
       .op_div_i				(decode_op_div_o),	 // Templated
       .op_div_signed_i			(decode_op_div_signed_o), // Templated
       .op_div_unsigned_i		(decode_op_div_unsigned_o), // Templated

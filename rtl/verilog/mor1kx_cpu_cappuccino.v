@@ -204,6 +204,7 @@ module mor1kx_cpu_cappuccino
    wire [9:0]		decode_immjbr_upper_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [1:0]		decode_lsu_length_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_lsu_zext_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_add_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_alu_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_branch_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_div_o;	// From mor1kx_decode of mor1kx_decode.v
@@ -220,6 +221,7 @@ module mor1kx_cpu_cappuccino
    wire			decode_op_mtspr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mul_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mul_signed_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_mul_unsigned_o;// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_rfe_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_setflag_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_shift_o;	// From mor1kx_decode of mor1kx_decode.v
@@ -252,6 +254,7 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0] execute_jal_result_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [1:0]		execute_lsu_length_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_lsu_zext_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire			execute_op_add_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_alu_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_branch_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_div_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
@@ -268,6 +271,7 @@ module mor1kx_cpu_cappuccino
    wire			execute_op_mtspr_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_mul_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_mul_signed_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire			execute_op_mul_unsigned_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_rfe_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_setflag_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_shift_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
@@ -449,8 +453,10 @@ module mor1kx_cpu_cappuccino
       .decode_op_mtspr_o		(decode_op_mtspr_o),
       .decode_op_rfe_o			(decode_op_rfe_o),
       .decode_op_setflag_o		(decode_op_setflag_o),
+      .decode_op_add_o			(decode_op_add_o),
       .decode_op_mul_o			(decode_op_mul_o),
       .decode_op_mul_signed_o		(decode_op_mul_signed_o),
+      .decode_op_mul_unsigned_o		(decode_op_mul_unsigned_o),
       .decode_op_div_o			(decode_op_div_o),
       .decode_op_div_signed_o		(decode_op_div_signed_o),
       .decode_op_div_unsigned_o		(decode_op_div_unsigned_o),
@@ -506,8 +512,10 @@ module mor1kx_cpu_cappuccino
       .decode_op_mfspr_i		(decode_op_mfspr_o),
       .decode_op_mtspr_i		(decode_op_mtspr_o),
       .decode_op_rfe_i			(decode_op_rfe_o),
+      .decode_op_add_i			(decode_op_add_o),
       .decode_op_mul_i			(decode_op_mul_o),
       .decode_op_mul_signed_i		(decode_op_mul_signed_o),
+      .decode_op_mul_unsigned_i		(decode_op_mul_unsigned_o),
       .decode_op_div_i			(decode_op_div_o),
       .decode_op_div_signed_i		(decode_op_div_signed_o),
       .decode_op_div_unsigned_i		(decode_op_div_unsigned_o),
@@ -556,8 +564,10 @@ module mor1kx_cpu_cappuccino
       .execute_op_mfspr_o		(execute_op_mfspr_o),
       .execute_op_mtspr_o		(execute_op_mtspr_o),
       .execute_op_rfe_o			(execute_op_rfe_o),
+      .execute_op_add_o			(execute_op_add_o),
       .execute_op_mul_o			(execute_op_mul_o),
       .execute_op_mul_signed_o		(execute_op_mul_signed_o),
+      .execute_op_mul_unsigned_o	(execute_op_mul_unsigned_o),
       .execute_op_div_o			(execute_op_div_o),
       .execute_op_div_signed_o		(execute_op_div_signed_o),
       .execute_op_div_unsigned_o	(execute_op_div_unsigned_o),
@@ -618,8 +628,10 @@ module mor1kx_cpu_cappuccino
       .decode_op_mfspr_i		(decode_op_mfspr_o),	 // Templated
       .decode_op_mtspr_i		(decode_op_mtspr_o),	 // Templated
       .decode_op_rfe_i			(decode_op_rfe_o),	 // Templated
+      .decode_op_add_i			(decode_op_add_o),	 // Templated
       .decode_op_mul_i			(decode_op_mul_o),	 // Templated
       .decode_op_mul_signed_i		(decode_op_mul_signed_o), // Templated
+      .decode_op_mul_unsigned_i		(decode_op_mul_unsigned_o), // Templated
       .decode_op_div_i			(decode_op_div_o),	 // Templated
       .decode_op_div_signed_i		(decode_op_div_signed_o), // Templated
       .decode_op_div_unsigned_i		(decode_op_div_unsigned_o), // Templated
@@ -644,8 +656,10 @@ module mor1kx_cpu_cappuccino
     .opc_insn_i			        (execute_opc_insn_o),
     .decode_valid_i			(decode_valid_o),
     .op_alu_i				(execute_op_alu_o),
+    .op_add_i				(execute_op_add_o),
     .op_mul_i				(execute_op_mul_o),
     .op_mul_signed_i			(execute_op_mul_signed_o),
+    .op_mul_unsigned_i			(execute_op_mul_unsigned_o),
     .op_div_i				(execute_op_div_o),
     .op_div_signed_i			(execute_op_div_signed_o),
     .op_div_unsigned_i			(execute_op_div_unsigned_o),
@@ -712,8 +726,10 @@ module mor1kx_cpu_cappuccino
       .opc_insn_i			(execute_opc_insn_o),	 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
       .op_alu_i				(execute_op_alu_o),	 // Templated
+      .op_add_i				(execute_op_add_o),	 // Templated
       .op_mul_i				(execute_op_mul_o),	 // Templated
       .op_mul_signed_i			(execute_op_mul_signed_o), // Templated
+      .op_mul_unsigned_i		(execute_op_mul_unsigned_o), // Templated
       .op_div_i				(execute_op_div_o),	 // Templated
       .op_div_signed_i			(execute_op_div_signed_o), // Templated
       .op_div_unsigned_i		(execute_op_div_unsigned_o), // Templated

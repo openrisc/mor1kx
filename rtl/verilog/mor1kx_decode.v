@@ -94,8 +94,10 @@ module mor1kx_decode
 
     output 			      decode_op_rfe_o,
     output 			      decode_op_setflag_o,
+    output 			      decode_op_add_o,
     output 			      decode_op_mul_o,
     output 			      decode_op_mul_signed_o,
+    output 			      decode_op_mul_unsigned_o,
     output 			      decode_op_div_o,
     output 			      decode_op_div_signed_o,
     output 			      decode_op_div_unsigned_o,
@@ -194,14 +196,21 @@ module mor1kx_decode
 
    assign decode_op_rfe_o = opc_insn == `OR1K_OPCODE_RFE;
 
-   assign decode_op_mul_o = (opc_insn == `OR1K_OPCODE_ALU &&
-			     (opc_alu == `OR1K_ALU_OPC_MUL ||
-			      opc_alu == `OR1K_ALU_OPC_MULU)) ||
-			    opc_insn == `OR1K_OPCODE_MULI;
+   assign decode_op_add_o = (opc_insn == `OR1K_OPCODE_ALU &&
+			     (opc_alu == `OR1K_ALU_OPC_ADDC ||
+			      opc_alu == `OR1K_ALU_OPC_ADD ||
+			      opc_alu == `OR1K_ALU_OPC_SUB)) ||
+			    opc_insn == `OR1K_OPCODE_ADDIC ||
+			    opc_insn == `OR1K_OPCODE_ADDI;
 
    assign decode_op_mul_signed_o = (opc_insn == `OR1K_OPCODE_ALU &&
 				    opc_alu == `OR1K_ALU_OPC_MUL) ||
 				   opc_insn == `OR1K_OPCODE_MULI;
+
+   assign decode_op_mul_unsigned_o = opc_insn == `OR1K_OPCODE_ALU &&
+				     opc_alu == `OR1K_ALU_OPC_MULU;
+
+   assign decode_op_mul_o = decode_op_mul_signed_o | decode_op_mul_unsigned_o;
 
    assign decode_op_div_signed_o = opc_insn == `OR1K_OPCODE_ALU &&
 				   opc_alu == `OR1K_ALU_OPC_DIV;
