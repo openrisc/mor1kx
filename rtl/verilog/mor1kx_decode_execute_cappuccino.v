@@ -284,6 +284,9 @@ module mor1kx_decode_execute_cappuccino
      if (rst) begin
 	execute_op_mfspr_o <= 1'b0;
 	execute_op_mtspr_o <= 1'b0;
+     end else if (pipeline_flush_i) begin
+	execute_op_mfspr_o <= 1'b0;
+	execute_op_mtspr_o <= 1'b0;
      end else if (padv_i) begin
 	execute_op_mfspr_o <= decode_op_mfspr_i;
 	execute_op_mtspr_o <= decode_op_mtspr_i;
@@ -295,6 +298,14 @@ module mor1kx_decode_execute_cappuccino
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
+	execute_op_mul_o <= 1'b0;
+	execute_op_mul_signed_o <= 1'b0;
+	execute_op_div_o <= 1'b0;
+	execute_op_div_signed_o <= 1'b0;
+	execute_op_div_unsigned_o <= 1'b0;
+	execute_op_shift_o <= 1'b0;
+	execute_op_ffl1_o <= 1'b0;
+     end else if (pipeline_flush_i) begin
 	execute_op_mul_o <= 1'b0;
 	execute_op_mul_signed_o <= 1'b0;
 	execute_op_div_o <= 1'b0;
@@ -361,6 +372,9 @@ module mor1kx_decode_execute_cappuccino
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
+	execute_adder_do_sub_o <= 1'b0;
+	execute_adder_do_carry_o <= 1'b0;
+     end else if (pipeline_flush_i) begin
 	execute_adder_do_sub_o <= 1'b0;
 	execute_adder_do_carry_o <= 1'b0;
      end else if (padv_i) begin
