@@ -172,6 +172,9 @@ module mor1kx_cpu_prontoespresso
    wire			decode_lsu_zext_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_alu_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_branch_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_div_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_div_signed_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_div_unsigned_o;// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_jal_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_jbr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_jr_o;		// From mor1kx_decode of mor1kx_decode.v
@@ -404,6 +407,9 @@ module mor1kx_cpu_prontoespresso
       .decode_op_setflag_o		(decode_op_setflag_o),
       .decode_op_mul_o			(decode_op_mul_o),
       .decode_op_mul_signed_o		(decode_op_mul_signed_o),
+      .decode_op_div_o			(decode_op_div_o),
+      .decode_op_div_signed_o		(decode_op_div_signed_o),
+      .decode_op_div_unsigned_o		(decode_op_div_unsigned_o),
       .decode_adder_do_sub_o		(decode_adder_do_sub_o),
       .decode_adder_do_carry_o		(decode_adder_do_carry_o),
       .decode_except_illegal_o		(decode_except_illegal_o),
@@ -426,6 +432,9 @@ module mor1kx_cpu_prontoespresso
     .decode_valid_i			(padv_decode_o),
     .op_mul_i				(decode_op_mul_o),
     .op_mul_signed_i			(decode_op_mul_signed_o),
+    .op_div_i				(decode_op_div_o),
+    .op_div_signed_i			(decode_op_div_signed_o),
+    .op_div_unsigned_i			(decode_op_div_unsigned_o),
     .op_setflag_i			(decode_op_setflag_o),
     .op_jbr_i				(decode_op_jbr_o),
     .op_jr_i				(decode_op_jr_o),

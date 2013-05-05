@@ -66,6 +66,9 @@ module mor1kx_execute_alu
 
     input 			      op_mul_i,
     input 			      op_mul_signed_i,
+    input 			      op_div_i,
+    input 			      op_div_signed_i,
+    input 			      op_div_unsigned_i,
     input 			      op_setflag_i,
     input 			      op_jbr_i,
     input 			      op_jr_i,
@@ -140,9 +143,6 @@ module mor1kx_execute_alu
    wire 				  mul_signed_overflow;
    wire 				  mul_unsigned_overflow;
 
-   wire 				  divs_op;
-   wire 				  divu_op;
-   wire 				  div_op;
    wire [OPTION_OPERAND_WIDTH-1:0]        div_result;
    wire                                   div_valid;
    wire 				  div_by_zero;
@@ -342,12 +342,6 @@ endgenerate
 				  b[OPTION_OPERAND_WIDTH-1]) &&
 				 !mul_result[OPTION_OPERAND_WIDTH-1]);
 
-   assign divs_op = opc_insn_i==`OR1K_OPCODE_ALU &&
-		    opc_alu_i == `OR1K_ALU_OPC_DIV;
-   assign divu_op = opc_insn_i==`OR1K_OPCODE_ALU &&
-		    opc_alu_i == `OR1K_ALU_OPC_DIVU;
-   assign div_op = divs_op | divu_op;
-
    generate
       /* verilator lint_off WIDTH */
       if (FEATURE_DIVIDER=="SERIAL") begin
@@ -384,7 +378,7 @@ endgenerate
                div_neg <= 1'b0;
                div_done <= 1'b0;
 	       div_by_zero_r <= 1'b0;
-            end else if (decode_valid_i & div_op) begin
+            end else if (decode_valid_i & op_div_i) begin
 	       div_n <= rfa_i;
                div_d <= rfb_i;
                div_r <= 0;
@@ -397,7 +391,7 @@ endgenerate
                 * If only one of the operands is negative, the result is
                 * converted back to negative later on
                 */
-               if (divs_op) begin
+               if (op_div_signed_i) begin
                   if (rfa_i[OPTION_OPERAND_WIDTH-1] ^
 		      rfb_i[OPTION_OPERAND_WIDTH-1])
                     div_neg <= 1'b1;
@@ -802,7 +796,7 @@ endgenerate
      endcase // case (opc_insn_i)
 
    // Stall logic for multicycle ALU operations
-   assign alu_stall = div_op & !div_valid |
+   assign alu_stall = op_div_i & !div_valid |
 		      op_mul_i & !mul_valid |
 		      shift_op & !shift_valid |
 		      ffl1_op & !ffl1_valid;
