@@ -69,6 +69,7 @@ module mor1kx_execute_alu
     input 			      op_div_i,
     input 			      op_div_signed_i,
     input 			      op_div_unsigned_i,
+    input 			      op_shift_i,
     input 			      op_setflag_i,
     input 			      op_jbr_i,
     input 			      op_jr_i,
@@ -122,7 +123,6 @@ module mor1kx_execute_alu
 
    // Shifter wires
    wire [`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0] opc_alu_shr;
-   wire                                   shift_op;
    wire [OPTION_OPERAND_WIDTH-1:0]        shift_result;
    wire                                   shift_valid;
 
@@ -500,10 +500,6 @@ endgenerate
    // Unsigned compare
    assign a_ltu_b = !adder_carryout;
 
-   assign shift_op = opc_insn_i==`OR1K_OPCODE_ALU &&
-		     opc_alu_i == `OR1K_ALU_OPC_SHRT ||
-                      opc_insn_i == `OR1K_OPCODE_SHRTI;
-
    generate
       /* verilator lint_off WIDTH */
       if (OPTION_SHIFTER=="BARREL" &&
@@ -561,14 +557,14 @@ endgenerate
            if (rst)
              shift_go <= 0;
            else if (decode_valid_i)
-             shift_go <= shift_op;
+             shift_go <= op_shift_i;
 
          always @(posedge clk `OR_ASYNC_RST)
            if (rst) begin
               shift_cnt <= 0;
               shift_result_r <= 0;
            end
-           else if (decode_valid_i & shift_op) begin
+           else if (decode_valid_i & op_shift_i) begin
               shift_cnt <= 0;
               shift_result_r <= a;
            end
@@ -798,7 +794,7 @@ endgenerate
    // Stall logic for multicycle ALU operations
    assign alu_stall = op_div_i & !div_valid |
 		      op_mul_i & !mul_valid |
-		      shift_op & !shift_valid |
+		      op_shift_i & !shift_valid |
 		      ffl1_op & !ffl1_valid;
 
    assign alu_valid_o = !alu_stall;

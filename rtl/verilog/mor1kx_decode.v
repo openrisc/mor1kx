@@ -99,6 +99,7 @@ module mor1kx_decode
     output 			      decode_op_div_o,
     output 			      decode_op_div_signed_o,
     output 			      decode_op_div_unsigned_o,
+    output 			      decode_op_shift_o,
 
     // Adder control logic
     output 			      decode_adder_do_sub_o,
@@ -213,6 +214,10 @@ module mor1kx_decode
 				     decode_opc_alu_o == `OR1K_ALU_OPC_DIVU;
 
    assign decode_op_div_o = decode_op_div_signed_o | decode_op_div_unsigned_o;
+
+   assign decode_op_shift_o = opc_insn == `OR1K_OPCODE_ALU &&
+			      decode_opc_alu_o == `OR1K_ALU_OPC_SHRT ||
+			      opc_insn == `OR1K_OPCODE_SHRTI;
 
    // Which instructions cause writeback?
    assign decode_rf_wb_o = (opc_insn == `OR1K_OPCODE_JAL |
