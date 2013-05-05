@@ -180,6 +180,7 @@ module mor1kx_cpu_espresso
    wire			decode_op_lsu_load_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_lsu_store_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mfspr_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_movhi_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mtspr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mul_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mul_signed_o;	// From mor1kx_decode of mor1kx_decode.v
@@ -338,6 +339,7 @@ module mor1kx_cpu_espresso
       .decode_op_div_unsigned_o		(decode_op_div_unsigned_o),
       .decode_op_shift_o		(decode_op_shift_o),
       .decode_op_ffl1_o			(decode_op_ffl1_o),
+      .decode_op_movhi_o		(decode_op_movhi_o),
       .decode_adder_do_sub_o		(decode_adder_do_sub_o),
       .decode_adder_do_carry_o		(decode_adder_do_carry_o),
       .decode_except_illegal_o		(decode_except_illegal_o),
@@ -358,6 +360,7 @@ module mor1kx_cpu_espresso
     .immediate_sel_i			(decode_immediate_sel_o),
     .opc_insn_i			        (decode_opc_insn_o),
     .decode_valid_i			(padv_decode_o),
+    .op_alu_i				(decode_op_alu_o),
     .op_mul_i				(decode_op_mul_o),
     .op_mul_signed_i			(decode_op_mul_signed_o),
     .op_div_i				(decode_op_div_o),
@@ -366,6 +369,9 @@ module mor1kx_cpu_espresso
     .op_shift_i				(decode_op_shift_o),
     .op_ffl1_i				(decode_op_ffl1_o),
     .op_setflag_i			(decode_op_setflag_o),
+    .op_mtspr_i				(decode_op_mtspr_o),
+    .op_mfspr_i				(decode_op_mfspr_o),
+    .op_movhi_i				(decode_op_movhi_o),
     .op_jbr_i				(decode_op_jbr_o),
     .op_jr_i				(decode_op_jr_o),
     .immjbr_upper_i			(decode_immjbr_upper_o),
@@ -421,6 +427,7 @@ module mor1kx_cpu_espresso
       .immediate_sel_i			(decode_immediate_sel_o), // Templated
       .opc_insn_i			(decode_opc_insn_o),	 // Templated
       .decode_valid_i			(padv_decode_o),	 // Templated
+      .op_alu_i				(decode_op_alu_o),	 // Templated
       .op_mul_i				(decode_op_mul_o),	 // Templated
       .op_mul_signed_i			(decode_op_mul_signed_o), // Templated
       .op_div_i				(decode_op_div_o),	 // Templated
@@ -429,6 +436,9 @@ module mor1kx_cpu_espresso
       .op_shift_i			(decode_op_shift_o),	 // Templated
       .op_ffl1_i			(decode_op_ffl1_o),	 // Templated
       .op_setflag_i			(decode_op_setflag_o),	 // Templated
+      .op_mtspr_i			(decode_op_mtspr_o),	 // Templated
+      .op_mfspr_i			(decode_op_mfspr_o),	 // Templated
+      .op_movhi_i			(decode_op_movhi_o),	 // Templated
       .op_jbr_i				(decode_op_jbr_o),	 // Templated
       .op_jr_i				(decode_op_jr_o),	 // Templated
       .immjbr_upper_i			(decode_immjbr_upper_o), // Templated

@@ -64,6 +64,7 @@ module mor1kx_execute_alu
 
     input 			      decode_valid_i,
 
+    input 			      op_alu_i,
     input 			      op_mul_i,
     input 			      op_mul_signed_i,
     input 			      op_div_i,
@@ -72,6 +73,9 @@ module mor1kx_execute_alu
     input 			      op_shift_i,
     input 			      op_ffl1_i,
     input 			      op_setflag_i,
+    input 			      op_mtspr_i,
+    input 			      op_mfspr_i,
+    input 			      op_movhi_i,
     input 			      op_jbr_i,
     input 			      op_jr_i,
     input [9:0] 		      immjbr_upper_i,
@@ -127,13 +131,13 @@ module mor1kx_execute_alu
    wire [OPTION_OPERAND_WIDTH-1:0]        shift_result;
    wire                                   shift_valid;
 
-   reg [OPTION_OPERAND_WIDTH-1:0]         alu_result;  // comb.
-
-
    // Comparison wires
    reg                                    flag_set; // comb.
 
    // Logic wires
+   wire 				  op_and;
+   wire 				  op_or;
+   wire 				  op_xor;
    wire [OPTION_OPERAND_WIDTH-1:0]        and_result;
    wire [OPTION_OPERAND_WIDTH-1:0]        or_result;
    wire [OPTION_OPERAND_WIDTH-1:0]        xor_result;
@@ -151,6 +155,7 @@ module mor1kx_execute_alu
 
    wire [OPTION_OPERAND_WIDTH-1:0]        ffl1_result;
 
+   wire 				  op_cmov;
    wire [OPTION_OPERAND_WIDTH-1:0]        cmov_result;
 
 generate
@@ -641,78 +646,22 @@ endgenerate
    assign or_result = a | b;
    assign xor_result = a ^ b;
 
+   assign op_and = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_AND;
+   assign op_or = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_OR;
+   assign op_xor = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_XOR;
+   assign op_cmov = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_CMOV;
+
    // Result muxing - result is registered in RF
-   always @*
-     case(opc_insn_i)
-       `OR1K_OPCODE_ALU:
-         case(opc_alu_i)
-           `OR1K_ALU_OPC_ADDC,
-           `OR1K_ALU_OPC_ADD:
-             alu_result = adder_result;
-           `OR1K_ALU_OPC_SUB:
-             alu_result = adder_result;
-           `OR1K_ALU_OPC_AND:
-             alu_result = and_result;
-           `OR1K_ALU_OPC_OR:
-             alu_result = or_result;
-           `OR1K_ALU_OPC_XOR:
-             alu_result = xor_result;
-           `OR1K_ALU_OPC_MUL,
-           `OR1K_ALU_OPC_MULU:
-             alu_result = mul_result[OPTION_OPERAND_WIDTH-1:0];
-           `OR1K_ALU_OPC_SHRT:
-             alu_result = shift_result;
-           `OR1K_ALU_OPC_DIV,
-           `OR1K_ALU_OPC_DIVU:
-             alu_result = div_result;
-           `OR1K_ALU_OPC_FFL1:
-             alu_result = ffl1_result;
-           `OR1K_ALU_OPC_CMOV:
-             alu_result = cmov_result;
-             default:
-               alu_result = adder_result;
-           endcase // case (opc_alu_i)
-         `OR1K_OPCODE_SHRTI:
-           alu_result = shift_result;
-         `OR1K_OPCODE_ADDIC,
-         `OR1K_OPCODE_ADDI:
-           alu_result = adder_result;
-         `OR1K_OPCODE_ANDI:
-           alu_result = and_result;
-         `OR1K_OPCODE_ORI:
-           alu_result = or_result;
-         `OR1K_OPCODE_XORI:
-           alu_result = xor_result;
-         `OR1K_OPCODE_MULI:
-           alu_result = mul_result[OPTION_OPERAND_WIDTH-1:0];
-         `OR1K_OPCODE_SW,
-         `OR1K_OPCODE_SH,
-         `OR1K_OPCODE_SB,
-         `OR1K_OPCODE_LWZ,
-         `OR1K_OPCODE_LWS,
-         `OR1K_OPCODE_LBZ,
-         `OR1K_OPCODE_LBS,
-         `OR1K_OPCODE_LHZ,
-         `OR1K_OPCODE_LHS:
-           alu_result = adder_result;
-         `OR1K_OPCODE_MOVHI:
-           alu_result = b;
-         `OR1K_OPCODE_MFSPR,
-         `OR1K_OPCODE_MTSPR:
-           alu_result = or_result;
-         `OR1K_OPCODE_J,
-         `OR1K_OPCODE_JAL,
-         `OR1K_OPCODE_BNF,
-         `OR1K_OPCODE_BF,
-         `OR1K_OPCODE_JR,
-         `OR1K_OPCODE_JALR:
-           alu_result = adder_result;
-       default:
-         alu_result = adder_result;
-       endcase // case (opc_insn_i)
-
-   assign alu_result_o = alu_result;
-
+   assign alu_result_o = op_and ? and_result :
+			 op_or | op_mfspr_i | op_mtspr_i ? or_result :
+			 op_xor ? xor_result :
+			 op_cmov ? cmov_result :
+			 op_movhi_i ? immediate_i :
+			 op_mul_i ? mul_result[OPTION_OPERAND_WIDTH-1:0] :
+			 op_shift_i ? shift_result :
+			 op_div_i ? div_result :
+			 op_ffl1_i ? ffl1_result :
+			 adder_result;
 
    // Carry and overflow flag generation
    always @*

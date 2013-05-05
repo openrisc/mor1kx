@@ -92,6 +92,8 @@ module mor1kx_decode_execute_cappuccino
     // Control signal inputs from decode stage
     input 				  decode_rf_wb_i,
 
+    input 				  decode_op_alu_i,
+
     input 				  decode_op_setflag_i,
 
     input 				  decode_op_jbr_i,
@@ -115,11 +117,14 @@ module mor1kx_decode_execute_cappuccino
     input 				  decode_op_div_unsigned_i,
     input 				  decode_op_shift_i,
     input 				  decode_op_ffl1_i,
+    input 				  decode_op_movhi_i,
 
     input [`OR1K_OPCODE_WIDTH-1:0] 	  decode_opc_insn_i,
 
     // Control signal outputs to execute stage
     output reg 				  execute_rf_wb_o,
+
+    output reg 				  execute_op_alu_o,
 
     output reg 				  execute_op_setflag_o,
 
@@ -144,6 +149,7 @@ module mor1kx_decode_execute_cappuccino
     output reg 				  execute_op_div_unsigned_o,
     output reg 				  execute_op_shift_o,
     output reg 				  execute_op_ffl1_o,
+    output reg 				  execute_op_movhi_o,
 
     output reg [OPTION_OPERAND_WIDTH-1:0] execute_jal_result_o,
 
@@ -298,6 +304,7 @@ module mor1kx_decode_execute_cappuccino
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
+	execute_op_alu_o <= 1'b0;
 	execute_op_mul_o <= 1'b0;
 	execute_op_mul_signed_o <= 1'b0;
 	execute_op_div_o <= 1'b0;
@@ -305,7 +312,9 @@ module mor1kx_decode_execute_cappuccino
 	execute_op_div_unsigned_o <= 1'b0;
 	execute_op_shift_o <= 1'b0;
 	execute_op_ffl1_o <= 1'b0;
+	execute_op_movhi_o <= 1'b0;
      end else if (pipeline_flush_i) begin
+	execute_op_alu_o <= 1'b0;
 	execute_op_mul_o <= 1'b0;
 	execute_op_mul_signed_o <= 1'b0;
 	execute_op_div_o <= 1'b0;
@@ -313,7 +322,9 @@ module mor1kx_decode_execute_cappuccino
 	execute_op_div_unsigned_o <= 1'b0;
 	execute_op_shift_o <= 1'b0;
 	execute_op_ffl1_o <= 1'b0;
+	execute_op_movhi_o <= 1'b0;
      end else if (padv_i) begin
+	execute_op_alu_o <= decode_op_alu_i;
 	execute_op_mul_o <= decode_op_mul_i;
 	execute_op_mul_signed_o <= decode_op_mul_signed_i;
 	execute_op_div_o <= decode_op_div_i;
@@ -321,7 +332,9 @@ module mor1kx_decode_execute_cappuccino
 	execute_op_div_unsigned_o <= decode_op_div_unsigned_i;
 	execute_op_shift_o <= decode_op_shift_i;
 	execute_op_ffl1_o <= decode_op_ffl1_i;
+	execute_op_movhi_o <= decode_op_movhi_i;
 	if (decode_bubble_o) begin
+	   execute_op_alu_o <= 1'b0;
 	   execute_op_mul_o <= 1'b0;
 	   execute_op_mul_signed_o <= 1'b0;
 	   execute_op_div_o <= 1'b0;
@@ -329,6 +342,7 @@ module mor1kx_decode_execute_cappuccino
 	   execute_op_div_unsigned_o <= 1'b0;
 	   execute_op_shift_o <= 1'b0;
 	   execute_op_ffl1_o <= 1'b0;
+	   execute_op_movhi_o <= 1'b0;
 	end
      end
 

@@ -101,6 +101,7 @@ module mor1kx_decode
     output 			      decode_op_div_unsigned_o,
     output 			      decode_op_shift_o,
     output 			      decode_op_ffl1_o,
+    output 			      decode_op_movhi_o,
 
     // Adder control logic
     output 			      decode_adder_do_sub_o,
@@ -115,6 +116,7 @@ module mor1kx_decode
     );
 
    wire [`OR1K_OPCODE_WIDTH-1:0]      opc_insn;
+   wire [`OR1K_ALU_OPC_WIDTH-1:0]     opc_alu;
 
    wire [OPTION_OPERAND_WIDTH-1:0]    imm_sext;
    wire 			      imm_sext_sel;
@@ -169,17 +171,10 @@ module mor1kx_decode
    assign decode_op_setflag_o = opc_insn == `OR1K_OPCODE_SF ||
 				opc_insn == `OR1K_OPCODE_SFIMM;
 
-   // Detect which instructions will be generating a result from the ALU
-   assign decode_op_alu_o = ((decode_insn_i[31:30] == 2'b10) &
-			     // l.addi and the rest...
-			     (decode_insn_i[28:26] == 3'b111 |
-			      decode_insn_i[29])) |
-			    // all normal ALU ops, and l.cust5-8
-			    decode_insn_i[31:29] == 3'b111 |
-			    // l.mt/fspr - need address out of ALU
-			    decode_op_mtspr_o |
-			    (opc_insn == `OR1K_OPCODE_MFSPR) |
-			    (opc_insn == `OR1K_OPCODE_MOVHI);
+   assign decode_op_alu_o = opc_insn == `OR1K_OPCODE_ALU ||
+			    opc_insn == `OR1K_OPCODE_ORI ||
+			    opc_insn == `OR1K_OPCODE_ANDI ||
+			    opc_insn == `OR1K_OPCODE_XORI;
 
    // Bottom 4 opcodes branch against an immediate
    assign decode_op_jbr_o = opc_insn < `OR1K_OPCODE_NOP;
@@ -200,28 +195,30 @@ module mor1kx_decode
    assign decode_op_rfe_o = opc_insn == `OR1K_OPCODE_RFE;
 
    assign decode_op_mul_o = (opc_insn == `OR1K_OPCODE_ALU &&
-			     (decode_opc_alu_o == `OR1K_ALU_OPC_MUL ||
-			      decode_opc_alu_o == `OR1K_ALU_OPC_MULU)) ||
+			     (opc_alu == `OR1K_ALU_OPC_MUL ||
+			      opc_alu == `OR1K_ALU_OPC_MULU)) ||
 			    opc_insn == `OR1K_OPCODE_MULI;
 
    assign decode_op_mul_signed_o = (opc_insn == `OR1K_OPCODE_ALU &&
-				    decode_opc_alu_o == `OR1K_ALU_OPC_MUL) ||
+				    opc_alu == `OR1K_ALU_OPC_MUL) ||
 				   opc_insn == `OR1K_OPCODE_MULI;
 
    assign decode_op_div_signed_o = opc_insn == `OR1K_OPCODE_ALU &&
-				   decode_opc_alu_o == `OR1K_ALU_OPC_DIV;
+				   opc_alu == `OR1K_ALU_OPC_DIV;
 
    assign decode_op_div_unsigned_o = opc_insn == `OR1K_OPCODE_ALU &&
-				     decode_opc_alu_o == `OR1K_ALU_OPC_DIVU;
+				     opc_alu == `OR1K_ALU_OPC_DIVU;
 
    assign decode_op_div_o = decode_op_div_signed_o | decode_op_div_unsigned_o;
 
    assign decode_op_shift_o = opc_insn == `OR1K_OPCODE_ALU &&
-			      decode_opc_alu_o == `OR1K_ALU_OPC_SHRT ||
+			      opc_alu == `OR1K_ALU_OPC_SHRT ||
 			      opc_insn == `OR1K_OPCODE_SHRTI;
 
    assign decode_op_ffl1_o = opc_insn == `OR1K_OPCODE_ALU &&
-			     decode_opc_alu_o == `OR1K_ALU_OPC_FFL1;
+			     opc_alu == `OR1K_ALU_OPC_FFL1;
+
+   assign decode_op_movhi_o = opc_insn == `OR1K_OPCODE_MOVHI;
 
    // Which instructions cause writeback?
    assign decode_rf_wb_o = (opc_insn == `OR1K_OPCODE_JAL |
@@ -266,7 +263,7 @@ module mor1kx_decode
                          (opc_insn == `OR1K_OPCODE_MTSPR);
 
    assign imm_high = {decode_imm16_o, 16'd0};
-   assign imm_high_sel = opc_insn == `OR1K_OPCODE_MOVHI;
+   assign imm_high_sel = decode_op_movhi_o;
 
    assign decode_immediate_o = imm_sext_sel ? imm_sext :
 			       imm_zext_sel ? imm_zext : imm_high;
@@ -274,7 +271,11 @@ module mor1kx_decode
    assign decode_immediate_sel_o = imm_sext_sel | imm_zext_sel | imm_high_sel;
 
    // ALU opcode
-   assign decode_opc_alu_o = decode_insn_i[`OR1K_ALU_OPC_SELECT];
+   assign opc_alu = decode_insn_i[`OR1K_ALU_OPC_SELECT];
+   assign decode_opc_alu_o = opc_insn == `OR1K_OPCODE_ORI ? `OR1K_ALU_OPC_OR :
+			     opc_insn == `OR1K_OPCODE_ANDI ? `OR1K_ALU_OPC_AND :
+			     opc_insn == `OR1K_OPCODE_XORI ? `OR1K_ALU_OPC_XOR :
+			     opc_alu;
 
    assign decode_opc_alu_secondary_o = decode_op_setflag_o ?
 				       decode_insn_i[`OR1K_COMP_OPC_SELECT]:
@@ -442,13 +443,13 @@ module mor1kx_decode
    // Adder control logic
    // Subtract when comparing to check if equal
    assign decode_adder_do_sub_o = (opc_insn == `OR1K_OPCODE_ALU &
-				   decode_opc_alu_o == `OR1K_ALU_OPC_SUB) |
+				   opc_alu == `OR1K_ALU_OPC_SUB) |
 				  decode_op_setflag_o;
 
    // Generate carry-in select
    assign decode_adder_do_carry_o = (FEATURE_ADDC!="NONE") &&
 				    ((opc_insn == `OR1K_OPCODE_ALU &
-				      decode_opc_alu_o == `OR1K_ALU_OPC_ADDC) ||
+				      opc_alu == `OR1K_ALU_OPC_ADDC) ||
 				     (opc_insn == `OR1K_OPCODE_ADDIC));
 
 endmodule // mor1kx_decode
