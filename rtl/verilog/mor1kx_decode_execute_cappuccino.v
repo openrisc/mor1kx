@@ -200,6 +200,108 @@ module mor1kx_decode_execute_cappuccino
 
    reg 	  pipeline_flush_r;
 
+   // Op control signals to execute stage
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst) begin
+	execute_op_alu_o <= 1'b0;
+	execute_op_add_o <= 1'b0;
+	execute_op_mul_o <= 1'b0;
+	execute_op_mul_signed_o <= 1'b0;
+	execute_op_mul_unsigned_o <= 1'b0;
+	execute_op_div_o <= 1'b0;
+	execute_op_div_signed_o <= 1'b0;
+	execute_op_div_unsigned_o <= 1'b0;
+	execute_op_shift_o <= 1'b0;
+	execute_op_ffl1_o <= 1'b0;
+	execute_op_movhi_o <= 1'b0;
+	execute_op_mfspr_o <= 1'b0;
+	execute_op_mtspr_o <= 1'b0;
+	execute_op_lsu_load_o <= 1'b0;
+	execute_op_lsu_store_o <= 1'b0;
+	execute_op_setflag_o <= 1'b0;
+	execute_op_jbr_o <= 1'b0;
+	execute_op_jr_o <= 1'b0;
+	execute_op_jal_o <= 1'b0;
+	execute_op_branch_o <= 0;
+     end else if (pipeline_flush_i) begin
+	execute_op_alu_o <= 1'b0;
+	execute_op_add_o <= 1'b0;
+	execute_op_mul_o <= 1'b0;
+	execute_op_mul_signed_o <= 1'b0;
+	execute_op_mul_unsigned_o <= 1'b0;
+	execute_op_div_o <= 1'b0;
+	execute_op_div_signed_o <= 1'b0;
+	execute_op_div_unsigned_o <= 1'b0;
+	execute_op_shift_o <= 1'b0;
+	execute_op_ffl1_o <= 1'b0;
+	execute_op_movhi_o <= 1'b0;
+	execute_op_lsu_load_o <= 1'b0;
+	execute_op_lsu_store_o <= 1'b0;
+	execute_op_setflag_o <= 1'b0;
+	execute_op_jbr_o <= 1'b0;
+	execute_op_jr_o <= 1'b0;
+	execute_op_jal_o <= 1'b0;
+	execute_op_branch_o <= 1'b0;
+     end else if (padv_i) begin
+	execute_op_alu_o <= decode_op_alu_i;
+	execute_op_add_o <= decode_op_add_i;
+	execute_op_mul_o <= decode_op_mul_i;
+	execute_op_mul_signed_o <= decode_op_mul_signed_i;
+	execute_op_mul_unsigned_o <= decode_op_mul_unsigned_i;
+	execute_op_div_o <= decode_op_div_i;
+	execute_op_div_signed_o <= decode_op_div_signed_i;
+	execute_op_div_unsigned_o <= decode_op_div_unsigned_i;
+	execute_op_shift_o <= decode_op_shift_i;
+	execute_op_ffl1_o <= decode_op_ffl1_i;
+	execute_op_movhi_o <= decode_op_movhi_i;
+	execute_op_mfspr_o <= decode_op_mfspr_i;
+	execute_op_mtspr_o <= decode_op_mtspr_i;
+	execute_op_lsu_load_o <= decode_op_lsu_load_i;
+	execute_op_lsu_store_o <= decode_op_lsu_store_i;
+	execute_op_setflag_o <= decode_op_setflag_i;
+	execute_op_jbr_o <= decode_op_jbr_i;
+	execute_op_jr_o <= decode_op_jr_i;
+	execute_op_jal_o <= decode_op_jal_i;
+	execute_op_branch_o <= decode_op_branch_i;
+	if (decode_bubble_o) begin
+	   execute_op_alu_o <= 1'b0;
+	   execute_op_add_o <= 1'b0;
+	   execute_op_mul_o <= 1'b0;
+	   execute_op_mul_signed_o <= 1'b0;
+	   execute_op_mul_unsigned_o <= 1'b0;
+	   execute_op_div_o <= 1'b0;
+	   execute_op_div_signed_o <= 1'b0;
+	   execute_op_div_unsigned_o <= 1'b0;
+	   execute_op_shift_o <= 1'b0;
+	   execute_op_ffl1_o <= 1'b0;
+	   execute_op_movhi_o <= 1'b0;
+	   execute_op_mtspr_o <= 1'b0;
+	   execute_op_mfspr_o <= 1'b0;
+	   execute_op_lsu_load_o <= 1'b0;
+	   execute_op_lsu_store_o <= 1'b0;
+	   execute_op_setflag_o <= 1'b0;
+	   execute_op_jbr_o <= 1'b0;
+	   execute_op_jr_o <= 1'b0;
+	   execute_op_jal_o <= 1'b0;
+	   execute_op_branch_o <= 1'b0;
+	end
+     end
+
+   // rfe is a special case, instead of pushing the pipeline full
+   // of nops on a decode_bubble_o, we push it full of rfes.
+   // The reason for this is that we need the rfe to reach control
+   // stage so it will cause the branch.
+   // It will clear itself by the pipeline_flush_i that the rfe
+   // will generate.
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       execute_op_rfe_o <= 0;
+     else if (pipeline_flush_i)
+       execute_op_rfe_o <= 0;
+     else if (padv_i)
+       execute_op_rfe_o <= decode_op_rfe_i;
+
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
 	execute_rf_wb_o <= 0;
@@ -214,148 +316,10 @@ module mor1kx_decode_execute_cappuccino
 	end
      end
 
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	execute_op_setflag_o <= 0;
-     end else if (pipeline_flush_i) begin
-	execute_op_setflag_o <= 0;
-     end else if (padv_i) begin
-	execute_op_setflag_o <= decode_op_setflag_i;
-	if (decode_bubble_o)
-	  execute_op_setflag_o <= 0;
-     end
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	execute_op_jbr_o <= 0;
-	execute_op_jr_o <= 0;
-	execute_op_jal_o <= 0;
-	execute_op_branch_o <= 0;
-     end
-     else if (pipeline_flush_i)
-       begin
-	  execute_op_jbr_o <= 0;
-	  execute_op_jr_o <= 0;
-	  execute_op_jal_o <= 0;
-	  execute_op_branch_o <= 0;
-       end
-     else if (padv_i) begin
-	execute_op_jbr_o <= decode_op_jbr_i;
-	execute_op_jr_o <= decode_op_jr_i;
-	execute_op_jal_o <= decode_op_jal_i;
-	execute_op_branch_o <= decode_op_branch_i;
-	if (decode_bubble_o) begin
-	   execute_op_jbr_o <= 0;
-	   execute_op_jr_o <= 0;
-	   execute_op_jal_o <= 0;
-	   execute_op_branch_o <= 0;
-	end
-     end
-
-   // rfe is a special case, instead of pushing the pipeline full
-   // of nops, we push it full of rfes.
-   // The reason for this is that we need the rfe to reach control
-   // stage so it will cause the branch.
-   // It will clear itself by the pipeline_flush_i that the rfe
-   // will generate.
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       execute_op_rfe_o <= 0;
-     else if (pipeline_flush_i)
-       execute_op_rfe_o <= 0;
-     else if (padv_i)
-       execute_op_rfe_o <= decode_op_rfe_i;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	execute_op_lsu_load_o <= 0;
-	execute_op_lsu_store_o <= 0;
-       end
-     else if (pipeline_flush_i) begin
-	execute_op_lsu_load_o <= 0;
-	execute_op_lsu_store_o <= 0;
-     end
-     else if (padv_i) begin
-	execute_op_lsu_load_o <= decode_op_lsu_load_i;
-	execute_op_lsu_store_o <= decode_op_lsu_store_i;
-	if (decode_bubble_o) begin
-	   execute_op_lsu_load_o <= 0;
-	   execute_op_lsu_store_o <= 0;
-	end
-     end
-
    always @(posedge clk)
      if (padv_i) begin
 	execute_lsu_length_o <= decode_lsu_length_i;
 	execute_lsu_zext_o <= decode_lsu_zext_i;
-     end
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	execute_op_mfspr_o <= 1'b0;
-	execute_op_mtspr_o <= 1'b0;
-     end else if (pipeline_flush_i) begin
-	execute_op_mfspr_o <= 1'b0;
-	execute_op_mtspr_o <= 1'b0;
-     end else if (padv_i) begin
-	execute_op_mfspr_o <= decode_op_mfspr_i;
-	execute_op_mtspr_o <= decode_op_mtspr_i;
-	if (decode_bubble_o) begin
-	   execute_op_mtspr_o <= 1'b0;
-	   execute_op_mfspr_o <= 1'b0;
-	end
-     end
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	execute_op_alu_o <= 1'b0;
-	execute_op_add_o <= 1'b0;
-	execute_op_mul_o <= 1'b0;
-	execute_op_mul_signed_o <= 1'b0;
-	execute_op_mul_unsigned_o <= 1'b0;
-	execute_op_div_o <= 1'b0;
-	execute_op_div_signed_o <= 1'b0;
-	execute_op_div_unsigned_o <= 1'b0;
-	execute_op_shift_o <= 1'b0;
-	execute_op_ffl1_o <= 1'b0;
-	execute_op_movhi_o <= 1'b0;
-     end else if (pipeline_flush_i) begin
-	execute_op_alu_o <= 1'b0;
-	execute_op_add_o <= 1'b0;
-	execute_op_mul_o <= 1'b0;
-	execute_op_mul_signed_o <= 1'b0;
-	execute_op_mul_unsigned_o <= 1'b0;
-	execute_op_div_o <= 1'b0;
-	execute_op_div_signed_o <= 1'b0;
-	execute_op_div_unsigned_o <= 1'b0;
-	execute_op_shift_o <= 1'b0;
-	execute_op_ffl1_o <= 1'b0;
-	execute_op_movhi_o <= 1'b0;
-     end else if (padv_i) begin
-	execute_op_alu_o <= decode_op_alu_i;
-	execute_op_add_o <= decode_op_add_i;
-	execute_op_mul_o <= decode_op_mul_i;
-	execute_op_mul_signed_o <= decode_op_mul_signed_i;
-	execute_op_mul_unsigned_o <= decode_op_mul_unsigned_i;
-	execute_op_div_o <= decode_op_div_i;
-	execute_op_div_signed_o <= decode_op_div_signed_i;
-	execute_op_div_unsigned_o <= decode_op_div_unsigned_i;
-	execute_op_shift_o <= decode_op_shift_i;
-	execute_op_ffl1_o <= decode_op_ffl1_i;
-	execute_op_movhi_o <= decode_op_movhi_i;
-	if (decode_bubble_o) begin
-	   execute_op_alu_o <= 1'b0;
-	   execute_op_add_o <= 1'b0;
-	   execute_op_mul_o <= 1'b0;
-	   execute_op_mul_signed_o <= 1'b0;
-	   execute_op_mul_unsigned_o <= 1'b0;
-	   execute_op_div_o <= 1'b0;
-	   execute_op_div_signed_o <= 1'b0;
-	   execute_op_div_unsigned_o <= 1'b0;
-	   execute_op_shift_o <= 1'b0;
-	   execute_op_ffl1_o <= 1'b0;
-	   execute_op_movhi_o <= 1'b0;
-	end
      end
 
    always @(posedge clk)
