@@ -70,6 +70,7 @@ module mor1kx_execute_alu
     input 			      op_div_signed_i,
     input 			      op_div_unsigned_i,
     input 			      op_shift_i,
+    input 			      op_ffl1_i,
     input 			      op_setflag_i,
     input 			      op_jbr_i,
     input 			      op_jr_i,
@@ -148,7 +149,6 @@ module mor1kx_execute_alu
    wire 				  div_by_zero;
 
 
-   wire 				  ffl1_op;
    wire [OPTION_OPERAND_WIDTH-1:0]        ffl1_result;
 
    wire [OPTION_OPERAND_WIDTH-1:0]        cmov_result;
@@ -444,8 +444,6 @@ endgenerate
       end
    endgenerate
 
-   assign ffl1_op = opc_insn_i==`OR1K_OPCODE_ALU &&
-		    opc_alu_i == `OR1K_ALU_OPC_FFL1;
    wire ffl1_valid;
    generate
       if (FEATURE_FFL1!="NONE") begin
@@ -795,7 +793,7 @@ endgenerate
    assign alu_stall = op_div_i & !div_valid |
 		      op_mul_i & !mul_valid |
 		      op_shift_i & !shift_valid |
-		      ffl1_op & !ffl1_valid;
+		      op_ffl1_i & !ffl1_valid;
 
    assign alu_valid_o = !alu_stall;
 
