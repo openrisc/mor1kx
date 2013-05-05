@@ -42,15 +42,15 @@ module mor1kx_ctrl_espresso
    ctrl_flag_clear_i, ctrl_opc_insn_i, pc_fetch_i, fetch_advancing_i,
    except_ibus_err_i, except_illegal_i, except_syscall_i,
    except_dbus_i, except_trap_i, except_align_i, next_fetch_done_i,
-   alu_valid_i, lsu_valid_i, op_alu_i, op_lsu_load_i, op_lsu_store_i,
-   op_jr_i, op_jbr_i, irq_i, carry_set_i, carry_clear_i,
-   overflow_set_i, overflow_clear_i, du_addr_i, du_stb_i, du_dat_i,
-   du_we_i, du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i,
-   spr_bus_dat_ic_i, spr_bus_ack_ic_i, spr_bus_dat_dmmu_i,
-   spr_bus_ack_dmmu_i, spr_bus_dat_immu_i, spr_bus_ack_immu_i,
-   spr_bus_dat_mac_i, spr_bus_ack_mac_i, spr_bus_dat_pmu_i,
-   spr_bus_ack_pmu_i, spr_bus_dat_pcu_i, spr_bus_ack_pcu_i,
-   spr_bus_dat_fpu_i, spr_bus_ack_fpu_i, rf_wb_i
+   alu_valid_i, lsu_valid_i, op_lsu_load_i, op_lsu_store_i, op_jr_i,
+   op_jbr_i, irq_i, carry_set_i, carry_clear_i, overflow_set_i,
+   overflow_clear_i, du_addr_i, du_stb_i, du_dat_i, du_we_i,
+   du_stall_i, spr_bus_dat_dc_i, spr_bus_ack_dc_i, spr_bus_dat_ic_i,
+   spr_bus_ack_ic_i, spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i,
+   spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
+   spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
+   spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
+   spr_bus_ack_fpu_i, rf_wb_i
    );
 
    parameter OPTION_OPERAND_WIDTH       = 32;
@@ -120,7 +120,7 @@ module mor1kx_ctrl_espresso
    
    input                            alu_valid_i, lsu_valid_i;
    
-   input                            op_alu_i, op_lsu_load_i, op_lsu_store_i;
+   input                            op_lsu_load_i, op_lsu_store_i;
    input                            op_jr_i, op_jbr_i;
 
    // External IRQ lines in
@@ -492,10 +492,8 @@ module mor1kx_ctrl_espresso
    assign execute_done = execute_go & !execute_waiting;
 
    // ALU or LSU stall execution, nothing else can
-   assign execute_valid = (op_alu_i) ? alu_valid_i :
-                          (op_lsu_load_i | op_lsu_store_i) ? 
-                          lsu_valid_i : 1'b1;
-
+   assign execute_valid = !((op_lsu_load_i | op_lsu_store_i) & !lsu_valid_i |
+			    !alu_valid_i);
 
    assign execute_waiting = !execute_valid & !waiting_for_fetch;
    assign execute_waiting_o = execute_waiting;

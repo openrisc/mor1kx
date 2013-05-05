@@ -588,7 +588,6 @@ module mor1kx_cpu_espresso
     .pc_fetch_i 		(pc_fetch_o),    
     .ctrl_opc_insn_i		(decode_opc_insn_o),
     .ctrl_branch_target_i	(ctrl_branch_target_o),
-    .op_alu_i			(decode_op_alu_o),
     .op_lsu_load_i		(decode_op_lsu_load_o),
     .op_lsu_store_i		(decode_op_lsu_store_o),
     .alu_valid_i		(alu_valid_o),	 
@@ -692,7 +691,6 @@ module mor1kx_cpu_espresso
 	.next_fetch_done_i		(next_fetch_done_o),	 // Templated
 	.alu_valid_i			(alu_valid_o),		 // Templated
 	.lsu_valid_i			(lsu_valid_o),		 // Templated
-	.op_alu_i			(decode_op_alu_o),	 // Templated
 	.op_lsu_load_i			(decode_op_lsu_load_o),	 // Templated
 	.op_lsu_store_i			(decode_op_lsu_store_o), // Templated
 	.op_jr_i			(decode_op_jr_o),	 // Templated
