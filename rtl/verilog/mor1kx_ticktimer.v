@@ -34,6 +34,11 @@ module mor1kx_ticktimer
    reg [31:0] 	 spr_ttmr;
    reg [31:0] 	 spr_ttcr;
 
+   // ttcr control wires
+   wire 	 ttcr_clear;
+   wire 	 ttcr_run;
+   wire 	 ttcr_match;
+
    assign spr_ttmr_o = spr_ttmr;
    assign spr_ttcr_o = spr_ttcr;
    assign spr_bus_ack = 1'b1;
@@ -42,32 +47,34 @@ module mor1kx_ticktimer
 		      (spr_addr_i==`OR1K_SPR_TTMR_ADDR) ?
 		      spr_ttmr : 0;
 
+   assign ttcr_match = spr_ttcr[27:0] == spr_ttmr[27:0];
+
    // Timer SPR control
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_ttmr <= 0;
      else if (spr_we_i && spr_addr_i==`OR1K_SPR_TTMR_ADDR)
        spr_ttmr <= spr_dat_i[31:0];
-     else if ((spr_ttmr[27:0]==spr_ttcr[27:0]) & spr_ttmr[29])
+     else if (ttcr_match & spr_ttmr[29])
        spr_ttmr[28] <= 1; // Generate interrupt
+
+   // Modes (spr_ttmr[31:30]):
+   // 00 Tick timer is disabled.
+   // 01 Timer is restarted on ttcr_match.
+   // 10 Timer stops when ttcr_match is true.
+   // 11 Timer does not stop when ttcr_match is true
+   assign ttcr_clear = (spr_ttmr[31:30] == 2'b01) & ttcr_match;
+   assign ttcr_run = (spr_ttmr[31:30] != 2'b00) & !ttcr_match |
+		     (spr_ttmr[31:30] == 2'b11);
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_ttcr <= 0;
      else if (spr_we_i && spr_addr_i==`OR1K_SPR_TTCR_ADDR)
        spr_ttcr <= spr_dat_i[31:0];
-     else if (spr_ttmr[27:0]==spr_ttcr[27:0])
-       begin
-	  case(spr_ttmr[31:30])
-	    2'b01: // Restart
-	      spr_ttcr <= 0;
-	    2'b11: // Continuous
-	      spr_ttcr <= spr_ttcr + 1;
-	    default: // Stop, or disabled
-	      spr_ttcr <= spr_ttcr;
-	  endcase // case (spr_ttmr[31:30])
-       end // if (spr_ttmr[27:0]==spr_ttcr[27:0])
-     else if (|spr_ttmr[31:30])
+     else if (ttcr_clear)
+       spr_ttcr <= 0;
+     else if (ttcr_run)
        spr_ttcr <= spr_ttcr + 1;
 
 endmodule // mor1kx_ticktimer
