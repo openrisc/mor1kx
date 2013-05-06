@@ -60,8 +60,6 @@ module mor1kx_execute_alu
     input [OPTION_OPERAND_WIDTH-1:0]  immediate_i,
     input 			      immediate_sel_i,
 
-    input [`OR1K_OPCODE_WIDTH-1:0]    opc_insn_i,
-
     input 			      decode_valid_i,
 
     input 			      op_alu_i,

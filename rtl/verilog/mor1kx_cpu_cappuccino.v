@@ -653,7 +653,6 @@ module mor1kx_cpu_cappuccino
     .imm16_i				(execute_imm16_o),
     .immediate_i			(execute_immediate_o),
     .immediate_sel_i			(execute_immediate_sel_o),
-    .opc_insn_i			        (execute_opc_insn_o),
     .decode_valid_i			(decode_valid_o),
     .op_alu_i				(execute_op_alu_o),
     .op_add_i				(execute_op_add_o),
@@ -723,7 +722,6 @@ module mor1kx_cpu_cappuccino
       .imm16_i				(execute_imm16_o),	 // Templated
       .immediate_i			(execute_immediate_o),	 // Templated
       .immediate_sel_i			(execute_immediate_sel_o), // Templated
-      .opc_insn_i			(execute_opc_insn_o),	 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
       .op_alu_i				(execute_op_alu_o),	 // Templated
       .op_add_i				(execute_op_add_o),	 // Templated

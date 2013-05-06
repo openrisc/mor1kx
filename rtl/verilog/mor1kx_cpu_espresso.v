@@ -362,7 +362,6 @@ module mor1kx_cpu_espresso
     .imm16_i				(decode_imm16_o),
     .immediate_i			(decode_immediate_o),
     .immediate_sel_i			(decode_immediate_sel_o),
-    .opc_insn_i			        (decode_opc_insn_o),
     .decode_valid_i			(padv_decode_o),
     .op_alu_i				(decode_op_alu_o),
     .op_add_i				(decode_op_add_o),
@@ -431,7 +430,6 @@ module mor1kx_cpu_espresso
       .imm16_i				(decode_imm16_o),	 // Templated
       .immediate_i			(decode_immediate_o),	 // Templated
       .immediate_sel_i			(decode_immediate_sel_o), // Templated
-      .opc_insn_i			(decode_opc_insn_o),	 // Templated
       .decode_valid_i			(padv_decode_o),	 // Templated
       .op_alu_i				(decode_op_alu_o),	 // Templated
       .op_add_i				(decode_op_add_o),	 // Templated
