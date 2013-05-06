@@ -1116,7 +1116,6 @@ module mor1kx_cpu_cappuccino
     .decode_valid_i		(decode_valid_o),
     .execute_valid_i		(execute_valid_o),
     .execute_waiting_i		(execute_waiting_o),
-    .execute_opc_insn_i		(execute_opc_insn_o),
     .fetch_exception_taken_i	(fetch_exception_taken_o),
     .decode_bubble_i		(decode_bubble_o),
     .execute_bubble_i		(execute_bubble_o),
