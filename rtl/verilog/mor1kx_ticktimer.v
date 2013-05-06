@@ -15,25 +15,20 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_ticktimer
-  (/*AUTOARG*/
-   // Outputs
-   spr_ttmr_o, spr_ttcr_o, spr_bus_ack, spr_dat_o,
-   // Inputs
-   clk, rst, spr_we_i, spr_addr_i, spr_dat_i
-   );
+  (
+   input 	 clk,
+   input 	 rst,
 
-   input clk;
-   input rst;
-
-   output [31:0] spr_ttmr_o;
-   output [31:0] spr_ttcr_o;
+   output [31:0] spr_ttmr_o,
+   output [31:0] spr_ttcr_o,
 
    // SPR Bus interface
-   input 	 spr_we_i;
-   input [15:0]  spr_addr_i;
-   input [31:0]  spr_dat_i;
-   output 	 spr_bus_ack;
-   output [31:0] spr_dat_o;
+   input 	 spr_we_i,
+   input [15:0]  spr_addr_i,
+   input [31:0]  spr_dat_i,
+   output 	 spr_bus_ack,
+   output [31:0] spr_dat_o
+   );
 
    // Registers
    reg [31:0] 	 spr_ttmr;
