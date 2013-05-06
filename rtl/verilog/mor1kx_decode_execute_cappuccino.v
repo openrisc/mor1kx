@@ -304,6 +304,8 @@ module mor1kx_decode_execute_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
 	execute_rf_wb_o <= 0;
+     end else if (pipeline_flush_i) begin
+	execute_rf_wb_o <= 0;
      end else if (padv_i) begin
 	execute_rf_wb_o <= decode_rf_wb_i;
 	if (decode_bubble_o)
