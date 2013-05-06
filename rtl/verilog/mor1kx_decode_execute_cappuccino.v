@@ -301,20 +301,18 @@ module mor1kx_decode_execute_cappuccino
      else if (padv_i)
        execute_op_rfe_o <= decode_op_rfe_i;
 
-
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
 	execute_rf_wb_o <= 0;
-	execute_rfd_adr_o <= 0;
-     end
-     else if (padv_i) begin
+     end else if (padv_i) begin
 	execute_rf_wb_o <= decode_rf_wb_i;
-	execute_rfd_adr_o <= decode_rfd_adr_i;
-	if (decode_bubble_o) begin
-	   execute_rf_wb_o <= 0;
-	   execute_rfd_adr_o <= 0;
-	end
+	if (decode_bubble_o)
+	  execute_rf_wb_o <= 0;
      end
+
+   always @(posedge clk)
+     if (padv_i)
+       execute_rfd_adr_o <= decode_rfd_adr_i;
 
    always @(posedge clk)
      if (padv_i) begin
