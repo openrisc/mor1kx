@@ -1,16 +1,16 @@
 /* ****************************************************************************
- This Source Code Form is subject to the terms of the 
- Open Hardware Description License, v. 1.0. If a copy 
- of the OHDL was not distributed with this file, You 
+ This Source Code Form is subject to the terms of the
+ Open Hardware Description License, v. 1.0. If a copy
+ of the OHDL was not distributed with this file, You
  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
  Description: mor1kx tick timer unit
- 
+
  Copyright (C) 2012 Authors
- 
+
  Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
- ***************************************************************************** */
+
+***************************************************************************** */
 
 `include "mor1kx-defines.v"
 
@@ -34,7 +34,7 @@ module mor1kx_ticktimer
    input [31:0]  spr_dat_i;
    output 	 spr_bus_ack;
    output [31:0] spr_dat_o;
-   
+
    // Registers
    reg [31:0] 	 spr_ttmr;
    reg [31:0] 	 spr_ttcr;
@@ -47,7 +47,7 @@ module mor1kx_ticktimer
 		      (spr_addr_i==`OR1K_SPR_TTMR_ADDR) ?
 		      spr_ttmr : 0;
 
-   // Timer SPR control   
+   // Timer SPR control
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_ttmr <= 0;
@@ -55,7 +55,7 @@ module mor1kx_ticktimer
        spr_ttmr <= spr_dat_i[31:0];
      else if ((spr_ttmr[27:0]==spr_ttcr[27:0]) & spr_ttmr[29])
        spr_ttmr[28] <= 1; // Generate interrupt
-   
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_ttcr <= 0;
@@ -76,4 +76,3 @@ module mor1kx_ticktimer
        spr_ttcr <= spr_ttcr + 1;
 
 endmodule // mor1kx_ticktimer
-
