@@ -335,18 +335,10 @@ module mor1kx_decode_execute_cappuccino
      else if (padv_i )
        execute_immjbr_upper_o <= decode_immjbr_upper_i;
 
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst) begin
-	execute_opc_alu_o <= 0;
-	execute_opc_alu_secondary_o <= 0;
-     end
-     else if (padv_i) begin
+   always @(posedge clk)
+     if (padv_i) begin
 	execute_opc_alu_o <= decode_opc_alu_i;
 	execute_opc_alu_secondary_o <= decode_opc_alu_secondary_i;
-	if (decode_bubble_o) begin
-	   execute_opc_alu_o <= 0;
-	   execute_opc_alu_secondary_o <= 0;
-	end
      end
 
    always @(posedge clk `OR_ASYNC_RST)
