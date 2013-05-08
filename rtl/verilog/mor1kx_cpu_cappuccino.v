@@ -479,9 +479,7 @@ module mor1kx_cpu_cappuccino
       .pc_decode_i			(pc_fetch_to_decode),
       .decode_rfb_i			(decode_rfb_o),
       .execute_rfb_i			(execute_rfb_o),
-      .flag_i				(spr_sr_o[`OR1K_SPR_SR_F]),
-      .flag_set_i			(flag_set_o),
-      .flag_clear_i			(flag_clear_o),
+      .flag_i				(ctrl_flag_o),
       .pc_execute_o			(pc_decode_to_execute),
       .pipeline_flush_i			(pipeline_flush_o),
       .decode_opc_alu_i			(decode_opc_alu_o),
@@ -596,9 +594,7 @@ module mor1kx_cpu_cappuccino
       .pc_decode_i			(pc_fetch_to_decode),	 // Templated
       .decode_rfb_i			(decode_rfb_o),		 // Templated
       .execute_rfb_i			(execute_rfb_o),	 // Templated
-      .flag_i				(spr_sr_o[`OR1K_SPR_SR_F]), // Templated
-      .flag_set_i			(flag_set_o),		 // Templated
-      .flag_clear_i			(flag_clear_o),		 // Templated
+      .flag_i				(ctrl_flag_o),		 // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
       .decode_opc_alu_i			(decode_opc_alu_o),	 // Templated
       .decode_opc_alu_secondary_i	(decode_opc_alu_secondary_o), // Templated

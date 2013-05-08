@@ -45,10 +45,8 @@ module mor1kx_decode_execute_cappuccino
     input [OPTION_OPERAND_WIDTH-1:0] 	  decode_rfb_i,
     input [OPTION_OPERAND_WIDTH-1:0] 	  execute_rfb_i,
 
-    // input from execute stage
+    // input from ctrl stage
     input 				  flag_i,
-    input 				  flag_set_i,
-    input 				  flag_clear_i,
 
     input 				  pipeline_flush_i,
 
@@ -190,15 +188,11 @@ module mor1kx_decode_execute_cappuccino
     );
 
    wire   ctrl_to_decode_interlock;
+   wire   decode_op_brcond;
    wire   branch_to_imm;
    wire   branch_to_reg;
 
    wire   decode_except_ibus_align;
-
-   reg 	  flag_r;
-   wire   flag;
-
-   reg 	  pipeline_flush_r;
 
    // Op control signals to execute stage
    always @(posedge clk `OR_ASYNC_RST)
@@ -421,22 +415,6 @@ module mor1kx_decode_execute_cappuccino
      if (padv_i)
        pc_execute_o <= pc_decode_i;
 
-   // Flag calculation, we get the flag_set_i and flag_clear_i straight from
-   // execute stage, and we keep track of the value.
-   always @(posedge clk)
-     pipeline_flush_r <= pipeline_flush_i;
-
-   always @(posedge clk)
-     if (pipeline_flush_r)
-       flag_r <= flag_i;
-     else if (flag_set_i)
-       flag_r <= 1;
-     else if (flag_clear_i)
-       flag_r <= 0;
-
-   assign flag = pipeline_flush_r ? flag_i :
-		 (!flag_clear_i & flag_r) | flag_set_i;
-
    // Branch detection
    assign ctrl_to_decode_interlock = (ctrl_op_lsu_load_i | ctrl_op_mfspr_i) &
 				     (decode_rfb_adr_i == ctrl_rfd_adr_i);
@@ -445,7 +423,7 @@ module mor1kx_decode_execute_cappuccino
 			   // l.j/l.jal
 			   (!(|decode_opc_insn_i[2:1]) |
 			    // l.bf/bnf and flag is right
-			    (decode_opc_insn_i[2] == flag)));
+			    (decode_opc_insn_i[2] == flag_i)));
 
    assign branch_to_reg = decode_op_jr_i & !ctrl_to_decode_interlock;
 
@@ -476,6 +454,9 @@ module mor1kx_decode_execute_cappuccino
 			       pc_decode_i + 8 :
 			       pc_decode_i + 4;
 
+   assign decode_op_brcond = decode_opc_insn_i == `OR1K_OPCODE_BF ||
+			     decode_opc_insn_i == `OR1K_OPCODE_BNF;
+
    // Detect the situation where there is an instruction in execute stage
    // that will produce it's result in control stage (i.e. load and mfspr),
    // and an instruction currently in decode stage needing it's result as
@@ -494,6 +475,16 @@ module mor1kx_decode_execute_cappuccino
 			     decode_op_jr_i &
 			     (ctrl_to_decode_interlock |
 			      (decode_rfb_adr_i == execute_rfd_adr_o)) |
+			     // Connecting the set/clear flag result
+			     // directly from execute stage creates a very
+			     // critical path, so for now, insert a bubble
+			     // and wait for the registered result.
+			     //
+			     // TODO: simple branch "prediction", by using
+			     // the (potentially invalid) old flag value and
+			     // re-evaluate the condition when the branch insn
+			     // have reached execute stage.
+			     decode_op_brcond & execute_op_setflag_o |
 			     decode_op_rfe_i) & padv_i;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -511,7 +502,7 @@ module mor1kx_decode_execute_cappuccino
 	 always @(posedge clk)
 	    if (padv_i & !rst & !pipeline_flush_i &
 		decode_op_jbr_i & (|decode_opc_insn_i[2:1]) &
-		flag === 1'bx) begin
+		flag_i === 1'bx) begin
 	       $display("ERROR: flag === 'x' on l.b(n)f");
 	       $finish();
 	    end
