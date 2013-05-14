@@ -206,7 +206,10 @@ module mor1kx_cpu_cappuccino
    wire			decode_lsu_zext_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_add_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_alu_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_bf_o;		// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_bnf_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_branch_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_brcond_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_div_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_div_signed_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_div_unsigned_o;// From mor1kx_decode of mor1kx_decode.v
@@ -257,6 +260,7 @@ module mor1kx_cpu_cappuccino
    wire			execute_op_add_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_alu_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_branch_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire			execute_op_brcond_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_div_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_div_signed_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_op_div_unsigned_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
@@ -443,6 +447,9 @@ module mor1kx_cpu_cappuccino
       .decode_op_jbr_o			(decode_op_jbr_o),
       .decode_op_jr_o			(decode_op_jr_o),
       .decode_op_jal_o			(decode_op_jal_o),
+      .decode_op_bf_o			(decode_op_bf_o),
+      .decode_op_bnf_o			(decode_op_bnf_o),
+      .decode_op_brcond_o		(decode_op_brcond_o),
       .decode_op_branch_o		(decode_op_branch_o),
       .decode_op_alu_o			(decode_op_alu_o),
       .decode_op_lsu_load_o		(decode_op_lsu_load_o),
@@ -502,6 +509,7 @@ module mor1kx_cpu_cappuccino
       .decode_op_jbr_i			(decode_op_jbr_o),
       .decode_op_jr_i			(decode_op_jr_o),
       .decode_op_jal_i			(decode_op_jal_o),
+      .decode_op_brcond_i		(decode_op_brcond_o),
       .decode_op_branch_i		(decode_op_branch_o),
       .decode_op_lsu_load_i		(decode_op_lsu_load_o),
       .decode_op_lsu_store_i		(decode_op_lsu_store_o),
@@ -554,6 +562,7 @@ module mor1kx_cpu_cappuccino
       .execute_op_jbr_o			(execute_op_jbr_o),
       .execute_op_jr_o			(execute_op_jr_o),
       .execute_op_jal_o			(execute_op_jal_o),
+      .execute_op_brcond_o		(execute_op_brcond_o),
       .execute_op_branch_o		(execute_op_branch_o),
       .execute_op_lsu_load_o		(execute_op_lsu_load_o),
       .execute_op_lsu_store_o		(execute_op_lsu_store_o),
@@ -616,6 +625,7 @@ module mor1kx_cpu_cappuccino
       .decode_op_jbr_i			(decode_op_jbr_o),	 // Templated
       .decode_op_jr_i			(decode_op_jr_o),	 // Templated
       .decode_op_jal_i			(decode_op_jal_o),	 // Templated
+      .decode_op_brcond_i		(decode_op_brcond_o),	 // Templated
       .decode_op_branch_i		(decode_op_branch_o),	 // Templated
       .decode_op_lsu_load_i		(decode_op_lsu_load_o),	 // Templated
       .decode_op_lsu_store_i		(decode_op_lsu_store_o), // Templated

@@ -97,6 +97,7 @@ module mor1kx_decode_execute_cappuccino
     input 				  decode_op_jbr_i,
     input 				  decode_op_jr_i,
     input 				  decode_op_jal_i,
+    input 				  decode_op_brcond_i,
     input 				  decode_op_branch_i,
 
     input 				  decode_op_lsu_load_i,
@@ -131,6 +132,7 @@ module mor1kx_decode_execute_cappuccino
     output reg 				  execute_op_jbr_o,
     output reg 				  execute_op_jr_o,
     output reg 				  execute_op_jal_o,
+    output reg 				  execute_op_brcond_o,
     output reg 				  execute_op_branch_o,
 
     output reg 				  execute_op_lsu_load_o,
@@ -188,7 +190,6 @@ module mor1kx_decode_execute_cappuccino
     );
 
    wire   ctrl_to_decode_interlock;
-   wire   decode_op_brcond;
    wire   branch_to_imm;
    wire   branch_to_reg;
 
@@ -216,6 +217,7 @@ module mor1kx_decode_execute_cappuccino
 	execute_op_jbr_o <= 1'b0;
 	execute_op_jr_o <= 1'b0;
 	execute_op_jal_o <= 1'b0;
+	execute_op_brcond_o <= 1'b0;
 	execute_op_branch_o <= 0;
      end else if (pipeline_flush_i) begin
 	execute_op_alu_o <= 1'b0;
@@ -235,6 +237,7 @@ module mor1kx_decode_execute_cappuccino
 	execute_op_jbr_o <= 1'b0;
 	execute_op_jr_o <= 1'b0;
 	execute_op_jal_o <= 1'b0;
+	execute_op_brcond_o <= 1'b0;
 	execute_op_branch_o <= 1'b0;
      end else if (padv_i) begin
 	execute_op_alu_o <= decode_op_alu_i;
@@ -256,6 +259,7 @@ module mor1kx_decode_execute_cappuccino
 	execute_op_jbr_o <= decode_op_jbr_i;
 	execute_op_jr_o <= decode_op_jr_i;
 	execute_op_jal_o <= decode_op_jal_i;
+	execute_op_brcond_o <= decode_op_brcond_i;
 	execute_op_branch_o <= decode_op_branch_i;
 	if (decode_bubble_o) begin
 	   execute_op_alu_o <= 1'b0;
@@ -277,6 +281,7 @@ module mor1kx_decode_execute_cappuccino
 	   execute_op_jbr_o <= 1'b0;
 	   execute_op_jr_o <= 1'b0;
 	   execute_op_jal_o <= 1'b0;
+	   execute_op_brcond_o <= decode_op_brcond_i;
 	   execute_op_branch_o <= 1'b0;
 	end
      end
@@ -454,9 +459,6 @@ module mor1kx_decode_execute_cappuccino
 			       pc_decode_i + 8 :
 			       pc_decode_i + 4;
 
-   assign decode_op_brcond = decode_opc_insn_i == `OR1K_OPCODE_BF ||
-			     decode_opc_insn_i == `OR1K_OPCODE_BNF;
-
    // Detect the situation where there is an instruction in execute stage
    // that will produce it's result in control stage (i.e. load and mfspr),
    // and an instruction currently in decode stage needing it's result as
@@ -484,7 +486,7 @@ module mor1kx_decode_execute_cappuccino
 			     // the (potentially invalid) old flag value and
 			     // re-evaluate the condition when the branch insn
 			     // have reached execute stage.
-			     decode_op_brcond & execute_op_setflag_o |
+			     decode_op_brcond_i & execute_op_setflag_o |
 			     decode_op_rfe_i) & padv_i;
 
    always @(posedge clk `OR_ASYNC_RST)

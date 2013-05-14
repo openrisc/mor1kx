@@ -80,6 +80,9 @@ module mor1kx_decode
     output 			      decode_op_jbr_o,
     output 			      decode_op_jr_o,
     output 			      decode_op_jal_o,
+    output 			      decode_op_bf_o,
+    output 			      decode_op_bnf_o,
+    output 			      decode_op_brcond_o,
     output 			      decode_op_branch_o,
 
     output 			      decode_op_alu_o,
@@ -186,6 +189,10 @@ module mor1kx_decode
 
    assign decode_op_jal_o = opc_insn == `OR1K_OPCODE_JALR |
 			    opc_insn == `OR1K_OPCODE_JAL;
+
+   assign decode_op_bf_o = opc_insn == `OR1K_OPCODE_BF;
+   assign decode_op_bnf_o = opc_insn == `OR1K_OPCODE_BNF;
+   assign decode_op_brcond_o = decode_op_bf_o | decode_op_bnf_o;
 
    // All branch instructions combined
    assign decode_op_branch_o = decode_op_jbr_o |
