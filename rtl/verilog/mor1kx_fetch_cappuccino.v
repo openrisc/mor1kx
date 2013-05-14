@@ -77,6 +77,9 @@ module mor1kx_fetch_cappuccino
     input [OPTION_OPERAND_WIDTH-1:0] 	  ctrl_branch_except_pc_i,
     input 				  du_restart_i,
     input [OPTION_OPERAND_WIDTH-1:0] 	  du_restart_pc_i,
+    input 				  decode_op_brcond_i,
+    input 				  branch_mispredict_i,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  execute_mispredict_target_i,
 
     // pipeline flush input from control unit
     input 				  pipeline_flush_i,
@@ -137,6 +140,10 @@ module mor1kx_fetch_cappuccino
    wire 				  except_itlb_miss;
    wire 				  except_ipagefault;
 
+   reg 					  fetching_brcond;
+   reg 					  fetching_mispredicted_branch;
+   wire 				  mispredict_stall;
+
    assign bus_access_done =  imem_ack | imem_err | fake_ack;
    assign ctrl_branch_exception_edge = ctrl_branch_exception_i &
 				       !ctrl_branch_exception_r;
@@ -151,9 +158,9 @@ module mor1kx_fetch_cappuccino
 		       doing_rfe_i;
 
    assign except_itlb_miss = tlb_miss & immu_enable_i & bus_access_done &
-			      !doing_rfe_i;
+			     !mispredict_stall & !doing_rfe_i;
    assign except_ipagefault = pagefault & immu_enable_i & bus_access_done &
-			      !doing_rfe_i;
+			      !mispredict_stall & !doing_rfe_i;
 
    assign fetch_rfb_adr_o = imem_dat[`OR1K_RB_SELECT];
    assign fetch_rf_adr_valid_o = imem_ack & padv_i;
@@ -172,6 +179,30 @@ module mor1kx_fetch_cappuccino
    // to keep on flushing when the branch signal comes in.
    assign flushing = pipeline_flush_i | ctrl_branch_exception_edge | flush;
 
+   // Branch misprediction stall logic
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       fetching_brcond <= 0;
+     else if (pipeline_flush_i)
+       fetching_brcond <= 0;
+     else if (decode_op_brcond_i & addr_valid)
+       fetching_brcond <= 1;
+     else if (bus_access_done & padv_i | du_restart_i)
+       fetching_brcond <= 0;
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       fetching_mispredicted_branch <= 0;
+     else if (pipeline_flush_i)
+       fetching_mispredicted_branch <= 0;
+     else if (bus_access_done & padv_i | du_restart_i)
+       fetching_mispredicted_branch <= 0;
+     else if (fetching_brcond & branch_mispredict_i & padv_i)
+       fetching_mispredicted_branch <= 1;
+
+   assign mispredict_stall = fetching_mispredicted_branch |
+			     branch_mispredict_i & fetching_brcond;
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        ctrl_branch_exception_r <= 1'b0;
@@ -186,6 +217,8 @@ module mor1kx_fetch_cappuccino
 	pc_addr = du_restart_pc_i;
       else if (ctrl_branch_exception_i & !fetch_exception_taken_o)
 	pc_addr = ctrl_branch_except_pc_i;
+      else if (branch_mispredict_i | fetching_mispredicted_branch)
+	pc_addr = execute_mispredict_target_i;
       else if (decode_branch_i)
 	pc_addr = decode_branch_target_i;
       else
@@ -215,7 +248,7 @@ module mor1kx_fetch_cappuccino
        fetch_valid_o <= 1'b0;
      else if (pipeline_flush_i)
        fetch_valid_o <= 1'b0;
-     else if (bus_access_done & padv_i | stall_fetch_valid)
+     else if (bus_access_done & padv_i & !mispredict_stall | stall_fetch_valid)
        fetch_valid_o <= 1'b1;
      else
        fetch_valid_o <= 1'b0;
@@ -226,12 +259,12 @@ module mor1kx_fetch_cappuccino
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
      else if (imem_err | flushing)
        decode_insn_o <= {`OR1K_OPCODE_NOP,26'd0};
-     else if (bus_access_done & padv_i)
+     else if (bus_access_done & padv_i & !mispredict_stall)
        decode_insn_o <= imem_dat;
 
    // Register PC for later stages
    always @(posedge clk)
-     if (bus_access_done & padv_i)
+     if (bus_access_done & padv_i & !mispredict_stall)
        pc_decode_o <= pc_fetch;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -281,8 +314,10 @@ module mor1kx_fetch_cappuccino
      if (rst)
        fake_ack <= 0;
      else
-       fake_ack <= padv_i & ((immu_enable_i & (tlb_miss | pagefault)) |
-		   ctrl_branch_exception_edge) & !bus_access_done & !ibus_req;
+       fake_ack <= padv_i & !bus_access_done & !ibus_req &
+		   ((immu_enable_i & (tlb_miss | pagefault)) |
+		    ctrl_branch_exception_edge |
+		    mispredict_stall);
 
    assign ibus_access = !ic_access & !ic_refill;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
@@ -353,8 +388,8 @@ module mor1kx_fetch_cappuccino
    assign ic_addr = addr_valid ? pc_addr : pc_fetch;
    assign ic_addr_match = immu_enable_i ? immu_phys_addr : pc_fetch;
    assign ic_refill_allowed = !((tlb_miss | pagefault) & immu_enable_i) &
-			      !ctrl_branch_exception_i & !pipeline_flush_i |
-			      doing_rfe_i;
+			      !ctrl_branch_exception_i & !pipeline_flush_i &
+			      !mispredict_stall | doing_rfe_i;
    assign ic_req = padv_i & !decode_except_ibus_err_o &
 		   !decode_except_itlb_miss_o & !except_itlb_miss &
 		   !decode_except_ipagefault_o & !except_ipagefault &

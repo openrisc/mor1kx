@@ -45,8 +45,11 @@ module mor1kx_decode_execute_cappuccino
     input [OPTION_OPERAND_WIDTH-1:0] 	  decode_rfb_i,
     input [OPTION_OPERAND_WIDTH-1:0] 	  execute_rfb_i,
 
-    // input from ctrl stage
-    input 				  flag_i,
+    // Branch prediction signals
+    input 				  predicted_flag_i,
+    output reg 				  execute_predicted_flag_o,
+    // The target pc that should be used in case of branch misprediction
+    output reg [OPTION_OPERAND_WIDTH-1:0] execute_mispredict_target_o,
 
     input 				  pipeline_flush_i,
 
@@ -97,6 +100,8 @@ module mor1kx_decode_execute_cappuccino
     input 				  decode_op_jbr_i,
     input 				  decode_op_jr_i,
     input 				  decode_op_jal_i,
+    input 				  decode_op_bf_i,
+    input 				  decode_op_bnf_i,
     input 				  decode_op_brcond_i,
     input 				  decode_op_branch_i,
 
@@ -189,11 +194,15 @@ module mor1kx_decode_execute_cappuccino
     output reg 				  execute_bubble_o
     );
 
-   wire   ctrl_to_decode_interlock;
-   wire   branch_to_imm;
-   wire   branch_to_reg;
+   wire 			   ctrl_to_decode_interlock;
+   wire 			   branch_to_imm;
+   wire [OPTION_OPERAND_WIDTH-1:0] branch_to_imm_target;
+   wire 			   branch_to_reg;
 
-   wire   decode_except_ibus_align;
+   wire 			   decode_except_ibus_align;
+
+   wire [OPTION_OPERAND_WIDTH-1:0] next_pc_after_branch_insn;
+   wire [OPTION_OPERAND_WIDTH-1:0] decode_mispredict_target;
 
    // Op control signals to execute stage
    always @(posedge clk `OR_ASYNC_RST)
@@ -428,7 +437,11 @@ module mor1kx_decode_execute_cappuccino
 			   // l.j/l.jal
 			   (!(|decode_opc_insn_i[2:1]) |
 			    // l.bf/bnf and flag is right
-			    (decode_opc_insn_i[2] == flag_i)));
+			    (decode_opc_insn_i[2] == predicted_flag_i)));
+
+   assign branch_to_imm_target = pc_decode_i + {{4{decode_immjbr_upper_i[9]}},
+						decode_immjbr_upper_i,
+						decode_imm16_i,2'b00};
 
    assign branch_to_reg = decode_op_jr_i & !ctrl_to_decode_interlock;
 
@@ -436,9 +449,7 @@ module mor1kx_decode_execute_cappuccino
 			    !pipeline_flush_i & !decode_bubble_o;
 
    assign decode_branch_target_o = branch_to_imm ?
-				   pc_decode_i + {{4{decode_immjbr_upper_i[9]}},
-						  decode_immjbr_upper_i,
-						  decode_imm16_i,2'b00} :
+				   branch_to_imm_target :
 				   // If a bubble have been pushed out to get
 				   // the instruction that will write the
 				   // branch target to control stage, then we
@@ -450,14 +461,29 @@ module mor1kx_decode_execute_cappuccino
    assign decode_except_ibus_align = decode_branch_o &
 				     (|decode_branch_target_o[1:0]);
 
+   assign next_pc_after_branch_insn = FEATURE_DELAY_SLOT == "ENABLED" ?
+				      pc_decode_i + 8 : pc_decode_i + 4;
+
+   assign decode_mispredict_target = decode_op_bf_i & !predicted_flag_i |
+				     decode_op_bnf_i & predicted_flag_i ?
+				     branch_to_imm_target :
+				     next_pc_after_branch_insn;
+
+   // Forward branch prediction signals to execute stage
+   always @(posedge clk)
+     if (padv_i & decode_op_brcond_i)
+       execute_mispredict_target_o <= decode_mispredict_target;
+
+   always @(posedge clk)
+     if (padv_i & decode_op_brcond_i)
+       execute_predicted_flag_o <= predicted_flag_i;
+
    // Calculate the link register result
    // TODO: investigate if the ALU adder can be used for this without
    // introducing critical paths
    always @(posedge clk)
      if (padv_i)
-       execute_jal_result_o <= FEATURE_DELAY_SLOT == "ENABLED" ?
-			       pc_decode_i + 8 :
-			       pc_decode_i + 4;
+       execute_jal_result_o <= next_pc_after_branch_insn;
 
    // Detect the situation where there is an instruction in execute stage
    // that will produce it's result in control stage (i.e. load and mfspr),
@@ -477,16 +503,6 @@ module mor1kx_decode_execute_cappuccino
 			     decode_op_jr_i &
 			     (ctrl_to_decode_interlock |
 			      (decode_rfb_adr_i == execute_rfd_adr_o)) |
-			     // Connecting the set/clear flag result
-			     // directly from execute stage creates a very
-			     // critical path, so for now, insert a bubble
-			     // and wait for the registered result.
-			     //
-			     // TODO: simple branch "prediction", by using
-			     // the (potentially invalid) old flag value and
-			     // re-evaluate the condition when the branch insn
-			     // have reached execute stage.
-			     decode_op_brcond_i & execute_op_setflag_o |
 			     decode_op_rfe_i) & padv_i;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -496,21 +512,5 @@ module mor1kx_decode_execute_cappuccino
        execute_bubble_o <= 0;
      else if (padv_i)
        execute_bubble_o <= decode_bubble_o;
-
-   // synthesis translate_off
-   generate
-      if (FEATURE_INBUILT_CHECKERS != "NONE") begin
-	 // assert on l.bnf/l.bf and flag is 'x'
-	 always @(posedge clk)
-	    if (padv_i & !rst & !pipeline_flush_i &
-		decode_op_jbr_i & (|decode_opc_insn_i[2:1]) &
-		flag_i === 1'bx) begin
-	       $display("ERROR: flag === 'x' on l.b(n)f");
-	       $finish();
-	    end
-
-      end
-   endgenerate
-   // synthesis translate_on
 
 endmodule // mor1kx_decode_execute_cappuccino
