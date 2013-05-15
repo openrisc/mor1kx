@@ -167,6 +167,7 @@ module mor1kx_cpu(/*AUTOARG*/
    wire [OPTION_OPERAND_WIDTH-1:0]   monitor_spr_epcr/* verilator public */;
    wire [OPTION_OPERAND_WIDTH-1:0]   monitor_spr_eear/* verilator public */;
    wire [OPTION_OPERAND_WIDTH-1:0]   monitor_spr_esr/* verilator public */;
+   wire 			     monitor_branch_mispredict/* verilator public */;
 
 
    generate
@@ -287,6 +288,8 @@ module mor1kx_cpu(/*AUTOARG*/
 	 assign monitor_spr_esr = {16'd0,cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_esr};
 	 assign monitor_spr_epcr = cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_epcr;
 	 assign monitor_spr_eear = cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_eear;
+	 assign monitor_branch_mispredict = cappuccino.mor1kx_cpu.branch_mispredict_o;
+
         reg [`OR1K_INSN_WIDTH-1:0]          monitor_execute_insn_reg;
         always @(posedge clk)
           if (cappuccino.mor1kx_cpu.padv_decode_o)
@@ -416,6 +419,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	 assign monitor_spr_esr = {16'd0,espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_esr};
 	 assign monitor_spr_epcr = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_epcr;
 	 assign monitor_spr_eear = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_eear;
+	 assign monitor_branch_mispredict = 0;
 `endif
 	 // synthesis translate_on
 
@@ -538,6 +542,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	 assign monitor_spr_esr = {16'd0,prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_esr};
 	 assign monitor_spr_epcr = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_epcr;
 	 assign monitor_spr_eear = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_eear;
+	 assign monitor_branch_mispredict = 0;
 `endif
 	 // synthesis translate_on
 
