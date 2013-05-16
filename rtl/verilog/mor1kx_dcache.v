@@ -278,12 +278,8 @@ module mor1kx_dcache
 	end
 
 	WRITE: begin
-	   if (dc_access_i) begin
-	      if ((dbus_ack_i | !cpu_req_i) & !cpu_we_i)
-		state <= IDLE;
-	   end else begin
-	      state <= IDLE;
-	   end
+	   if (!dc_access_i | (dbus_ack_i | !cpu_req_i) & !cpu_we_i)
+	     state <= IDLE;
 	   write_pending <= 0;
 	end
 
