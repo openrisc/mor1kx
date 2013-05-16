@@ -410,15 +410,6 @@ module mor1kx_dcache
       endcase
    end
 
-   /* mor1kx_simple_dpram_sclk AUTO_TEMPLATE (
-      // Outputs
-      .dout			(way_dout[i][OPTION_OPERAND_WIDTH-1:0]),
-      // Inputs
-      .raddr			(way_raddr[i][WAY_WIDTH-3:0]),
-      .waddr			(way_waddr[i][WAY_WIDTH-3:0]),
-      .we			(way_we[i]),
-      .din			(way_din[i][31:0]));
-    */
    generate
       for (i = 0; i < OPTION_DCACHE_WAYS; i=i+1) begin : way_memories
 	 mor1kx_simple_dpram_sclk
@@ -428,28 +419,19 @@ module mor1kx_dcache
 		 .ENABLE_BYPASS("FALSE")
 		 )
 	 way_data_ram
-	       (/*AUTOINST*/
+	       (
 		// Outputs
-		.dout			(way_dout[i][OPTION_OPERAND_WIDTH-1:0]), // Templated
+		.dout			(way_dout[i]),
 		// Inputs
 		.clk			(clk),
-		.raddr			(way_raddr[i][WAY_WIDTH-3:0]), // Templated
-		.waddr			(way_waddr[i][WAY_WIDTH-3:0]), // Templated
-		.we			(way_we[i]),		 // Templated
-		.din			(way_din[i][31:0]));	 // Templated
+		.raddr			(way_raddr[i][WAY_WIDTH-3:0]),
+		.waddr			(way_waddr[i][WAY_WIDTH-3:0]),
+		.we			(way_we[i]),
+		.din			(way_din[i][31:0]));
 
       end
    endgenerate
 
-   /* mor1kx_simple_dpram_sclk AUTO_TEMPLATE (
-      // Outputs
-      .dout			(tag_dout[TAG_WIDTH-1:0]),
-      // Inputs
-      .raddr			(tag_raddr),
-      .waddr			(tag_waddr),
-      .we			(tag_we),
-      .din			(tag_din));
-    */
    mor1kx_simple_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
@@ -457,14 +439,14 @@ module mor1kx_dcache
        .ENABLE_BYPASS("FALSE")
      )
    tag_ram
-     (/*AUTOINST*/
+     (
       // Outputs
-      .dout				(tag_dout[TAG_WIDTH-1:0]), // Templated
+      .dout				(tag_dout[TAG_WIDTH-1:0]),
       // Inputs
       .clk				(clk),
-      .raddr				(tag_raddr),		 // Templated
-      .waddr				(tag_waddr),		 // Templated
-      .we				(tag_we),		 // Templated
-      .din				(tag_din));		 // Templated
+      .raddr				(tag_raddr),
+      .waddr				(tag_waddr),
+      .we				(tag_we),
+      .din				(tag_din));
 
 endmodule
