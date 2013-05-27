@@ -36,21 +36,22 @@ module mor1kx_ctrl_prontoespresso
    execute_waiting_o, stepping_o, du_dat_o, du_ack_o, du_stall_o,
    du_restart_pc_o, du_restart_o, spr_bus_addr_o, spr_bus_we_o,
    spr_bus_stb_o, spr_bus_dat_o, spr_sr_o, ctrl_branch_target_o,
-   ctrl_branch_occur_o, rf_we_o,
+   ctrl_insn_done_o, ctrl_branch_occur_o, rf_we_o,
    // Inputs
    clk, rst, ctrl_alu_result_i, ctrl_rfb_i, ctrl_flag_set_i,
    ctrl_flag_clear_i, ctrl_opc_insn_i, fetch_ppc_i, pc_fetch_next_i,
    fetch_sleep_i, except_ibus_err_i, except_illegal_i,
    except_syscall_i, except_dbus_i, except_trap_i, except_align_i,
-   fetch_ready_i, alu_valid_i, lsu_valid_i, op_lsu_load_i,
-   op_lsu_store_i, op_jr_i, op_jbr_i, irq_i, carry_set_i,
-   carry_clear_i, overflow_set_i, overflow_clear_i, du_addr_i,
-   du_stb_i, du_dat_i, du_we_i, du_stall_i, spr_bus_dat_dc_i,
-   spr_bus_ack_dc_i, spr_bus_dat_ic_i, spr_bus_ack_ic_i,
-   spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i, spr_bus_dat_immu_i,
-   spr_bus_ack_immu_i, spr_bus_dat_mac_i, spr_bus_ack_mac_i,
-   spr_bus_dat_pmu_i, spr_bus_ack_pmu_i, spr_bus_dat_pcu_i,
-   spr_bus_ack_pcu_i, spr_bus_dat_fpu_i, spr_bus_ack_fpu_i, rf_wb_i
+   fetch_ready_i, fetch_quick_branch_i, alu_valid_i, lsu_valid_i,
+   op_lsu_load_i, op_lsu_store_i, op_jr_i, op_jbr_i, irq_i,
+   carry_set_i, carry_clear_i, overflow_set_i, overflow_clear_i,
+   du_addr_i, du_stb_i, du_dat_i, du_we_i, du_stall_i,
+   spr_bus_dat_dc_i, spr_bus_ack_dc_i, spr_bus_dat_ic_i,
+   spr_bus_ack_ic_i, spr_bus_dat_dmmu_i, spr_bus_ack_dmmu_i,
+   spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
+   spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
+   spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
+   spr_bus_ack_fpu_i, rf_wb_i
    );
 
    parameter OPTION_OPERAND_WIDTH       = 32;
@@ -127,6 +128,7 @@ module mor1kx_ctrl_prontoespresso
    
    // Inputs from two units that can stall proceedings
    input 			     fetch_ready_i;
+   input 			     fetch_quick_branch_i;
    
    input 			     alu_valid_i, lsu_valid_i;
    
@@ -233,6 +235,8 @@ module mor1kx_ctrl_prontoespresso
    reg                               execute_go;
    wire                              execute_done;
 
+   output 			     ctrl_insn_done_o;
+
    reg                               execute_waiting_r;
    
    reg                               decode_execute_halt;
@@ -290,7 +294,7 @@ module mor1kx_ctrl_prontoespresso
    wire                              fetch_advance;
    wire                              rfete;
    wire 			     stall_on_trap;
-   
+
    /* Debug SPRs */
    reg [31:0] 			     spr_dmr1;
    reg [31:0] 			     spr_dmr2;
@@ -299,7 +303,7 @@ module mor1kx_ctrl_prontoespresso
    
    /* DU internal control signals */
    wire                              du_access;
-   wire                              cpu_stall;
+   reg                               cpu_stall;
    wire                              du_restart_from_stall;
    wire [1:0] 			     pstep;
    wire                              stepping;
@@ -371,7 +375,7 @@ module mor1kx_ctrl_prontoespresso
                               (op_jr_i & !(except_ibus_align));
    
    assign ctrl_branch_occur_o = // Usual branch signaling
-                                ((ctrl_branch_occur | ctrl_branch_exception) &
+                                ((ctrl_branch_occur/* | ctrl_branch_exception*/) &
                                 fetch_advance);
       
    assign ctrl_branch_target_o = ctrl_branch_exception ? 
@@ -463,8 +467,9 @@ module mor1kx_ctrl_prontoespresso
      if (rst)
        take_exception <= 0;
      else
-       take_exception <= (exception_pending | exception_r | doing_rfe_r) & 
-                         ((fetch_advance | fetch_sleep_i) |
+       take_exception <= (exception_pending/* | doing_rfe_r*/) & 
+                         (((fetch_advance & waiting_for_fetch) | execute_done |
+			   fetch_sleep_i) |
                           // Cause exception to always be 'taken' if stepping
                           (stepping & execute_done)
                           ) &
@@ -503,8 +508,17 @@ module mor1kx_ctrl_prontoespresso
        execute_go <= (padv_fetch_o & !(ctrl_branch_occur_re | op_rfe)) | 
 		     execute_waiting | (stepping & fetch_ready_i);
 
-   assign execute_done = execute_go & !execute_waiting;
-
+   assign execute_done = (execute_go | fetch_quick_branch_i) & 
+			 !execute_waiting & !cpu_stall;
+   // Note: we gate on cpu_stall here because a case was observed where
+   // the stall came during a multicycle instruction, and the rest of the
+   // pipeline had stalled and execute_done strobed, indicating the
+   // instruction completed but the PCs were not advanced. So it's best to
+   // just stop this signal asserting, meaning we don't allow  the 
+   // instruction to officially complete (result is not written to RF).
+ 
+   assign ctrl_insn_done_o = execute_done;
+  
    // ALU or LSU stall execution, nothing else can
    assign execute_valid = !((op_lsu_load_i | op_lsu_store_i) & !lsu_valid_i |
 			    !alu_valid_i);
@@ -568,7 +582,7 @@ module mor1kx_ctrl_prontoespresso
      else if (exception_r & take_exception)
        exception_taken <= 1;
 
-   assign exception_taken_o = exception_taken;
+   assign exception_taken_o = exception_r & take_exception;//exception_taken;
    
    // Used to gate execute stage's advance signal in the case where a LSU op has
    // finished before the next instruction has been fetched. Typically this
@@ -578,7 +592,10 @@ module mor1kx_ctrl_prontoespresso
        waiting_for_fetch <= 0;
      else if (fetch_ready_i)
        waiting_for_fetch <= 0;
-     else if (!execute_waiting & execute_waiting_r & !fetch_ready_i)
+     // Whenever execute not waiting and fetch not ready
+     else if (!execute_waiting /*& execute_waiting_r*/ & !fetch_ready_i)
+       waiting_for_fetch <= 1;
+     else if (execute_done & !fetch_ready_i)
        waiting_for_fetch <= 1;
 
    assign doing_rfe = ((execute_done & op_rfe) | doing_rfe_r) & 
@@ -771,11 +788,11 @@ module mor1kx_ctrl_prontoespresso
      else if (stepping & execute_done & ctrl_branch_occur)
        // The case where we stepped into a jump
        spr_npc <= ctrl_branch_target_o;
-     else if (((fetch_advance & exception)|fetch_take_exception_branch_o)  | 
-	      padv_fetch_o )
+     else if (((fetch_advance & exception) | fetch_take_exception_branch_o) | 
+	      padv_fetch_o)
        // PC we're now executing
        spr_npc <= (fetch_take_exception_branch_o |(fetch_advance & exception)) ?
-		  exception_pc_addr : ctrl_branch_occur ? 
+		  exception_pc_addr : (ctrl_branch_occur & !fetch_quick_branch_i) ? 
 		  ctrl_branch_target_o : pc_fetch_next_i; 
 
    // Previous PC (PPC)
@@ -1139,7 +1156,9 @@ module mor1kx_ctrl_prontoespresso
           Why? Potentially an instruction like l.mfspr from an external unit
           hasn't completed fully, gets interrupted, and it's assumed it's
           completed, but actually hasn't. */
-         assign cpu_stall = du_stall_i | du_restart_from_stall;          
+         
+	 always @(posedge clk)
+	   cpu_stall <= du_stall_i | du_restart_from_stall;
          
          /* goes out to the debug interface and comes back 1 cycle later
           via du_stall_i */
@@ -1270,7 +1289,8 @@ module mor1kx_ctrl_prontoespresso
       else
         begin : no_du
            assign du_access = 0;
-           assign cpu_stall = 0;
+	   always @*
+             cpu_stall = 0;
            assign du_stall_o = 0;
            assign du_ack_o = 0;
            assign du_restart_o = 0;
@@ -1387,14 +1407,19 @@ module mor1kx_ctrl_prontoespresso
 
 	 reg [OPTION_OPERAND_WIDTH-1:0] last_execute_pc;
 	 reg 				just_branched = 1;
+	 reg                            had_rfe = 0;
 	 integer 			insns = 0;
 	 
 
 	 // A monitor to do a rudimentary check of the processor's PC 
 	 // progression
 	 always @(negedge clk) begin
+
+	    if (op_rfe)
+	      had_rfe = 1;
+	    
 	    if (execute_done & !stepping) begin
-	       
+
 	       // First instruction of an exception vector, ie.
 	       // 0x100, 0x200, 0x300 ... 0x2000
 	       if (~|spr_ppc[31:14] && ~|spr_ppc[7:0])
@@ -1413,7 +1438,7 @@ module mor1kx_ctrl_prontoespresso
 	       
 	       insns = insns + 1;
 	       last_execute_pc = spr_ppc;
-	       
+
 	       case (ctrl_opc_insn_i)
 		 `OR1K_OPCODE_J,
 		 `OR1K_OPCODE_JAL,
@@ -1427,6 +1452,16 @@ module mor1kx_ctrl_prontoespresso
 		 default:
 		   just_branched = 0;
 	       endcase // case (`EXECUTE_STAGE_INSN[`OR1K_OPCODE_POS])
+
+	       if (had_rfe)
+		 begin
+		    // Sometimes the RFE will pulse high, and the
+		    // branch logic in the fetch stage will acknowledge
+		    // it but the instruction isn't "acked" in the
+		    // control stage.
+		    just_branched = 1;
+		    had_rfe = 0;
+		 end
 	       
 	    end // if (execute_done & !stepping)
 	    else if (du_npc_write)
