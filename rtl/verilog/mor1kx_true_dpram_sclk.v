@@ -36,15 +36,21 @@ module mor1kx_true_dpram_sclk
    assign dout_b = rdata_b;
 
    always @(posedge clk) begin
-      if (we_a)
-	mem[addr_a] <= din_a;
-      rdata_a <= mem[addr_a];
+      if (we_a) begin
+	 mem[addr_a] <= din_a;
+	 rdata_a <= din_a;
+      end else begin
+	 rdata_a <= mem[addr_a];
+      end
    end
 
    always @(posedge clk) begin
-      if (we_b)
-	mem[addr_b] <= din_b;
-      rdata_b <= mem[addr_b];
+      if (we_b) begin
+	 mem[addr_b] <= din_b;
+	 rdata_b <= din_b;
+      end else begin
+	 rdata_b <= mem[addr_b];
+      end
    end
 
 endmodule
