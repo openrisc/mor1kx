@@ -468,7 +468,9 @@ module mor1kx_fetch_prontoespresso
    // Mini cache logic
    genvar 					     i;      
    generate
+      /* verilator lint_off WIDTH */
       if (FEATURE_INSTRUCTIONCACHE != "ENABLED")
+      /* verilator lint_on WIDTH */
 	begin : no_mini_cache
 	   assign mini_cache_hit = 0;
 	   assign mini_cache_hit_ungated = 0;
