@@ -21,10 +21,15 @@ module mor1kx
    iwbm_adr_o, iwbm_stb_o, iwbm_cyc_o, iwbm_sel_o, iwbm_we_o,
    iwbm_cti_o, iwbm_bte_o, iwbm_dat_o, dwbm_adr_o, dwbm_stb_o,
    dwbm_cyc_o, dwbm_sel_o, dwbm_we_o, dwbm_cti_o, dwbm_bte_o,
-   dwbm_dat_o, du_dat_o, du_ack_o, du_stall_o,
+   dwbm_dat_o, avm_d_address_o, avm_d_byteenable_o, avm_d_read_o,
+   avm_d_burstcount_o, avm_d_write_o, avm_d_writedata_o,
+   avm_i_address_o, avm_i_byteenable_o, avm_i_read_o,
+   avm_i_burstcount_o, du_dat_o, du_ack_o, du_stall_o,
    // Inputs
    clk, rst, iwbm_err_i, iwbm_ack_i, iwbm_dat_i, iwbm_rty_i,
-   dwbm_err_i, dwbm_ack_i, dwbm_dat_i, dwbm_rty_i, irq_i, du_addr_i,
+   dwbm_err_i, dwbm_ack_i, dwbm_dat_i, dwbm_rty_i, avm_d_readdata_i,
+   avm_d_waitrequest_i, avm_d_readdatavalid_i, avm_i_readdata_i,
+   avm_i_waitrequest_i, avm_i_readdatavalid_i, irq_i, du_addr_i,
    du_stb_i, du_dat_i, du_we_i, du_stall_i
    );
 
@@ -100,6 +105,7 @@ module mor1kx
 
    input clk, rst;
 
+   // Wishbone interface
    output [31:0] iwbm_adr_o;
    output 	 iwbm_stb_o;
    output 	 iwbm_cyc_o;
@@ -126,6 +132,25 @@ module mor1kx
    input [31:0]  dwbm_dat_i;
    input 	 dwbm_rty_i;
 
+   // Avalon interface
+   output [31:0] avm_d_address_o;
+   output [3:0]  avm_d_byteenable_o;
+   output 	 avm_d_read_o;
+   input [31:0]  avm_d_readdata_i;
+   output [3:0]  avm_d_burstcount_o;
+   output 	 avm_d_write_o;
+   output [31:0] avm_d_writedata_o;
+   input 	 avm_d_waitrequest_i;
+   input 	 avm_d_readdatavalid_i;
+
+   output [31:0] avm_i_address_o;
+   output [3:0]  avm_i_byteenable_o;
+   output 	 avm_i_read_o;
+   input [31:0]  avm_i_readdata_i;
+   output [3:0]  avm_i_burstcount_o;
+   input 	 avm_i_waitrequest_i;
+   input 	 avm_i_readdatavalid_i;
+
    input [31:0]  irq_i;
 
    // Debug interface
@@ -142,6 +167,8 @@ module mor1kx
 
    /*AUTOWIRE*/
    // Beginning of automatic wires (for undeclared instantiated-module outputs)
+   wire			avm_i_write_o;		// From ibus_bridge of mor1kx_bus_if_avalon.v
+   wire			avm_i_writedata_o;	// From ibus_bridge of mor1kx_bus_if_avalon.v
    wire [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o;	// From mor1kx_cpu of mor1kx_cpu.v
    wire [3:0]		dbus_bsel_o;		// From mor1kx_cpu of mor1kx_cpu.v
    wire			dbus_burst_o;		// From mor1kx_cpu of mor1kx_cpu.v
@@ -279,9 +306,106 @@ module mor1kx
 	    .wbm_dat_i			(dwbm_dat_i),		 // Templated
 	    .wbm_rty_i			(dwbm_rty_i));		 // Templated
 
-      end // if (BUS_IF_TYPE=="WISHBONE32")
-      else
-	begin
+      end else if (BUS_IF_TYPE=="AVALON") begin // block: bus_gen
+	 /* mor1kx_bus_if_avalon AUTO_TEMPLATE (
+	  .cpu_err_o			(ibus_err_i),
+	  .cpu_ack_o			(ibus_ack_i),
+	  .cpu_dat_o			(ibus_dat_i),
+	  .avm_address_o		(avm_i_address_o),
+	  .avm_byteenable_o		(avm_i_byteenable_o),
+	  .avm_read_o			(avm_i_read_o),
+	  .avm_burstcount_o		(avm_i_burstcount_o),
+	  .avm_write_o			(avm_i_write_o),
+	  .avm_writedata_o		(avm_i_writedata_o),
+	  // Inputs
+	  .cpu_adr_i			(ibus_adr_o),
+	  .cpu_dat_i			({OPTION_OPERAND_WIDTH{1'b0}}),
+	  .cpu_req_i			(ibus_req_o),
+	  .cpu_we_i			(1'b0),
+	  .cpu_bsel_i			(4'b1111),
+	  .cpu_burst_i			(ibus_burst_o),
+	  .avm_readdata_i		(avm_i_readdata_i),
+	  .avm_waitrequest_i		(avm_i_waitrequest_i),
+	  .avm_readdatavalid_i		(avm_i_readdatavalid_i),
+	  ); */
+
+	 mor1kx_bus_if_avalon
+	   #(.OPTION_AVALON_BURST_LENGTH((1<<OPTION_ICACHE_BLOCK_WIDTH)/4))
+	 ibus_bridge
+	   (/*AUTOINST*/
+	    // Outputs
+	    .cpu_err_o			(ibus_err_i),		 // Templated
+	    .cpu_ack_o			(ibus_ack_i),		 // Templated
+	    .cpu_dat_o			(ibus_dat_i),		 // Templated
+	    .avm_address_o		(avm_i_address_o),	 // Templated
+	    .avm_byteenable_o		(avm_i_byteenable_o),	 // Templated
+	    .avm_read_o			(avm_i_read_o),		 // Templated
+	    .avm_burstcount_o		(avm_i_burstcount_o),	 // Templated
+	    .avm_write_o		(avm_i_write_o),	 // Templated
+	    .avm_writedata_o		(avm_i_writedata_o),	 // Templated
+	    // Inputs
+	    .clk			(clk),
+	    .rst			(rst),
+	    .cpu_adr_i			(ibus_adr_o),		 // Templated
+	    .cpu_dat_i			({OPTION_OPERAND_WIDTH{1'b0}}), // Templated
+	    .cpu_req_i			(ibus_req_o),		 // Templated
+	    .cpu_bsel_i			(4'b1111),		 // Templated
+	    .cpu_we_i			(1'b0),			 // Templated
+	    .cpu_burst_i		(ibus_burst_o),		 // Templated
+	    .avm_readdata_i		(avm_i_readdata_i),	 // Templated
+	    .avm_waitrequest_i		(avm_i_waitrequest_i),	 // Templated
+	    .avm_readdatavalid_i	(avm_i_readdatavalid_i)); // Templated
+
+	 /* mor1kx_bus_if_avalon AUTO_TEMPLATE (
+	  .cpu_err_o			(dbus_err_i),
+	  .cpu_ack_o			(dbus_ack_i),
+	  .cpu_dat_o			(dbus_dat_i),
+	  .avm_address_o		(avm_d_address_o),
+	  .avm_byteenable_o		(avm_d_byteenable_o),
+	  .avm_read_o			(avm_d_read_o),
+	  .avm_burstcount_o		(avm_d_burstcount_o),
+	  .avm_write_o			(avm_d_write_o),
+	  .avm_writedata_o		(avm_d_writedata_o),
+	  // Inputs
+	  .cpu_adr_i			(dbus_adr_o),
+	  .cpu_dat_i			(dbus_dat_o),
+	  .cpu_req_i			(dbus_req_o),
+	  .cpu_we_i			(dbus_we_o),
+	  .cpu_bsel_i			(dbus_bsel_o),
+	  .cpu_burst_i			(dbus_burst_o),
+	  .avm_readdata_i		(avm_d_readdata_i),
+	  .avm_waitrequest_i		(avm_d_waitrequest_i),
+	  .avm_readdatavalid_i		(avm_d_readdatavalid_i),
+	  ); */
+
+	 mor1kx_bus_if_avalon
+	   #(.OPTION_AVALON_BURST_LENGTH((1<<OPTION_DCACHE_BLOCK_WIDTH)/4))
+	 dbus_bridge
+	   (/*AUTOINST*/
+	    // Outputs
+	    .cpu_err_o			(dbus_err_i),		 // Templated
+	    .cpu_ack_o			(dbus_ack_i),		 // Templated
+	    .cpu_dat_o			(dbus_dat_i),		 // Templated
+	    .avm_address_o		(avm_d_address_o),	 // Templated
+	    .avm_byteenable_o		(avm_d_byteenable_o),	 // Templated
+	    .avm_read_o			(avm_d_read_o),		 // Templated
+	    .avm_burstcount_o		(avm_d_burstcount_o),	 // Templated
+	    .avm_write_o		(avm_d_write_o),	 // Templated
+	    .avm_writedata_o		(avm_d_writedata_o),	 // Templated
+	    // Inputs
+	    .clk			(clk),
+	    .rst			(rst),
+	    .cpu_adr_i			(dbus_adr_o),		 // Templated
+	    .cpu_dat_i			(dbus_dat_o),		 // Templated
+	    .cpu_req_i			(dbus_req_o),		 // Templated
+	    .cpu_bsel_i			(dbus_bsel_o),		 // Templated
+	    .cpu_we_i			(dbus_we_o),		 // Templated
+	    .cpu_burst_i		(dbus_burst_o),		 // Templated
+	    .avm_readdata_i		(avm_d_readdata_i),	 // Templated
+	    .avm_waitrequest_i		(avm_d_waitrequest_i),	 // Templated
+	    .avm_readdatavalid_i	(avm_d_readdatavalid_i)); // Templated
+
+      end else begin
 	   initial begin
 	      $display("Error: BUS_IF_TYPE not correct");
 	      $finish();
