@@ -61,6 +61,7 @@ module mor1kx_immu
    wire 			      itlb_match_spr_cs;
    reg 				      itlb_match_spr_cs_r;
    wire 			      itlb_trans_spr_cs;
+   reg 				      itlb_trans_spr_cs_r;
 
    // sxe: supervisor execute enable
    // uxe: user exexute enable
@@ -72,12 +73,13 @@ module mor1kx_immu
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_bus_ack <= 0;
-     else if (itlb_match_spr_cs | itlb_trans_spr_cs)
+     else if (spr_bus_stb_i & spr_bus_addr_i[15:11] == 5'd2)
        spr_bus_ack <= 1;
      else
        spr_bus_ack <= 0;
 
-   assign spr_bus_ack_o = spr_bus_ack & (itlb_match_spr_cs | itlb_trans_spr_cs);
+   assign spr_bus_ack_o = spr_bus_ack & spr_bus_stb_i &
+			  spr_bus_addr_i[15:11] == 5'd2;
 
    assign cache_inhibit_o = itlb_trans_dout[1];
    assign sxe = itlb_trans_dout[6];
@@ -86,10 +88,13 @@ module mor1kx_immu
    assign pagefault_o = supervisor_mode_i ? !sxe : !uxe;
 
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       itlb_match_spr_cs_r <= 0;
-     else
-       itlb_match_spr_cs_r <= itlb_match_spr_cs;
+     if (rst) begin
+	itlb_match_spr_cs_r <= 0;
+	itlb_trans_spr_cs_r <= 0;
+     end else begin
+	itlb_match_spr_cs_r <= itlb_match_spr_cs;
+	itlb_trans_spr_cs_r <= itlb_trans_spr_cs;
+     end
 
    // TODO: optimize this
    assign itlb_match_spr_cs = spr_bus_stb_i &
@@ -111,9 +116,8 @@ module mor1kx_immu
    assign itlb_match_spr_din = spr_bus_dat_i;
    assign itlb_trans_spr_din = spr_bus_dat_i;
 
-   assign spr_bus_dat_o = itlb_match_spr_cs_r ?
-			  itlb_match_spr_dout : itlb_trans_spr_dout;
-
+   assign spr_bus_dat_o = itlb_match_spr_cs_r ? itlb_match_spr_dout :
+			  itlb_trans_spr_cs_r ? itlb_trans_spr_dout : 0;
    assign tlb_miss_o = itlb_match_dout[31:13] != virt_addr_match_i[31:13] |
 		       !itlb_match_dout[0]; // valid bit
 
