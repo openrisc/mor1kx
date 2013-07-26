@@ -27,6 +27,7 @@ module mor1kx_icache
     input 			      ic_access_i,
     output 			      refill_o,
     output 			      refill_done_o,
+    output 			      invalidate_o,
 
     // CPU Interface
     output 			      cpu_err_o,
@@ -50,7 +51,7 @@ module mor1kx_icache
     input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_i,
 
     output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
-    output 			      spr_bus_ack_o
+    output reg 			      spr_bus_ack_o
     );
 
    // States
@@ -85,9 +86,6 @@ module mor1kx_icache
    wire 			      refill_hit;
    reg [(1<<(OPTION_ICACHE_BLOCK_WIDTH-2))-1:0] refill_valid;
    reg [(1<<(OPTION_ICACHE_BLOCK_WIDTH-2))-1:0] refill_valid_r;
-   wire				      invalidate;
-   wire				      invalidate_edge;
-   reg				      invalidate_r;
 
    wire [OPTION_ICACHE_SET_WIDTH-1:0] tag_raddr;
    wire [OPTION_ICACHE_SET_WIDTH-1:0] tag_waddr;
@@ -189,23 +187,15 @@ module mor1kx_icache
    /*
     * SPR bus interface
     */
-   assign invalidate = spr_bus_stb_i & spr_bus_we_i &
-		       (spr_bus_addr_i == `OR1K_SPR_ICBIR_ADDR);
-
-   assign invalidate_edge = invalidate & !invalidate_r;
-   assign spr_bus_ack_o = 1'b1;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       invalidate_r <= 1'b0;
-     else
-       invalidate_r <= invalidate;
+   assign invalidate_o = spr_bus_stb_i & spr_bus_we_i &
+			 (spr_bus_addr_i == `OR1K_SPR_ICBIR_ADDR);
 
    /*
     * Cache FSM
     */
    always @(posedge clk `OR_ASYNC_RST) begin
       refill_valid_r <= refill_valid;
+      spr_bus_ack_o <= 0;
       case (state)
 	IDLE: begin
 	   ibus_adr <= cpu_adr_i;
@@ -247,16 +237,19 @@ module mor1kx_icache
 	end
 
 	INVALIDATE: begin
-	   state <= IDLE;
+	   if (!invalidate_o)
+	     state <= IDLE;
+	   spr_bus_ack_o <= 1;
 	end
 
 	default:
 	  state <= IDLE;
       endcase
 
-      if (invalidate_edge) begin
+      if (invalidate_o & !refill) begin
 	 /* ibus_adr is hijacked as the invalidate address here */
 	 ibus_adr <= spr_bus_dat_i;
+	 spr_bus_ack_o <= 1;
 	 state <= INVALIDATE;
       end
 

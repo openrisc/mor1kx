@@ -123,6 +123,7 @@ module mor1kx_fetch_cappuccino
    wire 				  ic_refill_allowed;
    wire 				  ic_refill;
    wire 				  ic_refill_done;
+   wire 				  ic_invalidate;
    wire [OPTION_OPERAND_WIDTH-1:0] 	  ic_addr;
    wire [OPTION_OPERAND_WIDTH-1:0] 	  ic_addr_match;
 
@@ -319,7 +320,7 @@ module mor1kx_fetch_cappuccino
 		    ctrl_branch_exception_edge |
 		    mispredict_stall);
 
-   assign ibus_access = !ic_access & !ic_refill;
+   assign ibus_access = (!ic_access | ic_invalidate) & !ic_refill;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
    assign imem_dat = fake_ack ? {`OR1K_OPCODE_NOP,26'd0} :
 		     ibus_access ? ibus_dat : ic_dat;
@@ -423,6 +424,7 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
     .spr_bus_ack_o		(spr_bus_ack_ic_o),
     .refill_o			(ic_refill),
     .refill_done_o		(ic_refill_done),
+    .invalidate_o		(ic_invalidate),
     // Inputs
     .ic_access_i		(ic_access),
     .cpu_adr_i			(ic_addr),
@@ -442,6 +444,7 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
       // Outputs
       .refill_o				(ic_refill),		 // Templated
       .refill_done_o			(ic_refill_done),	 // Templated
+      .invalidate_o			(ic_invalidate),	 // Templated
       .cpu_err_o			(ic_err),		 // Templated
       .cpu_ack_o			(ic_ack),		 // Templated
       .cpu_dat_o			(ic_dat[OPTION_OPERAND_WIDTH-1:0]), // Templated
