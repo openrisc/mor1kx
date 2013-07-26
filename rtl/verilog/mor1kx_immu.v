@@ -19,27 +19,27 @@ module mor1kx_immu
     parameter OPTION_IMMU_WAYS = 1
     )
    (
-    input 			      clk,
-    input 			      rst,
+    input 				  clk,
+    input 				  rst,
 
-    input [OPTION_OPERAND_WIDTH-1:0]  virt_addr_i,
-    input [OPTION_OPERAND_WIDTH-1:0]  virt_addr_match_i,
-    output [OPTION_OPERAND_WIDTH-1:0] phys_addr_o,
-    output 			      cache_inhibit_o,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  virt_addr_i,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  virt_addr_match_i,
+    output [OPTION_OPERAND_WIDTH-1:0] 	  phys_addr_o,
+    output 				  cache_inhibit_o,
 
-    input 			      supervisor_mode_i,
+    input 				  supervisor_mode_i,
 
-    output 			      tlb_miss_o,
-    output 			      pagefault_o,
+    output 				  tlb_miss_o,
+    output 				  pagefault_o,
 
     // SPR interface
-    input [15:0] 		      spr_bus_addr_i,
-    input 			      spr_bus_we_i,
-    input 			      spr_bus_stb_i,
-    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_i,
+    input [15:0] 			  spr_bus_addr_i,
+    input 				  spr_bus_we_i,
+    input 				  spr_bus_stb_i,
+    input [OPTION_OPERAND_WIDTH-1:0] 	  spr_bus_dat_i,
 
-    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
-    output 			      spr_bus_ack_o
+    output [OPTION_OPERAND_WIDTH-1:0] 	  spr_bus_dat_o,
+    output 				  spr_bus_ack_o
     );
 
    wire [OPTION_OPERAND_WIDTH-1:0]    itlb_match_dout;
