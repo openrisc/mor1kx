@@ -57,6 +57,7 @@ module mor1kx_dmmu
    wire 			      dtlb_match_spr_cs;
    reg 				      dtlb_match_spr_cs_r;
    wire 			      dtlb_trans_spr_cs;
+   reg 				      dtlb_trans_spr_cs_r;
 
    // ure: user read enable
    // uwe: user write enable
@@ -72,12 +73,13 @@ module mor1kx_dmmu
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_bus_ack <= 0;
-     else if (dtlb_match_spr_cs | dtlb_trans_spr_cs)
+     else if (spr_bus_stb_i & spr_bus_addr_i[15:11] == 5'd1)
        spr_bus_ack <= 1;
      else
        spr_bus_ack <= 0;
 
-   assign spr_bus_ack_o = spr_bus_ack & (dtlb_match_spr_cs | dtlb_trans_spr_cs);
+   assign spr_bus_ack_o = spr_bus_ack & spr_bus_stb_i &
+			  spr_bus_addr_i[15:11] == 5'd1;
 
    assign cache_inhibit_o = dtlb_trans_dout[1];
    assign ure = dtlb_trans_dout[6];
@@ -90,10 +92,13 @@ module mor1kx_dmmu
 			!uwe & op_store_i || !ure & op_load_i;
 
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       dtlb_match_spr_cs_r <= 0;
-     else
-       dtlb_match_spr_cs_r <= dtlb_match_spr_cs;
+     if (rst) begin
+	dtlb_match_spr_cs_r <= 0;
+	dtlb_trans_spr_cs_r <= 0;
+     end else begin
+	dtlb_match_spr_cs_r <= dtlb_match_spr_cs;
+	dtlb_trans_spr_cs_r <= dtlb_trans_spr_cs;
+     end
 
    // TODO: optimize this
    assign dtlb_match_spr_cs = spr_bus_stb_i &
@@ -117,8 +122,8 @@ module mor1kx_dmmu
    assign dtlb_match_din = spr_bus_dat_i;
    assign dtlb_trans_din = spr_bus_dat_i;
 
-   assign spr_bus_dat_o = dtlb_match_spr_cs_r ?
-			  dtlb_match_dout : dtlb_trans_dout;
+   assign spr_bus_dat_o = dtlb_match_spr_cs_r ? dtlb_match_dout :
+			  dtlb_trans_spr_cs_r ? dtlb_trans_dout : 0;
 
    assign tlb_miss_o = dtlb_match_dout[31:13] != virt_addr_match_i[31:13] |
 		       !dtlb_match_dout[0]; // valid bit
