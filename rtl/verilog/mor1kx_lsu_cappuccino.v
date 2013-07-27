@@ -34,6 +34,7 @@ module mor1kx_lsu_cappuccino
     parameter OPTION_DCACHE_WAYS = 2,
     parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
     parameter FEATURE_DMMU = "NONE",
+    parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
     parameter OPTION_DMMU_SET_WIDTH = 6,
     parameter OPTION_DMMU_WAYS = 1
     )
@@ -157,6 +158,14 @@ module mor1kx_lsu_cappuccino
    reg 				     except_dpagefault_r;
    wire 			     dmmu_cache_inhibit;
 
+   wire 			     tlb_reload_req;
+   wire 			     tlb_reload_busy;
+   wire [OPTION_OPERAND_WIDTH-1:0]   tlb_reload_addr;
+   wire 			     tlb_reload_pagefault;
+   reg 				     tlb_reload_ack;
+   reg [OPTION_OPERAND_WIDTH-1:0]    tlb_reload_data;
+   wire				     tlb_reload_pagefault_clear;
+
    assign ctrl_op_lsu = ctrl_op_lsu_load_i | ctrl_op_lsu_store_i;
 
    assign dbus_sdat = (ctrl_lsu_length_i == 2'b00) ? // byte access
@@ -170,7 +179,7 @@ module mor1kx_lsu_cappuccino
    assign align_err_short = ctrl_lsu_adr_i[0];
 
 
-   assign lsu_valid_o = lsu_ack | access_done;
+   assign lsu_valid_o = (lsu_ack | access_done) & !tlb_reload_busy;
    assign lsu_except_dbus_o = dbus_err | except_dbus;
 
 
@@ -181,11 +190,13 @@ module mor1kx_lsu_cappuccino
 
    assign lsu_except_align_o = except_align;
 
-   assign except_dtlb_miss = ctrl_op_lsu & tlb_miss & dmmu_enable_i;
+   assign except_dtlb_miss = ctrl_op_lsu & tlb_miss & dmmu_enable_i &
+			     !tlb_reload_busy;
 
    assign lsu_except_dtlb_miss_o = except_dtlb_miss;
 
-   assign except_dpagefault = ctrl_op_lsu & pagefault & dmmu_enable_i;
+   assign except_dpagefault = ctrl_op_lsu & pagefault & dmmu_enable_i &
+			      !tlb_reload_busy | tlb_reload_pagefault;
 
    assign lsu_except_dpagefault_o = except_dpagefault;
 
@@ -284,10 +295,11 @@ module mor1kx_lsu_cappuccino
    localparam [1:0] IDLE = 2'd0;
    localparam [1:0] READ = 2'd1;
    localparam [1:0] WRITE = 2'd2;
+   localparam [1:0] TLB_RELOAD = 2'd3;
 
    reg [1:0] state;
 
-   assign dbus_access = !dc_access & !dc_refill;
+   assign dbus_access = (!dc_access | tlb_reload_busy) & !dc_refill;
    assign lsu_ack = dbus_access ? dbus_ack : dc_ack;
    assign lsu_ldat = dbus_access ? dbus_ldat : dc_ldat;
    assign dbus_adr_o = dbus_access ? dbus_adr : dc_dbus_adr;
@@ -308,7 +320,11 @@ module mor1kx_lsu_cappuccino
 	   dbus_we <= 0;
 	   if (ctrl_op_lsu & dbus_access & !dbus_ack & !dbus_err &
 	       !except_dbus & !access_done) begin
-	      if (dmmu_enable_i) begin
+	      if (tlb_reload_req) begin
+		 dbus_adr <= tlb_reload_addr;
+		 dbus_req <= 1;
+		 state <= TLB_RELOAD;
+	      end else if (dmmu_enable_i) begin
 		 dbus_adr <= dmmu_phys_addr;
 		 if (!tlb_miss & !pagefault & !except_align) begin
 		    dbus_req <= 1;
@@ -342,6 +358,19 @@ module mor1kx_lsu_cappuccino
 	   end
 	end
 
+	TLB_RELOAD: begin
+	   dbus_adr <= tlb_reload_addr;
+	   tlb_reload_data <= dbus_dat_i;
+	   tlb_reload_ack <= dbus_ack_i & tlb_reload_req;
+
+	   if (!tlb_reload_req | dbus_err_i)
+	     state <= IDLE;
+
+	   dbus_req <= tlb_reload_req;
+	   if (dbus_ack_i | tlb_reload_ack)
+	     dbus_req <= 0;
+	end
+
 	default:
 	  state <= IDLE;
       endcase
@@ -372,7 +401,7 @@ module mor1kx_lsu_cappuccino
 		   (exec_op_lsu_load_i | exec_op_lsu_store_i) ?
 		   exec_lsu_adr_i : ctrl_lsu_adr_i;
    assign dc_adr_match = dmmu_enable_i ? dmmu_phys_addr : ctrl_lsu_adr_i;
-   assign dc_req = ctrl_op_lsu & dc_access &
+   assign dc_req = ctrl_op_lsu & dc_access & !tlb_reload_busy &
 		   !except_align & !except_dbus &
 		   !(except_dtlb_miss | except_dtlb_miss_r) &
 		   !(except_dpagefault | except_dpagefault_r) &
@@ -397,7 +426,8 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
    end
 
    assign dc_bsel = dbus_bsel;
-   assign dc_we = exec_op_lsu_store_i & padv_execute_i;
+   assign dc_we = exec_op_lsu_store_i & padv_execute_i |
+		  ctrl_op_lsu_store_i & tlb_reload_busy & !tlb_reload_req;
 
    /* mor1kx_dcache AUTO_TEMPLATE (
 	    .refill_o			(dc_refill),
@@ -492,21 +522,32 @@ if (FEATURE_DMMU!="NONE") begin : dmmu_gen
    // stage, but this is not how things currently work.
    assign dmmu_spr_bus_stb = spr_bus_stb_i & (!padv_ctrl_i | spr_bus_we_i);
 
+   assign tlb_reload_pagefault_clear = !ctrl_op_lsu; // use pipeline_flush_i?
+
    /* mor1kx_dmmu AUTO_TEMPLATE (
-    .phys_addr_o		(dmmu_phys_addr),
-    .cache_inhibit_o		(dmmu_cache_inhibit),
-    .op_store_i			(ctrl_op_lsu_store_i),
-    .op_load_i			(ctrl_op_lsu_load_i),
-    .tlb_miss_o			(tlb_miss),
-    .pagefault_o		(pagefault),
-    .spr_bus_dat_o		(spr_bus_dat_dmmu_o),
-    .spr_bus_ack_o		(spr_bus_ack_dmmu_o),
-    .spr_bus_stb_i		(dmmu_spr_bus_stb),
-    .virt_addr_i		(virt_addr),
-    .virt_addr_match_i		(ctrl_lsu_adr_i),
+    .enable_i				(dmmu_enable_i),
+    .phys_addr_o			(dmmu_phys_addr),
+    .cache_inhibit_o			(dmmu_cache_inhibit),
+    .op_store_i				(ctrl_op_lsu_store_i),
+    .op_load_i				(ctrl_op_lsu_load_i),
+    .tlb_miss_o				(tlb_miss),
+    .pagefault_o			(pagefault),
+    .tlb_reload_req_o			(tlb_reload_req),
+    .tlb_reload_busy_o			(tlb_reload_busy),
+    .tlb_reload_addr_o			(tlb_reload_addr),
+    .tlb_reload_pagefault_o		(tlb_reload_pagefault),
+    .tlb_reload_ack_i			(tlb_reload_ack),
+    .tlb_reload_data_i			(tlb_reload_data),
+    .tlb_reload_pagefault_clear_i	(tlb_reload_pagefault_clear),
+    .spr_bus_dat_o			(spr_bus_dat_dmmu_o),
+    .spr_bus_ack_o			(spr_bus_ack_dmmu_o),
+    .spr_bus_stb_i			(dmmu_spr_bus_stb),
+    .virt_addr_i			(virt_addr),
+    .virt_addr_match_i			(ctrl_lsu_adr_i),
     ); */
    mor1kx_dmmu
      #(
+       .FEATURE_DMMU_HW_TLB_RELOAD(FEATURE_DMMU_HW_TLB_RELOAD),
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
        .OPTION_DMMU_SET_WIDTH(OPTION_DMMU_SET_WIDTH),
        .OPTION_DMMU_WAYS(OPTION_DMMU_WAYS)
@@ -518,16 +559,24 @@ if (FEATURE_DMMU!="NONE") begin : dmmu_gen
       .cache_inhibit_o			(dmmu_cache_inhibit),	 // Templated
       .tlb_miss_o			(tlb_miss),		 // Templated
       .pagefault_o			(pagefault),		 // Templated
+      .tlb_reload_req_o			(tlb_reload_req),	 // Templated
+      .tlb_reload_busy_o		(tlb_reload_busy),	 // Templated
+      .tlb_reload_addr_o		(tlb_reload_addr),	 // Templated
+      .tlb_reload_pagefault_o		(tlb_reload_pagefault),	 // Templated
       .spr_bus_dat_o			(spr_bus_dat_dmmu_o),	 // Templated
       .spr_bus_ack_o			(spr_bus_ack_dmmu_o),	 // Templated
       // Inputs
       .clk				(clk),
       .rst				(rst),
+      .enable_i				(dmmu_enable_i),	 // Templated
       .virt_addr_i			(virt_addr),		 // Templated
       .virt_addr_match_i		(ctrl_lsu_adr_i),	 // Templated
       .op_store_i			(ctrl_op_lsu_store_i),	 // Templated
       .op_load_i			(ctrl_op_lsu_load_i),	 // Templated
       .supervisor_mode_i		(supervisor_mode_i),
+      .tlb_reload_ack_i			(tlb_reload_ack),	 // Templated
+      .tlb_reload_data_i		(tlb_reload_data),	 // Templated
+      .tlb_reload_pagefault_clear_i	(tlb_reload_pagefault_clear), // Templated
       .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
       .spr_bus_we_i			(spr_bus_we_i),
       .spr_bus_stb_i			(dmmu_spr_bus_stb),	 // Templated
