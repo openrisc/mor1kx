@@ -40,11 +40,13 @@ module mor1kx_cpu_prontoespresso
    parameter OPTION_DCACHE_SET_WIDTH	= 9;
    parameter OPTION_DCACHE_WAYS		= 2;
    parameter FEATURE_DMMU		= "NONE";
+   parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE";
    parameter FEATURE_INSTRUCTIONCACHE	= "NONE";
    parameter OPTION_ICACHE_BLOCK_WIDTH	= 5;
    parameter OPTION_ICACHE_SET_WIDTH	= 9;
    parameter OPTION_ICACHE_WAYS		= 2;
    parameter FEATURE_IMMU		= "NONE";
+   parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE";
    parameter FEATURE_PIC		= "ENABLED";
    parameter FEATURE_TIMER		= "ENABLED";
    parameter FEATURE_DEBUGUNIT		= "NONE";
