@@ -100,8 +100,6 @@ module mor1kx_lsu_cappuccino
 
    reg 				     access_done;
 
-   reg [OPTION_OPERAND_WIDTH-1:0]    lsu_result_r;
-
    wire 			     align_err_word;
    wire 			     align_err_short;
 
@@ -111,15 +109,18 @@ module mor1kx_lsu_cappuccino
 
    reg 				     except_dbus;
 
-   wire 			     dbus_ack;
+   reg 				     dbus_ack;
    reg 				     dbus_err;
-   wire [OPTION_OPERAND_WIDTH-1:0]   dbus_ldat;
+   reg [OPTION_OPERAND_WIDTH-1:0]    dbus_ldat;
    wire [OPTION_OPERAND_WIDTH-1:0]   dbus_sdat;
-   wire [OPTION_OPERAND_WIDTH-1:0]   dbus_adr;
-   wire 			     dbus_req;
+   reg [OPTION_OPERAND_WIDTH-1:0]    dbus_adr;
+   reg 				     dbus_req;
    reg [3:0] 			     dbus_bsel;
-   wire 			     dbus_we;
+   reg 				     dbus_we;
    wire 			     dbus_access;
+
+   wire [OPTION_OPERAND_WIDTH-1:0]   lsu_ldat;
+   wire				     lsu_ack;
 
    wire 			     dc_err;
    wire 			     dc_ack;
@@ -144,6 +145,8 @@ module mor1kx_lsu_cappuccino
    reg 				     dc_enable_r;
    wire 			     dc_enabled;
 
+   wire 			     ctrl_op_lsu;
+
    // DMMU
    wire 			     tlb_miss;
    wire 			     pagefault;
@@ -153,6 +156,8 @@ module mor1kx_lsu_cappuccino
    wire 			     except_dpagefault;
    reg 				     except_dpagefault_r;
    wire 			     dmmu_cache_inhibit;
+
+   assign ctrl_op_lsu = ctrl_op_lsu_load_i | ctrl_op_lsu_store_i;
 
    assign dbus_sdat = (ctrl_lsu_length_i == 2'b00) ? // byte access
 		      {ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],
@@ -165,24 +170,22 @@ module mor1kx_lsu_cappuccino
    assign align_err_short = ctrl_lsu_adr_i[0];
 
 
-   assign lsu_valid_o = !dbus_access & dbus_ack | access_done;
+   assign lsu_valid_o = lsu_ack | access_done;
    assign lsu_except_dbus_o = dbus_err | except_dbus;
 
 
    assign align_err = (ctrl_lsu_length_i == 2'b10) & align_err_word |
 		      (ctrl_lsu_length_i == 2'b01) & align_err_short;
 
-   assign except_align = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) & align_err;
+   assign except_align = ctrl_op_lsu & align_err;
 
    assign lsu_except_align_o = except_align;
 
-   assign except_dtlb_miss = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) &
-			     tlb_miss & dmmu_enable_i;
+   assign except_dtlb_miss = ctrl_op_lsu & tlb_miss & dmmu_enable_i;
 
    assign lsu_except_dtlb_miss_o = except_dtlb_miss;
 
-   assign except_dpagefault = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) &
-			      pagefault & dmmu_enable_i;
+   assign except_dpagefault = ctrl_op_lsu & pagefault & dmmu_enable_i;
 
    assign lsu_except_dpagefault_o = except_dpagefault;
 
@@ -192,7 +195,7 @@ module mor1kx_lsu_cappuccino
        access_done <= 0;
      else if (padv_execute_i)
        access_done <= 0;
-     else if (dbus_ack)
+     else if (lsu_ack)
        access_done <= 1;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -249,13 +252,13 @@ module mor1kx_lsu_cappuccino
    always @*
      case(ctrl_lsu_adr_i[1:0])
        2'b00:
-	 dbus_dat_aligned = dbus_ldat;
+	 dbus_dat_aligned = lsu_ldat;
        2'b01:
-	 dbus_dat_aligned = {dbus_ldat[23:0],8'd0};
+	 dbus_dat_aligned = {lsu_ldat[23:0],8'd0};
        2'b10:
-	 dbus_dat_aligned = {dbus_ldat[15:0],16'd0};
+	 dbus_dat_aligned = {lsu_ldat[15:0],16'd0};
        2'b11:
-	 dbus_dat_aligned = {dbus_ldat[7:0],24'd0};
+	 dbus_dat_aligned = {lsu_ldat[7:0],24'd0};
      endcase // case (ctrl_lsu_adr_i[1:0])
 
    // Do appropriate extension
@@ -275,24 +278,18 @@ module mor1kx_lsu_cappuccino
 	 dbus_dat_extended = dbus_dat_aligned;
      endcase
 
-   // Register result incase writeback doesn't occur for a few cycles
-   always @(posedge clk)
-     if (dbus_ack & ctrl_op_lsu_load_i)
-       lsu_result_r <= dbus_dat_extended;
+   assign lsu_result_o = dbus_dat_extended;
 
-   assign lsu_result_o = (access_done | dbus_access) ?
-			 lsu_result_r : dbus_dat_extended;
+   // Bus access logic
+   localparam [1:0] IDLE = 2'd0;
+   localparam [1:0] READ = 2'd1;
+   localparam [1:0] WRITE = 2'd2;
 
-   assign dbus_req = (ctrl_op_lsu_load_i | ctrl_op_lsu_store_i) &
-		     !except_align & !(except_dtlb_miss | except_dtlb_miss_r) &
-		     !(except_dpagefault | except_dpagefault_r) &
-		     !access_done & !(pipeline_flush_i & !du_stall_i);
-   assign dbus_we = ctrl_op_lsu_store_i;
-   assign dbus_adr = dmmu_enable_i ? dmmu_phys_addr : ctrl_lsu_adr_i;
+   reg [1:0] state;
 
    assign dbus_access = !dc_access & !dc_refill;
-   assign dbus_ack = dbus_access ? dbus_ack_i : dc_ack;
-   assign dbus_ldat = dbus_access ? dbus_dat_i : dc_ldat;
+   assign lsu_ack = dbus_access ? dbus_ack : dc_ack;
+   assign lsu_ldat = dbus_access ? dbus_ldat : dc_ldat;
    assign dbus_adr_o = dbus_access ? dbus_adr : dc_dbus_adr;
    assign dbus_req_o = dbus_access ? dbus_req : dc_dbus_req;
    assign dbus_we_o = dbus_access ? dbus_we : dc_dbus_we;
@@ -302,6 +299,56 @@ module mor1kx_lsu_cappuccino
 
    always @(posedge clk)
      dbus_err <= dbus_err_i;
+
+   always @(posedge clk) begin
+      dbus_ack <= 0;
+      case (state)
+	IDLE: begin
+	   dbus_req <= 0;
+	   dbus_we <= 0;
+	   if (ctrl_op_lsu & dbus_access & !dbus_ack & !dbus_err &
+	       !except_dbus & !access_done) begin
+	      if (dmmu_enable_i) begin
+		 dbus_adr <= dmmu_phys_addr;
+		 if (!tlb_miss & !pagefault & !except_align) begin
+		    dbus_req <= 1;
+		    dbus_we <= ctrl_op_lsu_store_i;
+		    state <= ctrl_op_lsu_store_i ? WRITE : READ;
+		 end
+	      end else if (!except_align) begin
+		 dbus_adr <= ctrl_lsu_adr_i;
+		 dbus_req <= 1;
+		 dbus_we <= ctrl_op_lsu_store_i;
+		 state <= ctrl_op_lsu_store_i ? WRITE : READ;
+	      end
+	   end
+	end
+
+	READ: begin
+	   dbus_ack <= dbus_ack_i;
+	   dbus_ldat <= dbus_dat_i;
+	   if (dbus_ack_i | dbus_err_i) begin
+	      dbus_req <= 0;
+	      state <= IDLE;
+	   end
+	end
+
+	WRITE: begin
+	   dbus_ack <= dbus_ack_i;
+	   if (dbus_ack_i | dbus_err_i) begin
+	      dbus_req <= 0;
+	      dbus_we <= 0;
+	      state <= IDLE;
+	   end
+	end
+
+	default:
+	  state <= IDLE;
+      endcase
+
+      if (rst)
+	state <= IDLE;
+   end
 
 `ifndef SYNTHESIS
    /* synthesis translate_off */
@@ -324,8 +371,12 @@ module mor1kx_lsu_cappuccino
    assign dc_adr = padv_execute_i &
 		   (exec_op_lsu_load_i | exec_op_lsu_store_i) ?
 		   exec_lsu_adr_i : ctrl_lsu_adr_i;
-   assign dc_adr_match = dbus_adr;
-   assign dc_req = dbus_req & dc_access;
+   assign dc_adr_match = dmmu_enable_i ? dmmu_phys_addr : ctrl_lsu_adr_i;
+   assign dc_req = ctrl_op_lsu & dc_access &
+		   !except_align & !except_dbus &
+		   !(except_dtlb_miss | except_dtlb_miss_r) &
+		   !(except_dpagefault | except_dpagefault_r) &
+		   !access_done & !(pipeline_flush_i & !du_stall_i);
    assign dc_sdat = dbus_sdat;
 
 generate
