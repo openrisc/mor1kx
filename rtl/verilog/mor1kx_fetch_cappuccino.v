@@ -30,6 +30,7 @@ module mor1kx_fetch_cappuccino
     parameter OPTION_ICACHE_WAYS = 2,
     parameter OPTION_ICACHE_LIMIT_WIDTH = 32,
     parameter FEATURE_IMMU = "NONE",
+    parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE",
     parameter OPTION_IMMU_SET_WIDTH = 6,
     parameter OPTION_IMMU_WAYS = 1
     )
@@ -141,9 +142,19 @@ module mor1kx_fetch_cappuccino
    wire 				  except_itlb_miss;
    wire 				  except_ipagefault;
 
+   wire 				  tlb_reload_req;
+   wire 				  tlb_reload_busy;
+   reg 					  tlb_reload_ack;
+   wire [OPTION_OPERAND_WIDTH-1:0] 	  tlb_reload_addr;
+   reg [OPTION_OPERAND_WIDTH-1:0] 	  tlb_reload_data;
+   wire 				  tlb_reload_pagefault;
+
    reg 					  fetching_brcond;
    reg 					  fetching_mispredicted_branch;
    wire 				  mispredict_stall;
+
+   reg 					  exception_while_tlb_reload;
+   wire 				  except_ipagefault_clear;
 
    assign bus_access_done =  imem_ack | imem_err | fake_ack;
    assign ctrl_branch_exception_edge = ctrl_branch_exception_i &
@@ -161,7 +172,8 @@ module mor1kx_fetch_cappuccino
    assign except_itlb_miss = tlb_miss & immu_enable_i & bus_access_done &
 			     !mispredict_stall & !doing_rfe_i;
    assign except_ipagefault = pagefault & immu_enable_i & bus_access_done &
-			      !mispredict_stall & !doing_rfe_i;
+			      !mispredict_stall & !doing_rfe_i |
+			      tlb_reload_pagefault;
 
    assign fetch_rfb_adr_o = imem_dat[`OR1K_RB_SELECT];
    assign fetch_rf_adr_valid_o = imem_ack & padv_i;
@@ -249,7 +261,8 @@ module mor1kx_fetch_cappuccino
        fetch_valid_o <= 1'b0;
      else if (pipeline_flush_i)
        fetch_valid_o <= 1'b0;
-     else if (bus_access_done & padv_i & !mispredict_stall | stall_fetch_valid)
+     else if (bus_access_done & padv_i & !mispredict_stall & !tlb_reload_busy |
+	      stall_fetch_valid)
        fetch_valid_o <= 1'b1;
      else
        fetch_valid_o <= 1'b0;
@@ -283,10 +296,15 @@ module mor1kx_fetch_cappuccino
        decode_except_itlb_miss_o <= 0;
      else if (du_restart_i)
        decode_except_itlb_miss_o <= 0;
+     else if (tlb_reload_busy)
+       decode_except_itlb_miss_o <= 0;
      else if (except_itlb_miss)
        decode_except_itlb_miss_o <= 1;
      else if (decode_except_itlb_miss_o & ctrl_branch_exception_i)
        decode_except_itlb_miss_o <= 0;
+
+   assign except_ipagefault_clear = decode_except_ipagefault_o &
+				    ctrl_branch_exception_i;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -295,12 +313,13 @@ module mor1kx_fetch_cappuccino
        decode_except_ipagefault_o <= 0;
      else if (except_ipagefault)
        decode_except_ipagefault_o <= 1;
-     else if (decode_except_ipagefault_o & ctrl_branch_exception_i)
+     else if (except_ipagefault_clear)
        decode_except_ipagefault_o <= 0;
 
    // Bus access logic
    localparam [1:0] IDLE = 2'd0;
    localparam [1:0] READ = 2'd1;
+   localparam [1:0] TLB_RELOAD = 2'd2;
 
    reg [1:0] state;
 
@@ -316,11 +335,15 @@ module mor1kx_fetch_cappuccino
        fake_ack <= 0;
      else
        fake_ack <= padv_i & !bus_access_done & !ibus_req &
-		   ((immu_enable_i & (tlb_miss | pagefault)) |
-		    ctrl_branch_exception_edge |
+		   ((immu_enable_i & (tlb_miss | pagefault) &
+		     !tlb_reload_busy) |
+		    ctrl_branch_exception_edge & !tlb_reload_busy |
+		    exception_while_tlb_reload & !tlb_reload_busy |
+		    tlb_reload_pagefault |
 		    mispredict_stall);
 
-   assign ibus_access = (!ic_access | ic_invalidate) & !ic_refill;
+   assign ibus_access = (!ic_access | tlb_reload_busy | ic_invalidate) &
+			!ic_refill;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
    assign imem_dat = fake_ack ? {`OR1K_OPCODE_NOP,26'd0} :
 		     ibus_access ? ibus_dat : ic_dat;
@@ -333,11 +356,17 @@ module mor1kx_fetch_cappuccino
 
    always @(posedge clk) begin
       ibus_ack <= 0;
+      exception_while_tlb_reload <= 0;
+
       case (state)
 	IDLE: begin
 	   ibus_req <= 0;
 	   if (padv_i & ibus_access & !ibus_ack & !imem_err & !fake_ack) begin
-	      if (immu_enable_i) begin
+	      if (tlb_reload_req) begin
+		 ibus_adr <= tlb_reload_addr;
+		 ibus_req <= 1;
+		 state <= TLB_RELOAD;
+	      end else if (immu_enable_i) begin
 		 ibus_adr <= immu_phys_addr;
 		 if (!tlb_miss & !pagefault) begin
 		    ibus_req <= 1;
@@ -358,6 +387,22 @@ module mor1kx_fetch_cappuccino
 	      ibus_req <= 0;
 	      state <= IDLE;
 	   end
+	end
+
+	TLB_RELOAD: begin
+	   if (ctrl_branch_exception_i)
+	     exception_while_tlb_reload <= 1;
+
+	   ibus_adr <= tlb_reload_addr;
+	   tlb_reload_data <= ibus_dat_i;
+	   tlb_reload_ack <= ibus_ack_i & tlb_reload_req;
+
+	   if (!tlb_reload_req)
+	     state <= IDLE;
+
+	   ibus_req <= tlb_reload_req;
+	   if (ibus_ack_i | tlb_reload_ack)
+	     ibus_req <= 0;
 	end
 
 	default:
@@ -388,9 +433,11 @@ module mor1kx_fetch_cappuccino
    assign ic_enabled = ic_enable & ic_enable_r;
    assign ic_addr = addr_valid ? pc_addr : pc_fetch;
    assign ic_addr_match = immu_enable_i ? immu_phys_addr : pc_fetch;
-   assign ic_refill_allowed = !((tlb_miss | pagefault) & immu_enable_i) &
+   assign ic_refill_allowed = (!((tlb_miss | pagefault) & immu_enable_i) &
 			      !ctrl_branch_exception_i & !pipeline_flush_i &
-			      !mispredict_stall | doing_rfe_i;
+			      !mispredict_stall | doing_rfe_i) &
+			      !tlb_reload_busy;
+
    assign ic_req = padv_i & !decode_except_ibus_err_o &
 		   !decode_except_itlb_miss_o & !except_itlb_miss &
 		   !decode_except_ipagefault_o & !except_ipagefault &
@@ -488,18 +535,27 @@ if (FEATURE_IMMU!="NONE") begin : immu_gen
    assign immu_spr_bus_stb = spr_bus_stb_i & (!padv_ctrl_i | spr_bus_we_i);
 
    /* mor1kx_immu AUTO_TEMPLATE (
-    .phys_addr_o		(immu_phys_addr),
-    .cache_inhibit_o		(immu_cache_inhibit),
-    .tlb_miss_o			(tlb_miss),
-    .pagefault_o		(pagefault),
-    .spr_bus_dat_o		(spr_bus_dat_immu_o),
-    .spr_bus_ack_o		(spr_bus_ack_immu_o),
-    .spr_bus_stb_i		(immu_spr_bus_stb),
-    .virt_addr_i		(virt_addr),
-    .virt_addr_match_i		(pc_fetch),
+    .enable_i				(immu_enable_i),
+    .phys_addr_o			(immu_phys_addr),
+    .cache_inhibit_o			(immu_cache_inhibit),
+    .tlb_miss_o				(tlb_miss),
+    .tlb_reload_req_o			(tlb_reload_req),
+    .tlb_reload_busy_o			(tlb_reload_busy),
+    .tlb_reload_addr_o			(tlb_reload_addr),
+    .tlb_reload_pagefault_o		(tlb_reload_pagefault),
+    .tlb_reload_ack_i			(tlb_reload_ack),
+    .tlb_reload_data_i			(tlb_reload_data),
+    .tlb_reload_pagefault_clear_i	(except_ipagefault_clear),
+    .pagefault_o			(pagefault),
+    .spr_bus_dat_o			(spr_bus_dat_immu_o),
+    .spr_bus_ack_o			(spr_bus_ack_immu_o),
+    .spr_bus_stb_i			(immu_spr_bus_stb),
+    .virt_addr_i			(virt_addr),
+    .virt_addr_match_i			(pc_fetch),
     ); */
    mor1kx_immu
      #(
+       .FEATURE_IMMU_HW_TLB_RELOAD(FEATURE_IMMU_HW_TLB_RELOAD),
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
        .OPTION_IMMU_SET_WIDTH(OPTION_IMMU_SET_WIDTH),
        .OPTION_IMMU_WAYS(OPTION_IMMU_WAYS)
@@ -511,14 +567,22 @@ if (FEATURE_IMMU!="NONE") begin : immu_gen
       .cache_inhibit_o			(immu_cache_inhibit),	 // Templated
       .tlb_miss_o			(tlb_miss),		 // Templated
       .pagefault_o			(pagefault),		 // Templated
+      .tlb_reload_req_o			(tlb_reload_req),	 // Templated
+      .tlb_reload_busy_o		(tlb_reload_busy),	 // Templated
+      .tlb_reload_addr_o		(tlb_reload_addr),	 // Templated
+      .tlb_reload_pagefault_o		(tlb_reload_pagefault),	 // Templated
       .spr_bus_dat_o			(spr_bus_dat_immu_o),	 // Templated
       .spr_bus_ack_o			(spr_bus_ack_immu_o),	 // Templated
       // Inputs
       .clk				(clk),
       .rst				(rst),
+      .enable_i				(immu_enable_i),	 // Templated
       .virt_addr_i			(virt_addr),		 // Templated
       .virt_addr_match_i		(pc_fetch),		 // Templated
       .supervisor_mode_i		(supervisor_mode_i),
+      .tlb_reload_ack_i			(tlb_reload_ack),	 // Templated
+      .tlb_reload_data_i		(tlb_reload_data),	 // Templated
+      .tlb_reload_pagefault_clear_i	(except_ipagefault_clear), // Templated
       .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
       .spr_bus_we_i			(spr_bus_we_i),
       .spr_bus_stb_i			(immu_spr_bus_stb),	 // Templated
