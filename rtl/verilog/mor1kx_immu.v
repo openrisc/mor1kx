@@ -83,6 +83,7 @@ module mor1kx_immu
    reg [OPTION_OPERAND_WIDTH-1:0]     immucr;
 
    reg 				      tlb_reload_pagefault;
+   reg 				      tlb_reload_huge;
 
    // sxe: supervisor execute enable
    // uxe: user exexute enable
@@ -173,14 +174,23 @@ generate /* verilator lint_off WIDTH */
 if (FEATURE_IMMU_HW_TLB_RELOAD == "ENABLED") begin
    /* verilator lint_on WIDTH */
 
-   // Hardware TLB refill
-   // Not exactly compliant with the spec, instead we follow
-   // the PTE layout in Linux and translate that into the match
-   // and translate registers.
+   // Hardware TLB reload
+   // Compliant with the suggestions outlined in this thread:
+   // http://lists.openrisc.net/pipermail/openrisc/2013-July/001806.html
    //
-   // PTE layout in Linux:
-   // | 31 ... 12 |  11  | 10 | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 |   0   |
-   // |    PPN    |SHARED|EXEC|SWE|SRE|UWE|URE| D | A |WOM|WBC| CI|PRESENT|
+   // PTE layout:
+   // | 31 ... 13 | 12 |  11 |   10  | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+   // |    PPN    | Reserved |PRESENT| L | X | W | U | D | A |WOM|WBC|CI |CC |
+   //
+   // Where X/W/U maps into SXE/UXE like this:
+   // X | W | U   SXE | UXE
+   // ---------   ---------
+   // 0 | x | 0 =  0  |  0
+   // 0 | x | 1 =  0  |  0
+   //    ...
+   // 1 | x | 0 =  1  |  0
+   // 1 | x | 1 =  1  |  1
+
 
    localparam TLB_IDLE		 	= 2'd0;
    localparam TLB_GET_PTE_POINTER	= 2'd1;
@@ -223,11 +233,16 @@ if (FEATURE_IMMU_HW_TLB_RELOAD == "ENABLED") begin
 	// (number of PTEs in the PTE table)
 	//
 	TLB_GET_PTE_POINTER: begin
+	   tlb_reload_huge <= 0;
 	   if (tlb_reload_ack_i) begin
 	      if (tlb_reload_data_i[31:13] == 0) begin
 		 tlb_reload_pagefault <= 1;
 		 tlb_reload_req_o <= 0;
 		 tlb_reload_state <= TLB_IDLE;
+	      end else if (tlb_reload_data_i[9]) begin
+		 tlb_reload_huge <= 1;
+		 tlb_reload_req_o <= 0;
+		 tlb_reload_state <= TLB_GET_PTE;
 	      end else begin
 		 tlb_reload_addr_o <= {tlb_reload_data_i[31:13],
 				       virt_addr_match_i[23:13], 2'b00};
@@ -244,31 +259,28 @@ if (FEATURE_IMMU_HW_TLB_RELOAD == "ENABLED") begin
 	   if (tlb_reload_ack_i) begin
 	      tlb_reload_req_o <= 0;
 	      // Check PRESENT bit
-	      if (!tlb_reload_data_i[0]) begin
+	      if (!tlb_reload_data_i[10]) begin
 		 tlb_reload_pagefault <= 1;
 		 tlb_reload_state <= TLB_IDLE;
 	      end else begin
 		 // Translate register generation.
 		 // PPN
 		 itlb_trans_din[31:13] <= tlb_reload_data_i[31:13];
-		 // If EXEC, SWE, SRE, UWE or URE are set,
-		 // set UXE and SXE in the translate register.
-		 // This is referred to as "itlb_tr_fill_workaround" in the
-		 // kernel, were the exec flags are set on all pages with
-		 // read or write rights.
-		 // Sounds suspicious indeed, needs an overlook (both here
-		 // and in the kernel)
-		 if (|tlb_reload_data_i[10:6])
-		   itlb_trans_din[7:6] <= 2'b11;
-		 // Dirty, Accessed, Weakly-Ordered-Memory
-		 itlb_trans_din[5:3] <= tlb_reload_data_i[5:3];
-		 // Cache inhibit
-		 itlb_trans_din[1] <= tlb_reload_data_i[1];
+		 // UXE = X & U
+		 itlb_trans_din[7] <= tlb_reload_data_i[8] &
+				       tlb_reload_data_i[6];
+		 // SXE = X
+		 itlb_trans_din[6] <= tlb_reload_data_i[8];
+		 // Dirty, Accessed, Weakly-Ordered-Memory, Writeback cache,
+		 // Cache inhibit, Cache coherent
+		 itlb_trans_din[5:0] <= tlb_reload_data_i[5:0];
 		 itlb_trans_we <= 1;
 
 		 // Match register generation.
 		 // VPN
 		 itlb_match_din[31:13] <= virt_addr_match_i[31:13];
+		 // PL1
+		 itlb_match_din[1] <= tlb_reload_huge;
 		 // Valid
 		 itlb_match_din[0] <= 1;
 		 itlb_match_we <= 1;

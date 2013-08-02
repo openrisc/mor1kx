@@ -80,6 +80,7 @@ module mor1kx_dmmu
    reg [OPTION_OPERAND_WIDTH-1:0]     dmmucr;
 
    reg 				      tlb_reload_pagefault;
+   reg 				      tlb_reload_huge;
 
    // ure: user read enable
    // uwe: user write enable
@@ -184,14 +185,22 @@ generate /* verilator lint_off WIDTH */
 if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
    /* verilator lint_on WIDTH */
 
-   // Hardware TLB refill
-   // Not exactly compliant with the spec, instead we follow
-   // the PTE layout in Linux and translate that into the match
-   // and translate registers.
+   // Hardware TLB reload
+   // Compliant with the suggestion outlined in this thread:
+   // http://lists.openrisc.net/pipermail/openrisc/2013-July/001806.html
    //
-   // PTE layout in Linux:
-   // | 31 ... 12 |  11  | 10 | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 |   0   |
-   // |    PPN    |SHARED|EXEC|SWE|SRE|UWE|URE| D | A |WOM|WBC| CI|PRESENT|
+   // PTE layout:
+   // | 31 ... 13 | 12 |  11  |   10  | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+   // |    PPN    | Reserved  |PRESENT| L | X | W | U | D | A |WOM|WBC|CI |CC |
+   //
+   // Where X/W/U maps into SWE/SRE/UWE/URE like this:
+   // X | W | U    SWE | SRE | UWE | URE
+   // ----------   ---------------------
+   // x | 0 | 0  =  0  |  1  |  0  |  0
+   // x | 0 | 1  =  0  |  1  |  0  |  1
+   // x | 1 | 0  =  1  |  1  |  0  |  0
+   // x | 1 | 1  =  1  |  1  |  1  |  1
+
 
    localparam TLB_IDLE		 	= 2'd0;
    localparam TLB_GET_PTE_POINTER	= 2'd1;
@@ -237,11 +246,16 @@ if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
 	// (number of PTEs in the PTE table)
 	//
 	TLB_GET_PTE_POINTER: begin
+	   tlb_reload_huge <= 0;
 	   if (tlb_reload_ack_i) begin
 	      if (tlb_reload_data_i[31:13] == 0) begin
 		 tlb_reload_pagefault <= 1;
 		 tlb_reload_req_o <= 0;
 		 tlb_reload_state <= TLB_IDLE;
+	      end else if (tlb_reload_data_i[9]) begin
+		 tlb_reload_huge <= 1;
+		 tlb_reload_req_o <= 0;
+		 tlb_reload_state <= TLB_GET_PTE;
 	      end else begin
 		 tlb_reload_addr_o <= {tlb_reload_data_i[31:13],
 				       virt_addr_match_i[23:13], 2'b00};
@@ -258,19 +272,25 @@ if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
 	   if (tlb_reload_ack_i) begin
 	      tlb_reload_req_o <= 0;
 	      // Check PRESENT bit
-	      if (!tlb_reload_data_i[0]) begin
+	      if (!tlb_reload_data_i[10]) begin
 		 tlb_reload_pagefault <= 1;
 		 tlb_reload_state <= TLB_IDLE;
 	      end else begin
 		 // Translate register generation.
 		 // PPN
 		 dtlb_trans_reload_din[31:13] <= tlb_reload_data_i[31:13];
-		 // SWE, SRE, UWE, URE
-		 dtlb_trans_reload_din[9:6] <= tlb_reload_data_i[9:6];
-		 // Dirty, Accessed, Weakly-Ordered-Memory
-		 dtlb_trans_reload_din[5:3] <= tlb_reload_data_i[5:3];
-		 // Cache inhibit
-		 dtlb_trans_reload_din[1] <= tlb_reload_data_i[1];
+		 // SWE = W
+		 dtlb_trans_reload_din[9] <= tlb_reload_data_i[7];
+		 // SRE = 1
+		 dtlb_trans_reload_din[8] <= 1'b1;
+		 // UWE = W & U
+		 dtlb_trans_reload_din[7] <= tlb_reload_data_i[7] &
+					      tlb_reload_data_i[6];
+		 // URE = U
+		 dtlb_trans_reload_din[6] <= tlb_reload_data_i[6];
+		 // Dirty, Accessed, Weakly-Ordered-Memory, Writeback cache,
+		 // Cache inhibit, Cache coherent
+		 dtlb_trans_reload_din[5:0] <= tlb_reload_data_i[5:0];
 		 dtlb_trans_reload_we <= 1;
 
 		 // Match register generation.
