@@ -321,70 +321,46 @@ end
 endgenerate
 
    // ITLB match registers
-   /* mor1kx_true_dpram_sclk AUTO_TEMPLATE (
-      // Outputs
-      .dout_a			(itlb_match_dout),
-      .dout_b			(),
-      // Inputs
-      .addr_a			(itlb_match_addr),
-      .we_a			(itlb_match_we),
-      .din_a			(itlb_match_din),
-      .addr_b			(0),
-      .we_b			(0),
-      .din_b			(0),
-    );
-    */
    mor1kx_true_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_IMMU_SET_WIDTH),
        .DATA_WIDTH(OPTION_OPERAND_WIDTH)
        )
    itlb_match_regs
-     (/*AUTOINST*/
+     (
       // Outputs
-      .dout_a				(itlb_match_dout),	 // Templated
-      .dout_b				(),			 // Templated
+      .dout_a				(itlb_match_dout),
+      .dout_b				(),
       // Inputs
       .clk				(clk),
-      .addr_a				(itlb_match_addr),	 // Templated
-      .we_a				(itlb_match_we),	 // Templated
-      .din_a				(itlb_match_din),	 // Templated
-      .addr_b				(0),			 // Templated
-      .we_b				(0),			 // Templated
-      .din_b				(0));			 // Templated
+      .addr_a				(itlb_match_addr),
+      .we_a				(itlb_match_we),
+      .din_a				(itlb_match_din),
+      .addr_b				(0),
+      .we_b				(0),
+      .din_b				(0)
+      );
 
 
    // ITLB translate registers
-   /* mor1kx_true_dpram_sclk AUTO_TEMPLATE (
-      // Outputs
-      .dout_a			(itlb_trans_dout),
-      .dout_b			(),
-      // Inputs
-      .addr_a			(itlb_trans_addr),
-      .we_a			(itlb_trans_we),
-      .din_a			(itlb_trans_din),
-      .addr_b			(0),
-      .we_b			(0),
-      .din_b			(0),
-    );
-    */
    mor1kx_true_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_IMMU_SET_WIDTH),
        .DATA_WIDTH(OPTION_OPERAND_WIDTH)
        )
    itlb_translate_regs
-     (/*AUTOINST*/
+     (
       // Outputs
-      .dout_a				(itlb_trans_dout),	 // Templated
-      .dout_b				(),			 // Templated
+      .dout_a				(itlb_trans_dout),
+      .dout_b				(),
       // Inputs
       .clk				(clk),
-      .addr_a				(itlb_trans_addr),	 // Templated
-      .we_a				(itlb_trans_we),	 // Templated
-      .din_a				(itlb_trans_din),	 // Templated
-      .addr_b				(0),			 // Templated
-      .we_b				(0),			 // Templated
-      .din_b				(0));			 // Templated
+      .addr_a				(itlb_trans_addr),
+      .we_a				(itlb_trans_we),
+      .din_a				(itlb_trans_din),
+      .addr_b				(0),
+      .we_b				(0),
+      .din_b				(0)
+      );
 
 endmodule

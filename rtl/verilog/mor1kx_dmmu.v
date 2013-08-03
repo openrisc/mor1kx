@@ -332,16 +332,6 @@ end
 endgenerate
 
    // DTLB match registers
-   /* mor1kx_simple_dpram_sclk AUTO_TEMPLATE (
-      // Outputs
-      .dout			(dtlb_match_dout),
-      // Inputs
-      .raddr			(dtlb_match_addr),
-      .waddr			(dtlb_match_addr),
-      .we			(dtlb_match_we),
-      .din			(dtlb_match_din),
-    );
-    */
    mor1kx_simple_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_DMMU_SET_WIDTH),
@@ -349,28 +339,19 @@ endgenerate
        .ENABLE_BYPASS("FALSE")
        )
    dtlb_match_regs
-     (/*AUTOINST*/
+     (
       // Outputs
-      .dout				(dtlb_match_dout),	 // Templated
+      .dout				(dtlb_match_dout),
       // Inputs
       .clk				(clk),
-      .raddr				(dtlb_match_addr),	 // Templated
-      .waddr				(dtlb_match_addr),	 // Templated
-      .we				(dtlb_match_we),	 // Templated
-      .din				(dtlb_match_din));	 // Templated
+      .raddr				(dtlb_match_addr),
+      .waddr				(dtlb_match_addr),
+      .we				(dtlb_match_we),
+      .din				(dtlb_match_din)
+      );
 
 
    // DTLB translate registers
-   /* mor1kx_simple_dpram_sclk AUTO_TEMPLATE (
-      // Outputs
-      .dout			(dtlb_trans_dout),
-      // Inputs
-      .raddr			(dtlb_trans_addr),
-      .waddr			(dtlb_trans_addr),
-      .we			(dtlb_trans_we),
-      .din			(dtlb_trans_din),
-    );
-    */
    mor1kx_simple_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_DMMU_SET_WIDTH),
@@ -378,14 +359,15 @@ endgenerate
        .ENABLE_BYPASS("FALSE")
        )
    dtlb_translate_regs
-     (/*AUTOINST*/
+     (
       // Outputs
-      .dout				(dtlb_trans_dout),	 // Templated
+      .dout				(dtlb_trans_dout),
       // Inputs
       .clk				(clk),
-      .raddr				(dtlb_trans_addr),	 // Templated
-      .waddr				(dtlb_trans_addr),	 // Templated
-      .we				(dtlb_trans_we),	 // Templated
-      .din				(dtlb_trans_din));	 // Templated
+      .raddr				(dtlb_trans_addr),
+      .waddr				(dtlb_trans_addr),
+      .we				(dtlb_trans_we),
+      .din				(dtlb_trans_din)
+      );
 
 endmodule // mor1kx_dmmu
