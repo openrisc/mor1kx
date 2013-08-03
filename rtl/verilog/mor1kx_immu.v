@@ -59,10 +59,18 @@ module mor1kx_immu
    wire				      itlb_match_we;
    wire [OPTION_OPERAND_WIDTH-1:0]    itlb_match_din;
 
+   wire [OPTION_OPERAND_WIDTH-1:0]    itlb_match_huge_dout;
+   wire [OPTION_IMMU_SET_WIDTH-1:0]   itlb_match_huge_addr;
+   wire				      itlb_match_huge_we;
+
    wire [OPTION_OPERAND_WIDTH-1:0]    itlb_trans_dout;
    wire [OPTION_IMMU_SET_WIDTH-1:0]   itlb_trans_addr;
    wire				      itlb_trans_we;
    wire [OPTION_OPERAND_WIDTH-1:0]    itlb_trans_din;
+
+   wire [OPTION_OPERAND_WIDTH-1:0]    itlb_trans_huge_dout;
+   wire [OPTION_IMMU_SET_WIDTH-1:0]   itlb_trans_huge_addr;
+   wire				      itlb_trans_huge_we;
 
    reg 				      itlb_match_reload_we;
    reg [OPTION_OPERAND_WIDTH-1:0]     itlb_match_reload_din;
@@ -78,6 +86,11 @@ module mor1kx_immu
    wire 			      immucr_spr_cs;
    reg 				      immucr_spr_cs_r;
    reg [OPTION_OPERAND_WIDTH-1:0]     immucr;
+
+   wire				      tlb_huge;
+
+   wire				      tlb_miss;
+   wire				      tlb_huge_miss;
 
    wire				      tlb_reload_busy;
    reg 				      tlb_reload_pagefault;
@@ -101,9 +114,10 @@ module mor1kx_immu
    assign spr_bus_ack_o = spr_bus_ack & spr_bus_stb_i &
 			  spr_bus_addr_i[15:11] == 5'd2;
 
-   assign cache_inhibit_o = itlb_trans_dout[1];
-   assign sxe = itlb_trans_dout[6];
-   assign uxe = itlb_trans_dout[7];
+   assign cache_inhibit_o = tlb_huge ? itlb_trans_huge_dout[1] :
+			     itlb_trans_dout[1];
+   assign sxe = tlb_huge ? itlb_trans_huge_dout[6] : itlb_trans_dout[6];
+   assign uxe = tlb_huge ? itlb_trans_huge_dout[7] : itlb_trans_dout[7];
 
    assign pagefault_o = (supervisor_mode_i ? !sxe : !uxe) &
 			!busy_o;
@@ -157,23 +171,38 @@ endgenerate
 			    virt_addr_i[13+(OPTION_IMMU_SET_WIDTH-1):13];
 
    assign itlb_match_we = itlb_match_spr_cs & spr_bus_we_i & !spr_bus_ack |
-			  itlb_match_reload_we;
+			  itlb_match_reload_we & !tlb_reload_huge;
    assign itlb_trans_we = itlb_trans_spr_cs & spr_bus_we_i & !spr_bus_ack |
-			  itlb_trans_reload_we;
+			  itlb_trans_reload_we & !tlb_reload_huge;
    assign itlb_match_din = itlb_match_spr_cs & spr_bus_we_i & !spr_bus_ack ?
 			   spr_bus_dat_i : itlb_match_reload_din;
    assign itlb_trans_din = itlb_trans_spr_cs & spr_bus_we_i & !spr_bus_ack ?
 			   spr_bus_dat_i : itlb_trans_reload_din;
 
+   assign itlb_match_huge_addr = virt_addr_i[24+(OPTION_IMMU_SET_WIDTH-1):24];
+   assign itlb_trans_huge_addr = virt_addr_i[24+(OPTION_IMMU_SET_WIDTH-1):24];
+
+   assign itlb_match_huge_we = itlb_match_reload_we & tlb_reload_huge;
+   assign itlb_trans_huge_we = itlb_trans_reload_we & tlb_reload_huge;
+
    assign spr_bus_dat_o = itlb_match_spr_cs_r ? itlb_match_dout :
 			  itlb_trans_spr_cs_r ? itlb_trans_dout :
 			  immucr_spr_cs_r ? immucr : 0;
 
-   assign tlb_miss_o = (itlb_match_dout[31:13] != virt_addr_match_i[31:13] |
-		       !itlb_match_dout[0]) & // valid bit
+   assign tlb_huge = &itlb_match_huge_dout[1:0]; // huge & valid
+
+   assign tlb_miss = itlb_match_dout[31:13] != virt_addr_match_i[31:13] |
+		     !itlb_match_dout[0];  // valid bit
+
+   assign tlb_huge_miss = itlb_match_huge_dout[31:24] !=
+			  virt_addr_match_i[31:24] | !itlb_match_huge_dout[0];
+
+   assign tlb_miss_o = (tlb_miss & !tlb_huge | tlb_huge_miss & tlb_huge) &
 		       !tlb_reload_pagefault;
 
-   assign phys_addr_o = {itlb_trans_dout[31:13], virt_addr_match_i[12:0]};
+   assign phys_addr_o = tlb_huge ?
+			{itlb_trans_huge_dout[31:24], virt_addr_match_i[23:0]} :
+			{itlb_trans_dout[31:13], virt_addr_match_i[12:0]};
 
 generate /* verilator lint_off WIDTH */
 if (FEATURE_IMMU_HW_TLB_RELOAD == "ENABLED") begin
@@ -220,6 +249,7 @@ if (FEATURE_IMMU_HW_TLB_RELOAD == "ENABLED") begin
 
       case (tlb_reload_state)
 	TLB_IDLE: begin
+	   tlb_reload_huge <= 0;
 	   tlb_reload_req_o <= 0;
 	   if (do_reload) begin
 	      tlb_reload_req_o <= 1;
@@ -330,15 +360,15 @@ endgenerate
      (
       // Outputs
       .dout_a				(itlb_match_dout),
-      .dout_b				(),
+      .dout_b				(itlb_match_huge_dout),
       // Inputs
       .clk				(clk),
       .addr_a				(itlb_match_addr),
       .we_a				(itlb_match_we),
       .din_a				(itlb_match_din),
-      .addr_b				(0),
-      .we_b				(0),
-      .din_b				(0)
+      .addr_b				(itlb_match_huge_addr),
+      .we_b				(itlb_match_huge_we),
+      .din_b				(itlb_match_reload_din)
       );
 
 
@@ -352,15 +382,15 @@ endgenerate
      (
       // Outputs
       .dout_a				(itlb_trans_dout),
-      .dout_b				(),
+      .dout_b				(itlb_trans_huge_dout),
       // Inputs
       .clk				(clk),
       .addr_a				(itlb_trans_addr),
       .we_a				(itlb_trans_we),
       .din_a				(itlb_trans_din),
-      .addr_b				(0),
-      .we_b				(0),
-      .din_b				(0)
+      .addr_b				(itlb_trans_huge_addr),
+      .we_b				(itlb_trans_huge_we),
+      .din_b				(itlb_trans_reload_din)
       );
 
 endmodule

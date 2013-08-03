@@ -59,10 +59,18 @@ module mor1kx_dmmu
    wire 			      dtlb_match_we;
    wire [OPTION_OPERAND_WIDTH-1:0]    dtlb_match_din;
 
+   wire [OPTION_OPERAND_WIDTH-1:0]    dtlb_match_huge_dout;
+   wire [OPTION_DMMU_SET_WIDTH-1:0]   dtlb_match_huge_addr;
+   wire				      dtlb_match_huge_we;
+
    wire [OPTION_OPERAND_WIDTH-1:0]    dtlb_trans_dout;
    wire [OPTION_DMMU_SET_WIDTH-1:0]   dtlb_trans_addr;
    wire 			      dtlb_trans_we;
    wire [OPTION_OPERAND_WIDTH-1:0]    dtlb_trans_din;
+
+   wire [OPTION_OPERAND_WIDTH-1:0]    dtlb_trans_huge_dout;
+   wire [OPTION_DMMU_SET_WIDTH-1:0]   dtlb_trans_huge_addr;
+   wire				      dtlb_trans_huge_we;
 
    reg 				      dtlb_match_reload_we;
    reg [OPTION_OPERAND_WIDTH-1:0]     dtlb_match_reload_din;
@@ -78,6 +86,11 @@ module mor1kx_dmmu
    wire 			      dmmucr_spr_cs;
    reg 				      dmmucr_spr_cs_r;
    reg [OPTION_OPERAND_WIDTH-1:0]     dmmucr;
+
+   wire				      tlb_huge;
+
+   wire				      tlb_miss;
+   wire				      tlb_huge_miss;
 
    reg 				      tlb_reload_pagefault;
    reg 				      tlb_reload_huge;
@@ -104,11 +117,12 @@ module mor1kx_dmmu
    assign spr_bus_ack_o = spr_bus_ack & spr_bus_stb_i &
 			  spr_bus_addr_i[15:11] == 5'd1;
 
-   assign cache_inhibit_o = dtlb_trans_dout[1];
-   assign ure = dtlb_trans_dout[6];
-   assign uwe = dtlb_trans_dout[7];
-   assign sre = dtlb_trans_dout[8];
-   assign swe = dtlb_trans_dout[9];
+   assign cache_inhibit_o = tlb_huge ? dtlb_trans_huge_dout[1] :
+			     dtlb_trans_dout[1];
+   assign ure = tlb_huge ? dtlb_trans_huge_dout[6] : dtlb_trans_dout[6];
+   assign uwe = tlb_huge ? dtlb_trans_huge_dout[7] : dtlb_trans_dout[7];
+   assign sre = tlb_huge ? dtlb_trans_huge_dout[8] : dtlb_trans_dout[8];
+   assign swe = tlb_huge ? dtlb_trans_huge_dout[9] : dtlb_trans_dout[9];
 
    assign pagefault_o = (supervisor_mode_i ?
 			!swe & op_store_i || !sre & op_load_i :
@@ -156,7 +170,6 @@ endgenerate
    assign dtlb_match_addr = dtlb_match_spr_cs ?
 			    spr_bus_addr_i[OPTION_DMMU_SET_WIDTH-1:0] :
 			    virt_addr_i[13+(OPTION_DMMU_SET_WIDTH-1):13];
-
    assign dtlb_trans_addr = dtlb_trans_spr_cs ?
 			    spr_bus_addr_i[OPTION_DMMU_SET_WIDTH-1:0] :
 			    virt_addr_i[13+(OPTION_DMMU_SET_WIDTH-1):13];
@@ -171,15 +184,30 @@ endgenerate
    assign dtlb_trans_din = dtlb_trans_reload_we ? dtlb_trans_reload_din :
 			   spr_bus_dat_i;
 
+   assign dtlb_match_huge_addr = virt_addr_i[24+(OPTION_DMMU_SET_WIDTH-1):24];
+   assign dtlb_trans_huge_addr = virt_addr_i[24+(OPTION_DMMU_SET_WIDTH-1):24];
+
+   assign dtlb_match_huge_we = dtlb_match_reload_we & tlb_reload_huge;
+   assign dtlb_trans_huge_we = dtlb_trans_reload_we & tlb_reload_huge;
+
    assign spr_bus_dat_o = dtlb_match_spr_cs_r ? dtlb_match_dout :
 			  dtlb_trans_spr_cs_r ? dtlb_trans_dout :
 			  dmmucr_spr_cs_r ? dmmucr : 0;
 
-   assign tlb_miss_o = (dtlb_match_dout[31:13] != virt_addr_match_i[31:13] |
-		       !dtlb_match_dout[0]) & // valid bit
+   assign tlb_huge = &dtlb_match_huge_dout[1:0]; // huge & valid
+
+   assign tlb_miss = dtlb_match_dout[31:13] != virt_addr_match_i[31:13] |
+		     !dtlb_match_dout[0];  // valid bit
+
+   assign tlb_huge_miss = dtlb_match_huge_dout[31:24] !=
+			  virt_addr_match_i[31:24] | !dtlb_match_huge_dout[0];
+
+   assign tlb_miss_o = (tlb_miss & !tlb_huge | tlb_huge_miss & tlb_huge) &
 		       !tlb_reload_pagefault;
 
-   assign phys_addr_o = {dtlb_trans_dout[31:13], virt_addr_match_i[12:0]};
+   assign phys_addr_o = tlb_huge ?
+			{dtlb_trans_huge_dout[31:24], virt_addr_match_i[23:0]} :
+			{dtlb_trans_dout[31:13], virt_addr_match_i[12:0]};
 
 generate /* verilator lint_off WIDTH */
 if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
@@ -228,6 +256,7 @@ if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
 
       case (tlb_reload_state)
 	TLB_IDLE: begin
+	   tlb_reload_huge <= 0;
 	   tlb_reload_req_o <= 0;
 	   if (do_reload) begin
 	      tlb_reload_req_o <= 1;
@@ -307,8 +336,7 @@ if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
 
 	// Let the just written values propagate out on the read ports
 	TLB_READ: begin
-	   if (!dtlb_trans_reload_we)
-	      tlb_reload_state <= TLB_IDLE;
+	   tlb_reload_state <= TLB_IDLE;
 	end
 
 	default:
@@ -332,42 +360,46 @@ end
 endgenerate
 
    // DTLB match registers
-   mor1kx_simple_dpram_sclk
+   mor1kx_true_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_DMMU_SET_WIDTH),
-       .DATA_WIDTH(OPTION_OPERAND_WIDTH),
-       .ENABLE_BYPASS("FALSE")
+       .DATA_WIDTH(OPTION_OPERAND_WIDTH)
        )
    dtlb_match_regs
      (
       // Outputs
-      .dout				(dtlb_match_dout),
+      .dout_a				(dtlb_match_dout),
+      .dout_b				(dtlb_match_huge_dout),
       // Inputs
       .clk				(clk),
-      .raddr				(dtlb_match_addr),
-      .waddr				(dtlb_match_addr),
-      .we				(dtlb_match_we),
-      .din				(dtlb_match_din)
+      .addr_a				(dtlb_match_addr),
+      .we_a				(dtlb_match_we),
+      .din_a				(dtlb_match_din),
+      .addr_b				(dtlb_match_huge_addr),
+      .we_b				(dtlb_match_huge_we),
+      .din_b				(dtlb_match_reload_din)
       );
 
 
    // DTLB translate registers
-   mor1kx_simple_dpram_sclk
+   mor1kx_true_dpram_sclk
      #(
        .ADDR_WIDTH(OPTION_DMMU_SET_WIDTH),
-       .DATA_WIDTH(OPTION_OPERAND_WIDTH),
-       .ENABLE_BYPASS("FALSE")
+       .DATA_WIDTH(OPTION_OPERAND_WIDTH)
        )
    dtlb_translate_regs
      (
       // Outputs
-      .dout				(dtlb_trans_dout),
+      .dout_a				(dtlb_trans_dout),
+      .dout_b				(dtlb_trans_huge_dout),
       // Inputs
       .clk				(clk),
-      .raddr				(dtlb_trans_addr),
-      .waddr				(dtlb_trans_addr),
-      .we				(dtlb_trans_we),
-      .din				(dtlb_trans_din)
+      .addr_a				(dtlb_trans_addr),
+      .we_a				(dtlb_trans_we),
+      .din_a				(dtlb_trans_din),
+      .addr_b				(dtlb_trans_huge_addr),
+      .we_b				(dtlb_trans_huge_we),
+      .din_b				(dtlb_trans_reload_din)
       );
 
 endmodule // mor1kx_dmmu
