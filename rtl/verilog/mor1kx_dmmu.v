@@ -242,7 +242,7 @@ if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
 	// the actual pte from the offset in the table.
 	// The offset is calculated by:
 	// ((virt_addr_match >> PAGE_BITS) & (PTE_CNT-1)) << 2
-	// Where PAGE_BITS is 13 (8 kb page) and PTE_CNT is 1024
+	// Where PAGE_BITS is 13 (8 kb page) and PTE_CNT is 2048
 	// (number of PTEs in the PTE table)
 	//
 	TLB_GET_PTE_POINTER: begin
