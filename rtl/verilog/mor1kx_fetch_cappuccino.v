@@ -346,7 +346,8 @@ module mor1kx_fetch_cappuccino
    assign ibus_access = (!ic_access | immu_busy | ic_invalidate) &
 			!ic_refill;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
-   assign imem_dat = fake_ack ? {`OR1K_OPCODE_NOP,26'd0} :
+   assign imem_dat = (fake_ack | except_itlb_miss | except_ipagefault) ?
+		     {`OR1K_OPCODE_NOP,26'd0} :
 		     ibus_access ? ibus_dat : ic_dat;
    assign ibus_adr_o = ibus_access ? ibus_adr : ic_ibus_adr;
    assign ibus_req_o = ibus_access ? ibus_req : ic_ibus_req;
