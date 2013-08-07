@@ -149,6 +149,7 @@ module mor1kx_fetch_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0] 	  tlb_reload_addr;
    reg [OPTION_OPERAND_WIDTH-1:0] 	  tlb_reload_data;
    wire 				  tlb_reload_pagefault;
+   wire 				  tlb_reload_busy;
 
    reg 					  fetching_brcond;
    reg 					  fetching_mispredicted_branch;
@@ -262,8 +263,8 @@ module mor1kx_fetch_cappuccino
        fetch_valid_o <= 1'b0;
      else if (pipeline_flush_i)
        fetch_valid_o <= 1'b0;
-     else if (bus_access_done & padv_i & !mispredict_stall & !immu_busy |
-	      stall_fetch_valid)
+     else if (bus_access_done & padv_i & !mispredict_stall & !immu_busy &
+	      !tlb_reload_busy | stall_fetch_valid)
        fetch_valid_o <= 1'b1;
      else
        fetch_valid_o <= 1'b0;
@@ -297,7 +298,7 @@ module mor1kx_fetch_cappuccino
        decode_except_itlb_miss_o <= 0;
      else if (du_restart_i)
        decode_except_itlb_miss_o <= 0;
-     else if (immu_busy)
+     else if (tlb_reload_busy)
        decode_except_itlb_miss_o <= 0;
      else if (except_itlb_miss)
        decode_except_itlb_miss_o <= 1;
@@ -337,13 +338,13 @@ module mor1kx_fetch_cappuccino
      else
        fake_ack <= padv_i & !bus_access_done & !ibus_req &
 		   ((immu_enable_i & (tlb_miss | pagefault) &
-		     !immu_busy) |
-		    ctrl_branch_exception_edge & !immu_busy |
-		    exception_while_tlb_reload & !immu_busy |
+		     !tlb_reload_busy & !immu_busy) |
+		    ctrl_branch_exception_edge & !tlb_reload_busy |
+		    exception_while_tlb_reload & !tlb_reload_busy |
 		    tlb_reload_pagefault |
 		    mispredict_stall);
 
-   assign ibus_access = (!ic_access | immu_busy | ic_invalidate) &
+   assign ibus_access = (!ic_access | tlb_reload_busy | ic_invalidate) &
 			!ic_refill;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
    assign imem_dat = (fake_ack | except_itlb_miss | except_ipagefault) ?
@@ -370,7 +371,7 @@ module mor1kx_fetch_cappuccino
 		 state <= TLB_RELOAD;
 	      end else if (immu_enable_i) begin
 		 ibus_adr <= immu_phys_addr;
-		 if (!tlb_miss & !pagefault) begin
+		 if (!tlb_miss & !pagefault & !immu_busy) begin
 		    ibus_req <= 1;
 		    state <= READ;
 		 end
@@ -438,7 +439,7 @@ module mor1kx_fetch_cappuccino
    assign ic_refill_allowed = (!((tlb_miss | pagefault) & immu_enable_i) &
 			      !ctrl_branch_exception_i & !pipeline_flush_i &
 			      !mispredict_stall | doing_rfe_i) &
-			      !immu_busy;
+			      !tlb_reload_busy & !immu_busy;
 
    assign ic_req = padv_i & !decode_except_ibus_err_o &
 		   !decode_except_itlb_miss_o & !except_itlb_miss &
@@ -547,6 +548,7 @@ if (FEATURE_IMMU!="NONE") begin : immu_gen
     .tlb_reload_pagefault_o		(tlb_reload_pagefault),
     .tlb_reload_ack_i			(tlb_reload_ack),
     .tlb_reload_data_i			(tlb_reload_data),
+    .tlb_reload_busy_o			(tlb_reload_busy),
     .tlb_reload_pagefault_clear_i	(except_ipagefault_clear),
     .pagefault_o			(pagefault),
     .spr_bus_dat_o			(spr_bus_dat_immu_o),
@@ -573,6 +575,7 @@ if (FEATURE_IMMU!="NONE") begin : immu_gen
       .tlb_reload_req_o			(tlb_reload_req),	 // Templated
       .tlb_reload_addr_o		(tlb_reload_addr),	 // Templated
       .tlb_reload_pagefault_o		(tlb_reload_pagefault),	 // Templated
+      .tlb_reload_busy_o		(tlb_reload_busy),	 // Templated
       .spr_bus_dat_o			(spr_bus_dat_immu_o),	 // Templated
       .spr_bus_ack_o			(spr_bus_ack_immu_o),	 // Templated
       // Inputs

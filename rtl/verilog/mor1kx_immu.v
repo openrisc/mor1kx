@@ -41,8 +41,9 @@ module mor1kx_immu
     input 				  tlb_reload_ack_i,
     output reg [OPTION_OPERAND_WIDTH-1:0] tlb_reload_addr_o,
     input [OPTION_OPERAND_WIDTH-1:0] 	  tlb_reload_data_i,
-    output				  tlb_reload_pagefault_o,
-    input				  tlb_reload_pagefault_clear_i,
+    output 				  tlb_reload_pagefault_o,
+    input 				  tlb_reload_pagefault_clear_i,
+    output 				  tlb_reload_busy_o,
 
     // SPR interface
     input [15:0] 			  spr_bus_addr_i,
@@ -130,10 +131,11 @@ module mor1kx_immu
    assign uxe = tlb_huge ? itlb_trans_huge_dout[7] : itlb_trans_dout[7];
 
    assign pagefault_o = (supervisor_mode_i ? !sxe : !uxe) &
-			!busy_o;
+			!tlb_reload_busy_o & !busy_o;
 
-   assign busy_o = tlb_reload_busy |
-		    (itlb_match_spr_cs | itlb_trans_spr_cs) & !spr_bus_ack_o;
+   assign busy_o = ((itlb_match_spr_cs | itlb_trans_spr_cs) & !spr_bus_ack |
+		    (itlb_match_spr_cs_r | itlb_trans_spr_cs_r) &
+		    spr_bus_ack & !spr_bus_ack_r) & enable_i;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
@@ -249,7 +251,7 @@ if (FEATURE_IMMU_HW_TLB_RELOAD == "ENABLED") begin
    wire      do_reload;
 
    assign do_reload = enable_i & tlb_miss_o & (immucr[31:10] != 0);
-   assign tlb_reload_busy = (tlb_reload_state != TLB_IDLE) | do_reload;
+   assign tlb_reload_busy_o = (tlb_reload_state != TLB_IDLE) | do_reload;
    assign tlb_reload_pagefault_o = tlb_reload_pagefault &
 				    !tlb_reload_pagefault_clear_i;
 
