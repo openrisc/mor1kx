@@ -102,6 +102,9 @@ module mor1kx_immu
    wire 			      uxe;
 
    reg 				      spr_bus_ack;
+   reg 				      spr_bus_ack_r;
+   wire [OPTION_OPERAND_WIDTH-1:0]    spr_bus_dat;
+   reg [OPTION_OPERAND_WIDTH-1:0]     spr_bus_dat_r;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -110,6 +113,13 @@ module mor1kx_immu
        spr_bus_ack <= 1;
      else
        spr_bus_ack <= 0;
+
+   always @(posedge clk)
+     spr_bus_ack_r <= spr_bus_ack;
+
+   always @(posedge clk)
+     if (spr_bus_ack & !spr_bus_ack_r)
+       spr_bus_dat_r <= spr_bus_dat;
 
    assign spr_bus_ack_o = spr_bus_ack & spr_bus_stb_i &
 			  spr_bus_addr_i[15:11] == 5'd2;
@@ -185,9 +195,13 @@ endgenerate
    assign itlb_match_huge_we = itlb_match_reload_we & tlb_reload_huge;
    assign itlb_trans_huge_we = itlb_trans_reload_we & tlb_reload_huge;
 
-   assign spr_bus_dat_o = itlb_match_spr_cs_r ? itlb_match_dout :
-			  itlb_trans_spr_cs_r ? itlb_trans_dout :
-			  immucr_spr_cs_r ? immucr : 0;
+   assign spr_bus_dat = itlb_match_spr_cs_r ? itlb_match_dout :
+			itlb_trans_spr_cs_r ? itlb_trans_dout :
+			immucr_spr_cs_r ? immucr : 0;
+
+   // Use registered value on all but the first cycle spr_bus_ack is asserted
+   assign spr_bus_dat_o = spr_bus_ack & !spr_bus_ack_r ? spr_bus_dat :
+			  spr_bus_dat_r;
 
    assign tlb_huge = &itlb_match_huge_dout[1:0]; // huge & valid
 
