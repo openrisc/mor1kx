@@ -214,7 +214,7 @@ endgenerate
 			  virt_addr_match_i[31:24] | !itlb_match_huge_dout[0];
 
    assign tlb_miss_o = (tlb_miss & !tlb_huge | tlb_huge_miss & tlb_huge) &
-		       !tlb_reload_pagefault;
+		       !tlb_reload_pagefault & !busy_o;
 
    assign phys_addr_o = tlb_huge ?
 			{itlb_trans_huge_dout[31:24], virt_addr_match_i[23:0]} :
