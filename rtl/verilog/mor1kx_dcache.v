@@ -129,7 +129,7 @@ module mor1kx_dcache
 		       write & dbus_ack_i) & cpu_req_i;
    assign dbus_adr_o = write ? cpu_adr_match_i : dbus_adr;
    assign dbus_req_o = refill | write & cpu_req_i;
-   assign dbus_we_o = write & dc_access_i;
+   assign dbus_we_o = write & cpu_req_i;
    assign dbus_dat_o = cpu_dat_i;
    assign dbus_bsel_o = refill ? 4'b1111 : cpu_bsel_i;
 
