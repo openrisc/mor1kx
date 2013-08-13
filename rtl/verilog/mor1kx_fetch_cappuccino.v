@@ -158,7 +158,8 @@ module mor1kx_fetch_cappuccino
    reg 					  exception_while_tlb_reload;
    wire 				  except_ipagefault_clear;
 
-   assign bus_access_done =  imem_ack | imem_err | fake_ack;
+   assign bus_access_done = (imem_ack | imem_err | fake_ack) & !immu_busy &
+			    !tlb_reload_busy;
    assign ctrl_branch_exception_edge = ctrl_branch_exception_i &
 				       !ctrl_branch_exception_r;
 
