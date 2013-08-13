@@ -110,7 +110,7 @@ module mor1kx_fetch_cappuccino
    reg 					  flush;
    wire					  flushing;
 
-   reg 					  fake_ack;
+   reg 					  nop_ack;
 
    reg 					  imem_err;
    wire 				  imem_ack;
@@ -158,7 +158,7 @@ module mor1kx_fetch_cappuccino
    reg 					  exception_while_tlb_reload;
    wire 				  except_ipagefault_clear;
 
-   assign bus_access_done = (imem_ack | imem_err | fake_ack) & !immu_busy &
+   assign bus_access_done = (imem_ack | imem_err | nop_ack) & !immu_busy &
 			    !tlb_reload_busy;
    assign ctrl_branch_exception_edge = ctrl_branch_exception_i &
 				       !ctrl_branch_exception_r;
@@ -333,22 +333,28 @@ module mor1kx_fetch_cappuccino
 
    wire 			  ibus_access;
 
+   //
+   // Under certain circumstances, there is a need to insert an nop
+   // into the pipeline in order for it to move forward.
+   // Here those conditions are handled and an acknowledged signal
+   // is generated.
+   //
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       fake_ack <= 0;
+       nop_ack <= 0;
      else
-       fake_ack <= padv_i & !bus_access_done & !ibus_req &
-		   ((immu_enable_i & (tlb_miss | pagefault) &
-		     !tlb_reload_busy) |
-		    ctrl_branch_exception_edge & !tlb_reload_busy |
-		    exception_while_tlb_reload & !tlb_reload_busy |
-		    tlb_reload_pagefault |
-		    mispredict_stall);
+       nop_ack <= padv_i & !bus_access_done & !ibus_req &
+		  ((immu_enable_i & (tlb_miss | pagefault) &
+		    !tlb_reload_busy) |
+		   ctrl_branch_exception_edge & !tlb_reload_busy |
+		   exception_while_tlb_reload & !tlb_reload_busy |
+		   tlb_reload_pagefault |
+		   mispredict_stall);
 
    assign ibus_access = (!ic_access | tlb_reload_busy | ic_invalidate) &
 			!ic_refill;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
-   assign imem_dat = (fake_ack | except_itlb_miss | except_ipagefault) ?
+   assign imem_dat = (nop_ack | except_itlb_miss | except_ipagefault) ?
 		     {`OR1K_OPCODE_NOP,26'd0} :
 		     ibus_access ? ibus_dat : ic_dat;
    assign ibus_adr_o = ibus_access ? ibus_adr : ic_ibus_adr;
@@ -365,7 +371,7 @@ module mor1kx_fetch_cappuccino
       case (state)
 	IDLE: begin
 	   ibus_req <= 0;
-	   if (padv_i & ibus_access & !ibus_ack & !imem_err & !fake_ack) begin
+	   if (padv_i & ibus_access & !ibus_ack & !imem_err & !nop_ack) begin
 	      if (tlb_reload_req) begin
 		 ibus_adr <= tlb_reload_addr;
 		 ibus_req <= 1;
