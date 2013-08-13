@@ -531,14 +531,17 @@ generate
 if (FEATURE_IMMU!="NONE") begin : immu_gen
    wire  [OPTION_OPERAND_WIDTH-1:0] virt_addr = ic_addr;
    wire 			    immu_spr_bus_stb;
+   wire 			    immu_enable;
    // small hack to delay immu spr reads by one cycle
    // ideally the spr accesses should work so that the address is presented
    // in execute stage and the delayed data should be available in control
    // stage, but this is not how things currently work.
    assign immu_spr_bus_stb = spr_bus_stb_i & (!padv_ctrl_i | spr_bus_we_i);
 
+   assign immu_enable = immu_enable_i & !pipeline_flush_i & !mispredict_stall;
+
    /* mor1kx_immu AUTO_TEMPLATE (
-    .enable_i				(immu_enable_i),
+    .enable_i				(immu_enable),
     .busy_o				(immu_busy),
     .phys_addr_o			(immu_phys_addr),
     .cache_inhibit_o			(immu_cache_inhibit),
@@ -581,7 +584,7 @@ if (FEATURE_IMMU!="NONE") begin : immu_gen
       // Inputs
       .clk				(clk),
       .rst				(rst),
-      .enable_i				(immu_enable_i),	 // Templated
+      .enable_i				(immu_enable),		 // Templated
       .virt_addr_i			(virt_addr),		 // Templated
       .virt_addr_match_i		(pc_fetch),		 // Templated
       .supervisor_mode_i		(supervisor_mode_i),
