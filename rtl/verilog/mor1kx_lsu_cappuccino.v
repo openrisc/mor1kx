@@ -319,7 +319,7 @@ module mor1kx_lsu_cappuccino
 	   dbus_req <= 0;
 	   dbus_we <= 0;
 	   if (ctrl_op_lsu & dbus_access & !dbus_ack & !dbus_err &
-	       !except_dbus & !access_done) begin
+	       !except_dbus & !access_done & !pipeline_flush_i) begin
 	      if (tlb_reload_req) begin
 		 dbus_adr <= tlb_reload_addr;
 		 dbus_req <= 1;
