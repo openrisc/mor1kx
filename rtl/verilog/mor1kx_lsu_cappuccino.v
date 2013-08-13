@@ -513,6 +513,7 @@ generate
 if (FEATURE_DMMU!="NONE") begin : dmmu_gen
    wire  [OPTION_OPERAND_WIDTH-1:0] virt_addr;
    wire 			    dmmu_spr_bus_stb;
+   wire 			    dmmu_enable;
 
    assign virt_addr = dc_adr;
 
@@ -524,8 +525,10 @@ if (FEATURE_DMMU!="NONE") begin : dmmu_gen
 
    assign tlb_reload_pagefault_clear = !ctrl_op_lsu; // use pipeline_flush_i?
 
+   assign dmmu_enable = dmmu_enable_i & !pipeline_flush_i;
+
    /* mor1kx_dmmu AUTO_TEMPLATE (
-    .enable_i				(dmmu_enable_i),
+    .enable_i				(dmmu_enable),
     .phys_addr_o			(dmmu_phys_addr),
     .cache_inhibit_o			(dmmu_cache_inhibit),
     .op_store_i				(ctrl_op_lsu_store_i),
@@ -568,7 +571,7 @@ if (FEATURE_DMMU!="NONE") begin : dmmu_gen
       // Inputs
       .clk				(clk),
       .rst				(rst),
-      .enable_i				(dmmu_enable_i),	 // Templated
+      .enable_i				(dmmu_enable),		 // Templated
       .virt_addr_i			(virt_addr),		 // Templated
       .virt_addr_match_i		(ctrl_lsu_adr_i),	 // Templated
       .op_store_i			(ctrl_op_lsu_store_i),	 // Templated
