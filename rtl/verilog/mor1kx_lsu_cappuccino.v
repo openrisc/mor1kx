@@ -188,17 +188,17 @@ module mor1kx_lsu_cappuccino
 
    assign except_align = ctrl_op_lsu & align_err;
 
-   assign lsu_except_align_o = except_align;
+   assign lsu_except_align_o = except_align & !pipeline_flush_i;
 
    assign except_dtlb_miss = ctrl_op_lsu & tlb_miss & dmmu_enable_i &
 			     !tlb_reload_busy;
 
-   assign lsu_except_dtlb_miss_o = except_dtlb_miss;
+   assign lsu_except_dtlb_miss_o = except_dtlb_miss & !pipeline_flush_i;
 
    assign except_dpagefault = ctrl_op_lsu & pagefault & dmmu_enable_i &
 			      !tlb_reload_busy | tlb_reload_pagefault;
 
-   assign lsu_except_dpagefault_o = except_dpagefault;
+   assign lsu_except_dpagefault_o = except_dpagefault & !pipeline_flush_i;
 
 
    always @(posedge clk `OR_ASYNC_RST)
