@@ -341,8 +341,12 @@ if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
 
 	default:
 	  tlb_reload_state <= TLB_IDLE;
-
       endcase
+
+      // Abort if enable deasserts in the middle of a reload
+      if (!enable_i | (dmmucr[31:10] == 0))
+	tlb_reload_state <= TLB_IDLE;
+
    end
 end else begin // if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED")
    assign tlb_reload_pagefault_o = 0;
