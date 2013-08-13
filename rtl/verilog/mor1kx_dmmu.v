@@ -241,7 +241,7 @@ if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
    assign do_reload = enable_i & tlb_miss_o & (dmmucr[31:10] != 0) &
 		      (op_load_i | op_store_i);
 
-   assign tlb_reload_busy_o = (tlb_reload_state != TLB_IDLE) | do_reload;
+   assign tlb_reload_busy_o = enable_i & (tlb_reload_state != TLB_IDLE) | do_reload;
 
    assign tlb_reload_pagefault_o = tlb_reload_pagefault &
 				    !tlb_reload_pagefault_clear_i;
