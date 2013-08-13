@@ -339,7 +339,7 @@ module mor1kx_fetch_cappuccino
      else
        fake_ack <= padv_i & !bus_access_done & !ibus_req &
 		   ((immu_enable_i & (tlb_miss | pagefault) &
-		     !tlb_reload_busy & !immu_busy) |
+		     !tlb_reload_busy) |
 		    ctrl_branch_exception_edge & !tlb_reload_busy |
 		    exception_while_tlb_reload & !tlb_reload_busy |
 		    tlb_reload_pagefault |
