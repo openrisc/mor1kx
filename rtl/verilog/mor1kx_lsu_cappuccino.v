@@ -314,6 +314,7 @@ module mor1kx_lsu_cappuccino
 
    always @(posedge clk) begin
       dbus_ack <= 0;
+      tlb_reload_ack <= 0;
       case (state)
 	IDLE: begin
 	   dbus_req <= 0;
