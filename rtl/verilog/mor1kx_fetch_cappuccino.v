@@ -604,6 +604,12 @@ if (FEATURE_IMMU!="NONE") begin : immu_gen
       .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
 end else begin
    assign immu_cache_inhibit = 0;
+   assign immu_busy = 0;
+   assign tlb_miss = 0;
+   assign pagefault = 0;
+   assign tlb_reload_busy = 0;
+   assign tlb_reload_req = 0;
+   assign tlb_reload_pagefault = 0;
 end
 endgenerate
 
