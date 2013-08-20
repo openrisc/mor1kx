@@ -586,6 +586,11 @@ if (FEATURE_DMMU!="NONE") begin : dmmu_gen
       .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
 end else begin
    assign dmmu_cache_inhibit = 0;
+   assign tlb_miss = 0;
+   assign pagefault = 0;
+   assign tlb_reload_busy = 0;
+   assign tlb_reload_req = 0;
+   assign tlb_reload_pagefault = 0;
 end
 endgenerate
 
