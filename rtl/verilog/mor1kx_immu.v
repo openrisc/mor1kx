@@ -93,7 +93,6 @@ module mor1kx_immu
    wire				      tlb_miss;
    wire				      tlb_huge_miss;
 
-   wire				      tlb_reload_busy;
    reg 				      tlb_reload_pagefault;
    reg 				      tlb_reload_huge;
 
@@ -353,7 +352,7 @@ if (FEATURE_IMMU_HW_TLB_RELOAD == "ENABLED") begin
    end
 end else begin // if (FEATURE_IMMU_HW_TLB_RELOAD == "ENABLED")
    assign tlb_reload_pagefault_o = 0;
-   assign tlb_reload_busy = 0;
+   assign tlb_reload_busy_o = 0;
    always @(posedge clk) begin
       tlb_reload_req_o <= 0;
       tlb_reload_addr_o <= 0;
