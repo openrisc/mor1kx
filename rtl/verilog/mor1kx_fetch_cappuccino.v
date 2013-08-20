@@ -367,6 +367,7 @@ module mor1kx_fetch_cappuccino
    always @(posedge clk) begin
       ibus_ack <= 0;
       exception_while_tlb_reload <= 0;
+      tlb_reload_ack <= 0;
 
       case (state)
 	IDLE: begin
