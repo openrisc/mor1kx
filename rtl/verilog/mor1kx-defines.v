@@ -1,15 +1,15 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
   Description: mor1kx defines
-   
+
   Copyright (C) 2012 Authors
- 
+
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
+
 ***************************************************************************** */
 
 /* ORBIS32 opcodes - top 6 bits */
@@ -109,7 +109,7 @@
 `define OR1K_OPCODE_LBZ     {2'b10, 4'h3}
 `define OR1K_OPCODE_LBS     {2'b10, 4'h4}
 `define OR1K_OPCODE_LHZ     {2'b10, 4'h5}
-`define OR1K_OPCODE_LHS     {2'b10, 4'h6}  
+`define OR1K_OPCODE_LHS     {2'b10, 4'h6}
 
 `define OR1K_OPCODE_ADDI    {2'b10, 4'h7}
 `define OR1K_OPCODE_ADDIC   {2'b10, 4'h8}
@@ -187,14 +187,14 @@
 `define OR1K_OPCODE_SFGTS   {2'b11, 4'h9}
 `define OR1K_OPCODE_SFGES   {2'b11, 4'h9}
 `define OR1K_OPCODE_SFLTS   {2'b11, 4'h9}
-`define OR1K_OPCODE_SFLES   {2'b11, 4'h9} 
+`define OR1K_OPCODE_SFLES   {2'b11, 4'h9}
 */
 `define OR1K_OPCODE_SF      {2'b11, 4'h9}
 
 `define OR1K_OPCODE_CUST5   {2'b11, 4'hC}
 `define OR1K_OPCODE_CUST6   {2'b11, 4'hD}
 `define OR1K_OPCODE_CUST7   {2'b11, 4'hE}
-`define OR1K_OPCODE_CUST8   {2'b11, 4'hF}      
+`define OR1K_OPCODE_CUST8   {2'b11, 4'hF}
 
 //
 // OR1K SPR defines
