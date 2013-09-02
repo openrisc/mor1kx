@@ -180,7 +180,7 @@ module mor1kx_lsu_cappuccino
 
 
    assign lsu_valid_o = (lsu_ack | access_done) & !tlb_reload_busy;
-   assign lsu_except_dbus_o = dbus_err | except_dbus;
+   assign lsu_except_dbus_o = except_dbus;
 
 
    assign align_err = (ctrl_lsu_length_i == 2'b10) & align_err_word |
@@ -214,7 +214,7 @@ module mor1kx_lsu_cappuccino
        except_dbus <= 0;
      else if (padv_execute_i | pipeline_flush_i)
        except_dbus <= 0;
-     else if (dbus_err)
+     else if (dbus_err_i)
        except_dbus <= 1;
 
    always @(posedge clk `OR_ASYNC_RST)
