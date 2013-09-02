@@ -137,7 +137,6 @@ module mor1kx_lsu_cappuccino
    wire 			     dc_req;
    wire 			     dc_we;
    wire [3:0] 			     dc_bsel;
-   wire 			     dc_cache_inhibit;
 
    wire 			     dc_access;
    wire 			     dc_refill;
