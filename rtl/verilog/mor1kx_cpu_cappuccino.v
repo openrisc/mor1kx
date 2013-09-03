@@ -93,6 +93,7 @@ module mor1kx_cpu_cappuccino
    parameter FEATURE_CUST8 = "NONE";
 
    parameter OPTION_SHIFTER = "ENABLED";
+   parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8;
 
    // Instruction bus
    input ibus_err_i;
@@ -161,6 +162,7 @@ module mor1kx_cpu_cappuccino
    wire			ctrl_carry_clear_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_carry_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			ctrl_carry_set_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire [OPTION_OPERAND_WIDTH-1:0] ctrl_epcr_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			ctrl_except_align_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_except_dbus_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_except_dpagefault_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
@@ -323,6 +325,8 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_dmmu_i;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_ic_i;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_immu_i;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire [OPTION_OPERAND_WIDTH-1:0] store_buffer_epcr_o;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire			store_buffer_err_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire			wb_rf_wb_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd_adr_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    // End of automatics
@@ -815,6 +819,7 @@ module mor1kx_cpu_cappuccino
     .ctrl_op_lsu_store_i		(ctrl_op_lsu_store_o),
     .ctrl_lsu_length_i			(ctrl_lsu_length_o),
     .ctrl_lsu_zext_i			(ctrl_lsu_zext_o),
+    .ctrl_epcr_i			(ctrl_epcr_o),
     .pipeline_flush_i			(pipeline_flush_o),
     .dc_enable_i			(spr_sr_o[`OR1K_SPR_SR_DCE]),
     .dmmu_enable_i			(spr_sr_o[`OR1K_SPR_SR_DME]),
@@ -839,17 +844,20 @@ module mor1kx_cpu_cappuccino
        .FEATURE_DMMU(FEATURE_DMMU),
        .FEATURE_DMMU_HW_TLB_RELOAD(FEATURE_DMMU_HW_TLB_RELOAD),
        .OPTION_DMMU_SET_WIDTH(OPTION_DMMU_SET_WIDTH),
-       .OPTION_DMMU_WAYS(OPTION_DMMU_WAYS)
+       .OPTION_DMMU_WAYS(OPTION_DMMU_WAYS),
+       .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH)
        )
      mor1kx_lsu_cappuccino
      (/*AUTOINST*/
       // Outputs
+      .store_buffer_epcr_o		(store_buffer_epcr_o[OPTION_OPERAND_WIDTH-1:0]),
       .lsu_result_o			(lsu_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .lsu_valid_o			(lsu_valid_o),
       .lsu_except_dbus_o		(lsu_except_dbus_o),
       .lsu_except_align_o		(lsu_except_align_o),
       .lsu_except_dtlb_miss_o		(lsu_except_dtlb_miss_o),
       .lsu_except_dpagefault_o		(lsu_except_dpagefault_o),
+      .store_buffer_err_o		(store_buffer_err_o),
       .spr_bus_dat_dc_o			(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
       .spr_bus_ack_dc_o			(spr_bus_ack_dc_i),	 // Templated
       .spr_bus_dat_dmmu_o		(spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
@@ -875,6 +883,7 @@ module mor1kx_cpu_cappuccino
       .ctrl_op_lsu_store_i		(ctrl_op_lsu_store_o),	 // Templated
       .ctrl_lsu_length_i		(ctrl_lsu_length_o),	 // Templated
       .ctrl_lsu_zext_i			(ctrl_lsu_zext_o),	 // Templated
+      .ctrl_epcr_i			(ctrl_epcr_o),		 // Templated
       .spr_bus_addr_i			(spr_bus_addr_o[15:0]),	 // Templated
       .spr_bus_we_i			(spr_bus_we_o),		 // Templated
       .spr_bus_stb_i			(spr_bus_stb_o),	 // Templated
@@ -1171,6 +1180,8 @@ module mor1kx_cpu_cappuccino
     .fetch_exception_taken_i	(fetch_exception_taken_o),
     .decode_bubble_i		(decode_bubble_o),
     .execute_bubble_i		(execute_bubble_o),
+    .store_buffer_epcr_i	(store_buffer_epcr_o),
+    .store_buffer_err_i		(store_buffer_err_o),
     .ctrl_carry_set_i		(ctrl_carry_set_o),
     .ctrl_carry_clear_i		(ctrl_carry_clear_o),
     .ctrl_overflow_set_i       (ctrl_overflow_set_o),
@@ -1209,6 +1220,7 @@ module mor1kx_cpu_cappuccino
      mor1kx_ctrl_cappuccino
      (/*AUTOINST*/
       // Outputs
+      .ctrl_epcr_o			(ctrl_epcr_o[OPTION_OPERAND_WIDTH-1:0]),
       .mfspr_dat_o			(mfspr_dat_o[OPTION_OPERAND_WIDTH-1:0]),
       .ctrl_mfspr_ack_o			(ctrl_mfspr_ack_o),
       .ctrl_mtspr_ack_o			(ctrl_mtspr_ack_o),
@@ -1267,6 +1279,8 @@ module mor1kx_cpu_cappuccino
       .decode_bubble_i			(decode_bubble_o),	 // Templated
       .execute_bubble_i			(execute_bubble_o),	 // Templated
       .irq_i				(irq_i[31:0]),
+      .store_buffer_epcr_i		(store_buffer_epcr_o),	 // Templated
+      .store_buffer_err_i		(store_buffer_err_o),	 // Templated
       .ctrl_carry_set_i			(ctrl_carry_set_o),	 // Templated
       .ctrl_carry_clear_i		(ctrl_carry_clear_o),	 // Templated
       .ctrl_overflow_set_i		(ctrl_overflow_set_o),	 // Templated

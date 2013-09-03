@@ -127,6 +127,14 @@ module mor1kx_ctrl_cappuccino
     // External IRQ lines in
     input [31:0] 		      irq_i,
 
+    // Exception PC output, used in the lsu to properly signal dbus errors that
+    // has went through the store buffer
+    output [OPTION_OPERAND_WIDTH-1:0] ctrl_epcr_o,
+    // Exception PC input coming from the store buffer
+    input [OPTION_OPERAND_WIDTH-1:0]  store_buffer_epcr_i,
+
+    input 			      store_buffer_err_i,
+
     // SPR data out
     output [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o,
 
@@ -328,6 +336,8 @@ module mor1kx_ctrl_cappuccino
 
    assign ctrl_branch_except_pc_o = (ctrl_op_rfe_i | doing_rfe) ? spr_epcr :
 				    exception_pc_addr;
+
+   assign ctrl_epcr_o = ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i;
 
    always @(posedge clk)
      ctrl_stage_exceptions <= except_align_i | except_dbus_i | except_range |
@@ -630,10 +640,14 @@ module mor1kx_ctrl_cappuccino
      if (exception_re) begin
 	if (except_ibus_err_i)
 	  spr_epcr <= last_branch_insn_pc;
+	// Syscall is a special case, we return back to the instruction _after_
+	// the syscall instruction, unless the syscall was in a delay slot
 	else if (except_syscall_i)
-	  spr_epcr <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i + 4;
+	  spr_epcr <= ctrl_delay_slot ? ctrl_epcr_o : pc_ctrl_i + 4;
+	else if (store_buffer_err_i)
+	  spr_epcr <= store_buffer_epcr_i;
 	else
-	  spr_epcr <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i;
+	  spr_epcr <= ctrl_epcr_o;
      end else if (spr_we && spr_addr==`OR1K_SPR_EPCR0_ADDR) begin
 	spr_epcr <= spr_write_dat;
      end

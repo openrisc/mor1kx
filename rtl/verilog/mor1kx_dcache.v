@@ -40,6 +40,8 @@ module mor1kx_dcache
     input 			      cpu_we_i,
     input [3:0] 		      cpu_bsel_i,
 
+    input 			      refill_allowed,
+
     // BUS Interface
     input 			      dbus_err_i,
     input 			      dbus_ack_i,
@@ -47,7 +49,6 @@ module mor1kx_dcache
     output [31:0] 		      dbus_dat_o,
     output [31:0] 		      dbus_adr_o,
     output 			      dbus_req_o,
-    output 			      dbus_we_o,
     output [3:0] 		      dbus_bsel_o,
 
     // SPR interface
@@ -125,13 +126,11 @@ module mor1kx_dcache
 
    assign cpu_err_o = dbus_err_i;
    assign cpu_ack_o = ((read | refill) & hit & !write_pending |
-		       refill_hit |
-		       write & dbus_ack_i) & cpu_req_i;
-   assign dbus_adr_o = write ? cpu_adr_match_i : dbus_adr;
-   assign dbus_req_o = refill | write & cpu_req_i;
-   assign dbus_we_o = write & cpu_req_i;
+		       refill_hit) & cpu_req_i;
+   assign dbus_adr_o = dbus_adr;
+   assign dbus_req_o = refill;
    assign dbus_dat_o = cpu_dat_i;
-   assign dbus_bsel_o = refill ? 4'b1111 : cpu_bsel_i;
+   assign dbus_bsel_o = 4'b1111;
 
    assign tag_raddr = cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
    /*
@@ -155,7 +154,8 @@ module mor1kx_dcache
 
       for (i = 0; i < OPTION_DCACHE_WAYS; i=i+1) begin : ways
 	 assign way_raddr[i] = cpu_adr_i[WAY_WIDTH-1:2];
-	 assign way_waddr[i] = dbus_adr_o[WAY_WIDTH-1:2];
+	 assign way_waddr[i] = write ? cpu_adr_match_i[WAY_WIDTH-1:2] :
+			       dbus_adr[WAY_WIDTH-1:2];
 	 assign way_din[i] = way_wr_dat;
 	 /*
 	  * compare tag stored index with incoming index
@@ -237,17 +237,15 @@ module mor1kx_dcache
       refill_valid_r <= refill_valid;
       case (state)
 	IDLE: begin
-	   if (cpu_req_i) begin
-	      if (cpu_we_i | write_pending)
-		state <= WRITE;
-	      else
-		state <= READ;
-	   end
+	   if (cpu_we_i | write_pending)
+	     state <= WRITE;
+	   else if (cpu_req_i)
+	     state <= READ;
 	end
 
 	READ: begin
 	   if (dc_access_i | cpu_we_i & dc_enable_i) begin
-	      if (!hit & cpu_req_i & !write_pending) begin
+	      if (!hit & cpu_req_i & !write_pending & refill_allowed) begin
 		 refill_valid <= 0;
 		 refill_valid_r <= 0;
 		 dbus_adr <= cpu_adr_match_i;
@@ -278,9 +276,10 @@ module mor1kx_dcache
 	end
 
 	WRITE: begin
-	   if (!dc_access_i | (dbus_ack_i | !cpu_req_i) & !cpu_we_i)
-	     state <= IDLE;
-	   write_pending <= 0;
+	   if (!dc_access_i | !cpu_req_i | !cpu_we_i) begin
+	      write_pending <= 0;
+	      state <= READ;
+	   end
 	end
 
 	INVALIDATE: begin
@@ -325,7 +324,7 @@ module mor1kx_dcache
 
 	WRITE: begin
 	   way_wr_dat = cpu_dat_i;
-	   if (hit & dbus_ack_i) begin
+	   if (hit & cpu_req_i) begin
 	      /* Mux cache output with write data */
 	      if (!cpu_bsel_i[3])
 		way_wr_dat[31:24] = cpu_dat_o[31:24];

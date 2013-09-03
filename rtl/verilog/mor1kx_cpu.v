@@ -103,6 +103,7 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter FEATURE_CUST8		= "NONE";
 
    parameter OPTION_SHIFTER		= "ENABLED";
+   parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8;
 
    // Instruction bus
    input ibus_err_i;
@@ -228,7 +229,8 @@ module mor1kx_cpu(/*AUTOARG*/
 	     .FEATURE_CUST6(FEATURE_CUST6),
 	     .FEATURE_CUST7(FEATURE_CUST7),
 	     .FEATURE_CUST8(FEATURE_CUST8),
-	     .OPTION_SHIFTER(OPTION_SHIFTER)
+	     .OPTION_SHIFTER(OPTION_SHIFTER),
+	     .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH)
 	     )
 	   mor1kx_cpu
 	   (/*AUTOINST*/

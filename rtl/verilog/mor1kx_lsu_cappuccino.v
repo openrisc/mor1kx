@@ -11,15 +11,8 @@
 
   32-bit specific
 
-  TODO: posted accesses - if we're not currently doing another posted access
-  then immediately signal valid to not hold up the pipeline and in the case of
-  loads remember the register we were supposed to access, and monitor the
-  pipeline for a read from that register, and then indicate we're waiting for
-  the read to come through before we can continue
-
-  Copyright (C) 2012 Authors
-
-  Author(s): Julius Baxter <juliusbaxter@gmail.com>
+  Copyright (C) 2012 Julius Baxter <juliusbaxter@gmail.com>
+  Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
 
 ***************************************************************************** */
 
@@ -36,7 +29,8 @@ module mor1kx_lsu_cappuccino
     parameter FEATURE_DMMU = "NONE",
     parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
     parameter OPTION_DMMU_SET_WIDTH = 6,
-    parameter OPTION_DMMU_WAYS = 1
+    parameter OPTION_DMMU_WAYS = 1,
+    parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8
     )
    (
     input 			      clk,
@@ -60,6 +54,11 @@ module mor1kx_lsu_cappuccino
     input [1:0] 		      ctrl_lsu_length_i,
     input 			      ctrl_lsu_zext_i,
 
+    // From control stage, exception PC for the store buffer input
+    input [OPTION_OPERAND_WIDTH-1:0]  ctrl_epcr_i,
+    // The exception PC as it has went through the store buffer
+    output [OPTION_OPERAND_WIDTH-1:0] store_buffer_epcr_o,
+
     output [OPTION_OPERAND_WIDTH-1:0] lsu_result_o,
     output 			      lsu_valid_o,
     // exception output
@@ -67,6 +66,9 @@ module mor1kx_lsu_cappuccino
     output 			      lsu_except_align_o,
     output 			      lsu_except_dtlb_miss_o,
     output 			      lsu_except_dpagefault_o,
+
+    // Indicator that the dbus exception came via the store buffer
+    output reg			      store_buffer_err_o,
 
     // SPR interface
     input [15:0] 		      spr_bus_addr_i,
@@ -87,7 +89,7 @@ module mor1kx_lsu_cappuccino
     output 			      dbus_req_o,
     output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
     output [3:0] 		      dbus_bsel_o,
-    output 			      dbus_we_o,
+    output reg 			      dbus_we_o,
     output 			      dbus_burst_o,
     input 			      dbus_err_i,
     input 			      dbus_ack_i,
@@ -117,8 +119,8 @@ module mor1kx_lsu_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_adr;
    reg 				     dbus_req;
    reg [3:0] 			     dbus_bsel;
-   reg 				     dbus_we;
    wire 			     dbus_access;
+   wire 			     dbus_stall;
 
    wire [OPTION_OPERAND_WIDTH-1:0]   lsu_ldat;
    wire				     lsu_ack;
@@ -139,6 +141,7 @@ module mor1kx_lsu_cappuccino
    wire [3:0] 			     dc_bsel;
 
    wire 			     dc_access;
+   wire 			     dc_refill_allowed;
    wire 			     dc_refill;
    wire 			     dc_refill_done;
 
@@ -164,6 +167,18 @@ module mor1kx_lsu_cappuccino
    reg 				     tlb_reload_ack;
    reg [OPTION_OPERAND_WIDTH-1:0]    tlb_reload_data;
    wire				     tlb_reload_pagefault_clear;
+   reg 				     tlb_reload_done;
+
+   // Store buffer
+   wire 			     store_buffer_write;
+   wire				     store_buffer_read;
+   wire 			     store_buffer_full;
+   wire 			     store_buffer_empty;
+   wire [OPTION_OPERAND_WIDTH-1:0]   store_buffer_radr;
+   wire [OPTION_OPERAND_WIDTH-1:0]   store_buffer_wadr;
+   wire [OPTION_OPERAND_WIDTH-1:0]   store_buffer_dat;
+   wire [OPTION_OPERAND_WIDTH/8-1:0] store_buffer_bsel;
+   reg 				     store_buffer_write_pending;
 
    assign ctrl_op_lsu = ctrl_op_lsu_load_i | ctrl_op_lsu_store_i;
 
@@ -179,8 +194,8 @@ module mor1kx_lsu_cappuccino
 
 
    assign lsu_valid_o = (lsu_ack | access_done) & !tlb_reload_busy;
-   assign lsu_except_dbus_o = except_dbus;
 
+   assign lsu_except_dbus_o = except_dbus | store_buffer_err_o;
 
    assign align_err = (ctrl_lsu_length_i == 2'b10) & align_err_word |
 		      (ctrl_lsu_length_i == 2'b01) & align_err_short;
@@ -231,6 +246,14 @@ module mor1kx_lsu_cappuccino
        except_dpagefault_r <= 0;
      else if (except_dpagefault)
        except_dpagefault_r <= 1;
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       store_buffer_err_o <= 0;
+     else if (pipeline_flush_i)
+       store_buffer_err_o <= 0;
+     else if (dbus_err_i & dbus_we_o)
+       store_buffer_err_o <= 1;
 
    // Big endian bus mapping
    always @(*)
@@ -298,14 +321,25 @@ module mor1kx_lsu_cappuccino
 
    reg [1:0] state;
 
-   assign dbus_access = (!dc_access | tlb_reload_busy) & !dc_refill;
-   assign lsu_ack = dbus_access ? dbus_ack : dc_ack;
+   assign dbus_access = (!dc_access | tlb_reload_busy | ctrl_op_lsu_store_i) &
+			!dc_refill | (state == WRITE);
+   reg      dc_refill_r;
+
+   always @(posedge clk)
+     dc_refill_r <= dc_refill;
+
+   assign lsu_ack = (ctrl_op_lsu_store_i | state == WRITE) ?
+		    store_buffer_write :
+		    (dbus_access ? dbus_ack : dc_ack);
+
    assign lsu_ldat = dbus_access ? dbus_ldat : dc_ldat;
-   assign dbus_adr_o = dbus_access ? dbus_adr : dc_dbus_adr;
+   assign dbus_adr_o = (state == WRITE) ? store_buffer_radr :
+		       dbus_access ? dbus_adr : dc_dbus_adr;
    assign dbus_req_o = dbus_access ? dbus_req : dc_dbus_req;
-   assign dbus_we_o = dbus_access ? dbus_we : dc_dbus_we;
-   assign dbus_bsel_o = dbus_access ? dbus_bsel : dc_dbus_bsel;
-   assign dbus_dat_o = dbus_access ? dbus_sdat : dc_dbus_sdat;
+   assign dbus_bsel_o = (state == WRITE) ? store_buffer_bsel :
+			dc_refill ? 4'hf : dbus_bsel;
+   assign dbus_dat_o = store_buffer_dat;
+
    assign dbus_burst_o = dc_refill & !dc_refill_done;
 
    always @(posedge clk)
@@ -314,12 +348,18 @@ module mor1kx_lsu_cappuccino
    always @(posedge clk) begin
       dbus_ack <= 0;
       tlb_reload_ack <= 0;
+      tlb_reload_done <= 0;
       case (state)
 	IDLE: begin
 	   dbus_req <= 0;
-	   dbus_we <= 0;
-	   if (ctrl_op_lsu & dbus_access & !dbus_ack & !dbus_err &
-	       !except_dbus & !access_done & !pipeline_flush_i) begin
+	   dbus_we_o <= 0;
+	   if (store_buffer_write | !store_buffer_empty) begin
+	      state <= WRITE;
+	      dbus_req <= 1;
+	      dbus_we_o <= 1;
+	   end else if (ctrl_op_lsu & dbus_access & !dc_refill & !dbus_ack &
+			!dbus_err & !except_dbus & !access_done &
+			!pipeline_flush_i) begin
 	      if (tlb_reload_req) begin
 		 dbus_adr <= tlb_reload_addr;
 		 dbus_req <= 1;
@@ -327,15 +367,17 @@ module mor1kx_lsu_cappuccino
 	      end else if (dmmu_enable_i) begin
 		 dbus_adr <= dmmu_phys_addr;
 		 if (!tlb_miss & !pagefault & !except_align) begin
-		    dbus_req <= 1;
-		    dbus_we <= ctrl_op_lsu_store_i;
-		    state <= ctrl_op_lsu_store_i ? WRITE : READ;
+		    if (ctrl_op_lsu_load_i) begin
+		       dbus_req <= 1;
+		       state <= READ;
+		    end
 		 end
 	      end else if (!except_align) begin
 		 dbus_adr <= ctrl_lsu_adr_i;
-		 dbus_req <= 1;
-		 dbus_we <= ctrl_op_lsu_store_i;
-		 state <= ctrl_op_lsu_store_i ? WRITE : READ;
+		 if (ctrl_op_lsu_load_i) begin
+		    dbus_req <= 1;
+		    state <= READ;
+		 end
 	      end
 	   end
 	end
@@ -350,10 +392,12 @@ module mor1kx_lsu_cappuccino
 	end
 
 	WRITE: begin
-	   dbus_ack <= dbus_ack_i;
-	   if (dbus_ack_i | dbus_err_i) begin
+	   dbus_req <= 1;
+	   dbus_we_o <= 1;
+	   if (store_buffer_empty & !store_buffer_write & dbus_ack_i |
+	       dbus_err_i) begin
 	      dbus_req <= 0;
-	      dbus_we <= 0;
+	      dbus_we_o <= 0;
 	      state <= IDLE;
 	   end
 	end
@@ -363,8 +407,10 @@ module mor1kx_lsu_cappuccino
 	   tlb_reload_data <= dbus_dat_i;
 	   tlb_reload_ack <= dbus_ack_i & tlb_reload_req;
 
-	   if (!tlb_reload_req | dbus_err_i)
-	     state <= IDLE;
+	   if (!tlb_reload_req | dbus_err_i) begin
+	      state <= IDLE;
+	      tlb_reload_done <= 1;
+	   end
 
 	   dbus_req <= tlb_reload_req;
 	   if (dbus_ack_i | tlb_reload_ack)
@@ -378,6 +424,56 @@ module mor1kx_lsu_cappuccino
       if (rst)
 	state <= IDLE;
    end
+
+   assign dbus_stall = tlb_reload_busy | except_align | except_dbus |
+		       except_dtlb_miss | except_dpagefault |
+		       pipeline_flush_i & !du_stall_i;
+
+   always @(posedge clk)
+     if (store_buffer_write | pipeline_flush_i)
+       store_buffer_write_pending <= 0;
+     else if (ctrl_op_lsu_store_i & padv_ctrl_i & !dbus_stall &
+	      (store_buffer_full | dc_refill | dc_refill_r))
+       store_buffer_write_pending <= 1;
+
+   assign store_buffer_write = (ctrl_op_lsu_store_i &
+				(padv_ctrl_i | tlb_reload_done) |
+				store_buffer_write_pending) &
+			       !store_buffer_full & !dc_refill & !dc_refill_r &
+			       !dbus_stall;
+
+   assign store_buffer_read = (state == IDLE) & store_buffer_write |
+			      (state == IDLE) & !store_buffer_empty |
+			      (state == WRITE) & dbus_ack_i &
+			      (!store_buffer_empty | store_buffer_write);
+
+   assign store_buffer_wadr = dc_adr_match;
+
+   mor1kx_store_buffer
+     #(
+       .DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH),
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
+       )
+   mor1kx_store_buffer
+     (
+      .clk	(clk),
+      .rst	(rst),
+
+      .pc_i	(ctrl_epcr_i),
+      .adr_i	(store_buffer_wadr),
+      .dat_i	(dbus_sdat),
+      .bsel_i	(dbus_bsel),
+      .write_i	(store_buffer_write),
+
+      .pc_o	(store_buffer_epcr_o),
+      .adr_o	(store_buffer_radr),
+      .dat_o	(store_buffer_dat),
+      .bsel_o	(store_buffer_bsel),
+      .read_i	(store_buffer_read),
+
+      .full_o	(store_buffer_full),
+      .empty_o	(store_buffer_empty)
+      );
 
 `ifndef SYNTHESIS
    /* synthesis translate_off */
@@ -401,12 +497,9 @@ module mor1kx_lsu_cappuccino
 		   (exec_op_lsu_load_i | exec_op_lsu_store_i) ?
 		   exec_lsu_adr_i : ctrl_lsu_adr_i;
    assign dc_adr_match = dmmu_enable_i ? dmmu_phys_addr : ctrl_lsu_adr_i;
-   assign dc_req = ctrl_op_lsu & dc_access & !tlb_reload_busy &
-		   !except_align & !except_dbus &
-		   !(except_dtlb_miss | except_dtlb_miss_r) &
-		   !(except_dpagefault | except_dpagefault_r) &
-		   !access_done & !(pipeline_flush_i & !du_stall_i);
+   assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall;
    assign dc_sdat = dbus_sdat;
+   assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE);
 
 generate
 if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
@@ -453,6 +546,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_req_i			(dc_req),
 	    .cpu_we_i			(dc_we),
 	    .cpu_bsel_i			(dc_bsel),
+	    .refill_allowed		(dc_refill_allowed),
     );*/
 
    mor1kx_dcache
@@ -474,7 +568,6 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .dbus_dat_o			(dc_dbus_sdat),		 // Templated
 	    .dbus_adr_o			(dc_dbus_adr),		 // Templated
 	    .dbus_req_o			(dc_dbus_req),		 // Templated
-	    .dbus_we_o			(dc_dbus_we),		 // Templated
 	    .dbus_bsel_o		(dc_dbus_bsel),		 // Templated
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),	 // Templated
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
@@ -489,6 +582,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_req_i			(dc_req),		 // Templated
 	    .cpu_we_i			(dc_we),		 // Templated
 	    .cpu_bsel_i			(dc_bsel),		 // Templated
+	    .refill_allowed		(dc_refill_allowed),	 // Templated
 	    .dbus_err_i			(dbus_err_i),
 	    .dbus_ack_i			(dbus_ack_i),
 	    .dbus_dat_i			(dbus_dat_i[31:0]),
