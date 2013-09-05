@@ -95,6 +95,9 @@ module mor1kx_ctrl_cappuccino
     input 			      decode_branch_i,
     input [OPTION_OPERAND_WIDTH-1:0]  decode_branch_target_i,
 
+    input 			      branch_mispredict_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  execute_mispredict_target_i,
+
     // PC of execute stage (NPC)
     input [OPTION_OPERAND_WIDTH-1:0]  pc_execute_i,
 
@@ -497,7 +500,9 @@ module mor1kx_ctrl_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        last_branch_target_pc <= 0;
-     else if (padv_execute_o & decode_branch_i)
+     else if (padv_execute_o & branch_mispredict_i)
+       last_branch_target_pc <= execute_mispredict_target_i;
+     else if (padv_decode_o & decode_branch_i)
        last_branch_target_pc <= decode_branch_target_i;
 
    // Used to gate execute stage's advance signal in the case where a LSU op has
