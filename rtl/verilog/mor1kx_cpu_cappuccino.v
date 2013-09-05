@@ -1153,6 +1153,8 @@ module mor1kx_cpu_cappuccino
     .ctrl_op_rfe_i		(ctrl_op_rfe_o),
     .decode_branch_i		(decode_branch_o),
     .decode_branch_target_i	(decode_branch_target_o),
+    .branch_mispredict_i	(branch_mispredict_o),
+    .execute_mispredict_target_i	(execute_mispredict_target_o),
     .except_ibus_err_i		(ctrl_except_ibus_err_o),
     .except_itlb_miss_i		(ctrl_except_itlb_miss_o),
     .except_ipagefault_i	(ctrl_except_ipagefault_o),
@@ -1246,6 +1248,8 @@ module mor1kx_cpu_cappuccino
       .ctrl_op_rfe_i			(ctrl_op_rfe_o),	 // Templated
       .decode_branch_i			(decode_branch_o),	 // Templated
       .decode_branch_target_i		(decode_branch_target_o), // Templated
+      .branch_mispredict_i		(branch_mispredict_o),	 // Templated
+      .execute_mispredict_target_i	(execute_mispredict_target_o), // Templated
       .pc_execute_i			(pc_decode_to_execute),	 // Templated
       .execute_op_branch_i		(execute_op_branch_o),	 // Templated
       .except_ibus_err_i		(ctrl_except_ibus_err_o), // Templated
