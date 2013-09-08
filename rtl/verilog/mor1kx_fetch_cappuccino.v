@@ -361,8 +361,11 @@ module mor1kx_fetch_cappuccino
    assign ibus_req_o = ibus_access ? ibus_req : ic_ibus_req;
    assign ibus_burst_o = ic_refill & !ic_refill_done;
 
-   always @(posedge clk)
-     imem_err <= ibus_err_i;
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       imem_err <= 0;
+     else
+       imem_err <= ibus_err_i;
 
    always @(posedge clk) begin
       ibus_ack <= 0;
