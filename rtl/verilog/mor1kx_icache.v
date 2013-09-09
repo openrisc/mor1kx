@@ -291,11 +291,14 @@ module mor1kx_icache
 
 	      /* Invalidate the way on the first write */
 	      if (refill_valid == 0) begin
-		 if (tag_save_lru && OPTION_ICACHE_WAYS == 2)
-		   tag_din[(2*TAG_WAY_VALID)-1] = 1'b0;
-		 else
-		   tag_din[TAG_WAY_VALID-1] = 1'b0;
-
+		 if (OPTION_ICACHE_WAYS == 2) begin
+		    if (tag_save_lru)
+		      tag_din[(2*TAG_WAY_VALID)-1] = 1'b0;
+		    else
+		      tag_din[TAG_WAY_VALID-1] = 1'b0;
+		 end else begin
+		    tag_din[TAG_WAY_VALID-1] = 1'b0;
+		 end
 		 tag_we = 1'b1;
 	      end
 
