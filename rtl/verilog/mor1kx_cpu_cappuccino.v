@@ -19,14 +19,17 @@ module mor1kx_cpu_cappuccino
    // Outputs
    ibus_adr_o, ibus_req_o, ibus_burst_o, dbus_adr_o, dbus_dat_o,
    dbus_req_o, dbus_bsel_o, dbus_we_o, dbus_burst_o, du_dat_o,
-   du_ack_o, du_stall_o, spr_bus_addr_o, spr_bus_we_o, spr_bus_stb_o,
-   spr_bus_dat_o, spr_sr_o,
+   du_ack_o, du_stall_o, traceport_exec_valid_o, traceport_exec_pc_o,
+   traceport_exec_insn_o, traceport_exec_wbdata_o,
+   traceport_exec_wbreg_o, traceport_exec_wben_o, spr_bus_addr_o,
+   spr_bus_we_o, spr_bus_stb_o, spr_bus_dat_o, spr_sr_o,
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, dbus_err_i,
    dbus_ack_i, dbus_dat_i, irq_i, du_addr_i, du_stb_i, du_dat_i,
    du_we_i, du_stall_i, spr_bus_dat_mac_i, spr_bus_ack_mac_i,
    spr_bus_dat_pmu_i, spr_bus_ack_pmu_i, spr_bus_dat_pcu_i,
-   spr_bus_ack_pcu_i, spr_bus_dat_fpu_i, spr_bus_ack_fpu_i
+   spr_bus_ack_pcu_i, spr_bus_dat_fpu_i, spr_bus_ack_fpu_i,
+   multicore_coreid_i, multicore_numcores_i, snoop_adr_i, snoop_en_i
    );
 
    input clk, rst;
@@ -56,6 +59,7 @@ module mor1kx_cpu_cappuccino
    parameter FEATURE_DEBUGUNIT = "NONE";
    parameter FEATURE_PERFCOUNTERS = "NONE";
    parameter FEATURE_MAC = "NONE";
+   parameter FEATURE_MULTICORE = "NONE";
 
    parameter FEATURE_SYSCALL = "ENABLED";
    parameter FEATURE_TRAP = "ENABLED";
@@ -142,6 +146,9 @@ module mor1kx_cpu_cappuccino
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i;
    input 			     spr_bus_ack_fpu_i;
    output [15:0] 		     spr_sr_o;
+
+   input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i;
+   input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i;
 
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_fetch_to_decode;
    wire [`OR1K_INSN_WIDTH-1:0] 	     insn_fetch_to_decode;
@@ -1213,6 +1220,7 @@ module mor1kx_cpu_cappuccino
        .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
        .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
        .FEATURE_MAC(FEATURE_MAC),
+       .FEATURE_MULTICORE(FEATURE_MULTICORE),
        .FEATURE_SYSCALL(FEATURE_SYSCALL),
        .FEATURE_TRAP(FEATURE_TRAP),
        .FEATURE_RANGE(FEATURE_RANGE),
@@ -1309,6 +1317,8 @@ module mor1kx_cpu_cappuccino
       .spr_bus_dat_pcu_i		(spr_bus_dat_pcu_i[OPTION_OPERAND_WIDTH-1:0]),
       .spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
       .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
-      .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
+      .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
+      .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
+      .multicore_numcores_i		(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
 
 endmodule // mor1kx_cpu_cappuccino

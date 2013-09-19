@@ -30,7 +30,8 @@ module mor1kx
    dwbm_err_i, dwbm_ack_i, dwbm_dat_i, dwbm_rty_i, avm_d_readdata_i,
    avm_d_waitrequest_i, avm_d_readdatavalid_i, avm_i_readdata_i,
    avm_i_waitrequest_i, avm_i_readdatavalid_i, irq_i, du_addr_i,
-   du_stb_i, du_dat_i, du_we_i, du_stall_i
+   du_stb_i, du_dat_i, du_we_i, du_stall_i, multicore_coreid_i,
+   multicore_numcores_i
    );
 
    parameter OPTION_OPERAND_WIDTH	= 32;
@@ -60,7 +61,8 @@ module mor1kx
    parameter FEATURE_DEBUGUNIT		= "NONE";
    parameter FEATURE_PERFCOUNTERS	= "NONE";
    parameter FEATURE_MAC		= "NONE";
-
+   parameter FEATURE_MULTICORE          = "NONE";
+   
    parameter FEATURE_SYSCALL		= "ENABLED";
    parameter FEATURE_TRAP		= "ENABLED";
    parameter FEATURE_RANGE		= "ENABLED";
@@ -165,6 +167,10 @@ module mor1kx
    input 			     du_stall_i;
    output 			     du_stall_o;
 
+   // The multicore core identifier
+   input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i;
+   // The number of cores
+   input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i;
 
    /*AUTOWIRE*/
    // Beginning of automatic wires (for undeclared instantiated-module outputs)
@@ -223,7 +229,11 @@ module mor1kx
 	  ); */
 
 	 mor1kx_bus_if_wb32
-	   	      #(.BUS_IF_TYPE(IBUS_WB_TYPE))
+	   #(.BUS_IF_TYPE(IBUS_WB_TYPE),
+	     .burst_length((FEATURE_INSTRUCTIONCACHE != "NONE") ?
+			   ((OPTION_ICACHE_BLOCK_WIDTH == 4) ? 4 :
+			    ((OPTION_ICACHE_BLOCK_WIDTH == 5) ? 8 : 1))
+			   : 1 ))
 	 ibus_bridge
 		      (/*AUTOINST*/
 		       // Outputs
@@ -278,7 +288,11 @@ module mor1kx
 	  ); */
 
 	 mor1kx_bus_if_wb32
-	   #(.BUS_IF_TYPE(DBUS_WB_TYPE))
+	   #(.BUS_IF_TYPE(DBUS_WB_TYPE),
+	     .burst_length((FEATURE_DATACACHE != "NONE") ?
+			   ((OPTION_DCACHE_BLOCK_WIDTH == 4) ? 4 :
+			    ((OPTION_DCACHE_BLOCK_WIDTH == 5) ? 8 : 1))
+			   : 1 ))
 	 dbus_bridge
 	   (/*AUTOINST*/
 	    // Outputs
@@ -483,8 +497,8 @@ module mor1kx
 	     .FEATURE_CUST7(FEATURE_CUST7),
 	     .FEATURE_CUST8(FEATURE_CUST8),
 	     .OPTION_SHIFTER(OPTION_SHIFTER),
-	     .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH)
-
+	     .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH),
+	     .FEATURE_MULTICORE(FEATURE_MULTICORE)
 	     )
    mor1kx_cpu
      (/*AUTOINST*/
@@ -532,6 +546,8 @@ module mor1kx
       .spr_bus_dat_pcu_i		(),			 // Templated
       .spr_bus_ack_pcu_i		(),			 // Templated
       .spr_bus_dat_fpu_i		(),			 // Templated
-      .spr_bus_ack_fpu_i		());			 // Templated
+      .spr_bus_ack_fpu_i		(),			 // Templated
+      .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
+      .multicore_numcores_i		(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
 
 endmodule // mor1kx

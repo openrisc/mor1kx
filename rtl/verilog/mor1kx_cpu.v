@@ -31,7 +31,7 @@ module mor1kx_cpu(/*AUTOARG*/
    spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
    spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
    spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
-   spr_bus_ack_fpu_i
+   spr_bus_ack_fpu_i, multicore_coreid_i, multicore_numcores_i
    );
 
 
@@ -64,7 +64,8 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter FEATURE_DEBUGUNIT		= "NONE";
    parameter FEATURE_PERFCOUNTERS	= "NONE";
    parameter FEATURE_MAC		= "NONE";
-
+   parameter FEATURE_MULTICORE          = "NONE";
+   
    parameter FEATURE_SYSCALL		= "ENABLED";
    parameter FEATURE_TRAP		= "ENABLED";
    parameter FEATURE_RANGE		= "ENABLED";
@@ -157,6 +158,11 @@ module mor1kx_cpu(/*AUTOARG*/
    input 			     spr_bus_ack_fpu_i;
    output [15:0] 		     spr_sr_o;
 
+   // The multicore core identifier
+   input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i;
+   // The number of cores
+   input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i;
+   
    wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_execute_insn/* verilator public */;   
    wire 			     monitor_execute_advance/* verilator public */;
    wire 			     monitor_flag_set/* verilator public */;
@@ -203,6 +209,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	     .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
 	     .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
 	     .FEATURE_MAC(FEATURE_MAC),
+	     .FEATURE_MULTICORE(FEATURE_MULTICORE),
 	     .FEATURE_SYSCALL(FEATURE_SYSCALL),
 	     .FEATURE_TRAP(FEATURE_TRAP),
 	     .FEATURE_RANGE(FEATURE_RANGE),
@@ -274,7 +281,9 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .spr_bus_dat_pcu_i		(spr_bus_dat_pcu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
+	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
+	    .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .multicore_numcores_i	(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
 
 	 // synthesis translate_off
 `ifndef SYNTHESIS
@@ -329,6 +338,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	     .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
 	     .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
 	     .FEATURE_MAC(FEATURE_MAC),
+	     .FEATURE_MULTICORE(FEATURE_MULTICORE),
 	     .FEATURE_SYSCALL(FEATURE_SYSCALL),
 	     .FEATURE_TRAP(FEATURE_TRAP),
 	     .FEATURE_RANGE(FEATURE_RANGE),
@@ -403,7 +413,8 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .spr_bus_dat_pcu_i		(spr_bus_dat_pcu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
+	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
+	    .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]));
 
 	 // synthesis translate_off
 `ifndef SYNTHESIS
@@ -451,6 +462,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	     .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
 	     .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
 	     .FEATURE_MAC(FEATURE_MAC),
+	     .FEATURE_MULTICORE(FEATURE_MULTICORE),
 	     .FEATURE_SYSCALL(FEATURE_SYSCALL),
 	     .FEATURE_TRAP(FEATURE_TRAP),
 	     .FEATURE_RANGE(FEATURE_RANGE),
@@ -526,7 +538,8 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .spr_bus_dat_pcu_i		(spr_bus_dat_pcu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
+	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
+	    .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]));
 
 	 // synthesis translate_off
 `ifndef SYNTHESIS
