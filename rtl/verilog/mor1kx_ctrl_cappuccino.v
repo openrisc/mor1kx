@@ -56,6 +56,7 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_PMU = "NONE",
     parameter FEATURE_MAC = "NONE",
     parameter FEATURE_FPU = "NONE",
+    parameter FEATURE_MULTICORE = "NONE",
 
     parameter FEATURE_PIC = "ENABLED",
     parameter OPTION_PIC_TRIGGER = "LEVEL",
@@ -211,7 +212,10 @@ module mor1kx_ctrl_cappuccino
     input 			      spr_bus_ack_fpu_i,
     input [OPTION_OPERAND_WIDTH-1:0]  spr_gpr_dat_i,
     input 			      spr_gpr_ack_i,
-    output [15:0] 		      spr_sr_o
+    output [15:0] 		      spr_sr_o,
+
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i
     );
 
    // Internal signals
@@ -865,6 +869,17 @@ module mor1kx_ctrl_cappuccino
            spr_sys_group_read = spr_isr[6];
          `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +7:
            spr_sys_group_read = spr_isr[7];
+
+         `SPR_OFFSET(`OR1K_SPR_COREID_ADDR):
+           // If the multicore feature is activated this address returns the
+           // core identifier, 0 otherwise
+           spr_sys_group_read = (FEATURE_MULTICORE!="NONE") ?
+                                multicore_coreid_i : 0;
+         `SPR_OFFSET(`OR1K_SPR_NUMCORES_ADDR):
+           // If the multicore feature is activated this address returns the
+           // core identifier, 0 otherwise
+           spr_sys_group_read = (FEATURE_MULTICORE!="NONE") ?
+                                multicore_numcores_i : 0;
 
          default:
             // GPR read

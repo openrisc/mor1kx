@@ -89,6 +89,8 @@ module mor1kx
     parameter FEATURE_STORE_BUFFER	= "ENABLED",
     parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
 
+    parameter FEATURE_MULTICORE = "NONE",
+
     parameter BUS_IF_TYPE		= "WISHBONE32",
 
     parameter IBUS_WB_TYPE		= "B3_READ_BURSTING",
@@ -155,7 +157,12 @@ module mor1kx
     output 			      du_ack_o,
     // Stall control from debug interface
     input 			      du_stall_i,
-    output 			      du_stall_o
+    output 			      du_stall_o,
+
+    // The multicore core identifier
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i,
+    // The number of cores
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i
     );
 
    /*AUTOWIRE*/
@@ -215,7 +222,11 @@ module mor1kx
 	  ); */
 
 	 mor1kx_bus_if_wb32
-	   	      #(.BUS_IF_TYPE(IBUS_WB_TYPE))
+	   #(.BUS_IF_TYPE(IBUS_WB_TYPE),
+	     .BURST_LENGTH((FEATURE_INSTRUCTIONCACHE != "NONE") ?
+			   ((OPTION_ICACHE_BLOCK_WIDTH == 4) ? 4 :
+			    ((OPTION_ICACHE_BLOCK_WIDTH == 5) ? 8 : 1))
+			   : 1 ))
 	 ibus_bridge
 		      (/*AUTOINST*/
 		       // Outputs
@@ -270,7 +281,11 @@ module mor1kx
 	  ); */
 
 	 mor1kx_bus_if_wb32
-	   #(.BUS_IF_TYPE(DBUS_WB_TYPE))
+	   #(.BUS_IF_TYPE(DBUS_WB_TYPE),
+	     .BURST_LENGTH((FEATURE_DATACACHE != "NONE") ?
+			   ((OPTION_DCACHE_BLOCK_WIDTH == 4) ? 4 :
+			    ((OPTION_DCACHE_BLOCK_WIDTH == 5) ? 8 : 1))
+			   : 1 ))
 	 dbus_bridge
 	   (/*AUTOINST*/
 	    // Outputs
@@ -480,7 +495,8 @@ module mor1kx
 	     .FEATURE_CUST8(FEATURE_CUST8),
 	     .OPTION_SHIFTER(OPTION_SHIFTER),
 	     .FEATURE_STORE_BUFFER(FEATURE_STORE_BUFFER),
-	     .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH)
+	     .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH),
+	     .FEATURE_MULTICORE(FEATURE_MULTICORE)
 	     )
    mor1kx_cpu
      (/*AUTOINST*/
@@ -528,6 +544,8 @@ module mor1kx
       .spr_bus_dat_pcu_i		(),			 // Templated
       .spr_bus_ack_pcu_i		(),			 // Templated
       .spr_bus_dat_fpu_i		(),			 // Templated
-      .spr_bus_ack_fpu_i		());			 // Templated
+      .spr_bus_ack_fpu_i		(),			 // Templated
+      .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
+      .multicore_numcores_i		(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
 
 endmodule // mor1kx

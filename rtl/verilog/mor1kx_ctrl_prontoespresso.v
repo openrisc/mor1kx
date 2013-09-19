@@ -51,7 +51,7 @@ module mor1kx_ctrl_prontoespresso
    spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
    spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
    spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
-   spr_bus_ack_fpu_i, rf_wb_i
+   spr_bus_ack_fpu_i, multicore_coreid_i, rf_wb_i
    );
 
    parameter OPTION_OPERAND_WIDTH       = 32;
@@ -78,6 +78,8 @@ module mor1kx_ctrl_prontoespresso
    parameter FEATURE_PMU                = "NONE";
    parameter FEATURE_MAC                = "NONE";
    parameter FEATURE_FPU                = "NONE";
+
+   parameter FEATURE_MULTICORE          = "NONE";
 
    parameter FEATURE_PIC                = "ENABLED";
    parameter OPTION_PIC_TRIGGER         = "LEVEL";
@@ -212,6 +214,9 @@ module mor1kx_ctrl_prontoespresso
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i;
    input                             spr_bus_ack_fpu_i;
    output [15:0] 		     spr_sr_o;
+
+   // The multicore core identifier
+   input [OPTION_OPERAND_WIDTH-1:0] multicore_coreid_i;
 
    // Internal signals
    reg 				     flag;
@@ -917,6 +922,11 @@ module mor1kx_ctrl_prontoespresso
 	 spr_sys_group_read = spr_isr[6];
        `OR1K_SPR_ISR0_ADDR +7:
 	 spr_sys_group_read = spr_isr[7];
+
+       `OR1K_SPR_COREID_ADDR:
+	 // If the multicore feature is activated this address returns the
+	 // core identifier, 0 otherwise
+	 spr_sys_group_read = (FEATURE_MULTICORE != "NONE") ? multicore_coreid_i : 0;
 
        default: begin
           /* GPR read */
