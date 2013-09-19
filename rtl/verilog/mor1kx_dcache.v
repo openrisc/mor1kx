@@ -97,8 +97,6 @@ module mor1kx_dcache
    reg [(1<<(OPTION_DCACHE_BLOCK_WIDTH-2))-1:0] refill_valid;
    reg [(1<<(OPTION_DCACHE_BLOCK_WIDTH-2))-1:0] refill_valid_r;
    wire				      invalidate;
-   wire				      invalidate_edge;
-   reg				      invalidate_r;
 
    wire [OPTION_DCACHE_SET_WIDTH-1:0] tag_raddr;
    wire [OPTION_DCACHE_SET_WIDTH-1:0] tag_waddr;
@@ -203,18 +201,27 @@ module mor1kx_dcache
    /*
     * SPR bus interface
     */
+
+   // The SPR interface is used to invalidate the cache blocks. When
+   // an invalidation is started, the respective entry in the tag
+   // memory is cleared. When another transfer is in progress, the
+   // handling is delayed until it is possible to serve it.
+   //
+   // The invalidation is acknowledged to the SPR bus, but the cycle
+   // is terminated by the core. We therefore need to hold the
+   // invalidate acknowledgement. Meanwhile we continuously write the
+   // tag memory which is no problem.
+
+   // Net that signals an acknowledgement
+   reg invalidate_ack;
+
+   // An invalidate request is either a block flush or a block invalidate
    assign invalidate = spr_bus_stb_i & spr_bus_we_i &
 		       (spr_bus_addr_i == `OR1K_SPR_DCBFR_ADDR |
 			spr_bus_addr_i == `OR1K_SPR_DCBIR_ADDR);
 
-   assign invalidate_edge = invalidate & !invalidate_r;
-   assign spr_bus_ack_o = 1'b1;
-
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       invalidate_r <= 1'b0;
-     else
-       invalidate_r <= invalidate;
+   // Acknowledge to the SPR bus.
+   assign spr_bus_ack_o = invalidate_ack;
 
    /*
     * Cache FSM
@@ -229,76 +236,93 @@ module mor1kx_dcache
     * really be executed.
     */
    always @(posedge clk `OR_ASYNC_RST) begin
-      if (cpu_we_i)
-	write_pending <= 1;
-      else if (!cpu_req_i)
-	write_pending <= 0;
+      if (rst | dbus_err_i) begin
+	 state <= IDLE;
+	 write_pending <= 0;
+      end else begin
+	 if (cpu_we_i)
+	   write_pending <= 1;
+	 else if (!cpu_req_i)
+	   write_pending <= 0;
 
-      refill_valid_r <= refill_valid;
-      case (state)
-	IDLE: begin
-	   if (cpu_we_i | write_pending)
-	     state <= WRITE;
-	   else if (cpu_req_i)
-	     state <= READ;
-	end
+	 refill_valid_r <= refill_valid;
 
-	READ: begin
-	   if (dc_access_i | cpu_we_i & dc_enable_i) begin
-	      if (!hit & cpu_req_i & !write_pending & refill_allowed) begin
-		 refill_valid <= 0;
-		 refill_valid_r <= 0;
-		 dbus_adr <= cpu_adr_match_i;
-		 tag_save_lru <= lru;
-		 if (OPTION_DCACHE_WAYS == 2) begin
-		    if (lru)
-		      tag_save_data <= tag_din[TAG_WAY_WIDTH-1:0];
-		    else
-		      tag_save_data <= tag_din[2*TAG_WAY_WIDTH-1:TAG_WAY_WIDTH];
+	 case (state)
+	   IDLE: begin
+	      if (invalidate) begin
+		 // If there is an invalidation request
+		 //
+		 // Store address in dbus_adr that is muxed to the tag
+		 // memory write address
+		 dbus_adr <= spr_bus_dat_i;
+
+		 // Change to invalidate state that actually accesses
+		 // the tag memory
+		 state <= INVALIDATE;
+	      end else if (cpu_we_i | write_pending)
+		state <= WRITE;
+	      else if (cpu_req_i)
+		state <= READ;
+	   end
+
+	   READ: begin
+	      if (dc_access_i | cpu_we_i & dc_enable_i) begin
+		 if (!hit & cpu_req_i & !write_pending & refill_allowed) begin
+		    refill_valid <= 0;
+		    refill_valid_r <= 0;
+		    dbus_adr <= cpu_adr_match_i;
+		    tag_save_lru <= lru;
+		    if (OPTION_DCACHE_WAYS == 2) begin
+		       if (lru)
+			 tag_save_data <= tag_din[TAG_WAY_WIDTH-1:0];
+		       else
+			 tag_save_data <= tag_din[2*TAG_WAY_WIDTH-1:TAG_WAY_WIDTH];
+		    end
+		    state <= REFILL;
+		 end else if (cpu_we_i | write_pending) begin
+		    state <= WRITE;
 		 end
-		 state <= REFILL;
-	      end else if (cpu_we_i | write_pending) begin
-		 state <= WRITE;
+	      end else if (!dc_enable_i) begin
+		 state <= IDLE;
 	      end
-	   end else if (!dc_enable_i) begin
-	      state <= IDLE;
 	   end
-	end
+	   REFILL: begin
+	      if (dbus_ack_i) begin
+		 dbus_adr <= next_dbus_adr;
+		 refill_valid[dbus_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]] <= 1;
 
-	REFILL: begin
-	   if (dbus_ack_i) begin
-	      dbus_adr <= next_dbus_adr;
-	      refill_valid[dbus_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]] <= 1;
-
-	      if (refill_done)
-		state <= IDLE;
+		 if (refill_done)
+		   state <= IDLE;
+	      end
 	   end
-	end
 
-	WRITE: begin
-	   if (!dc_access_i | !cpu_req_i | !cpu_we_i) begin
-	      write_pending <= 0;
-	      state <= READ;
+	   WRITE: begin
+	      if (!dc_access_i | !cpu_req_i | !cpu_we_i) begin
+		 write_pending <= 0;
+		 state <= READ;
+	      end
 	   end
-	end
 
-	INVALIDATE: begin
-	   state <= IDLE;
-	end
+	   INVALIDATE: begin
+	      if (invalidate) begin
+		 // Store address in dbus_adr that is muxed to the tag
+		 // memory write address
+		 dbus_adr <= spr_bus_dat_i;
 
-	default:
-	  state <= IDLE;
-      endcase
+		 state <= INVALIDATE;
+	      end else begin
+		 state <= IDLE;
+	      end
+	   end
 
-      if (invalidate_edge) begin
-	 /* dbus_adr is hijacked as the invalidate address here */
-	 dbus_adr <= spr_bus_dat_i;
-	 state <= INVALIDATE;
-      end
+	   default:
+	     state <= IDLE;
+	 endcase // case (state)
+      end // else: !if(rst | dbus_err_i)
+   end // always @ (posedge clk `OR_ASYNC_RST)
 
-      if (rst | dbus_err_i)
-	state <= IDLE;
-   end
+   // This is the combinational part of the state machine that
+   // interfaces the tag and way memories.
 
    always @(*) begin
       tag_we = 1'b0;
@@ -306,7 +330,17 @@ module mor1kx_dcache
       way_we = {(OPTION_DCACHE_WAYS){1'b0}};
       way_wr_dat = dbus_dat_i;
 
+      // The default is (of course) not to acknowledge the invalidate
+      invalidate_ack = 1'b0;
+
       case (state)
+	IDLE: begin
+	   // When idle we can always acknowledge the invalidate as it
+	   // has the highest priority in handling. When something is
+	   // changed on the state machine handling above this needs
+	   // to be changed.
+	   invalidate_ack = 1'b1;
+	end
 	READ: begin
 	   if (hit) begin
 	      /* output data and write back tag with LRU info */
@@ -395,7 +429,10 @@ module mor1kx_dcache
 	end
 
 	INVALIDATE: begin
-	   // Lazy invalidation, invalidate everything that matches tag address
+	   invalidate_ack = 1'b1;
+
+	   // Lazy invalidation, invalidate everything that matches
+	   // tag address
 	   tag_din = 0;
 	   tag_we = 1'b1;
 	end
