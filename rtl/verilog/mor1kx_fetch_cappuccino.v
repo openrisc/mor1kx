@@ -352,7 +352,7 @@ module mor1kx_fetch_cappuccino
 		   mispredict_stall);
 
    assign ibus_access = (!ic_access | tlb_reload_busy | ic_invalidate) &
-			!ic_refill;
+			!ic_refill | (state != IDLE) | ibus_ack;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
    assign imem_dat = (nop_ack | except_itlb_miss | except_ipagefault) ?
 		     {`OR1K_OPCODE_NOP,26'd0} :
