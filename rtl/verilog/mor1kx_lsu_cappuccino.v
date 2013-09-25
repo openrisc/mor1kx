@@ -342,8 +342,11 @@ module mor1kx_lsu_cappuccino
 
    assign dbus_burst_o = dc_refill & !dc_refill_done;
 
-   always @(posedge clk)
-     dbus_err <= dbus_err_i;
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       dbus_err <= 0;
+     else
+       dbus_err <= dbus_err_i;
 
    always @(posedge clk) begin
       dbus_ack <= 0;
