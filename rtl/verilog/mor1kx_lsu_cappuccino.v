@@ -356,6 +356,7 @@ module mor1kx_lsu_cappuccino
 	IDLE: begin
 	   dbus_req <= 0;
 	   dbus_we_o <= 0;
+	   dbus_adr <= 0;
 	   if (store_buffer_write | !store_buffer_empty) begin
 	      state <= WRITE;
 	      dbus_req <= 1;
