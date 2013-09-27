@@ -83,7 +83,7 @@
 //       .lru_post (lru_post[NUMWAYS-1:0]));
 
 
-module mor1kx_dcache_lru(/*AUTOARG*/
+module mor1kx_cache_lru(/*AUTOARG*/
    // Outputs
    update, lru_pre, lru_post,
    // Inputs
