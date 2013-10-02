@@ -1108,7 +1108,7 @@ module mor1kx_ctrl_cappuccino
 	   else if (!stepping & padv_ctrl)
 	     branch_step <= {branch_step[0], ctrl_delay_slot};
 
-	 assign stepped_into_delay_slot = branch_step[1];
+	 assign stepped_into_delay_slot = branch_step[1] & stepping;
 
 	 /* Signals for waveform debuging */
 	 wire [31:0] spr_read_data_group_0;
