@@ -227,7 +227,7 @@
 // MSB is major version, middle byte is minor version number
 // and final byte is the pipeline identifier.
 `define MOR1KX_VERSION_MAJOR 8'd1
-`define MOR1KX_VERSION_MINOR 8'd1
+`define MOR1KX_VERSION_MINOR 8'd2
 
 // mor1kx implementation-specific register definitions
 `define MOR1KX_PIPEID_CAPPUCCINO 8'd1
