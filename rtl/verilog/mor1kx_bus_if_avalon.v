@@ -14,7 +14,7 @@
 
 module mor1kx_bus_if_avalon
 #(
-  parameter [3:0] OPTION_AVALON_BURST_LENGTH = 4'd4
+  parameter OPTION_AVALON_BURST_LENGTH = 4
   )
   (
    input 	 clk,
