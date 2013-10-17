@@ -1202,13 +1202,13 @@ module mor1kx_ctrl_cappuccino
 	   assign du_restart_from_stall = 0;
 	   assign spr_access_ack[6] = 1;
 
-	   always @(*)
+	   always @(posedge clk)
 	     begin
-		spr_dmr1 = 0;
-		spr_dmr2 = 0;
-		spr_dsr = 0;
-		spr_drr = 0;
-		du_npc_written = 0;
+		spr_dmr1 <= 0;
+		spr_dmr2 <= 0;
+		spr_dsr <= 0;
+		spr_drr <= 0;
+		du_npc_written <= 0;
 	     end
 	end
    endgenerate
