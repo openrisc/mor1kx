@@ -284,6 +284,7 @@ module mor1kx_ctrl_cappuccino
    reg 				     stepped_into_rfe;
    wire 			     du_npc_write;
    reg 				     du_npc_written;
+   wire 			     stall_on_trap;
 
    /* Wires for SPR management */
    wire 			     spr_group_present;
@@ -651,7 +652,8 @@ module mor1kx_ctrl_cappuccino
 	  spr_epcr <= ctrl_delay_slot ? ctrl_epcr_o : pc_ctrl_i + 4;
 	else if (store_buffer_err_i)
 	  spr_epcr <= store_buffer_epcr_i;
-	else
+	// Don't update EPCR on software breakpoint
+	else if (!(stall_on_trap & except_trap_i))
 	  spr_epcr <= ctrl_epcr_o;
      end else if (spr_we && spr_addr==`OR1K_SPR_EPCR0_ADDR) begin
 	spr_epcr <= spr_write_dat;
@@ -1053,7 +1055,8 @@ module mor1kx_ctrl_cappuccino
 
 	 /* goes out to the debug interface and comes back 1 cycle later
 	  via du_stall_i */
-	 assign du_stall_o = stepping & pstep[4];
+	 assign du_stall_o = stepping & pstep[4] |
+			     (stall_on_trap & padv_ctrl & except_trap_i);
 
 	 /* Pulse to indicate we're restarting after a stall */
 	 assign du_restart_from_stall = du_stall_r & !du_stall_i;
@@ -1061,6 +1064,9 @@ module mor1kx_ctrl_cappuccino
 	 /* NPC debug control logic */
 	 assign du_npc_write = (du_we_i && du_addr_i==`OR1K_SPR_NPC_ADDR &&
 				du_ack_o);
+
+	 /* Pick the traps-cause-stall bit out of the DSR */
+	 assign stall_on_trap = spr_dsr[`OR1K_SPR_DSR_TE];
 
 	 /* record if NPC was written while we were stalled.
 	  If so, we will use this value for restarting */
@@ -1185,6 +1191,8 @@ module mor1kx_ctrl_cappuccino
 	     spr_drr <= 0;
 	   else if (spr_we && spr_addr==`OR1K_SPR_DRR_ADDR)
 	     spr_drr[13:0] <= spr_write_dat[13:0];
+	   else if (stall_on_trap & padv_ctrl & except_trap_i)
+	     spr_drr[`OR1K_SPR_DRR_TE] <= 1;
 
       end // block: du
       else
