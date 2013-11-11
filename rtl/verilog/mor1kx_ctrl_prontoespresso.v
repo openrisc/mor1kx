@@ -1289,8 +1289,6 @@ module mor1kx_ctrl_prontoespresso
       else
         begin : no_du
            assign du_access = 0;
-	   always @*
-             cpu_stall = 0;
            assign du_stall_o = 0;
            assign du_ack_o = 0;
            assign du_restart_o = 0;
@@ -1301,13 +1299,14 @@ module mor1kx_ctrl_prontoespresso
            assign du_restart_from_stall = 0;
            assign spr_access_ack[6] = 0;
 
-           always @(*)
-             begin
-                spr_dmr1 = 0;
-                spr_dmr2 = 0;
-                spr_dsr = 0;
-                spr_drr = 0;
-             end
+	   always @(posedge clk)
+	     begin
+		cpu_stall <= 0;
+		spr_dmr1 <= 0;
+		spr_dmr2 <= 0;
+		spr_dsr <= 0;
+		spr_drr <= 0;
+	     end
         end
    endgenerate
 
