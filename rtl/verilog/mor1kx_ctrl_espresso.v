@@ -1328,14 +1328,14 @@ module mor1kx_ctrl_espresso
            assign du_restart_from_stall = 0;
            assign spr_access_ack[6] = 0;
 
-           always @(*)
-             begin
-                spr_dmr1 = 0;
-                spr_dmr2 = 0;
-                spr_dsr = 0;
-                spr_drr = 0;
-                du_npc_written = 0;
-             end
+	   always @(posedge clk)
+	     begin
+		spr_dmr1 <= 0;
+		spr_dmr2 <= 0;
+		spr_dsr <= 0;
+		spr_drr <= 0;
+		du_npc_written <= 0;
+	     end
         end
    endgenerate
 
