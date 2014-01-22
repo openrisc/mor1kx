@@ -502,7 +502,6 @@ module mor1kx_lsu_cappuccino
 		   exec_lsu_adr_i : ctrl_lsu_adr_i;
    assign dc_adr_match = dmmu_enable_i ? dmmu_phys_addr : ctrl_lsu_adr_i;
    assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall;
-   assign dc_sdat = dbus_sdat;
    assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE);
 
 generate
@@ -525,6 +524,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
    assign dc_bsel = dbus_bsel;
    assign dc_we = exec_op_lsu_store_i & padv_execute_i |
 		  ctrl_op_lsu_store_i & tlb_reload_busy & !tlb_reload_req;
+   assign dc_sdat = dbus_sdat;
 
    /* mor1kx_dcache AUTO_TEMPLATE (
 	    .refill_o			(dc_refill),
