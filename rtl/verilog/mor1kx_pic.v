@@ -69,8 +69,8 @@ module mor1kx_pic
 		  spr_picsr[irqline] <= 0;
 	      // Clear
 		else if (spr_we_i & spr_addr_i==`OR1K_SPR_PICSR_ADDR)
-		  spr_picsr[irqline] <= spr_dat_i[irqline] ? 0 :
-					       spr_picsr[irqline];
+		  spr_picsr[irqline] <= spr_dat_i[irqline] ?
+					       spr_picsr[irqline] : 0;
 	      // Set
 		else if (!spr_picsr[irqline] & irq_unmasked[irqline])
 		  spr_picsr[irqline] <= 1;
