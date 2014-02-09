@@ -1296,6 +1296,10 @@ module mor1kx_ctrl_espresso
            else if (spr_we && spr_addr==`OR1K_SPR_DMR1_ADDR)
              spr_dmr1[23:0] <= spr_write_dat[23:0];
 
+         /* DMR2 */
+         always @(posedge clk)
+           spr_dmr2 <= 0;
+
          /* DSR */
          always @(posedge clk `OR_ASYNC_RST)
            if (rst)
