@@ -1270,7 +1270,7 @@ module mor1kx_ctrl_prontoespresso
 
          /* DMR2 */
          always @(posedge clk)
-           spr_dmr1 <= 0;
+           spr_dmr2 <= 0;
 
          /* DSR */
          always @(posedge clk `OR_ASYNC_RST)
