@@ -479,15 +479,6 @@ module mor1kx_lsu_cappuccino
       .empty_o	(store_buffer_empty)
       );
 
-`ifndef SYNTHESIS
-   /* synthesis translate_off */
-   always @(posedge clk)
-     if (dc_enable_i & !dbus_req & !dc_enable_r)
-       $display("mor1kx dcache enabled at %t", $time);
-
-   /* synthesis translate_on */
-`endif
-
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        dc_enable_r <= 0;
