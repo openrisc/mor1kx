@@ -42,6 +42,7 @@ module mor1kx_decode
     parameter FEATURE_EXT = "NONE",
     parameter FEATURE_CMOV = "NONE",
     parameter FEATURE_FFL1 = "NONE",
+    parameter FEATURE_ATOMIC = "ENABLED",
 
     parameter FEATURE_CUST1 = "NONE",
     parameter FEATURE_CUST2 = "NONE",
@@ -89,6 +90,7 @@ module mor1kx_decode
 
     output 			      decode_op_lsu_load_o,
     output 			      decode_op_lsu_store_o,
+    output 			      decode_op_lsu_atomic_o,
     output reg [1:0] 		      decode_lsu_length_o,
     output 			      decode_lsu_zext_o,
 
@@ -139,12 +141,20 @@ module mor1kx_decode
    // load opcodes are 6'b10_0000 to 6'b10_0110, 0 to 6, so check for 7 and up
    assign decode_op_lsu_load_o = (decode_insn_i[31:30] == 2'b10) &
 				 !(&decode_insn_i[28:26]) &
-				 !decode_insn_i[29];
+				 !decode_insn_i[29] ||
+				 ((opc_insn == `OR1K_OPCODE_LWA) &
+				 (FEATURE_ATOMIC!="NONE"));
 
    // Detect when instruction is store
    assign decode_op_lsu_store_o = (opc_insn == `OR1K_OPCODE_SW) ||
 				  (opc_insn == `OR1K_OPCODE_SB) ||
-				  (opc_insn == `OR1K_OPCODE_SH);
+				  (opc_insn == `OR1K_OPCODE_SH) ||
+				  ((opc_insn == `OR1K_OPCODE_SWA) &
+				  (FEATURE_ATOMIC!="NONE"));
+
+   assign decode_op_lsu_atomic_o = ((opc_insn == `OR1K_OPCODE_LWA) ||
+				    (opc_insn == `OR1K_OPCODE_SWA)) &
+				   (FEATURE_ATOMIC!="NONE");
 
    // Decode length of load/store operation
    always @(*)
@@ -160,8 +170,10 @@ module mor1kx_decode
 	 decode_lsu_length_o = 2'b01;
 
        `OR1K_OPCODE_SW,
+       `OR1K_OPCODE_SWA,
        `OR1K_OPCODE_LWZ,
-       `OR1K_OPCODE_LWS:
+       `OR1K_OPCODE_LWS,
+       `OR1K_OPCODE_LWA:
 	 decode_lsu_length_o = 2'b10;
 
        default:
@@ -239,7 +251,8 @@ module mor1kx_decode
    // Which instructions cause writeback?
    assign decode_rf_wb_o = (opc_insn == `OR1K_OPCODE_JAL |
 			    opc_insn == `OR1K_OPCODE_MOVHI |
-			    opc_insn == `OR1K_OPCODE_JALR) |
+			    opc_insn == `OR1K_OPCODE_JALR |
+			    opc_insn == `OR1K_OPCODE_LWA) |
 			   // All '10????' opcodes except l.sfxxi
 			   (decode_insn_i[31:30] == 2'b10 &
 			    !(opc_insn == `OR1K_OPCODE_SFIMM)) |
@@ -268,6 +281,8 @@ module mor1kx_decode
    assign imm_sext_sel = ((opc_insn[5:4] == 2'b10) &
                           ~(opc_insn == `OR1K_OPCODE_ORI) &
                           ~(opc_insn == `OR1K_OPCODE_ANDI)) |
+                         (opc_insn == `OR1K_OPCODE_SWA) |
+                         (opc_insn == `OR1K_OPCODE_LWA) |
                          (opc_insn == `OR1K_OPCODE_SW) |
                          (opc_insn == `OR1K_OPCODE_SH) |
                          (opc_insn == `OR1K_OPCODE_SB);
@@ -354,6 +369,10 @@ module mor1kx_decode
        `OR1K_OPCODE_SF,
        `OR1K_OPCODE_NOP:
 	 decode_except_illegal_o = 1'b0;
+
+       `OR1K_OPCODE_SWA,
+       `OR1K_OPCODE_LWA:
+	 decode_except_illegal_o = (FEATURE_ATOMIC=="NONE");
 
        `OR1K_OPCODE_CUST1:
 	 decode_except_illegal_o = (FEATURE_CUST1=="NONE");

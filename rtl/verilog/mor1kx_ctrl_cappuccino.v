@@ -84,6 +84,8 @@ module mor1kx_ctrl_cappuccino
 
     input 			      ctrl_flag_set_i,
     input 			      ctrl_flag_clear_i,
+    input 			      atomic_flag_set_i,
+    input 			      atomic_flag_clear_i,
 
     input [OPTION_OPERAND_WIDTH-1:0]  pc_ctrl_i,
 
@@ -445,8 +447,11 @@ module mor1kx_ctrl_cappuccino
 			     cpu_stall;
 
    // Flag output
-   assign ctrl_flag_o = (!ctrl_flag_clear_i & spr_sr[`OR1K_SPR_SR_F]) |
-			ctrl_flag_set_i;
+   wire ctrl_flag_clear = ctrl_flag_clear_i | atomic_flag_clear_i;
+   wire ctrl_flag_set = ctrl_flag_set_i | atomic_flag_set_i;
+
+   assign ctrl_flag_o = (!ctrl_flag_clear & spr_sr[`OR1K_SPR_SR_F]) |
+			ctrl_flag_set;
 
    // Carry output
    assign ctrl_carry_o = (!ctrl_carry_clear_i & spr_sr[`OR1K_SPR_SR_CY]) |
@@ -602,8 +607,8 @@ module mor1kx_ctrl_cappuccino
        end
      else if (padv_ctrl)
        begin
-	  spr_sr[`OR1K_SPR_SR_F   ] <= ctrl_flag_set_i ? 1 :
-				       ctrl_flag_clear_i ? 0 :
+	  spr_sr[`OR1K_SPR_SR_F   ] <= ctrl_flag_set ? 1 :
+				       ctrl_flag_clear ? 0 :
 				       spr_sr[`OR1K_SPR_SR_F   ];
 	  spr_sr[`OR1K_SPR_SR_CY   ] <= ctrl_carry_set_i ? 1 :
 					ctrl_carry_clear_i ? 0 :

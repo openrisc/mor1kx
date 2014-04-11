@@ -30,7 +30,8 @@ module mor1kx_lsu_cappuccino
     parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
     parameter OPTION_DMMU_SET_WIDTH = 6,
     parameter OPTION_DMMU_WAYS = 1,
-    parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8
+    parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
+    parameter FEATURE_ATOMIC = "ENABLED"
     )
    (
     input 			      clk,
@@ -49,8 +50,10 @@ module mor1kx_lsu_cappuccino
     // from decode stage regs, indicate if load or store
     input 			      exec_op_lsu_load_i,
     input 			      exec_op_lsu_store_i,
+    input 			      exec_op_lsu_atomic_i,
     input 			      ctrl_op_lsu_load_i,
     input 			      ctrl_op_lsu_store_i,
+    input 			      ctrl_op_lsu_atomic_i,
     input [1:0] 		      ctrl_lsu_length_i,
     input 			      ctrl_lsu_zext_i,
 
@@ -68,7 +71,11 @@ module mor1kx_lsu_cappuccino
     output 			      lsu_except_dpagefault_o,
 
     // Indicator that the dbus exception came via the store buffer
-    output reg			      store_buffer_err_o,
+    output reg 			      store_buffer_err_o,
+
+    // Atomic operation flag set/clear logic
+    output 			      atomic_flag_set_o,
+    output 			      atomic_flag_clear_o,
 
     // SPR interface
     input [15:0] 		      spr_bus_addr_i,
@@ -179,6 +186,12 @@ module mor1kx_lsu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0]   store_buffer_dat;
    wire [OPTION_OPERAND_WIDTH/8-1:0] store_buffer_bsel;
    reg 				     store_buffer_write_pending;
+
+   // Atomic operations
+   reg [OPTION_OPERAND_WIDTH-1:0]    atomic_addr;
+   reg 				     atomic_reserve;
+   wire				     swa_success;
+   wire				     swa_fail;
 
    assign ctrl_op_lsu = ctrl_op_lsu_load_i | ctrl_op_lsu_store_i;
 
@@ -329,7 +342,7 @@ module mor1kx_lsu_cappuccino
      dc_refill_r <= dc_refill;
 
    assign lsu_ack = (ctrl_op_lsu_store_i | state == WRITE) ?
-		    store_buffer_write :
+		    (store_buffer_write | swa_fail & padv_ctrl_i) :
 		    (dbus_access ? dbus_ack : dc_ack);
 
    assign lsu_ldat = dbus_access ? dbus_ldat : dc_ldat;
@@ -433,14 +446,51 @@ module mor1kx_lsu_cappuccino
 		       except_dtlb_miss | except_dpagefault |
 		       pipeline_flush_i & !du_stall_i;
 
+generate
+if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
+   // Atomic operations logic
+   always @(posedge clk)
+     if (rst | pipeline_flush_i)
+       atomic_reserve <= 0;
+     else if (ctrl_op_lsu_load_i & ctrl_op_lsu_atomic_i & padv_ctrl_i)
+       atomic_reserve <= 1;
+     else if ((ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i & padv_ctrl_i) ||
+	      store_buffer_write & (store_buffer_wadr == atomic_addr))
+       atomic_reserve <= 0;
+
+   always @(posedge clk)
+     if (ctrl_op_lsu_load_i & ctrl_op_lsu_atomic_i & padv_ctrl_i)
+       atomic_addr <= dc_adr_match;
+
+   assign swa_success = ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i &
+			atomic_reserve & (store_buffer_wadr == atomic_addr);
+   assign swa_fail = ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i &
+		     (!atomic_reserve | (store_buffer_wadr != atomic_addr));
+
+   assign atomic_flag_set_o = swa_success & padv_ctrl_i;
+   assign atomic_flag_clear_o = swa_fail & padv_ctrl_i;
+
+end else begin
+   assign atomic_flag_set_o = 0;
+   assign atomic_flag_clear_o = 0;
+   assign swa_success = 0;
+   assign swa_fail = 0;
+   always @(posedge clk) begin
+      atomic_addr <= 0;
+      atomic_reserve <= 0;
+   end
+end
+endgenerate
+
+   // Store buffer logic
    always @(posedge clk)
      if (store_buffer_write | pipeline_flush_i)
        store_buffer_write_pending <= 0;
-     else if (ctrl_op_lsu_store_i & padv_ctrl_i & !dbus_stall &
+     else if (ctrl_op_lsu_store_i & padv_ctrl_i & !swa_fail & !dbus_stall &
 	      (store_buffer_full | dc_refill | dc_refill_r))
        store_buffer_write_pending <= 1;
 
-   assign store_buffer_write = (ctrl_op_lsu_store_i &
+   assign store_buffer_write = (ctrl_op_lsu_store_i & !swa_fail &
 				(padv_ctrl_i | tlb_reload_done) |
 				store_buffer_write_pending) &
 			       !store_buffer_full & !dc_refill & !dc_refill_r &
@@ -491,7 +541,9 @@ module mor1kx_lsu_cappuccino
    assign dc_adr = padv_execute_i &
 		   (exec_op_lsu_load_i | exec_op_lsu_store_i) ?
 		   exec_lsu_adr_i : ctrl_lsu_adr_i;
-   assign dc_adr_match = dmmu_enable_i ? dmmu_phys_addr : ctrl_lsu_adr_i;
+   assign dc_adr_match = dmmu_enable_i ?
+			 {dmmu_phys_addr[OPTION_OPERAND_WIDTH-1:2],2'b0} :
+			 {ctrl_lsu_adr_i[OPTION_OPERAND_WIDTH-1:2],2'b0};
    assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall;
    assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE);
 

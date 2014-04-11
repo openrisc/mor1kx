@@ -88,6 +88,7 @@ module mor1kx
    parameter FEATURE_EXT		= "NONE";
    parameter FEATURE_CMOV		= "ENABLED";
    parameter FEATURE_FFL1		= "ENABLED";
+   parameter FEATURE_ATOMIC		= "ENABLED";
 
    parameter FEATURE_CUST1		= "NONE";
    parameter FEATURE_CUST2		= "NONE";
@@ -488,6 +489,7 @@ module mor1kx
 	     .FEATURE_EXT(FEATURE_EXT),
 	     .FEATURE_CMOV(FEATURE_CMOV),
 	     .FEATURE_FFL1(FEATURE_FFL1),
+	     .FEATURE_ATOMIC(FEATURE_ATOMIC),
 	     .FEATURE_CUST1(FEATURE_CUST1),
 	     .FEATURE_CUST2(FEATURE_CUST2),
 	     .FEATURE_CUST3(FEATURE_CUST3),
