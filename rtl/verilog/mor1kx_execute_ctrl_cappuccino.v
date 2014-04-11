@@ -49,6 +49,7 @@ module mor1kx_execute_ctrl_cappuccino
 
     input 				  op_lsu_load_i,
     input 				  op_lsu_store_i,
+    input 				  op_lsu_atomic_i,
     input [1:0] 			  lsu_length_i,
     input 				  lsu_zext_i,
 
@@ -104,6 +105,7 @@ module mor1kx_execute_ctrl_cappuccino
 
     output reg 				  ctrl_op_lsu_load_o,
     output reg 				  ctrl_op_lsu_store_o,
+    output reg 				  ctrl_op_lsu_atomic_o,
     output reg [1:0] 			  ctrl_lsu_length_o,
     output reg 				  ctrl_lsu_zext_o,
 
@@ -253,16 +255,20 @@ module mor1kx_execute_ctrl_cappuccino
      if (rst) begin
 	ctrl_op_lsu_load_o <= 0;
 	ctrl_op_lsu_store_o <= 0;
+	ctrl_op_lsu_atomic_o <= 0;
      end else if (ctrl_except_align_o | ctrl_except_dbus_o |
 		  ctrl_except_dtlb_miss_o | ctrl_except_dpagefault_o) begin
 	ctrl_op_lsu_load_o <= 0;
 	ctrl_op_lsu_store_o <= 0;
+	ctrl_op_lsu_atomic_o <= 0;
     end else if (padv_i) begin
 	ctrl_op_lsu_load_o <= op_lsu_load_i;
 	ctrl_op_lsu_store_o <= op_lsu_store_i;
+	ctrl_op_lsu_atomic_o <= op_lsu_atomic_i;
      end else if (pipeline_flush_i & !du_stall_i) begin
 	ctrl_op_lsu_load_o <= 0;
 	ctrl_op_lsu_store_o <= 0;
+	ctrl_op_lsu_atomic_o <= 0;
      end
 
    always @(posedge clk)

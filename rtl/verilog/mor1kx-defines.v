@@ -98,6 +98,7 @@
 `define OR1K_OPCODE_JR      {2'b01, 4'h1}
 `define OR1K_OPCODE_JALR    {2'b01, 4'h2}
 `define OR1K_OPCODE_MACI    {2'b01, 4'h3}
+`define OR1K_OPCODE_LWA     {2'b01, 4'hB}
 `define OR1K_OPCODE_CUST1   {2'b01, 4'hC}
 `define OR1K_OPCODE_CUST2   {2'b01, 4'hD}
 `define OR1K_OPCODE_CUST3   {2'b01, 4'hE}
@@ -144,6 +145,7 @@
 `define OR1K_OPCODE_MAC     {2'b11, 4'h1}
 `define OR1K_OPCODE_MSB     {2'b11, 4'h1}
 
+`define OR1K_OPCODE_SWA     {2'b11, 4'h3}
 `define OR1K_OPCODE_SD      {2'b11, 4'h4}
 `define OR1K_OPCODE_SW      {2'b11, 4'h5}
 `define OR1K_OPCODE_SB      {2'b11, 4'h6}
