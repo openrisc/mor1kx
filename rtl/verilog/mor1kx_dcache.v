@@ -134,6 +134,8 @@ module mor1kx_dcache
    reg [TAG_LRU_WIDTH_BITS-1:0]       tag_lru_in;
    reg [TAGMEM_WAY_WIDTH-1:0] 	      tag_way_in [OPTION_DCACHE_WAYS-1:0];
 
+   reg [TAGMEM_WAY_WIDTH-1:0] 	      tag_way_save[OPTION_DCACHE_WAYS-1:0];
+
    // Whether to write to the tag memory in this cycle
    reg 				      tag_we;
 
@@ -339,6 +341,10 @@ module mor1kx_dcache
                     // on refill. Always one when only one way.
                     tag_save_lru <= (OPTION_DCACHE_WAYS==1) | lru;
 
+		    for (w = 0; w < OPTION_DCACHE_WAYS; w = w + 1) begin
+		       tag_way_save[w] <= tag_way_out[w];
+		    end
+
 		    state <= REFILL;
 		 end else if (cpu_we_i | write_pending) begin
 		    state <= WRITE;
@@ -470,6 +476,7 @@ module mor1kx_dcache
               // valid to 1.
 	      if (refill_done) begin
 		 for (w = 0; w < OPTION_DCACHE_WAYS; w = w + 1) begin
+		    tag_way_in[w] = tag_way_save[w];
                     if (tag_save_lru[w]) begin
                        tag_way_in[w] = { 1'b1, tag_wtag };
                     end
