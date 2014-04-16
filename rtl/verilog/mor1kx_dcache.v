@@ -348,8 +348,10 @@ module mor1kx_dcache
 		    state <= REFILL;
 		 end else if (cpu_we_i | write_pending) begin
 		    state <= WRITE;
+		 end else if (invalidate) begin
+		    state <= IDLE;
 		 end
-	      end else if (!dc_enable_i) begin
+	      end else if (!dc_enable_i | invalidate) begin
 		 state <= IDLE;
 	      end
 	   end
