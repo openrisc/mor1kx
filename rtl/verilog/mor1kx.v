@@ -25,6 +25,9 @@ module mor1kx
    avm_d_burstcount_o, avm_d_write_o, avm_d_writedata_o,
    avm_i_address_o, avm_i_byteenable_o, avm_i_read_o,
    avm_i_burstcount_o, du_dat_o, du_ack_o, du_stall_o,
+   traceport_exec_valid_o, traceport_exec_pc_o, traceport_exec_insn_o,
+   traceport_exec_wbdata_o, traceport_exec_wbreg_o,
+   traceport_exec_wben_o,
    // Inputs
    clk, rst, iwbm_err_i, iwbm_ack_i, iwbm_dat_i, iwbm_rty_i,
    dwbm_err_i, dwbm_ack_i, dwbm_dat_i, dwbm_rty_i, avm_d_readdata_i,
@@ -62,6 +65,8 @@ module mor1kx
    parameter FEATURE_PERFCOUNTERS	= "NONE";
    parameter FEATURE_MAC		= "NONE";
    parameter FEATURE_MULTICORE          = "NONE";
+
+   parameter FEATURE_TRACEPORT_EXEC     = "NONE";
    
    parameter FEATURE_SYSCALL		= "ENABLED";
    parameter FEATURE_TRAP		= "ENABLED";
@@ -167,6 +172,13 @@ module mor1kx
    // Stall control from debug interface
    input 			     du_stall_i;
    output 			     du_stall_o;
+
+   output 			     traceport_exec_valid_o;
+   output [31:0] 		     traceport_exec_pc_o;
+   output [`OR1K_INSN_WIDTH-1:0]     traceport_exec_insn_o;
+   output [OPTION_OPERAND_WIDTH-1:0] traceport_exec_wbdata_o;
+   output [OPTION_RF_ADDR_WIDTH-1:0] traceport_exec_wbreg_o;
+   output 			     traceport_exec_wben_o;
 
    // The multicore core identifier
    input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i;
@@ -500,7 +512,8 @@ module mor1kx
 	     .FEATURE_CUST8(FEATURE_CUST8),
 	     .OPTION_SHIFTER(OPTION_SHIFTER),
 	     .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH),
-	     .FEATURE_MULTICORE(FEATURE_MULTICORE)
+	     .FEATURE_MULTICORE(FEATURE_MULTICORE),
+	     .FEATURE_TRACEPORT_EXEC(FEATURE_TRACEPORT_EXEC)
 	     )
    mor1kx_cpu
      (/*AUTOINST*/
@@ -517,6 +530,12 @@ module mor1kx
       .du_dat_o				(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
       .du_ack_o				(du_ack_o),
       .du_stall_o			(du_stall_o),
+      .traceport_exec_valid_o		(traceport_exec_valid_o),
+      .traceport_exec_pc_o		(traceport_exec_pc_o[31:0]),
+      .traceport_exec_insn_o		(traceport_exec_insn_o[`OR1K_INSN_WIDTH-1:0]),
+      .traceport_exec_wbdata_o		(traceport_exec_wbdata_o[OPTION_OPERAND_WIDTH-1:0]),
+      .traceport_exec_wbreg_o		(traceport_exec_wbreg_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .traceport_exec_wben_o		(traceport_exec_wben_o),
       .spr_bus_addr_o			(spr_bus_addr_o[15:0]),
       .spr_bus_we_o			(spr_bus_we_o),
       .spr_bus_stb_o			(spr_bus_stb_o),

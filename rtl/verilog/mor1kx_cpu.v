@@ -22,8 +22,10 @@ module mor1kx_cpu(/*AUTOARG*/
    // Outputs
    ibus_adr_o, ibus_req_o, ibus_burst_o, dbus_adr_o, dbus_dat_o,
    dbus_req_o, dbus_bsel_o, dbus_we_o, dbus_burst_o, du_dat_o,
-   du_ack_o, du_stall_o, spr_bus_addr_o, spr_bus_we_o, spr_bus_stb_o,
-   spr_bus_dat_o, spr_sr_o,
+   du_ack_o, du_stall_o, traceport_exec_valid_o, traceport_exec_pc_o,
+   traceport_exec_insn_o, traceport_exec_wbdata_o,
+   traceport_exec_wbreg_o, traceport_exec_wben_o, spr_bus_addr_o,
+   spr_bus_we_o, spr_bus_stb_o, spr_bus_dat_o, spr_sr_o,
    // Inputs
    clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, dbus_err_i,
    dbus_ack_i, dbus_dat_i, irq_i, du_addr_i, du_stb_i, du_dat_i,
@@ -65,6 +67,8 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter FEATURE_PERFCOUNTERS	= "NONE";
    parameter FEATURE_MAC		= "NONE";
    parameter FEATURE_MULTICORE          = "NONE";
+
+   parameter FEATURE_TRACEPORT_EXEC = "NONE";
    
    parameter FEATURE_SYSCALL		= "ENABLED";
    parameter FEATURE_TRAP		= "ENABLED";
@@ -140,6 +144,13 @@ module mor1kx_cpu(/*AUTOARG*/
    input 			     du_stall_i;
    output 			     du_stall_o;
 
+   output 			     traceport_exec_valid_o;
+   output [31:0] 		     traceport_exec_pc_o;
+   output [`OR1K_INSN_WIDTH-1:0]     traceport_exec_insn_o;
+   output [OPTION_OPERAND_WIDTH-1:0] traceport_exec_wbdata_o;
+   output [OPTION_RF_ADDR_WIDTH-1:0] traceport_exec_wbreg_o;
+   output 			     traceport_exec_wben_o;
+
    // SPR accesses to external units (cache, mmu, etc.)
    output [15:0] 		     spr_bus_addr_o;
    output 			     spr_bus_we_o;
@@ -211,6 +222,7 @@ module mor1kx_cpu(/*AUTOARG*/
 	     .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
 	     .FEATURE_MAC(FEATURE_MAC),
 	     .FEATURE_MULTICORE(FEATURE_MULTICORE),
+	     .FEATURE_TRACEPORT_EXEC(FEATURE_TRACEPORT_EXEC),
 	     .FEATURE_SYSCALL(FEATURE_SYSCALL),
 	     .FEATURE_TRAP(FEATURE_TRAP),
 	     .FEATURE_RANGE(FEATURE_RANGE),
@@ -256,6 +268,12 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .du_dat_o			(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
 	    .du_ack_o			(du_ack_o),
 	    .du_stall_o			(du_stall_o),
+	    .traceport_exec_valid_o	(traceport_exec_valid_o),
+	    .traceport_exec_pc_o	(traceport_exec_pc_o[31:0]),
+	    .traceport_exec_insn_o	(traceport_exec_insn_o[`OR1K_INSN_WIDTH-1:0]),
+	    .traceport_exec_wbdata_o	(traceport_exec_wbdata_o[OPTION_OPERAND_WIDTH-1:0]),
+	    .traceport_exec_wbreg_o	(traceport_exec_wbreg_o[OPTION_RF_ADDR_WIDTH-1:0]),
+	    .traceport_exec_wben_o	(traceport_exec_wben_o),
 	    .spr_bus_addr_o		(spr_bus_addr_o[15:0]),
 	    .spr_bus_we_o		(spr_bus_we_o),
 	    .spr_bus_stb_o		(spr_bus_stb_o),
