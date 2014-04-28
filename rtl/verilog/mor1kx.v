@@ -91,6 +91,8 @@ module mor1kx
 
     parameter FEATURE_MULTICORE = "NONE",
 
+    parameter FEATURE_TRACEPORT_EXEC = "NONE",
+
     parameter BUS_IF_TYPE		= "WISHBONE32",
 
     parameter IBUS_WB_TYPE		= "B3_READ_BURSTING",
@@ -158,6 +160,13 @@ module mor1kx
     // Stall control from debug interface
     input 			      du_stall_i,
     output 			      du_stall_o,
+
+    output 			     traceport_exec_valid_o,
+    output [31:0] 		     traceport_exec_pc_o,
+    output [`OR1K_INSN_WIDTH-1:0]     traceport_exec_insn_o,
+    output [OPTION_OPERAND_WIDTH-1:0] traceport_exec_wbdata_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0] traceport_exec_wbreg_o,
+    output 			     traceport_exec_wben_o,
 
     // The multicore core identifier
     input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i,
@@ -499,7 +508,8 @@ module mor1kx
 	     .OPTION_SHIFTER(OPTION_SHIFTER),
 	     .FEATURE_STORE_BUFFER(FEATURE_STORE_BUFFER),
 	     .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH),
-	     .FEATURE_MULTICORE(FEATURE_MULTICORE)
+	     .FEATURE_MULTICORE(FEATURE_MULTICORE),
+	     .FEATURE_TRACEPORT_EXEC(FEATURE_TRACEPORT_EXEC)
 	     )
    mor1kx_cpu
      (/*AUTOINST*/
@@ -516,6 +526,12 @@ module mor1kx
       .du_dat_o				(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
       .du_ack_o				(du_ack_o),
       .du_stall_o			(du_stall_o),
+      .traceport_exec_valid_o		(traceport_exec_valid_o),
+      .traceport_exec_pc_o		(traceport_exec_pc_o[31:0]),
+      .traceport_exec_insn_o		(traceport_exec_insn_o[`OR1K_INSN_WIDTH-1:0]),
+      .traceport_exec_wbdata_o		(traceport_exec_wbdata_o[OPTION_OPERAND_WIDTH-1:0]),
+      .traceport_exec_wbreg_o		(traceport_exec_wbreg_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .traceport_exec_wben_o		(traceport_exec_wben_o),
       .spr_bus_addr_o			(spr_bus_addr_o[15:0]),
       .spr_bus_we_o			(spr_bus_we_o),
       .spr_bus_stb_o			(spr_bus_stb_o),

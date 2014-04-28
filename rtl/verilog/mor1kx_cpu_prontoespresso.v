@@ -80,7 +80,9 @@ module mor1kx_cpu_prontoespresso
 
     parameter OPTION_SHIFTER		= "BARREL",
 
-    parameter FEATURE_MULTICORE         = "NONE"
+    parameter FEATURE_MULTICORE = "NONE",
+
+    parameter FEATURE_TRACEPORT_EXEC = "NONE"
    )
    (
     input 			      clk,

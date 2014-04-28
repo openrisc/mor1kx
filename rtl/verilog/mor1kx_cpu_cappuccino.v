@@ -91,7 +91,9 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_STORE_BUFFER = "ENABLED",
     parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
 
-    parameter FEATURE_MULTICORE = "NONE"
+    parameter FEATURE_MULTICORE = "NONE",
+
+    parameter FEATURE_TRACEPORT_EXEC = "NONE"
     )
    (
     input 			      clk,
@@ -129,6 +131,13 @@ module mor1kx_cpu_cappuccino
     // Stall control from debug interface
     input 			      du_stall_i,
     output 			      du_stall_o,
+
+    output reg	                      traceport_exec_valid_o,
+    output reg [31:0]                 traceport_exec_pc_o,
+    output reg [`OR1K_INSN_WIDTH-1:0] traceport_exec_insn_o,
+    output [OPTION_OPERAND_WIDTH-1:0] traceport_exec_wbdata_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0] traceport_exec_wbreg_o,
+    output                            traceport_exec_wben_o,
 
     // SPR accesses to external units (cache, mmu, etc.)
     output [15:0] 		      spr_bus_addr_o,
@@ -170,6 +179,7 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_alu_result_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc_o;// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			ctrl_branch_exception_o;// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire			ctrl_bubble_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			ctrl_carry_clear_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_carry_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire			ctrl_carry_set_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
@@ -1336,6 +1346,7 @@ module mor1kx_cpu_cappuccino
       .spr_bus_stb_o			(spr_bus_stb_o),
       .spr_bus_dat_o			(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
       .spr_sr_o				(spr_sr_o[15:0]),
+      .ctrl_bubble_o			(ctrl_bubble_o),
       // Inputs
       .clk				(clk),
       .rst				(rst),
@@ -1406,5 +1417,69 @@ module mor1kx_cpu_cappuccino
       .spr_gpr_ack_i			(spr_gpr_ack_o),	 // Templated
       .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
       .multicore_numcores_i		(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
+
+   reg [`OR1K_INSN_WIDTH-1:0] traceport_stage_decode_insn;
+   reg [`OR1K_INSN_WIDTH-1:0] traceport_stage_exec_insn;
+
+   reg 			      traceport_waitexec;
+
+   always @(posedge clk) begin
+      if (FEATURE_TRACEPORT_EXEC != "NONE") begin
+	 if (rst) begin
+	    traceport_waitexec <= 0;
+	 end else begin
+	    if (padv_decode_o) begin
+	       traceport_stage_decode_insn <= insn_fetch_to_decode;
+	    end
+
+	    if (padv_execute_o) begin
+	       traceport_stage_exec_insn <= traceport_stage_decode_insn;
+	    end
+
+	    if (padv_ctrl_o) begin
+	       traceport_exec_insn_o <= traceport_stage_exec_insn;
+	    end
+
+	    traceport_exec_pc_o <= pc_execute_to_ctrl;
+	    if (!traceport_waitexec) begin
+	       if (padv_ctrl_o & !ctrl_bubble_o) begin
+		  if (execute_valid_o) begin
+		     traceport_exec_valid_o <= 1'b1;
+		  end else begin
+		     traceport_exec_valid_o <= 1'b0;
+		     traceport_waitexec <= 1'b1;
+		  end
+	       end else begin
+		  traceport_exec_valid_o <= 1'b0;
+	       end
+	    end else begin
+	       if (execute_valid_o) begin
+		  traceport_exec_valid_o <= 1'b1;
+		  traceport_waitexec <= 1'b0;
+	       end else begin
+		  traceport_exec_valid_o <= 1'b0;
+	       end
+	    end // else: !if(!traceport_waitexec)
+	 end // else: !if(rst)
+      end else begin // if (FEATURE_TRACEPORT_EXEC != "NONE")
+	 traceport_stage_decode_insn <= {`OR1K_INSN_WIDTH{1'b0}};
+	 traceport_stage_exec_insn <= {`OR1K_INSN_WIDTH{1'b0}};
+	 traceport_exec_insn_o <= {`OR1K_INSN_WIDTH{1'b0}};
+	 traceport_exec_pc_o <= 32'h0;
+	 traceport_exec_valid_o <= 1'b0;
+      end
+   end
+
+   generate
+      if (FEATURE_TRACEPORT_EXEC != "NONE") begin
+	 assign traceport_exec_wbreg_o = wb_rfd_adr_o;
+	 assign traceport_exec_wben_o = wb_rf_wb_o;
+	 assign traceport_exec_wbdata_o = rf_result_o;
+      end else begin
+	 assign traceport_exec_wbreg_o = {OPTION_RF_ADDR_WIDTH{1'b0}};
+	 assign traceport_exec_wben_o = 1'b0;
+	 assign traceport_exec_wbdata_o = {OPTION_OPERAND_WIDTH{1'b0}};
+      end
+   endgenerate
 
 endmodule // mor1kx_cpu_cappuccino
