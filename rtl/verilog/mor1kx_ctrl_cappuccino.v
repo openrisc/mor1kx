@@ -320,6 +320,29 @@ module mor1kx_ctrl_cappuccino
    wire [31:0] 			     spr_fpcsr;
    wire [31:0] 			     spr_isr [0:7];
 
+   // Only in multicore implementation:
+   // Implementation specific registers 0 and 1 are used as registers
+   // during exceptions or for kernel specific data
+   reg [OPTION_OPERAND_WIDTH-1:0]    spr_isr0;
+   reg [OPTION_OPERAND_WIDTH-1:0]    spr_isr1;
+
+   generate
+      if (FEATURE_MULTICORE != "NONE") begin
+	 assign spr_isr[0] = spr_isr0;
+	 assign spr_isr[1] = spr_isr1;
+      end else begin
+	 assign spr_isr[0] = 0;
+	 assign spr_isr[1] = 0;
+      end // else: !if(FEATURE_MULTICORE != "NONE")
+   endgenerate
+
+   assign spr_isr[2] = 0;
+   assign spr_isr[3] = 0;
+   assign spr_isr[4] = 0;
+   assign spr_isr[5] = 0;
+   assign spr_isr[6] = 0;
+   assign spr_isr[7] = 0;
+
    assign  b = ctrl_rfb_i;
 
    assign ctrl_branch_exception_o = (exception_r | ctrl_op_rfe_i | doing_rfe) &
@@ -644,6 +667,20 @@ module mor1kx_ctrl_cappuccino
      else if (spr_we & spr_addr==`OR1K_SPR_ESR0_ADDR)
        spr_esr <= spr_write_dat[SPR_SR_WIDTH-1:0];
 
+   // Implementation specific registers
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if (rst) begin
+	 spr_isr0 <= {OPTION_OPERAND_WIDTH{1'bx}};
+	 spr_isr1 <= {OPTION_OPERAND_WIDTH{1'bx}};
+      end else if ((FEATURE_MULTICORE != "NONE") &&
+		   spr_we && (spr_addr==`OR1K_SPR_ISR0_ADDR)) begin
+	 spr_isr0 <= spr_write_dat;
+      end else if ((FEATURE_MULTICORE != "NONE") &&
+		   spr_we && (spr_addr==`OR1K_SPR_ISR0_ADDR + 1)) begin
+	 spr_isr1 <= spr_write_dat;
+      end
+   end
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        ctrl_bubble <= 0;
@@ -769,16 +806,6 @@ module mor1kx_ctrl_cappuccino
       .spr_pccfgr			(spr_pccfgr[31:0]),
       .spr_fpcsr			(spr_fpcsr[31:0]),
       .spr_avr				(spr_avr[31:0]));
-
-   /* Implementation-specific registers */
-   assign spr_isr[0] = 0;
-   assign spr_isr[1] = 0;
-   assign spr_isr[2] = 0;
-   assign spr_isr[3] = 0;
-   assign spr_isr[4] = 0;
-   assign spr_isr[5] = 0;
-   assign spr_isr[6] = 0;
-   assign spr_isr[7] = 0;
 
    // System group (0) SPR data out
    always @*
