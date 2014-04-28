@@ -452,7 +452,7 @@ module mor1kx_icache
 	       // Inputs
 	       .current			(current_lru_history),	 // Templated
 	       .access			(access));		 // Templated
-      end // if (OPTIMSOC_ICACHE_WAYS >= 2)
+      end // if (OPTION_ICACHE_WAYS >= 2)
    endgenerate
 
    /* mor1kx_simple_dpram_sclk AUTO_TEMPLATE (
