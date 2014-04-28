@@ -102,7 +102,10 @@ module mor1kx_lsu_cappuccino
     input 			      dbus_err_i,
     input 			      dbus_ack_i,
     input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
-    input 			      pipeline_flush_i
+    input 			      pipeline_flush_i,
+
+    input [31:0] 		      snoop_adr_i,
+    input 			      snoop_en_i
     );
 
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_aligned;  // comb.
@@ -191,6 +194,11 @@ module mor1kx_lsu_cappuccino
    reg 				     atomic_reserve;
    wire				     swa_success;
    wire				     swa_fail;
+
+   wire 			     snoop_valid;
+   // We have to mask out our snooped bus accesses
+   assign snoop_valid = snoop_en_i &
+			!((snoop_adr_i == dbus_adr_o) & dbus_ack_i);
 
    assign ctrl_op_lsu = ctrl_op_lsu_load_i | ctrl_op_lsu_store_i;
 
@@ -496,7 +504,8 @@ if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
      if (rst | pipeline_flush_i)
        atomic_reserve <= 0;
      else if ((ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i & padv_ctrl_i) ||
-	      store_buffer_write & (store_buffer_wadr == atomic_addr))
+	      store_buffer_write & (store_buffer_wadr == atomic_addr) ||
+	      (snoop_valid & (snoop_adr_i == atomic_addr)))
        atomic_reserve <= 0;
      else if (ctrl_op_lsu_load_i & ctrl_op_lsu_atomic_i & padv_ctrl_i)
        atomic_reserve <= 1;

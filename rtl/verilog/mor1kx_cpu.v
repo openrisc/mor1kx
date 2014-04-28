@@ -158,7 +158,10 @@ module mor1kx_cpu
     // The multicore core identifier
     input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i,
     // The number of cores
-    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i,
+
+    input [31:0] 		     snoop_adr_i,
+    input 			     snoop_en_i
     );
 
    wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_execute_insn/* verilator public */;
@@ -289,7 +292,9 @@ module mor1kx_cpu
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
 	    .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .multicore_numcores_i	(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
+	    .multicore_numcores_i	(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .snoop_adr_i		(snoop_adr_i[31:0]),
+	    .snoop_en_i			(snoop_en_i));
 
 	 // synthesis translate_off
 `ifndef SYNTHESIS
