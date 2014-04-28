@@ -34,7 +34,7 @@ module mor1kx
    avm_d_waitrequest_i, avm_d_readdatavalid_i, avm_i_readdata_i,
    avm_i_waitrequest_i, avm_i_readdatavalid_i, irq_i, du_addr_i,
    du_stb_i, du_dat_i, du_we_i, du_stall_i, multicore_coreid_i,
-   multicore_numcores_i
+   multicore_numcores_i, snoop_adr_i, snoop_en_i
    );
 
    parameter OPTION_OPERAND_WIDTH	= 32;
@@ -184,6 +184,9 @@ module mor1kx
    input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i;
    // The number of cores
    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i;
+
+   input [31:0] 		     snoop_adr_i;
+   input 			     snoop_en_i;
 
    /*AUTOWIRE*/
    // Beginning of automatic wires (for undeclared instantiated-module outputs)
@@ -569,6 +572,8 @@ module mor1kx
       .spr_bus_dat_fpu_i		(),			 // Templated
       .spr_bus_ack_fpu_i		(),			 // Templated
       .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
-      .multicore_numcores_i		(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
+      .multicore_numcores_i		(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]),
+      .snoop_adr_i			(snoop_adr_i[31:0]),
+      .snoop_en_i			(snoop_en_i));
 
 endmodule // mor1kx

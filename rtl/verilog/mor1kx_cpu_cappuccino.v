@@ -161,6 +161,9 @@ module mor1kx_cpu_cappuccino
    input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i;
    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i;
 
+   input [31:0] 		     snoop_adr_i;
+   input 			     snoop_en_i;
+
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_fetch_to_decode;
    wire [`OR1K_INSN_WIDTH-1:0] 	     insn_fetch_to_decode;
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_decode_to_execute;
@@ -931,7 +934,9 @@ module mor1kx_cpu_cappuccino
       .dbus_ack_i			(dbus_ack_i),
       .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
-      .du_stall_i			(du_stall_i));
+      .du_stall_i			(du_stall_i),
+      .snoop_adr_i			(snoop_adr_i[31:0]),
+      .snoop_en_i			(snoop_en_i));
 
 
    /* mor1kx_wb_mux_cappuccino AUTO_TEMPLATE (

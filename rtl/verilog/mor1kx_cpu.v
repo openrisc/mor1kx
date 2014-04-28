@@ -33,7 +33,8 @@ module mor1kx_cpu(/*AUTOARG*/
    spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
    spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
    spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
-   spr_bus_ack_fpu_i, multicore_coreid_i, multicore_numcores_i
+   spr_bus_ack_fpu_i, multicore_coreid_i, multicore_numcores_i,
+   snoop_adr_i, snoop_en_i
    );
 
 
@@ -174,6 +175,9 @@ module mor1kx_cpu(/*AUTOARG*/
    input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i;
    // The number of cores
    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i;
+
+   input [31:0] 		     snoop_adr_i;
+   input 			     snoop_en_i;
    
    wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_execute_insn/* verilator public */;   
    wire 			     monitor_execute_advance/* verilator public */;
@@ -303,7 +307,9 @@ module mor1kx_cpu(/*AUTOARG*/
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
 	    .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .multicore_numcores_i	(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
+	    .multicore_numcores_i	(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .snoop_adr_i		(snoop_adr_i[31:0]),
+	    .snoop_en_i			(snoop_en_i));
 
 	 // synthesis translate_off
 `ifndef SYNTHESIS
