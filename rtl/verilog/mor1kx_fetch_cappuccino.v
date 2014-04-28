@@ -427,15 +427,6 @@ module mor1kx_fetch_cappuccino
 	state <= IDLE;
    end
 
-`ifndef SYNTHESIS
-   /* synthesis translate_off */
-   always @(posedge clk)
-     if (ic_enable & !ibus_req & !ic_enable_r)
-       $display("mor1kx icache enabled at %t", $time);
-
-   /* synthesis translate_on */
-`endif
-
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        ic_enable_r <= 0;
