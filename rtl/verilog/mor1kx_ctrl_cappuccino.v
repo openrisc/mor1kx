@@ -205,6 +205,7 @@ module mor1kx_ctrl_cappuccino
     input 			      spr_bus_ack_pcu_i,
     input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i,
     input 			      spr_bus_ack_fpu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_gpr_dat_i,
     output [15:0] 		      spr_sr_o
     );
 
@@ -838,7 +839,7 @@ module mor1kx_ctrl_cappuccino
 	  // GPR read
 	  if (spr_addr >= `OR1K_SPR_GPR0_ADDR &&
 	      spr_addr < (`OR1K_SPR_GPR0_ADDR + 32))
-	    spr_sys_group_read = b; // Register file
+	    spr_sys_group_read = spr_gpr_dat_i; // Register file
 	  else
 	    // Invalid address - read as zero
 	    spr_sys_group_read = 0;
@@ -848,9 +849,11 @@ module mor1kx_ctrl_cappuccino
    /* System group read data MUX in */
    assign spr_internal_read_dat[0] = spr_sys_group_read;
    /* System group ack generation */
-   /* TODO - might be delay for register file reads! */
-   assign spr_access_ack[0] = 1;
+   reg spr_sys_group_ack;
+   always @(posedge clk)
+     spr_sys_group_ack <= spr_read_access | spr_write_access;
 
+   assign spr_access_ack[0] = spr_sys_group_ack;
 
    /* Generate data to the register file for mfspr operations */
    assign mfspr_dat_o = spr_internal_read_dat[spr_addr[14:11]];
