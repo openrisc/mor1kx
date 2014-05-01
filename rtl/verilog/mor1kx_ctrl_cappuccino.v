@@ -692,7 +692,9 @@ module mor1kx_ctrl_cappuccino
        spr_npc <= last_branch_target_pc;
      else if (stepped_into_exception)
        spr_npc <= exception_pc_addr;
-     else
+     else if (stall_on_trap & padv_ctrl & except_trap_i)
+       spr_npc <= pc_ctrl_i;
+     else if (!cpu_stall)
        spr_npc <= pc_ctrl_i + 4;
 
    // Exception Vector Address
