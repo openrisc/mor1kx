@@ -423,8 +423,10 @@ module mor1kx_fetch_cappuccino
 	  state <= IDLE;
       endcase // case (state)
 
-      if (rst)
-	state <= IDLE;
+      if (rst) begin
+	 ibus_req <= 0;
+	 state <= IDLE;
+      end
    end
 
    always @(posedge clk `OR_ASYNC_RST)
