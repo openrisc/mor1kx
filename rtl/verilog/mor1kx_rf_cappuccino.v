@@ -20,7 +20,7 @@ module mor1kx_rf_cappuccino
   #(
     parameter OPTION_RF_ADDR_WIDTH = 5,
     parameter OPTION_RF_WORDS = 32,
-
+    parameter FEATURE_DEBUGUNIT = "NONE",
     parameter OPTION_OPERAND_WIDTH = 32
     )
    (
@@ -46,6 +46,10 @@ module mor1kx_rf_cappuccino
     input [OPTION_RF_ADDR_WIDTH-1:0]  execute_rfd_adr_i,
     input [OPTION_RF_ADDR_WIDTH-1:0]  ctrl_rfd_adr_i,
     input [OPTION_RF_ADDR_WIDTH-1:0]  wb_rfd_adr_i,
+
+    // SPR interface
+    input [15:0] 		      spr_bus_addr_i,
+    output [OPTION_OPERAND_WIDTH-1:0] spr_gpr_dat_o,
 
     // Write back signal indications
     input 			      execute_rf_wb_i,
@@ -236,5 +240,29 @@ module mor1kx_rf_cappuccino
       .wren_i(rf_wren),
       .wrda_i(result_i)
       );
+
+generate
+if (FEATURE_DEBUGUNIT!="NONE") begin : rfspr_gen
+   mor1kx_rf_ram
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
+       .OPTION_RF_WORDS(OPTION_RF_WORDS)
+       )
+   rfspr
+     (
+      .clk(clk),
+      .rst(rst),
+      .rdad_i(spr_bus_addr_i[OPTION_RF_ADDR_WIDTH-1:0]),
+      .rden_i(1'b1),
+      .rdda_o(spr_gpr_dat_o),
+      .wrad_i(wb_rfd_adr_i),
+      .wren_i(rf_wren),
+      .wrda_i(result_i)
+      );
+end else begin
+   assign spr_gpr_dat_o = 0;
+end
+endgenerate
 
 endmodule // mor1kx_rf_cappuccino
