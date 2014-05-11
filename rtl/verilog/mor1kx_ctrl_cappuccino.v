@@ -325,23 +325,34 @@ module mor1kx_ctrl_cappuccino
    // during exceptions or for kernel specific data
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_isr0;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_isr1;
+   reg [OPTION_OPERAND_WIDTH-1:0]    spr_isr2;
+   reg [OPTION_OPERAND_WIDTH-1:0]    spr_isr3;
+   reg [OPTION_OPERAND_WIDTH-1:0]    spr_isr4;
+   reg [OPTION_OPERAND_WIDTH-1:0]    spr_isr5;
+   reg [OPTION_OPERAND_WIDTH-1:0]    spr_isr6;
+   reg [OPTION_OPERAND_WIDTH-1:0]    spr_isr7;
 
    generate
       if (FEATURE_MULTICORE != "NONE") begin
 	 assign spr_isr[0] = spr_isr0;
 	 assign spr_isr[1] = spr_isr1;
+	 assign spr_isr[2] = spr_isr2;
+	 assign spr_isr[3] = spr_isr3;
+	 assign spr_isr[4] = spr_isr4;
+	 assign spr_isr[5] = spr_isr5;
+	 assign spr_isr[6] = spr_isr6;
+	 assign spr_isr[7] = spr_isr7;
       end else begin
 	 assign spr_isr[0] = 0;
 	 assign spr_isr[1] = 0;
+	 assign spr_isr[2] = 0;
+	 assign spr_isr[3] = 0;
+	 assign spr_isr[4] = 0;
+	 assign spr_isr[5] = 0;
+	 assign spr_isr[6] = 0;
+	 assign spr_isr[7] = 0;
       end // else: !if(FEATURE_MULTICORE != "NONE")
    endgenerate
-
-   assign spr_isr[2] = 0;
-   assign spr_isr[3] = 0;
-   assign spr_isr[4] = 0;
-   assign spr_isr[5] = 0;
-   assign spr_isr[6] = 0;
-   assign spr_isr[7] = 0;
 
    assign  b = ctrl_rfb_i;
 
@@ -672,12 +683,36 @@ module mor1kx_ctrl_cappuccino
       if (rst) begin
 	 spr_isr0 <= {OPTION_OPERAND_WIDTH{1'bx}};
 	 spr_isr1 <= {OPTION_OPERAND_WIDTH{1'bx}};
+	 spr_isr2 <= {OPTION_OPERAND_WIDTH{1'bx}};
+	 spr_isr3 <= {OPTION_OPERAND_WIDTH{1'bx}};
+	 spr_isr4 <= {OPTION_OPERAND_WIDTH{1'bx}};
+	 spr_isr5 <= {OPTION_OPERAND_WIDTH{1'bx}};
+	 spr_isr6 <= {OPTION_OPERAND_WIDTH{1'bx}};
+	 spr_isr7 <= {OPTION_OPERAND_WIDTH{1'bx}};
       end else if ((FEATURE_MULTICORE != "NONE") &&
 		   spr_we && (spr_addr==`OR1K_SPR_ISR0_ADDR)) begin
 	 spr_isr0 <= spr_write_dat;
       end else if ((FEATURE_MULTICORE != "NONE") &&
 		   spr_we && (spr_addr==`OR1K_SPR_ISR0_ADDR + 1)) begin
 	 spr_isr1 <= spr_write_dat;
+      end else if ((FEATURE_MULTICORE != "NONE") &&
+		   spr_we && (spr_addr==`OR1K_SPR_ISR0_ADDR + 2)) begin
+	 spr_isr2 <= spr_write_dat;
+      end else if ((FEATURE_MULTICORE != "NONE") &&
+		   spr_we && (spr_addr==`OR1K_SPR_ISR0_ADDR + 3)) begin
+	 spr_isr3 <= spr_write_dat;
+      end else if ((FEATURE_MULTICORE != "NONE") &&
+		   spr_we && (spr_addr==`OR1K_SPR_ISR0_ADDR + 4)) begin
+	 spr_isr4 <= spr_write_dat;
+      end else if ((FEATURE_MULTICORE != "NONE") &&
+		   spr_we && (spr_addr==`OR1K_SPR_ISR0_ADDR + 5)) begin
+	 spr_isr5 <= spr_write_dat;
+      end else if ((FEATURE_MULTICORE != "NONE") &&
+		   spr_we && (spr_addr==`OR1K_SPR_ISR0_ADDR + 6)) begin
+	 spr_isr6 <= spr_write_dat;
+      end else if ((FEATURE_MULTICORE != "NONE") &&
+		   spr_we && (spr_addr==`OR1K_SPR_ISR0_ADDR + 7)) begin
+	 spr_isr7 <= spr_write_dat;
       end
    end
 
