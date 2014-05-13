@@ -120,8 +120,8 @@ module mor1kx_bus_if_wb32
 	     finish_burst_r <= 0;
 
 	 assign wbm_adr_o = bursting ? {burst_address,2'b00} : cpu_adr_i;
-	 assign wbm_stb_o = bursting & !finish_burst_r;
-	 assign wbm_cyc_o = bursting & !finish_burst_r;
+	 assign wbm_stb_o = bursting & !finish_burst_r & !rst;
+	 assign wbm_cyc_o = bursting & !finish_burst_r & !rst;
 	 assign wbm_sel_o = cpu_bsel_i;
 	 assign wbm_we_o = cpu_we_i;
 	 assign wbm_cti_o = bursting ? (finish_burst ? 3'b111 : 3'b010) :
@@ -143,8 +143,8 @@ module mor1kx_bus_if_wb32
 	 /* verilator lint_on WIDTH */
 
 	 assign wbm_adr_o = cpu_adr_i;
-	 assign wbm_stb_o = cpu_req_i;
-	 assign wbm_cyc_o = cpu_req_i;
+	 assign wbm_stb_o = cpu_req_i & !rst;
+	 assign wbm_cyc_o = cpu_req_i & !rst;
 	 assign wbm_sel_o = cpu_bsel_i;
 	 assign wbm_we_o = cpu_we_i;
 	 assign wbm_cti_o = cpu_burst_i ? 3'b010 : 3'b111;
@@ -177,8 +177,8 @@ module mor1kx_bus_if_wb32
 	 assign cpu_dat_o = wbm_dat_i;
 
 	 assign wbm_adr_o = cpu_adr_i;
-	 assign wbm_stb_o = cpu_req_i & !cycle_end;
-	 assign wbm_cyc_o = cpu_req_i;
+	 assign wbm_stb_o = cpu_req_i & !cycle_end & !rst;
+	 assign wbm_cyc_o = cpu_req_i & !rst;
 	 assign wbm_sel_o = cpu_bsel_i;
 	 assign wbm_we_o = cpu_we_i;
 	 assign wbm_cti_o = 0;
