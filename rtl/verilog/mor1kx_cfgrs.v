@@ -126,10 +126,10 @@ module mor1kx_cfgrs
    assign spr_vr2[`OR1K_SPR_VR2_VER] = {`MOR1KX_VERSION_MAJOR,
                                         `MOR1KX_VERSION_MINOR,
                                         8'd0};
-      
-   /* Currently supporting Or1K version 1.0 rev0 */
+
+   /* Currently supporting OR1K version 1.1 rev0 */
    assign spr_avr[`OR1K_SPR_AVR_MAJ] = 8'd1;
-   assign spr_avr[`OR1K_SPR_AVR_MIN] = 8'd0;
+   assign spr_avr[`OR1K_SPR_AVR_MIN] = 8'd1;
    assign spr_avr[`OR1K_SPR_AVR_REV] = 8'd0;
    assign spr_avr[`OR1K_SPR_AVR_RESERVED] = 0;
 
