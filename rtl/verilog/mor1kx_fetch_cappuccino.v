@@ -359,7 +359,7 @@ module mor1kx_fetch_cappuccino
 		     ibus_access ? ibus_dat : ic_dat;
    assign ibus_adr_o = ibus_access ? ibus_adr : ic_ibus_adr;
    assign ibus_req_o = ibus_access ? ibus_req : ic_ibus_req;
-   assign ibus_burst_o = ic_refill & !ic_refill_done;
+   assign ibus_burst_o = !ibus_access & ic_refill & !ic_refill_done;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
