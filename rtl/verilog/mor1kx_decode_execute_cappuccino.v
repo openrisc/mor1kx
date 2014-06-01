@@ -509,6 +509,7 @@ module mor1kx_decode_execute_cappuccino
 			     decode_op_jr_i &
 			     (ctrl_to_decode_interlock |
 			      (decode_rfb_adr_i == execute_rfd_adr_o)) |
+			     execute_op_lsu_store_o & execute_op_lsu_atomic_o |
 			     decode_op_rfe_i) & padv_i;
 
    always @(posedge clk `OR_ASYNC_RST)

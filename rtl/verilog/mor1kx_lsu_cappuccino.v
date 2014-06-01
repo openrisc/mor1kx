@@ -75,7 +75,7 @@ module mor1kx_lsu_cappuccino
 
     // Atomic operation flag set/clear logic
     output 			      atomic_flag_set_o,
-    output 			      atomic_flag_clear_o,
+    output			      atomic_flag_clear_o,
 
     // SPR interface
     input [15:0] 		      spr_bus_addr_i,
@@ -96,7 +96,7 @@ module mor1kx_lsu_cappuccino
     output 			      dbus_req_o,
     output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
     output [3:0] 		      dbus_bsel_o,
-    output reg 			      dbus_we_o,
+    output 			      dbus_we_o,
     output 			      dbus_burst_o,
     input 			      dbus_err_i,
     input 			      dbus_ack_i,
@@ -128,6 +128,7 @@ module mor1kx_lsu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0]   dbus_sdat;
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_adr;
    reg 				     dbus_req;
+   reg 				     dbus_we;
    reg [3:0] 			     dbus_bsel;
    wire 			     dbus_access;
    wire 			     dbus_stall;
@@ -188,7 +189,10 @@ module mor1kx_lsu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0]   store_buffer_wadr;
    wire [OPTION_OPERAND_WIDTH-1:0]   store_buffer_dat;
    wire [OPTION_OPERAND_WIDTH/8-1:0] store_buffer_bsel;
+   wire 			     store_buffer_atomic;
    reg 				     store_buffer_write_pending;
+
+   reg 				     write_done;
 
    // Atomic operations
    reg [OPTION_OPERAND_WIDTH-1:0]    atomic_addr;
@@ -350,7 +354,9 @@ module mor1kx_lsu_cappuccino
      dc_refill_r <= dc_refill;
 
    assign lsu_ack = (ctrl_op_lsu_store_i | state == WRITE) ?
-		    (store_buffer_write | swa_fail & padv_ctrl_i) :
+		    (store_buffer_write & !ctrl_op_lsu_atomic_i |
+		     write_done & ctrl_op_lsu_atomic_i |
+		     swa_fail & padv_ctrl_i) :
 		    (dbus_access ? dbus_ack : dc_ack);
 
    assign lsu_ldat = dbus_access ? dbus_ldat : dc_ldat;
@@ -362,6 +368,12 @@ module mor1kx_lsu_cappuccino
    assign dbus_dat_o = store_buffer_dat;
 
    assign dbus_burst_o = dc_refill & !dc_refill_done;
+   //
+   // Slightly subtle, but if there is an atomic store coming out from the
+   // store buffer, and the link has been broken while it was waiting there,
+   // the bus access is still performed as a (discarded) read.
+   //
+   assign dbus_we_o = dbus_we & (!store_buffer_atomic | atomic_reserve);
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -371,17 +383,18 @@ module mor1kx_lsu_cappuccino
 
    always @(posedge clk) begin
       dbus_ack <= 0;
+      write_done <= 0;
       tlb_reload_ack <= 0;
       tlb_reload_done <= 0;
       case (state)
 	IDLE: begin
 	   dbus_req <= 0;
-	   dbus_we_o <= 0;
+	   dbus_we <= 0;
 	   dbus_adr <= 0;
 	   if (store_buffer_write | !store_buffer_empty) begin
 	      state <= WRITE;
 	      dbus_req <= 1;
-	      dbus_we_o <= 1;
+	      dbus_we <= 1;
 	   end else if (ctrl_op_lsu & dbus_access & !dc_refill & !dbus_ack &
 			!dbus_err & !except_dbus & !access_done &
 			!pipeline_flush_i) begin
@@ -418,11 +431,12 @@ module mor1kx_lsu_cappuccino
 
 	WRITE: begin
 	   dbus_req <= 1;
-	   dbus_we_o <= 1;
+	   dbus_we <= 1;
 	   if (store_buffer_empty & !store_buffer_write & dbus_ack_i |
 	       dbus_err_i) begin
 	      dbus_req <= 0;
-	      dbus_we_o <= 0;
+	      dbus_we <= 0;
+	      write_done <= 1;
 	      state <= IDLE;
 	   end
 	end
@@ -457,13 +471,17 @@ module mor1kx_lsu_cappuccino
 generate
 if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
    // Atomic operations logic
+   reg atomic_flag_set;
+   reg atomic_flag_clear;
+
    always @(posedge clk)
      if (rst | pipeline_flush_i)
        atomic_reserve <= 0;
      else if (ctrl_op_lsu_load_i & ctrl_op_lsu_atomic_i & padv_ctrl_i)
        atomic_reserve <= 1;
-     else if ((ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i & padv_ctrl_i) ||
-	      store_buffer_write & (store_buffer_wadr == atomic_addr) ||
+     else if (ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i & write_done ||
+	      !ctrl_op_lsu_atomic_i & store_buffer_write &
+	      (store_buffer_wadr == atomic_addr) ||
 	      (snoop_valid & (snoop_adr_i == atomic_addr)))
        atomic_reserve <= 0;
 
@@ -472,12 +490,25 @@ if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
        atomic_addr <= dc_adr_match;
 
    assign swa_success = ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i &
-			atomic_reserve & (store_buffer_wadr == atomic_addr);
+			atomic_reserve & (store_buffer_radr == atomic_addr);
    assign swa_fail = ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i &
 		     (!atomic_reserve | (store_buffer_wadr != atomic_addr));
 
-   assign atomic_flag_set_o = swa_success & padv_ctrl_i;
-   assign atomic_flag_clear_o = swa_fail & padv_ctrl_i;
+   always @(posedge clk)
+     if (padv_ctrl_i)
+       atomic_flag_set <= 0;
+     else if (write_done)
+       atomic_flag_set <= swa_success & lsu_valid_o;
+
+   always @(posedge clk)
+     if (padv_ctrl_i)
+       atomic_flag_clear <= 0;
+     else if (write_done)
+       atomic_flag_clear <= !swa_success & lsu_valid_o &
+			    ctrl_op_lsu_atomic_i & ctrl_op_lsu_store_i;
+
+   assign atomic_flag_set_o = atomic_flag_set;
+   assign atomic_flag_clear_o = swa_fail & padv_ctrl_i | atomic_flag_clear;
 
 end else begin
    assign atomic_flag_set_o = 0;
@@ -526,12 +557,14 @@ endgenerate
       .adr_i	(store_buffer_wadr),
       .dat_i	(dbus_sdat),
       .bsel_i	(dbus_bsel),
+      .atomic_i	(ctrl_op_lsu_atomic_i),
       .write_i	(store_buffer_write),
 
       .pc_o	(store_buffer_epcr_o),
       .adr_o	(store_buffer_radr),
       .dat_o	(store_buffer_dat),
       .bsel_o	(store_buffer_bsel),
+      .atomic_o	(store_buffer_atomic),
       .read_i	(store_buffer_read),
 
       .full_o	(store_buffer_full),
