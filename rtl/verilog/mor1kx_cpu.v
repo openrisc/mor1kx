@@ -69,7 +69,7 @@ module mor1kx_cpu(/*AUTOARG*/
    parameter FEATURE_TRAP		= "ENABLED";
    parameter FEATURE_RANGE		= "ENABLED";
 
-   parameter OPTION_PIC_TRIGGER		= "EDGE";
+   parameter OPTION_PIC_TRIGGER		= "LEVEL";
 
    parameter FEATURE_DSX		= "NONE";
    parameter FEATURE_FASTCONTEXTS	= "NONE";

@@ -59,7 +59,7 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_MAC = "NONE",
     parameter FEATURE_FPU = "NONE",
 
-    parameter OPTION_PIC_TRIGGER = "EDGE",
+    parameter OPTION_PIC_TRIGGER = "LEVEL",
 
     parameter FEATURE_DSX ="NONE",
     parameter FEATURE_FASTCONTEXTS = "NONE",
