@@ -22,7 +22,7 @@ module mor1kx_pic
    clk, rst, irq_i, spr_we_i, spr_addr_i, spr_dat_i
    );
 
-   parameter OPTION_PIC_TRIGGER="EDGE";
+   parameter OPTION_PIC_TRIGGER="LEVEL";
 
    input clk;
    input rst;
