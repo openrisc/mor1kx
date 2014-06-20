@@ -484,13 +484,13 @@ if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
    always @(posedge clk)
      if (rst | pipeline_flush_i)
        atomic_reserve <= 0;
-     else if (ctrl_op_lsu_load_i & ctrl_op_lsu_atomic_i & padv_ctrl_i)
-       atomic_reserve <= 1;
      else if (ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i & write_done ||
 	      !ctrl_op_lsu_atomic_i & store_buffer_write &
 	      (store_buffer_wadr == atomic_addr) ||
 	      (snoop_valid & (snoop_adr_i == atomic_addr)))
        atomic_reserve <= 0;
+     else if (ctrl_op_lsu_load_i & ctrl_op_lsu_atomic_i & padv_ctrl_i)
+       atomic_reserve <= 1;
 
    always @(posedge clk)
      if (ctrl_op_lsu_load_i & ctrl_op_lsu_atomic_i & padv_ctrl_i)
