@@ -58,7 +58,7 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_PMU = "NONE",
     parameter FEATURE_MAC = "NONE",
     parameter FEATURE_FPU = "NONE",
-    parameter FEATURE_MULTICORE = 0,
+    parameter FEATURE_MULTICORE = "NONE",
 
     parameter OPTION_PIC_TRIGGER = "EDGE",
 
@@ -909,11 +909,11 @@ module mor1kx_ctrl_cappuccino
        `OR1K_SPR_COREID_ADDR:
 	 // If the multicore feature is activated this address returns the
 	 // core identifier, 0 otherwise
-	 spr_sys_group_read = (FEATURE_MULTICORE == "ENABLED") ? multicore_coreid_i : 0;
+	 spr_sys_group_read = (FEATURE_MULTICORE != "NONE") ? multicore_coreid_i : 0;
        `OR1K_SPR_NUMCORES_ADDR:
 	 // If the multicore feature is activated this address returns the
 	 // core identifier, 0 otherwise
-	 spr_sys_group_read = (FEATURE_MULTICORE == "ENABLED") ? multicore_numcores_i : 0;
+	 spr_sys_group_read = (FEATURE_MULTICORE != "NONE") ? multicore_numcores_i : 0;
        
        default: begin
 	  // GPR read
