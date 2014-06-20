@@ -339,7 +339,7 @@ module mor1kx_dcache
    genvar 			      i;
 
    assign cpu_err_o = dbus_err_i;
-   assign cpu_ack_o = ((read | refill) & hit & !snoop_check & !write_pending |
+   assign cpu_ack_o = ((read | refill) & hit & !snoop_hit & !write_pending |
 		       refill_hit) & cpu_req_i;
    assign dbus_adr_o = dbus_adr;
    assign dbus_req_o = refill;
