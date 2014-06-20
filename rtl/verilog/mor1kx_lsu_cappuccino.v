@@ -159,6 +159,9 @@ module mor1kx_lsu_cappuccino
    reg 				     dc_enable_r;
    wire 			     dc_enabled;
 
+   wire 			     dc_snoop_read_tagmem;
+   wire 			     dc_snoop_hit;
+   
    wire 			     ctrl_op_lsu;
 
    // DMMU
@@ -346,6 +349,7 @@ module mor1kx_lsu_cappuccino
 
    reg [1:0] state;
 
+   // The data bus is accesses by the LSU and not the cache
    assign dbus_access = (!dc_access | tlb_reload_busy | ctrl_op_lsu_store_i) &
 			!dc_refill | (state == WRITE);
    reg      dc_refill_r;
@@ -381,6 +385,7 @@ module mor1kx_lsu_cappuccino
      else
        dbus_err <= dbus_err_i;
 
+   // This is the state machine that handles the bus side of the LSU
    always @(posedge clk) begin
       dbus_ack <= 0;
       write_done <= 0;
@@ -392,6 +397,8 @@ module mor1kx_lsu_cappuccino
 	   dbus_we <= 0;
 	   dbus_adr <= 0;
 	   if (store_buffer_write | !store_buffer_empty) begin
+	      // We go to WRITE state if there is a write or a write
+	      // pending in the store buffer
 	      state <= WRITE;
 	      dbus_req <= 1;
 	      dbus_we <= 1;
@@ -527,14 +534,14 @@ endgenerate
      if (store_buffer_write | pipeline_flush_i)
        store_buffer_write_pending <= 0;
      else if (ctrl_op_lsu_store_i & padv_ctrl_i & !swa_fail & !dbus_stall &
-	      (store_buffer_full | dc_refill | dc_refill_r))
+	      (store_buffer_full | dc_refill | dc_refill_r | dc_snoop_read_tagmem))
        store_buffer_write_pending <= 1;
 
    assign store_buffer_write = (ctrl_op_lsu_store_i & !swa_fail &
 				(padv_ctrl_i | tlb_reload_done) |
 				store_buffer_write_pending) &
 			       !store_buffer_full & !dc_refill & !dc_refill_r &
-			       !dbus_stall;
+			       !dbus_stall & !dc_snoop_read_tagmem;
 
    assign store_buffer_read = (state == IDLE) & store_buffer_write |
 			      (state == IDLE) & !store_buffer_empty |
@@ -586,6 +593,7 @@ endgenerate
    assign dc_adr_match = dmmu_enable_i ?
 			 {dmmu_phys_addr[OPTION_OPERAND_WIDTH-1:2],2'b0} :
 			 {ctrl_lsu_adr_i[OPTION_OPERAND_WIDTH-1:2],2'b0};
+   
    assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall;
    assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE);
 
@@ -624,6 +632,9 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .dbus_dat_o			(dc_dbus_sdat),
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
+            .snoop_hit_o                (dc_snoop_hit),
+            .snoop_read_tagmem_o        (dc_snoop_read_tagmem),
+            .traceport_.*               (),
 	    // Inputs
 	    .clk			(clk),
 	    .rst			(rst),
@@ -636,6 +647,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_we_i			(dc_we),
 	    .cpu_bsel_i			(dc_bsel),
 	    .refill_allowed		(dc_refill_allowed),
+            .snoop_en_i                 (snoop_valid),
     );*/
 
    mor1kx_dcache
@@ -660,6 +672,15 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .dbus_bsel_o		(dc_dbus_bsel),		 // Templated
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),	 // Templated
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
+	    .snoop_read_tagmem_o	(dc_snoop_read_tagmem),	 // Templated
+	    .snoop_hit_o		(dc_snoop_hit),		 // Templated
+	    .traceport_start_o		(),			 // Templated
+	    .traceport_end_o		(),			 // Templated
+	    .traceport_read_o		(),			 // Templated
+	    .traceport_write_o		(),			 // Templated
+	    .traceport_hit_o		(),			 // Templated
+	    .traceport_miss_o		(),			 // Templated
+	    .traceport_snoop_o		(),			 // Templated
 	    // Inputs
 	    .clk			(clk),			 // Templated
 	    .rst			(rst),			 // Templated
@@ -678,7 +699,9 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .spr_bus_addr_i		(spr_bus_addr_i[15:0]),
 	    .spr_bus_we_i		(spr_bus_we_i),
 	    .spr_bus_stb_i		(spr_bus_stb_i),
-	    .spr_bus_dat_i		(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
+	    .spr_bus_dat_i		(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .snoop_adr_i		(snoop_adr_i[31:0]),
+	    .snoop_en_i			(snoop_valid));		 // Templated
 end else begin
    assign dc_access = 0;
    assign dc_refill = 0;
