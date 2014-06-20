@@ -196,6 +196,8 @@ module mor1kx_lsu_cappuccino
    wire				     swa_fail;
 
    wire 			     snoop_valid;
+   wire 			     dc_snoop_hit;
+
    // We have to mask out our snooped bus accesses
    assign snoop_valid = snoop_en_i &
 			!((snoop_adr_i == dbus_adr_o) & dbus_ack_i);
@@ -213,7 +215,7 @@ module mor1kx_lsu_cappuccino
    assign align_err_short = ctrl_lsu_adr_i[0];
 
 
-   assign lsu_valid_o = (lsu_ack | access_done) & !tlb_reload_busy;
+   assign lsu_valid_o = (lsu_ack | access_done) & !tlb_reload_busy & !dc_snoop_hit;
 
    assign lsu_except_dbus_o = except_dbus | store_buffer_err_o;
 
@@ -548,7 +550,8 @@ endgenerate
 				(padv_ctrl_i | tlb_reload_done) |
 				store_buffer_write_pending) &
 			       !store_buffer_full & !dc_refill & !dc_refill_r &
-			       !dbus_stall;
+			       !dbus_stall & !dc_snoop_hit;
+
 generate
 if (FEATURE_STORE_BUFFER!="NONE") begin : store_buffer_gen
    assign store_buffer_read = (state == IDLE) & store_buffer_write |
@@ -654,6 +657,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_dat_o			(dc_ldat),
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
+            .snoop_hit_o                (dc_snoop_hit),
 	    // Inputs
 	    .clk			(clk),
 	    .rst			(dc_rst),
@@ -669,6 +673,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .wradr_i			(dbus_adr),
 	    .wrdat_i			(dbus_dat_i),
 	    .we_i			(dbus_ack_i),
+            .snoop_valid_i              (snoop_valid),
     );*/
 
    mor1kx_dcache
@@ -688,6 +693,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_err_o			(dc_err),		 // Templated
 	    .cpu_ack_o			(dc_ack),		 // Templated
 	    .cpu_dat_o			(dc_ldat),		 // Templated
+	    .snoop_hit_o		(dc_snoop_hit),		 // Templated
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),	 // Templated
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
 	    // Inputs
@@ -705,6 +711,8 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .wradr_i			(dbus_adr),		 // Templated
 	    .wrdat_i			(dbus_dat_i),		 // Templated
 	    .we_i			(dbus_ack_i),		 // Templated
+	    .snoop_adr_i		(snoop_adr_i[31:0]),
+	    .snoop_valid_i		(snoop_valid),		 // Templated
 	    .spr_bus_addr_i		(spr_bus_addr_i[15:0]),
 	    .spr_bus_we_i		(spr_bus_we_i),
 	    .spr_bus_stb_i		(spr_bus_stb_i),
@@ -718,6 +726,7 @@ end else begin
    assign dc_ack = 0;
    assign dc_bsel = 0;
    assign dc_we = 0;
+   assign dc_snoop_hit = 0;
 end
 
 endgenerate
