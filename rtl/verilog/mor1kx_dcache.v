@@ -640,6 +640,8 @@ module mor1kx_dcache
 	 for (w2 = 0; w2 < OPTION_DCACHE_WAYS; w2 = w2 + 1) begin
 	    if (snoop_way_hit[w2]) begin
 	       tag_way_in[w2] = 0;
+	    end else if (OPTION_DCACHE_SNOOP_TAGMEM != "NONE") begin
+	       tag_way_in[w2] = snoopmem_way_out[w2];
 	    end
 	 end
       end else begin
