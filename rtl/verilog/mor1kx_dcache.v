@@ -161,11 +161,10 @@ module mor1kx_dcache
 
 
    // States
-   localparam IDLE		= 5'b00001; // TODO: deprecate
-   localparam READ		= 5'b00010;
-   localparam WRITE		= 5'b00100;
-   localparam REFILL		= 5'b01000;
-   localparam INVALIDATE	= 5'b10000;
+   localparam READ		= 4'b0001;
+   localparam WRITE		= 4'b0010;
+   localparam REFILL		= 4'b0100;
+   localparam INVALIDATE	= 4'b1000;
 
    // Address space in bytes for a way
    localparam WAY_WIDTH = OPTION_DCACHE_BLOCK_WIDTH + OPTION_DCACHE_SET_WIDTH;
@@ -437,7 +436,6 @@ module mor1kx_dcache
 				OPTION_DCACHE_BLOCK_WIDTH] &
 		       refill & !write_pending;
 
-   assign idle = (state == IDLE);
    assign refill = (state == REFILL);
    assign read = (state == READ);
    assign write = (state == WRITE);
@@ -469,7 +467,6 @@ module mor1kx_dcache
 
    /*
     * Cache FSM
-    * Starts in IDLE.
     * State changes between READ and WRITE happens cpu_we_i is asserted or not.
     * cpu_we_i is in sync with cpu_adr_i, so that means that it's the
     * *upcoming* write that it is indicating. It only toggles for one cycle,
@@ -503,89 +500,67 @@ module mor1kx_dcache
 	    snoop_check <= 0;
 	 end
 
-	 if (!snoop_read_tagmem) begin
-	    // We can only handle external requests when no snoop
-	    // checking is needed which is either no snoop event or we
-	    // have the separate tag memory for snoop checking
-	    case (state)
-	      IDLE: begin
-		 if (invalidate) begin
-		    // If there is an invalidation request
-		    //
-		    // Store address in dbus_adr that is muxed to the tag
-		    // memory write address
-		    dbus_adr <= spr_bus_dat_i;
-
-		    // Change to invalidate state that actually accesses
-		    // the tag memory
+	 // We can only handle external requests when no snoop
+	 // checking is needed which is either no snoop event or we
+	 // have the separate tag memory for snoop checking
+	 case (state)
+	   READ: begin
+	      if (dc_access_i | cpu_we_i & dc_enable_i) begin
+		 if (!hit & cpu_req_i & !write_pending & refill_allowed) begin
+		    refill_valid <= 0;
+		    refill_valid_r <= 0;
+		    dbus_adr <= cpu_adr_match_i;
+		    
+		    // Store the LRU information for correct replacement
+                    // on refill. Always one when only one way.
+                    tag_save_lru <= (OPTION_DCACHE_WAYS==1) | lru;
+		    
+		    for (w1 = 0; w1 < OPTION_DCACHE_WAYS; w1 = w1 + 1) begin
+		       tag_way_save[w1] <= tag_way_out[w1];
+		    end
+		    
+		    state <= REFILL;
+		 end else if (cpu_we_i | write_pending) begin
+		    state <= WRITE;
+		 end else if (invalidate) begin
 		    state <= INVALIDATE;
-		 end else if (cpu_we_i | write_pending)
-		   state <= WRITE;
-		 else if (cpu_req_i)
-		   // There is a read access
+		 end
+	      end else if (invalidate) begin // if (dc_access_i | cpu_we_i & dc_enable_i)
+		 state <= INVALIDATE;
+	      end
+	   end
+	   REFILL: begin
+	      if (dbus_ack_i) begin
+		 dbus_adr <= next_dbus_adr;
+		 refill_valid[dbus_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]] <= 1;
+		 
+		 if (refill_done)
 		   state <= READ;
 	      end
-
-	      READ: begin
-		 if (dc_access_i | cpu_we_i & dc_enable_i) begin
-		    if (!hit & cpu_req_i & !write_pending & refill_allowed) begin
-		       refill_valid <= 0;
-		       refill_valid_r <= 0;
-		       dbus_adr <= cpu_adr_match_i;
-
-		       // Store the LRU information for correct replacement
-                       // on refill. Always one when only one way.
-                       tag_save_lru <= (OPTION_DCACHE_WAYS==1) | lru;
-
-		       for (w1 = 0; w1 < OPTION_DCACHE_WAYS; w1 = w1 + 1) begin
-			  tag_way_save[w1] <= tag_way_out[w1];
-		       end
-
-		       state <= REFILL;
-		    end else if (cpu_we_i | write_pending) begin
-		       state <= WRITE;
-		    end else if (invalidate) begin
-		       state <= INVALIDATE;
-		    end
-		 end else if (invalidate) begin // if (dc_access_i | cpu_we_i & dc_enable_i)
-		    state <= INVALIDATE;
-//		 end else if (!dc_enable_i | invalidate) begin
-//		    state <= IDLE;
-		 end
+	   end
+	   
+	   WRITE: begin
+	      if ((!dc_access_i | !cpu_req_i | !cpu_we_i) & !snoop_hit) begin
+		 write_pending <= 0;
+		 state <= READ;
 	      end
-	      REFILL: begin
-		 if (dbus_ack_i) begin
-		    dbus_adr <= next_dbus_adr;
-		    refill_valid[dbus_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]] <= 1;
-
-		    if (refill_done)
-		      state <= READ;
-		 end
+	   end
+	   
+	   INVALIDATE: begin
+	      if (invalidate) begin
+		 // Store address in dbus_adr that is muxed to the tag
+		 // memory write address
+		 dbus_adr <= spr_bus_dat_i;
+		 
+		 state <= INVALIDATE;
+	      end else begin
+		 state <= READ;
 	      end
-
-	      WRITE: begin
-		 if (!dc_access_i | !cpu_req_i | !cpu_we_i) begin
-		    write_pending <= 0;
-		    state <= READ;
-		 end
-	      end
-
-	      INVALIDATE: begin
-		 if (invalidate) begin
-		    // Store address in dbus_adr that is muxed to the tag
-		    // memory write address
-		    dbus_adr <= spr_bus_dat_i;
-
-		    state <= INVALIDATE;
-		 end else begin
-		    state <= READ;
-		 end
-	      end
-
-	      default:
-		state <= IDLE;
-	    endcase // case (state)
-	 end // if (!snoop_check)
+	   end
+	   
+	   default:
+	     state <= READ;
+	 endcase // case (state)
       end // else: !if(rst | dbus_err_i)
    end // always @ (posedge clk `OR_ASYNC_RST)
 
@@ -649,13 +624,6 @@ module mor1kx_dcache
 	 // this cycle.
 	 tagmem_windex = dbus_adr[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 	 case (state)
-	   IDLE: begin
-	      // When idle we can always acknowledge the invalidate as it
-	      // has the highest priority in handling. When something is
-	      // changed on the state machine handling above this needs
-	      // to be changed.
-	      invalidate_ack = 1'b1;
-	   end
 	   READ: begin
 	      // In the previous cycle the tag was addressed with the
 	      // index of the request. If we have a hit, we need to
