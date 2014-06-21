@@ -249,7 +249,8 @@ module mor1kx_dcache
    reg [OPTION_DCACHE_WAYS-1:0]       way_we;
 
    // Does any way hit?
-   wire 			      hit;
+   wire 			      tagmem_hit;
+   wire 			      cpu_hit;
    wire [OPTION_DCACHE_WAYS-1:0]      way_hit;
 
    // This is the least recently used value before access the memory.
@@ -310,7 +311,9 @@ module mor1kx_dcache
    reg [TAG_WIDTH-1:0] 		      snoop_tag;
    // Also store the index for one cycle, for the succeeding write access
    reg [OPTION_DCACHE_SET_WIDTH-1:0]  snoop_windex;
-
+   wire 			      snoop_check_tagmem;
+   assign snoop_check_tagmem = snoop_check & (OPTION_DCACHE_SNOOP_TAGMEM == "NONE");
+   
    // Snoop tag memory interface
    // Data out of tag memory
    wire [TAGMEM_WIDTH-1:0] 	      snoopmem_dout;
@@ -338,7 +341,7 @@ module mor1kx_dcache
    genvar 			      i;
 
    assign cpu_err_o = dbus_err_i;
-   assign cpu_ack_o = ((read | refill) & hit & !snoop_hit & !write_pending |
+   assign cpu_ack_o = ((read | refill) & cpu_hit & !write_pending |
 		       refill_hit) & cpu_req_i;
    assign dbus_adr_o = dbus_adr;
    assign dbus_req_o = refill;
@@ -397,15 +400,21 @@ module mor1kx_dcache
    endgenerate
 
    // Did any way hit (or snoop hit)
-   assign hit = |way_hit;
+   assign tagmem_hit = |way_hit;
    // Did any way hit in the snoop tag memory
    assign snoopmem_hit = |snoopmem_way_hit;
 
+   // This one is only high for a hit that was caused by a cpu
+   // operation
+   assign cpu_hit = tagmem_hit & 
+		     ((OPTION_DCACHE_SNOOP_TAGMEM != "NONE") |
+		      !snoop_check_tagmem);
+   
    // Multiplex snoop tag memory hits or normal tag memory hits, also
    // mask with snoop_check
    assign snoop_hit = snoop_check &
 		      ((OPTION_DCACHE_SNOOP_TAGMEM == "NONE") ?
-		       hit : snoopmem_hit);
+		       tagmem_hit : snoopmem_hit);
 
    // Also multiplex the way for the actual invalidation
    assign snoop_way_hit = (OPTION_DCACHE_SNOOP_TAGMEM == "NONE") ?
@@ -506,7 +515,7 @@ module mor1kx_dcache
 	 case (state)
 	   READ: begin
 	      if (dc_access_i | cpu_we_i & dc_enable_i) begin
-		 if (!hit & cpu_req_i & !write_pending & refill_allowed) begin
+		 if (!cpu_hit & cpu_req_i & !write_pending & refill_allowed) begin
 		    refill_valid <= 0;
 		    refill_valid_r <= 0;
 		    dbus_adr <= cpu_adr_match_i;
@@ -630,7 +639,7 @@ module mor1kx_dcache
 	      // update the LRU information, which we do below. The
 	      // state transition is controlled above.
 	      tagmem_windex = cpu_adr_match_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
-	      if (dc_access_i  & hit & dc_enable_i & cpu_req_i) begin
+	      if (dc_access_i  & cpu_hit & dc_enable_i & cpu_req_i) begin
 		 // We got a hit. The LRU module gets the access
 		 // information. Depending on this we update the LRU
 		 // history in the tag.
@@ -648,7 +657,7 @@ module mor1kx_dcache
 	      tagmem_windex = cpu_adr_match_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 	      
 	      way_wr_dat = cpu_dat_i;
-	      if (hit & cpu_req_i) begin
+	      if (cpu_hit & cpu_req_i) begin
 		 /* Mux cache output with write data */
 		 if (!cpu_bsel_i[3])
 		   way_wr_dat[31:24] = cpu_dat_o[31:24];
@@ -669,8 +678,10 @@ module mor1kx_dcache
 	   
 	   REFILL: begin
 	      if (dbus_ack_i) begin
-		 // Write the data to the way that is replaced (which is
-		 // the LRU)
+		 // Snoop hint: This cannot happen during snoop
+		 // operations as they can only come from the bus.
+		 // Write the data to the way that is replaced (which
+		 // is the LRU)
 		 way_we = tag_save_lru;
 		 
 		 // Access pattern
