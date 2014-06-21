@@ -198,7 +198,6 @@ module mor1kx_lsu_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0]    atomic_addr;
    reg 				     atomic_reserve;
    wire				     swa_success;
-   wire				     swa_fail;
 
    wire 			     snoop_valid;
 
@@ -355,8 +354,7 @@ module mor1kx_lsu_cappuccino
 
    assign lsu_ack = (ctrl_op_lsu_store_i | state == WRITE) ?
 		    (store_buffer_write & !ctrl_op_lsu_atomic_i |
-		     write_done & ctrl_op_lsu_atomic_i |
-		     swa_fail & padv_ctrl_i) :
+		     write_done & ctrl_op_lsu_atomic_i) :
 		    (dbus_access ? dbus_ack : dc_ack);
 
    assign lsu_ldat = dbus_access ? dbus_ldat : dc_ldat;
@@ -491,8 +489,6 @@ if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
 
    assign swa_success = ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i &
 			atomic_reserve & (store_buffer_radr == atomic_addr);
-   assign swa_fail = ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i &
-		     (!atomic_reserve | (store_buffer_wadr != atomic_addr));
 
    always @(posedge clk)
      if (padv_ctrl_i)
@@ -508,13 +504,12 @@ if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
 			    ctrl_op_lsu_atomic_i & ctrl_op_lsu_store_i;
 
    assign atomic_flag_set_o = atomic_flag_set;
-   assign atomic_flag_clear_o = swa_fail & padv_ctrl_i | atomic_flag_clear;
+   assign atomic_flag_clear_o = atomic_flag_clear;
 
 end else begin
    assign atomic_flag_set_o = 0;
    assign atomic_flag_clear_o = 0;
    assign swa_success = 0;
-   assign swa_fail = 0;
    always @(posedge clk) begin
       atomic_addr <= 0;
       atomic_reserve <= 0;
@@ -526,11 +521,11 @@ endgenerate
    always @(posedge clk)
      if (store_buffer_write | pipeline_flush_i)
        store_buffer_write_pending <= 0;
-     else if (ctrl_op_lsu_store_i & padv_ctrl_i & !swa_fail & !dbus_stall &
+     else if (ctrl_op_lsu_store_i & padv_ctrl_i & !dbus_stall &
 	      (store_buffer_full | dc_refill | dc_refill_r))
        store_buffer_write_pending <= 1;
 
-   assign store_buffer_write = (ctrl_op_lsu_store_i & !swa_fail &
+   assign store_buffer_write = (ctrl_op_lsu_store_i &
 				(padv_ctrl_i | tlb_reload_done) |
 				store_buffer_write_pending) &
 			       !store_buffer_full & !dc_refill & !dc_refill_r &
