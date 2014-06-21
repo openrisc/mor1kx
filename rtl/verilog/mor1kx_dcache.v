@@ -515,7 +515,7 @@ module mor1kx_dcache
 	 case (state)
 	   READ: begin
 	      if (dc_access_i | cpu_we_i & dc_enable_i) begin
-		 if (!cpu_hit & cpu_req_i & !write_pending & refill_allowed) begin
+		 if (!cpu_hit & !snoop_check_tagmem & cpu_req_i & !write_pending & refill_allowed) begin
 		    refill_valid <= 0;
 		    refill_valid_r <= 0;
 		    dbus_adr <= cpu_adr_match_i;
