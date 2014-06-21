@@ -81,7 +81,7 @@ module mor1kx_ctrl_prontoespresso
    parameter FEATURE_FPU                = "NONE";   
    parameter FEATURE_MULTICORE          = 0;   
 
-   parameter OPTION_PIC_TRIGGER         = "EDGE";
+   parameter OPTION_PIC_TRIGGER         = "LEVEL";
 
    parameter FEATURE_DSX                = "NONE";
    parameter FEATURE_FASTCONTEXTS       = "NONE";

@@ -60,7 +60,7 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_FPU = "NONE",
     parameter FEATURE_MULTICORE = 0,
 
-    parameter OPTION_PIC_TRIGGER = "EDGE",
+    parameter OPTION_PIC_TRIGGER = "LEVEL",
 
     parameter FEATURE_DSX ="NONE",
     parameter FEATURE_FASTCONTEXTS = "NONE",
@@ -123,7 +123,7 @@ module mor1kx_ctrl_cappuccino
     input 			      fetch_valid_i,
     input 			      decode_valid_i,
     input 			      execute_valid_i,
-    input 			      execute_waiting_i,
+    input 			      ctrl_valid_i,
 
     input 			      fetch_exception_taken_i,
 
@@ -237,6 +237,7 @@ module mor1kx_ctrl_cappuccino
    reg 				     execute_delay_slot;
    reg 				     ctrl_delay_slot;
 
+   wire				     execute_waiting;
    reg 				     execute_waiting_r;
 
    reg 				     decode_execute_halt;
@@ -451,17 +452,19 @@ module mor1kx_ctrl_cappuccino
 				{19'd0,`OR1K_TT_VECTOR,8'd0};
        endcase // casex (...
 
-   assign padv_fetch_o = !execute_waiting_i & !cpu_stall & !decode_bubble_i
+   assign execute_waiting = !execute_valid_i;
+
+   assign padv_fetch_o = !execute_waiting & !cpu_stall & !decode_bubble_i
 			 & (!stepping | (stepping & pstep[0] & !fetch_valid_i));
 
-   assign padv_decode_o = fetch_valid_i & !execute_waiting_i &
+   assign padv_decode_o = fetch_valid_i & !execute_waiting &
 			  !decode_execute_halt & !cpu_stall
 			  & (!stepping | (stepping & pstep[1]));
 
-   assign padv_execute_o = ((decode_valid_i & !execute_waiting_i &
+   assign padv_execute_o = ((decode_valid_i & !execute_waiting &
 			     /* Stop fetch before exception branch continuing */
 			     !(exception_r & fetch_exception_taken_i)) |
-			    (!execute_waiting_i & execute_waiting_r &
+			    (!execute_waiting & execute_waiting_r &
 			     fetch_valid_i) |
 			    // Case where execute became ready before fetch
 			    // after delay in execute stage
@@ -502,9 +505,9 @@ module mor1kx_ctrl_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        execute_waiting_r <= 0;
-     else if (!execute_waiting_i)
+     else if (!execute_waiting)
        execute_waiting_r <= 0;
-     else if (decode_valid_i & execute_waiting_i)
+     else if (decode_valid_i & execute_waiting)
        execute_waiting_r <= 1;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -558,7 +561,7 @@ module mor1kx_ctrl_cappuccino
        waiting_for_fetch <= 0;
      else if (fetch_valid_i)
        waiting_for_fetch <= 0;
-     else if (!execute_waiting_i & execute_waiting_r & !fetch_valid_i)
+     else if (!execute_waiting & execute_waiting_r & !fetch_valid_i)
        waiting_for_fetch <= 1;
 
 

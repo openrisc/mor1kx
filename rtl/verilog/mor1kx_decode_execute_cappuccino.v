@@ -296,7 +296,7 @@ module mor1kx_decode_execute_cappuccino
 	   execute_op_jbr_o <= 1'b0;
 	   execute_op_jr_o <= 1'b0;
 	   execute_op_jal_o <= 1'b0;
-	   execute_op_brcond_o <= decode_op_brcond_i;
+	   execute_op_brcond_o <= 1'b0;
 	   execute_op_branch_o <= 1'b0;
 	end
      end

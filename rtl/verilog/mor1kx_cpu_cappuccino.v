@@ -67,7 +67,7 @@ module mor1kx_cpu_cappuccino
    parameter FEATURE_TRAP = "ENABLED";
    parameter FEATURE_RANGE = "ENABLED";
 
-   parameter OPTION_PIC_TRIGGER = "EDGE";
+   parameter OPTION_PIC_TRIGGER = "LEVEL";
 
    parameter FEATURE_DSX		= "NONE";
    parameter FEATURE_FASTCONTEXTS	= "NONE";
@@ -217,6 +217,7 @@ module mor1kx_cpu_cappuccino
    wire			ctrl_rf_wb_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_rfb_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] ctrl_rfd_adr_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire			ctrl_valid_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			decode_adder_do_carry_o;// From mor1kx_decode of mor1kx_decode.v
    wire			decode_adder_do_sub_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_branch_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
@@ -321,7 +322,6 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0] execute_rfb_o;// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] execute_rfd_adr_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire			execute_valid_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			execute_waiting_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			fetch_exception_taken_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			fetch_rf_adr_valid_o;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
@@ -1148,8 +1148,8 @@ module mor1kx_cpu_cappuccino
       .ctrl_except_dpagefault_o		(ctrl_except_dpagefault_o),
       .ctrl_except_align_o		(ctrl_except_align_o),
       .ctrl_except_trap_o		(ctrl_except_trap_o),
-      .execute_waiting_o		(execute_waiting_o),
       .execute_valid_o			(execute_valid_o),
+      .ctrl_valid_o			(ctrl_valid_o),
       // Inputs
       .clk				(clk),
       .rst				(rst),
@@ -1229,7 +1229,7 @@ module mor1kx_cpu_cappuccino
     .fetch_valid_i		(fetch_valid_o),
     .decode_valid_i		(decode_valid_o),
     .execute_valid_i		(execute_valid_o),
-    .execute_waiting_i		(execute_waiting_o),
+    .ctrl_valid_i		(ctrl_valid_o),
     .fetch_exception_taken_i	(fetch_exception_taken_o),
     .decode_bubble_i		(decode_bubble_o),
     .execute_bubble_i		(execute_bubble_o),
@@ -1334,7 +1334,7 @@ module mor1kx_cpu_cappuccino
       .fetch_valid_i			(fetch_valid_o),	 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
       .execute_valid_i			(execute_valid_o),	 // Templated
-      .execute_waiting_i		(execute_waiting_o),	 // Templated
+      .ctrl_valid_i			(ctrl_valid_o),		 // Templated
       .fetch_exception_taken_i		(fetch_exception_taken_o), // Templated
       .decode_bubble_i			(decode_bubble_o),	 // Templated
       .execute_bubble_i			(execute_bubble_o),	 // Templated

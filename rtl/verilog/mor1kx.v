@@ -72,7 +72,7 @@ module mor1kx
    parameter FEATURE_TRAP		= "ENABLED";
    parameter FEATURE_RANGE		= "ENABLED";
 
-   parameter OPTION_PIC_TRIGGER		= "EDGE";
+   parameter OPTION_PIC_TRIGGER		= "LEVEL";
 
    parameter FEATURE_DSX		= "ENABLED";
    parameter FEATURE_FASTCONTEXTS	= "NONE";
