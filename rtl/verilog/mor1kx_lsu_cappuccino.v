@@ -101,8 +101,7 @@ module mor1kx_lsu_cappuccino
     input 			      dbus_err_i,
     input 			      dbus_ack_i,
     input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
-    input 			      pipeline_flush_i,
-    input 			      du_stall_i
+    input 			      pipeline_flush_i
     );
 
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_aligned;  // comb.
@@ -444,7 +443,7 @@ module mor1kx_lsu_cappuccino
 
    assign dbus_stall = tlb_reload_busy | except_align | except_dbus |
 		       except_dtlb_miss | except_dpagefault |
-		       pipeline_flush_i & !du_stall_i;
+		       pipeline_flush_i;
 
 generate
 if (FEATURE_ATOMIC!="NONE") begin : atomic_gen

@@ -19,9 +19,8 @@
 
   contains PIC logic
 
-  Copyright (C) 2012 Authors
-
-  Author(s): Julius Baxter <juliusbaxter@gmail.com>
+  Copyright (C) 2012 Julius Baxter <juliusbaxter@gmail.com>
+  Copyright (C) 2012-2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
 
 ***************************************************************************** */
 
@@ -279,9 +278,9 @@ module mor1kx_ctrl_cappuccino
 
    /* DU internal control signals */
    wire 			     du_access;
-   wire 			     cpu_stall;
+   reg 				     cpu_stall;
    wire 			     du_restart_from_stall;
-   wire [5:0] 			     pstep;
+   reg [5:0] 			     pstep;
    wire 			     stepping;
    wire 			     stepped_into_delay_slot;
    reg 				     stepped_into_exception;
@@ -695,16 +694,21 @@ module mor1kx_ctrl_cappuccino
        spr_npc <= du_dat_i;
      else if (du_npc_written)
        spr_npc <= spr_npc;
-     else if (stepped_into_rfe)
-       spr_npc <= spr_epcr;
-     else if (stepped_into_delay_slot)
-       spr_npc <= last_branch_target_pc;
-     else if (stepped_into_exception)
-       spr_npc <= exception_pc_addr;
-     else if (stall_on_trap & padv_ctrl & except_trap_i)
+     else if (stepping) begin
+	if (stepped_into_rfe)
+	  spr_npc <= spr_epcr;
+	else if (stepped_into_delay_slot)
+	  spr_npc <= last_branch_target_pc;
+	else if (stepped_into_exception)
+	  spr_npc <= exception_pc_addr;
+	else
+	  spr_npc <= pc_ctrl_i + 4;
+     end else if (stall_on_trap & padv_ctrl & except_trap_i)
        spr_npc <= pc_ctrl_i;
+     else if (cpu_stall & padv_ctrl)
+       spr_npc <= ctrl_delay_slot ? pc_ctrl_i - 4 : pc_ctrl_i;
      else if (!cpu_stall)
-       spr_npc <= pc_ctrl_i + 4;
+       spr_npc <= pc_execute_i;
 
    // Exception Vector Address
    always @(posedge clk `OR_ASYNC_RST)
@@ -1032,7 +1036,6 @@ module mor1kx_ctrl_cappuccino
 
 	 reg 				du_ack;
 	 reg 				du_stall_r;
-	 reg [5:0] 			pstep_r;
 	 reg [1:0] 			branch_step;
 
 	 assign du_access = du_stb_i;
@@ -1059,12 +1062,15 @@ module mor1kx_ctrl_cappuccino
 	   du_read_dat <= spr_internal_read_dat[spr_group];
 
 	 assign du_dat_o = du_read_dat;
-	 /* TODO: check into only letting stall go high when we've gracefully
-	  completed the instruction currently in the ctrl stage.
-	  Why? Potentially an instruction like l.mfspr from an external unit
-	  hasn't completed fully, gets interrupted, and it's assumed it's
-	  completed, but actually hasn't. */
-	 assign cpu_stall = du_stall_i | du_restart_from_stall;
+
+	 always @(posedge clk)
+	   if (rst)
+	     cpu_stall <= 0;
+	   else if (!du_stall_i)
+	     cpu_stall <= 0;
+	   else if (padv_execute_o & !execute_bubble_i & du_stall_i |
+		    du_stall_o)
+	     cpu_stall <= 1;
 
 	 /* goes out to the debug interface and comes back 1 cycle later
 	  via du_stall_i */
@@ -1117,19 +1123,18 @@ module mor1kx_ctrl_cappuccino
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
-	     pstep_r <= 0;
+	     pstep <= 0;
 	   else if (du_restart_from_stall & stepping)
-	     pstep_r <= 6'h1;
+	     pstep <= 6'h1;
 	   else if ((pstep[0] & fetch_valid_i) |
 		    /* decode is always single cycle */
 		    (pstep[1] & padv_decode_o) |
+		    /* execute stage */
 		    (pstep[2] & (execute_valid_i | ctrl_stage_exceptions)) |
-		    /* ctrl stage can deassert execute_valid */
-		    (pstep[3] & (execute_valid_i | ctrl_stage_exceptions)) |
+		    /* ctrl stage */
+		    (pstep[3] & (ctrl_valid_i | ctrl_stage_exceptions)) |
 		    pstep[4])
-	     pstep_r <= {pstep_r[4:0],1'b0};
-
-	 assign pstep = pstep_r;
+	     pstep <= {pstep[4:0],1'b0};
 
 	 always @(posedge clk `OR_ASYNC_RST)
 	   if (rst)
@@ -1215,7 +1220,6 @@ module mor1kx_ctrl_cappuccino
       else
 	begin : no_du
 	   assign du_access = 0;
-	   assign cpu_stall = 0;
 	   assign du_stall_o = 0;
 	   assign du_ack_o = 0;
 	   assign du_restart_o = 0;
@@ -1234,6 +1238,7 @@ module mor1kx_ctrl_cappuccino
 		spr_dsr <= 0;
 		spr_drr <= 0;
 		du_npc_written <= 0;
+		cpu_stall <= 0;
 	     end
 	end
    endgenerate
