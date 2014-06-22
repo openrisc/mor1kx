@@ -1393,7 +1393,7 @@ module mor1kx_cpu_cappuccino
 	    traceport_exec_pc_o <= pc_execute_to_ctrl;
 	    if (!traceport_waitexec) begin
 	       if (padv_ctrl_o & !ctrl_bubble_o) begin
-		  if (!execute_waiting_o) begin
+		  if (execute_valid_o) begin
 		     traceport_exec_valid_o <= 1'b1;
 		  end else begin
 		     traceport_exec_valid_o <= 1'b0;
@@ -1403,7 +1403,7 @@ module mor1kx_cpu_cappuccino
 		  traceport_exec_valid_o <= 1'b0;
 	       end
 	    end else begin
-	       if (!execute_waiting_o) begin
+	       if (execute_valid_o) begin
 		  traceport_exec_valid_o <= 1'b1;
 		  traceport_waitexec <= 1'b0;
 	       end else begin
