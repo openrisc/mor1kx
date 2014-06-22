@@ -438,7 +438,7 @@ module mor1kx_fetch_cappuccino
        ic_enable_r <= 0;
 
    assign ic_enabled = ic_enable & ic_enable_r;
-   assign ic_addr = addr_valid ? pc_addr : pc_fetch;
+   assign ic_addr = (addr_valid | du_restart_i) ? pc_addr : pc_fetch;
    assign ic_addr_match = immu_enable_i ? immu_phys_addr : pc_fetch;
    assign ic_refill_allowed = (!((tlb_miss | pagefault) & immu_enable_i) &
 			      !ctrl_branch_exception_i & !pipeline_flush_i &
