@@ -45,7 +45,6 @@ module mor1kx_execute_ctrl_cappuccino
     input 				  execute_except_trap_i,
 
     input 				  pipeline_flush_i,
-    input 				  du_stall_i,
 
     input 				  op_lsu_load_i,
     input 				  op_lsu_store_i,
@@ -156,7 +155,7 @@ module mor1kx_execute_ctrl_cappuccino
 	ctrl_except_dbus_o <= 0;
 	ctrl_except_align_o <= 0;
      end
-     else if (pipeline_flush_i & !du_stall_i) begin
+     else if (pipeline_flush_i) begin
 	ctrl_except_ibus_err_o <= 0;
 	ctrl_except_itlb_miss_o <= 0;
 	ctrl_except_ipagefault_o <= 0;
@@ -242,7 +241,7 @@ module mor1kx_execute_ctrl_cappuccino
      end else if (padv_i) begin
 	ctrl_op_mfspr_o <= op_mfspr_i;
 	ctrl_op_mtspr_o <= op_mtspr_i;
-     end else if (pipeline_flush_i & !du_stall_i) begin
+     end else if (pipeline_flush_i) begin
 	ctrl_op_mfspr_o <= 0;
 	ctrl_op_mtspr_o <= 0;
      end
@@ -252,7 +251,7 @@ module mor1kx_execute_ctrl_cappuccino
        ctrl_op_rfe_o <= 0;
      else if (padv_i)
        ctrl_op_rfe_o <= op_rfe_i;
-     else if (pipeline_flush_i & !du_stall_i)
+     else if (pipeline_flush_i)
        ctrl_op_rfe_o <= 0;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -269,7 +268,7 @@ module mor1kx_execute_ctrl_cappuccino
 	ctrl_op_lsu_load_o <= op_lsu_load_i;
 	ctrl_op_lsu_store_o <= op_lsu_store_i;
 	ctrl_op_lsu_atomic_o <= op_lsu_atomic_i;
-     end else if (pipeline_flush_i & !du_stall_i) begin
+     end else if (pipeline_flush_i) begin
 	ctrl_op_lsu_load_o <= 0;
 	ctrl_op_lsu_store_o <= 0;
 	ctrl_op_lsu_atomic_o <= 0;
@@ -293,7 +292,7 @@ module mor1kx_execute_ctrl_cappuccino
        // 2) Signaling a need to bypass from control stage, when it really
        //    should be a bypass from wb stage.
        ctrl_rf_wb_o <= 0;
-     else if (pipeline_flush_i & !du_stall_i)
+     else if (pipeline_flush_i)
        ctrl_rf_wb_o <= 0;
 
    always @(posedge clk)
@@ -303,7 +302,7 @@ module mor1kx_execute_ctrl_cappuccino
    // load and mfpsr can stall from ctrl stage, so we have to hold off the
    // write back on them
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst | (pipeline_flush_i & !du_stall_i))
+     if (rst | pipeline_flush_i)
        wb_rf_wb_o <= 0;
      else if (ctrl_op_mfspr_o)
        wb_rf_wb_o <= ctrl_rf_wb_o & ctrl_mfspr_ack_i;

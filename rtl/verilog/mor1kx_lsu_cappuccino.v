@@ -102,7 +102,6 @@ module mor1kx_lsu_cappuccino
     input 			      dbus_ack_i,
     input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
     input 			      pipeline_flush_i,
-    input 			      du_stall_i,
 
     input [31:0] 		      snoop_adr_i,
     input 			      snoop_en_i
@@ -161,7 +160,7 @@ module mor1kx_lsu_cappuccino
 
    wire 			     dc_snoop_read_tagmem;
    wire 			     dc_snoop_hit;
-   
+
    wire 			     ctrl_op_lsu;
 
    // DMMU
@@ -471,7 +470,7 @@ module mor1kx_lsu_cappuccino
 
    assign dbus_stall = tlb_reload_busy | except_align | except_dbus |
 		       except_dtlb_miss | except_dpagefault |
-		       pipeline_flush_i & !du_stall_i;
+		       pipeline_flush_i;
 
 generate
 if (FEATURE_ATOMIC!="NONE") begin : atomic_gen

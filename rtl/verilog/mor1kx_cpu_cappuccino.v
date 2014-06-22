@@ -935,7 +935,6 @@ module mor1kx_cpu_cappuccino
       .dbus_ack_i			(dbus_ack_i),
       .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
-      .du_stall_i			(du_stall_i),
       .snoop_adr_i			(snoop_adr_i[31:0]),
       .snoop_en_i			(snoop_en_i));
 
@@ -1167,7 +1166,6 @@ module mor1kx_cpu_cappuccino
       .lsu_except_dpagefault_i		(lsu_except_dpagefault_o), // Templated
       .execute_except_trap_i		(execute_except_trap_o), // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
-      .du_stall_i			(du_stall_i),
       .op_lsu_load_i			(execute_op_lsu_load_o), // Templated
       .op_lsu_store_i			(execute_op_lsu_store_o), // Templated
       .op_lsu_atomic_i			(execute_op_lsu_atomic_o), // Templated
