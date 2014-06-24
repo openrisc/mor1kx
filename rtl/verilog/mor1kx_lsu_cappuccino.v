@@ -159,6 +159,7 @@ module mor1kx_lsu_cappuccino
    wire 			     dc_enabled;
 
    wire 			     dc_snoop_read_tagmem;
+   wire 			     dc_snoop_check_tagmem;
    wire 			     dc_snoop_hit;
 
    wire 			     ctrl_op_lsu;
@@ -628,6 +629,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
             .snoop_hit_o                (dc_snoop_hit),
             .snoop_read_tagmem_o        (dc_snoop_read_tagmem),
+            .snoop_check_tagmem_o       (dc_snoop_check_tagmem),
             .traceport_.*               (),
 	    // Inputs
 	    .clk			(clk),
@@ -667,6 +669,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),	 // Templated
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
 	    .snoop_read_tagmem_o	(dc_snoop_read_tagmem),	 // Templated
+	    .snoop_check_tagmem_o	(dc_snoop_check_tagmem), // Templated
 	    .snoop_hit_o		(dc_snoop_hit),		 // Templated
 	    .traceport_start_o		(),			 // Templated
 	    .traceport_end_o		(),			 // Templated

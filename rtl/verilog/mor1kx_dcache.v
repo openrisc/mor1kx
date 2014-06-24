@@ -89,7 +89,7 @@ module mor1kx_dcache
     parameter OPTION_DCACHE_SET_WIDTH = 9,
     parameter OPTION_DCACHE_WAYS = 2,
     parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
-    parameter OPTION_DCACHE_SNOOP_TAGMEM = "ENABLED"
+    parameter OPTION_DCACHE_SNOOP_TAGMEM = "NONE"
     )
    (
     input 			      clk,
@@ -146,6 +146,7 @@ module mor1kx_dcache
     // snoop read access. This can be avoided using a separate snoop
     // tag memory
     output 			      snoop_read_tagmem_o,
+    output 			      snoop_check_tagmem_o,
     // The snoop produced a hit and this cycle is reserved for the
     // snoop invalidation. Other write accesses are stalled
     output 			      snoop_hit_o,
@@ -201,8 +202,7 @@ module mor1kx_dcache
    localparam TAG_LRU_LSB = TAG_LRU_MSB - TAG_LRU_WIDTH + 1;
 
    // FSM state signals
-   reg [4:0] 			      state;
-   wire				      idle;
+   reg [3:0] 			      state;
    wire				      read;
    wire				      write;
    wire				      refill;
@@ -313,6 +313,7 @@ module mor1kx_dcache
    reg [OPTION_DCACHE_SET_WIDTH-1:0]  snoop_windex;
    wire 			      snoop_check_tagmem;
    assign snoop_check_tagmem = snoop_check & (OPTION_DCACHE_SNOOP_TAGMEM == "NONE");
+   assign snoop_check_tagmem_o = snoop_check_tagmem;
 
    // Snoop tag memory interface
    // Data out of tag memory
@@ -530,7 +531,7 @@ module mor1kx_dcache
 		    end
 
 		    state <= REFILL;
-		 end else if (cpu_we_i | write_pending) begin
+		 end else if ((cpu_we_i | write_pending) & !snoop_read_tagmem) begin
 		    state <= WRITE;
 		 end else if (invalidate) begin
 		    state <= INVALIDATE;
