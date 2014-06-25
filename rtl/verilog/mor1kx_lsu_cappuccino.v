@@ -217,7 +217,7 @@ module mor1kx_lsu_cappuccino
    assign align_err_short = ctrl_lsu_adr_i[0];
 
 
-   assign lsu_valid_o = (lsu_ack | access_done) & !tlb_reload_busy;
+   assign lsu_valid_o = (lsu_ack | access_done) & !tlb_reload_busy & !dc_snoop_hit;
 
    assign lsu_except_dbus_o = except_dbus | store_buffer_err_o;
 
@@ -526,14 +526,14 @@ endgenerate
      if (store_buffer_write | pipeline_flush_i)
        store_buffer_write_pending <= 0;
      else if (ctrl_op_lsu_store_i & padv_ctrl_i & !dbus_stall &
-	      (store_buffer_full | dc_refill | dc_refill_r))
+	      (store_buffer_full | dc_refill | dc_refill_r | dc_snoop_hit))
        store_buffer_write_pending <= 1;
 
    assign store_buffer_write = (ctrl_op_lsu_store_i &
 				(padv_ctrl_i | tlb_reload_done) |
 				store_buffer_write_pending) &
 			       !store_buffer_full & !dc_refill & !dc_refill_r &
-			       !dbus_stall;
+			       !dbus_stall & !dc_snoop_hit;
 
    assign store_buffer_read = (state == IDLE) & store_buffer_write |
 			      (state == IDLE) & !store_buffer_empty |
