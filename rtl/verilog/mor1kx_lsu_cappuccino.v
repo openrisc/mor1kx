@@ -158,10 +158,6 @@ module mor1kx_lsu_cappuccino
    reg 				     dc_enable_r;
    wire 			     dc_enabled;
 
-   wire 			     dc_snoop_read_tagmem;
-   wire 			     dc_snoop_check_tagmem;
-   wire 			     dc_snoop_hit;
-
    wire 			     ctrl_op_lsu;
 
    // DMMU
@@ -203,6 +199,7 @@ module mor1kx_lsu_cappuccino
    wire				     swa_success;
 
    wire 			     snoop_valid;
+   wire 			     dc_snoop_hit;
 
    // We have to mask out all our bus accesses
    assign snoop_valid = snoop_en_i & ~dbus_ack_i;
@@ -529,14 +526,14 @@ endgenerate
      if (store_buffer_write | pipeline_flush_i)
        store_buffer_write_pending <= 0;
      else if (ctrl_op_lsu_store_i & padv_ctrl_i & !dbus_stall &
-	      (store_buffer_full | dc_refill | dc_refill_r | dc_snoop_read_tagmem))
+	      (store_buffer_full | dc_refill | dc_refill_r))
        store_buffer_write_pending <= 1;
 
    assign store_buffer_write = (ctrl_op_lsu_store_i &
 				(padv_ctrl_i | tlb_reload_done) |
 				store_buffer_write_pending) &
 			       !store_buffer_full & !dc_refill & !dc_refill_r &
-			       !dbus_stall & !dc_snoop_read_tagmem;
+			       !dbus_stall;
 
    assign store_buffer_read = (state == IDLE) & store_buffer_write |
 			      (state == IDLE) & !store_buffer_empty |
@@ -588,7 +585,7 @@ endgenerate
    assign dc_adr_match = dmmu_enable_i ?
 			 {dmmu_phys_addr[OPTION_OPERAND_WIDTH-1:2],2'b0} :
 			 {ctrl_lsu_adr_i[OPTION_OPERAND_WIDTH-1:2],2'b0};
-   
+
    assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall;
    assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE);
 
@@ -628,9 +625,6 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
             .snoop_hit_o                (dc_snoop_hit),
-            .snoop_read_tagmem_o        (dc_snoop_read_tagmem),
-            .snoop_check_tagmem_o       (dc_snoop_check_tagmem),
-            .traceport_.*               (),
 	    // Inputs
 	    .clk			(clk),
 	    .rst			(rst),
@@ -643,7 +637,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_we_i			(dc_we),
 	    .cpu_bsel_i			(dc_bsel),
 	    .refill_allowed		(dc_refill_allowed),
-            .snoop_en_i                 (snoop_valid),
+            .snoop_valid_i              (snoop_valid),
     );*/
 
    mor1kx_dcache
@@ -662,22 +656,13 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_err_o			(dc_err),		 // Templated
 	    .cpu_ack_o			(dc_ack),		 // Templated
 	    .cpu_dat_o			(dc_ldat),		 // Templated
+	    .snoop_hit_o		(dc_snoop_hit),		 // Templated
 	    .dbus_dat_o			(dc_dbus_sdat),		 // Templated
 	    .dbus_adr_o			(dc_dbus_adr),		 // Templated
 	    .dbus_req_o			(dc_dbus_req),		 // Templated
 	    .dbus_bsel_o		(dc_dbus_bsel),		 // Templated
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),	 // Templated
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
-	    .snoop_read_tagmem_o	(dc_snoop_read_tagmem),	 // Templated
-	    .snoop_check_tagmem_o	(dc_snoop_check_tagmem), // Templated
-	    .snoop_hit_o		(dc_snoop_hit),		 // Templated
-	    .traceport_start_o		(),			 // Templated
-	    .traceport_end_o		(),			 // Templated
-	    .traceport_read_o		(),			 // Templated
-	    .traceport_write_o		(),			 // Templated
-	    .traceport_hit_o		(),			 // Templated
-	    .traceport_miss_o		(),			 // Templated
-	    .traceport_snoop_o		(),			 // Templated
 	    // Inputs
 	    .clk			(clk),			 // Templated
 	    .rst			(rst),			 // Templated
@@ -690,15 +675,15 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_we_i			(dc_we),		 // Templated
 	    .cpu_bsel_i			(dc_bsel),		 // Templated
 	    .refill_allowed		(dc_refill_allowed),	 // Templated
+	    .snoop_adr_i		(snoop_adr_i[31:0]),
+	    .snoop_valid_i		(snoop_valid),		 // Templated
 	    .dbus_err_i			(dbus_err_i),
 	    .dbus_ack_i			(dbus_ack_i),
 	    .dbus_dat_i			(dbus_dat_i[31:0]),
 	    .spr_bus_addr_i		(spr_bus_addr_i[15:0]),
 	    .spr_bus_we_i		(spr_bus_we_i),
 	    .spr_bus_stb_i		(spr_bus_stb_i),
-	    .spr_bus_dat_i		(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .snoop_adr_i		(snoop_adr_i[31:0]),
-	    .snoop_en_i			(snoop_valid));		 // Templated
+	    .spr_bus_dat_i		(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
 end else begin
    assign dc_access = 0;
    assign dc_refill = 0;
