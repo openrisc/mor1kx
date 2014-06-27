@@ -192,7 +192,7 @@ module mor1kx_dcache
    wire [OPTION_DCACHE_SET_WIDTH-1:0] snoop_index;
    assign snoop_index = snoop_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 
-      // Register that is high one cycle after the actual snoop event to
+   // Register that is high one cycle after the actual snoop event to
    // drive the comparison
    reg 				      snoop_check;
    // Register that stores the tag for one cycle
@@ -217,7 +217,7 @@ module mor1kx_dcache
    wire 			      snoop_hit;
 
    assign snoop_hit_o = snoop_hit;
-   
+
    genvar 			      i;
 
    assign cpu_err_o = dbus_err_i;
@@ -358,9 +358,11 @@ module mor1kx_dcache
 	 refill_valid_r <= refill_valid;
 
 	 if (snoop_valid_i) begin
+	    //
 	    // If there is a snoop event, we need to store this
 	    // information. This happens independent of whether we
 	    // have a snoop tag memory or not.
+	    //
 	    snoop_check <= 1;
 	    snoop_windex <= snoop_index;
 	    snoop_tag <= snoop_adr_i[OPTION_DCACHE_LIMIT_WIDTH-1:WAY_WIDTH];
@@ -411,6 +413,7 @@ module mor1kx_dcache
 		 state <= IDLE;
 	      end
 	   end
+
 	   REFILL: begin
 	      if (dbus_ack_i) begin
 		 dbus_adr <= next_dbus_adr;
@@ -442,12 +445,14 @@ module mor1kx_dcache
 
 	   default:
 	     state <= IDLE;
-	 endcase // case (state)
-      end // else: !if(rst | dbus_err_i)
-   end // always @ (posedge clk `OR_ASYNC_RST)
+	 endcase
+      end
+   end
 
+   //
    // This is the combinational part of the state machine that
    // interfaces the tag and way memories.
+   //
    integer w2;
    always @(*) begin
       // Default is to keep data, don't write and don't access
@@ -477,37 +482,42 @@ module mor1kx_dcache
 	       tag_way_in[w2] = snoop_way_out[w2];
 	    end
 	 end
-      end else begin // if (snoop_hit)
-	 
-	 /* The tag mem is written during reads and writes to write
-	    the lru info and  during refill and invalidate. */
-	  
+      end else begin
+	 //
+	 // The tag mem is written during reads and writes to write
+	 // the lru info and  during refill and invalidate.
+	 //
 	 tag_windex = read | write ?
 		      cpu_adr_match_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH] :
 		      dbus_adr[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 
 	 case (state)
 	   IDLE: begin
+	      //
 	      // When idle we can always acknowledge the invalidate as it
 	      // has the highest priority in handling. When something is
 	      // changed on the state machine handling above this needs
 	      // to be changed.
+	      //
 	      invalidate_ack = 1'b1;
 	   end
+
 	   READ: begin
 	      if (hit) begin
+		 //
 		 // We got a hit. The LRU module gets the access
 		 // information. Depending on this we update the LRU
 		 // history in the tag.
+		 //
 		 access = way_hit;
-		 
+
 		 // This is the updated LRU history after hit
 		 tag_lru_in = next_lru_history;
-		 
+
 		 tag_we = 1'b1;
 	      end
 	   end
-	   
+
 	   WRITE: begin
 	      way_wr_dat = cpu_dat_i;
 	      if (hit & cpu_req_i) begin
@@ -520,24 +530,26 @@ module mor1kx_dcache
 		   way_wr_dat[15:8] = cpu_dat_o[15:8];
 		 if (!cpu_bsel_i[0])
 		   way_wr_dat[7:0] = cpu_dat_o[7:0];
-		 
+
 		 way_we = way_hit;
-		 
+
 		 tag_lru_in = next_lru_history;
-		 
+
 		 tag_we = 1'b1;
 	      end
 	   end
-	   
+
 	   REFILL: begin
 	      if (dbus_ack_i) begin
+		 //
 		 // Write the data to the way that is replaced (which is
 		 // the LRU)
+		 //
 		 way_we = tag_save_lru;
-		 
+
 		 // Access pattern
 		 access = tag_save_lru;
-		 
+
 		 /* Invalidate the way on the first write */
 		 if (refill_valid == 0) begin
 		    for (w2 = 0; w2 < OPTION_DCACHE_WAYS; w2 = w2 + 1) begin
@@ -545,13 +557,15 @@ module mor1kx_dcache
 			  tag_way_in[w2][TAGMEM_WAY_VALID] = 1'b0;
                        end
                     end
-		    
+
 		    tag_we = 1'b1;
 		 end
-		 
+
+		 //
 		 // After refill update the tag memory entry of the
 		 // filled way with the LRU history, the tag and set
 		 // valid to 1.
+		 //
 		 if (refill_done) begin
 		    for (w2 = 0; w2 < OPTION_DCACHE_WAYS; w2 = w2 + 1) begin
 		       tag_way_in[w2] = tag_way_save[w2];
@@ -560,29 +574,29 @@ module mor1kx_dcache
                        end
                     end
                     tag_lru_in = next_lru_history;
-		    
+
 		    tag_we = 1'b1;
 		 end
 	      end
 	   end
-	   
+
 	   INVALIDATE: begin
 	      invalidate_ack = 1'b1;
-	      
+
 	      // Lazy invalidation, invalidate everything that matches tag address
               tag_lru_in = 0;
               for (w2 = 0; w2 < OPTION_DCACHE_WAYS; w2 = w2 + 1) begin
 		 tag_way_in[w2] = 0;
               end
-	      
+
 	      tag_we = 1'b1;
 	   end
-	   
+
 	   default: begin
 	   end
 	 endcase
-      end // else: !if(snoop_hit)
-   end // always @ begin
+      end
+   end
 
    generate
       for (i = 0; i < OPTION_DCACHE_WAYS; i=i+1) begin : way_memories
@@ -603,7 +617,7 @@ module mor1kx_dcache
 		.we			(way_we[i]),
 		.din			(way_din[i][31:0]));
 
-      end // block: way_memories
+      end
 
       if (OPTION_DCACHE_WAYS >= 2) begin : gen_u_lru
          /* mor1kx_cache_lru AUTO_TEMPLATE(
@@ -644,25 +658,25 @@ module mor1kx_dcache
       .we				(tag_we),
       .din				(tag_din));
 
-   generate
-      if (OPTION_DCACHE_SNOOP == "ENABLED") begin
-	 mor1kx_simple_dpram_sclk
-	   #(
-	     .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
-	     .DATA_WIDTH(TAGMEM_WIDTH),
-	     .ENABLE_BYPASS("TRUE")
-	     )
-	 snoop_tag_ram
-	   (
-	    // Outputs
-	    .dout			(snoop_dout[TAGMEM_WIDTH-1:0]),
-	    // Inputs
-	    .clk			(clk),
-	    .raddr			(snoop_index),
-	    .waddr			(tag_windex),
-	    .we			        (tag_we),
-	    .din			(tag_din));
-      end
-   endgenerate
-   
+generate
+if (OPTION_DCACHE_SNOOP == "ENABLED") begin
+   mor1kx_simple_dpram_sclk
+     #(
+       .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
+       .DATA_WIDTH(TAGMEM_WIDTH),
+       .ENABLE_BYPASS("TRUE")
+       )
+   snoop_tag_ram
+     (
+      // Outputs
+      .dout			(snoop_dout[TAGMEM_WIDTH-1:0]),
+      // Inputs
+      .clk			(clk),
+      .raddr			(snoop_index),
+      .waddr			(tag_windex),
+      .we			        (tag_we),
+      .din			(tag_din));
+end
+endgenerate
+
 endmodule
