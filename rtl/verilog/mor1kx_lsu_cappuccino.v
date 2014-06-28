@@ -586,7 +586,8 @@ endgenerate
 			 {dmmu_phys_addr[OPTION_OPERAND_WIDTH-1:2],2'b0} :
 			 {ctrl_lsu_adr_i[OPTION_OPERAND_WIDTH-1:2],2'b0};
 
-   assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall;
+   assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall &
+		   !(store_buffer_atomic & dbus_we & !atomic_reserve);
    assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE);
 
 generate
@@ -607,7 +608,8 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
    end
 
    assign dc_bsel = dbus_bsel;
-   assign dc_we = exec_op_lsu_store_i & padv_execute_i |
+   assign dc_we = exec_op_lsu_store_i & !exec_op_lsu_atomic_i & padv_execute_i |
+		  store_buffer_atomic & dbus_we_o & !write_done |
 		  ctrl_op_lsu_store_i & tlb_reload_busy & !tlb_reload_req;
    assign dc_sdat = dbus_sdat;
 
