@@ -116,20 +116,18 @@ module mor1kx_fetch_cappuccino
    wire 				  imem_ack;
    wire [`OR1K_INSN_WIDTH-1:0] 		  imem_dat;
 
-   wire 				  ic_err;
    wire 				  ic_ack;
    wire [`OR1K_INSN_WIDTH-1:0] 		  ic_dat;
 
    wire 				  ic_req;
    wire 				  ic_refill_allowed;
    wire 				  ic_refill;
+   wire 				  ic_refill_req;
    wire 				  ic_refill_done;
    wire 				  ic_invalidate;
    wire [OPTION_OPERAND_WIDTH-1:0] 	  ic_addr;
    wire [OPTION_OPERAND_WIDTH-1:0] 	  ic_addr_match;
 
-   wire [OPTION_OPERAND_WIDTH-1:0] 	  ic_ibus_adr;
-   wire 				  ic_ibus_req;
    wire 				  ic_access;
 
    reg 					  ic_enable_r;
@@ -320,13 +318,16 @@ module mor1kx_fetch_cappuccino
        decode_except_ipagefault_o <= 0;
 
    // Bus access logic
-   localparam [1:0] IDLE = 2'd0;
-   localparam [1:0] READ = 2'd1;
-   localparam [1:0] TLB_RELOAD = 2'd2;
+   localparam [2:0]
+     IDLE		= 0,
+     READ		= 1,
+     TLB_RELOAD		= 2,
+     IC_REFILL		= 3;
 
-   reg [1:0] state;
+   reg [2:0] state;
 
    reg [OPTION_OPERAND_WIDTH-1:0] ibus_adr;
+   wire [OPTION_OPERAND_WIDTH-1:0] next_ibus_adr;
    reg [`OR1K_INSN_WIDTH-1:0] 	  ibus_dat;
    reg 				  ibus_req;
    reg 				  ibus_ack;
@@ -343,7 +344,7 @@ module mor1kx_fetch_cappuccino
      if (rst)
        nop_ack <= 0;
      else
-       nop_ack <= padv_i & !bus_access_done & !ibus_req &
+       nop_ack <= padv_i & !bus_access_done & !(ibus_req & ibus_access) &
 		  ((immu_enable_i & (tlb_miss | pagefault) &
 		    !tlb_reload_busy) |
 		   ctrl_branch_exception_edge & !tlb_reload_busy |
@@ -352,14 +353,20 @@ module mor1kx_fetch_cappuccino
 		   mispredict_stall);
 
    assign ibus_access = (!ic_access | tlb_reload_busy | ic_invalidate) &
-			!ic_refill | (state != IDLE) | ibus_ack;
+			!ic_refill |
+			(state != IDLE) & (state != IC_REFILL) |
+			ibus_ack;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
    assign imem_dat = (nop_ack | except_itlb_miss | except_ipagefault) ?
 		     {`OR1K_OPCODE_NOP,26'd0} :
 		     ibus_access ? ibus_dat : ic_dat;
-   assign ibus_adr_o = ibus_access ? ibus_adr : ic_ibus_adr;
-   assign ibus_req_o = ibus_access ? ibus_req : ic_ibus_req;
+   assign ibus_adr_o = ibus_adr;
+   assign ibus_req_o = ibus_req;
    assign ibus_burst_o = !ibus_access & ic_refill & !ic_refill_done;
+
+   assign next_ibus_adr = (OPTION_ICACHE_BLOCK_WIDTH == 5) ?
+			  {ibus_adr[31:5], ibus_adr[4:0] + 5'd4} : // 32 byte
+			  {ibus_adr[31:4], ibus_adr[3:0] + 4'd4};  // 16 byte
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -390,6 +397,21 @@ module mor1kx_fetch_cappuccino
 		 ibus_adr <= pc_fetch;
 		 ibus_req <= 1;
 		 state <= READ;
+	      end
+	   end else if (ic_refill_req) begin
+	      ibus_adr <= ic_addr_match;
+	      ibus_req <= 1;
+	      state <= IC_REFILL;
+	   end
+	end
+
+	IC_REFILL: begin
+	   ibus_req <= 1;
+	   if (ibus_ack_i) begin
+	      ibus_adr <= next_ibus_adr;
+	      if (ic_refill_done) begin
+		 ibus_req <= 0;
+		 state <= IDLE;
 	      end
 	   end
 	end
@@ -467,23 +489,27 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
       end
    end
 
+   wire ic_rst = rst | imem_err;
+
    /* mor1kx_icache AUTO_TEMPLATE (
     // Outputs
-    .cpu_err_o			(ic_err),
     .cpu_ack_o			(ic_ack),
     .cpu_dat_o			(ic_dat[OPTION_OPERAND_WIDTH-1:0]),
-    .ibus_adr_o			(ic_ibus_adr),
-    .ibus_req_o			(ic_ibus_req),
     .spr_bus_dat_o		(spr_bus_dat_ic_o),
     .spr_bus_ack_o		(spr_bus_ack_ic_o),
     .refill_o			(ic_refill),
+    .refill_req_o		(ic_refill_req),
     .refill_done_o		(ic_refill_done),
     .invalidate_o		(ic_invalidate),
     // Inputs
+    .rst			(ic_rst),
     .ic_access_i		(ic_access),
     .cpu_adr_i			(ic_addr),
     .cpu_adr_match_i		(ic_addr_match),
     .cpu_req_i			(ic_req),
+    .wradr_i			(ibus_adr),
+    .wrdat_i			(ibus_dat_i),
+    .we_i			(ibus_ack_i),
     );*/
 
    mor1kx_icache
@@ -497,25 +523,23 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
      (/*AUTOINST*/
       // Outputs
       .refill_o				(ic_refill),		 // Templated
+      .refill_req_o			(ic_refill_req),	 // Templated
       .refill_done_o			(ic_refill_done),	 // Templated
       .invalidate_o			(ic_invalidate),	 // Templated
-      .cpu_err_o			(ic_err),		 // Templated
       .cpu_ack_o			(ic_ack),		 // Templated
       .cpu_dat_o			(ic_dat[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .ibus_adr_o			(ic_ibus_adr),		 // Templated
-      .ibus_req_o			(ic_ibus_req),		 // Templated
       .spr_bus_dat_o			(spr_bus_dat_ic_o),	 // Templated
       .spr_bus_ack_o			(spr_bus_ack_ic_o),	 // Templated
       // Inputs
       .clk				(clk),
-      .rst				(rst),
+      .rst				(ic_rst),		 // Templated
       .ic_access_i			(ic_access),		 // Templated
       .cpu_adr_i			(ic_addr),		 // Templated
       .cpu_adr_match_i			(ic_addr_match),	 // Templated
       .cpu_req_i			(ic_req),		 // Templated
-      .ibus_err_i			(ibus_err_i),
-      .ibus_ack_i			(ibus_ack_i),
-      .ibus_dat_i			(ibus_dat_i[31:0]),
+      .wradr_i				(ibus_adr),		 // Templated
+      .wrdat_i				(ibus_dat_i),		 // Templated
+      .we_i				(ibus_ack_i),		 // Templated
       .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
       .spr_bus_we_i			(spr_bus_we_i),
       .spr_bus_stb_i			(spr_bus_stb_i),
@@ -525,9 +549,6 @@ end else begin // block: icache_gen
    assign ic_refill = 0;
    assign ic_refill_done = 0;
    assign ic_ack = 0;
-   assign ic_err = 0;
-   assign ic_ibus_req = 0;
-   assign ic_ibus_adr = 0;
 end
 endgenerate
 
