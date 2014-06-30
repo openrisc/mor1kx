@@ -87,7 +87,7 @@ module mor1kx_icache
    // caches. To avoid signal width [-1:0] this generates [0:0]
    // vectors for them, which are removed automatically then.
    localparam TAG_LRU_WIDTH_BITS = (OPTION_ICACHE_WAYS >= 2) ? TAG_LRU_WIDTH : 1;
-   
+
    // Compute the total sum of the entry elements
    localparam TAGMEM_WIDTH = TAGMEM_WAY_WIDTH * OPTION_ICACHE_WAYS + TAG_LRU_WIDTH;
 
@@ -124,7 +124,7 @@ module mor1kx_icache
    reg [TAGMEM_WAY_WIDTH-1:0] 	      tag_way_in [OPTION_ICACHE_WAYS-1:0];
 
    reg [TAGMEM_WAY_WIDTH-1:0] 	      tag_way_save [OPTION_ICACHE_WAYS-1:0];
-   
+
    // Whether to write to the tag memory in this cycle
    reg 				      tag_we;
 
