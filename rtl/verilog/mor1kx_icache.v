@@ -28,23 +28,20 @@ module mor1kx_icache
 
     input 			      ic_access_i,
     output 			      refill_o,
+    output 			      refill_req_o,
     output 			      refill_done_o,
     output 			      invalidate_o,
 
     // CPU Interface
-    output 			      cpu_err_o,
     output 			      cpu_ack_o,
-    output reg [31:0] 		      cpu_dat_o,
+    output reg [`OR1K_INSN_WIDTH-1:0] cpu_dat_o,
     input [OPTION_OPERAND_WIDTH-1:0]  cpu_adr_i,
     input [OPTION_OPERAND_WIDTH-1:0]  cpu_adr_match_i,
     input 			      cpu_req_i,
 
-    // BUS Interface
-    input 			      ibus_err_i,
-    input 			      ibus_ack_i,
-    input [31:0] 		      ibus_dat_i,
-    output [31:0] 		      ibus_adr_o,
-    output 			      ibus_req_o,
+    input [OPTION_OPERAND_WIDTH-1:0]  wradr_i,
+    input [`OR1K_INSN_WIDTH-1:0]      wrdat_i,
+    input 			      we_i,
 
     // SPR interface
     input [15:0] 		      spr_bus_addr_i,
@@ -87,7 +84,7 @@ module mor1kx_icache
    // caches. To avoid signal width [-1:0] this generates [0:0]
    // vectors for them, which are removed automatically then.
    localparam TAG_LRU_WIDTH_BITS = (OPTION_ICACHE_WAYS >= 2) ? TAG_LRU_WIDTH : 1;
-   
+
    // Compute the total sum of the entry elements
    localparam TAGMEM_WIDTH = TAGMEM_WAY_WIDTH * OPTION_ICACHE_WAYS + TAG_LRU_WIDTH;
 
@@ -101,9 +98,10 @@ module mor1kx_icache
    wire				      idle;
    wire				      read;
    wire				      refill;
+   wire				      invalidate;
 
-   reg [31:0] 			      ibus_adr;
-   wire [31:0] 			      next_ibus_adr;
+   reg [WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH] invalidate_adr;
+   wire [31:0] 			      next_refill_adr;
    wire 			      refill_done;
    wire 			      refill_hit;
    reg [(1<<(OPTION_ICACHE_BLOCK_WIDTH-2))-1:0] refill_valid;
@@ -124,7 +122,7 @@ module mor1kx_icache
    reg [TAGMEM_WAY_WIDTH-1:0] 	      tag_way_in [OPTION_ICACHE_WAYS-1:0];
 
    reg [TAGMEM_WAY_WIDTH-1:0] 	      tag_way_save [OPTION_ICACHE_WAYS-1:0];
-   
+
    // Whether to write to the tag memory in this cycle
    reg 				      tag_we;
 
@@ -168,15 +166,12 @@ module mor1kx_icache
 
    genvar 			      i;
 
-   assign cpu_err_o = ibus_err_i;
    // Allowing (out of the cache line being refilled) accesses during refill
    // exposes a bug somewhere, causing the Linux kernel to end up with a
    // bus error UNHANDLED EXCEPTION.
    // Until that is sorted out, disable it.
    assign cpu_ack_o = (read /*| refill & ic_access_i*/) & hit |
 		      refill_hit & ic_access_i;
-   assign ibus_adr_o = ibus_adr;
-   assign ibus_req_o = refill;
 
    assign tag_rindex = cpu_adr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
    /*
@@ -185,9 +180,10 @@ module mor1kx_icache
     */
    assign tag_windex = read ?
 		       cpu_adr_match_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH] :
-		       ibus_adr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+		       invalidate ? invalidate_adr :
+		       wradr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
    assign tag_tag = cpu_adr_match_i[OPTION_ICACHE_LIMIT_WIDTH-1:WAY_WIDTH];
-   assign tag_wtag = ibus_adr[OPTION_ICACHE_LIMIT_WIDTH-1:WAY_WIDTH];
+   assign tag_wtag = wradr_i[OPTION_ICACHE_LIMIT_WIDTH-1:WAY_WIDTH];
 
    generate
       if (OPTION_ICACHE_WAYS >= 2) begin
@@ -199,8 +195,8 @@ module mor1kx_icache
 
       for (i = 0; i < OPTION_ICACHE_WAYS; i=i+1) begin : ways
 	 assign way_raddr[i] = cpu_adr_i[WAY_WIDTH-1:2];
-	 assign way_waddr[i] = ibus_adr[WAY_WIDTH-1:2];
-	 assign way_din[i] = ibus_dat_i;
+	 assign way_waddr[i] = wradr_i[WAY_WIDTH-1:2];
+	 assign way_din[i] = wrdat_i;
 
 	 // compare stored tag with incoming tag and check valid bit
          assign check_way_tag[i] = tag_way_out[i][TAGMEM_WAY_WIDTH-1:0];
@@ -229,24 +225,27 @@ module mor1kx_icache
       end
    end
 
-   assign next_ibus_adr = (OPTION_ICACHE_BLOCK_WIDTH == 5) ?
-			  {ibus_adr[31:5], ibus_adr[4:0] + 5'd4} : // 32 byte
-			  {ibus_adr[31:4], ibus_adr[3:0] + 4'd4};  // 16 byte
+   assign next_refill_adr = (OPTION_ICACHE_BLOCK_WIDTH == 5) ?
+			    {wradr_i[31:5], wradr_i[4:0] + 5'd4} : // 32 byte
+			    {wradr_i[31:4], wradr_i[3:0] + 4'd4};  // 16 byte
 
    assign refill_done_o = refill_done;
-   assign refill_done = refill_valid[next_ibus_adr[OPTION_ICACHE_BLOCK_WIDTH-1:2]];
+   assign refill_done = refill_valid[next_refill_adr[OPTION_ICACHE_BLOCK_WIDTH-1:2]];
    assign refill_hit = refill_valid_r[cpu_adr_match_i[OPTION_ICACHE_BLOCK_WIDTH-1:2]] &
 		       cpu_adr_match_i[OPTION_ICACHE_LIMIT_WIDTH-1:
 				       OPTION_ICACHE_BLOCK_WIDTH] ==
-		       ibus_adr[OPTION_ICACHE_LIMIT_WIDTH-1:
-				OPTION_ICACHE_BLOCK_WIDTH] &
+		       wradr_i[OPTION_ICACHE_LIMIT_WIDTH-1:
+			       OPTION_ICACHE_BLOCK_WIDTH] &
 		       refill;
 
    assign idle = (state == IDLE);
    assign refill = (state == REFILL);
    assign read = (state == READ);
+   assign invalidate = (state == INVALIDATE);
 
    assign refill_o = refill;
+
+   assign refill_req_o = read & cpu_req_i & !hit;
 
    /*
     * SPR bus interface
@@ -263,7 +262,6 @@ module mor1kx_icache
       spr_bus_ack_o <= 0;
       case (state)
 	IDLE: begin
-	   ibus_adr <= cpu_adr_i;
 	   if (cpu_req_i)
 	     state <= READ;
 	end
@@ -272,11 +270,9 @@ module mor1kx_icache
 	   if (ic_access_i) begin
 	      if (hit) begin
 		 state <= READ;
-		 ibus_adr <= cpu_adr_i;
 	      end else if (cpu_req_i) begin
 		 refill_valid <= 0;
 		 refill_valid_r <= 0;
-		 ibus_adr <= cpu_adr_match_i;
 
 		 // Store the LRU information for correct replacement
                  // on refill. Always one when only one way.
@@ -294,9 +290,8 @@ module mor1kx_icache
 	end
 
 	REFILL: begin
-	   if (ibus_ack_i) begin
-	      ibus_adr <= next_ibus_adr;
-	      refill_valid[ibus_adr[OPTION_ICACHE_BLOCK_WIDTH-1:2]] <= 1;
+	   if (we_i) begin
+	      refill_valid[wradr_i[OPTION_ICACHE_BLOCK_WIDTH-1:2]] <= 1;
 
 	      if (refill_done)
 		state <= IDLE;
@@ -314,13 +309,12 @@ module mor1kx_icache
       endcase
 
       if (invalidate_o & !refill) begin
-	 /* ibus_adr is hijacked as the invalidate address here */
-	 ibus_adr <= spr_bus_dat_i;
+	 invalidate_adr <= spr_bus_dat_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
 	 spr_bus_ack_o <= 1;
 	 state <= INVALIDATE;
       end
 
-      if (rst | ibus_err_i)
+      if (rst)
 	state <= IDLE;
    end
 
@@ -353,7 +347,7 @@ module mor1kx_icache
 	end
 
 	REFILL: begin
-	   if (ibus_ack_i) begin
+	   if (we_i) begin
               // Write the data to the way that is replaced (which is
               // the LRU)
               way_we = tag_save_lru;
