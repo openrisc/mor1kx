@@ -204,7 +204,7 @@ module mor1kx_dcache
       for (i = 0; i < OPTION_DCACHE_WAYS; i=i+1) begin : ways
 	 assign way_raddr[i] = cpu_adr_i[WAY_WIDTH-1:2];
 	 assign way_waddr[i] = write ? cpu_adr_match_i[WAY_WIDTH-1:2] :
-			       wradr_i[WAY_WIDTH-1:2];;
+			       wradr_i[WAY_WIDTH-1:2];
 	 assign way_din[i] = way_wr_dat;
 
 	 // compare stored tag with incoming tag and check valid bit
