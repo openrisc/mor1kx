@@ -368,7 +368,7 @@ module mor1kx_dcache
 	      if (invalidate) begin
 		 // Store address in invalidate_adr that is muxed to the tag
 		 // memory write address
-		 invalidate_adr <= spr_bus_dat_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];;
+		 invalidate_adr <= spr_bus_dat_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 
 		 state <= INVALIDATE;
 	      end else begin
