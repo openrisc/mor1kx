@@ -245,7 +245,7 @@ module mor1kx_icache
 
    assign refill_o = refill;
 
-   assign refill_req_o = read & cpu_req_i & !hit;
+   assign refill_req_o = read & cpu_req_i & !hit | refill;
 
    /*
     * SPR bus interface

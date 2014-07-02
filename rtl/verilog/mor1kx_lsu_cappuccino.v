@@ -126,6 +126,7 @@ module mor1kx_lsu_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_ldat;
    wire [OPTION_OPERAND_WIDTH-1:0]   dbus_sdat;
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_adr;
+   wire [OPTION_OPERAND_WIDTH-1:0]   next_dbus_adr;
    reg 				     dbus_req;
    reg 				     dbus_we;
    reg [3:0] 			     dbus_bsel;
@@ -139,11 +140,6 @@ module mor1kx_lsu_cappuccino
    wire 			     dc_ack;
    wire [31:0] 			     dc_ldat;
    wire [31:0] 			     dc_sdat;
-   wire [OPTION_OPERAND_WIDTH-1:0]   dc_dbus_adr;
-   wire 			     dc_dbus_req;
-   wire [3:0]			     dc_dbus_bsel;
-   wire 			     dc_dbus_we;
-   wire [OPTION_OPERAND_WIDTH-1:0]   dc_dbus_sdat;
    wire [31:0] 			     dc_adr;
    wire [31:0] 			     dc_adr_match;
    wire 			     dc_req;
@@ -153,6 +149,7 @@ module mor1kx_lsu_cappuccino
    wire 			     dc_access;
    wire 			     dc_refill_allowed;
    wire 			     dc_refill;
+   wire 			     dc_refill_req;
    wire 			     dc_refill_done;
 
    reg 				     dc_enable_r;
@@ -338,16 +335,17 @@ module mor1kx_lsu_cappuccino
    assign lsu_result_o = dbus_dat_extended;
 
    // Bus access logic
-   localparam [1:0] IDLE = 2'd0;
-   localparam [1:0] READ = 2'd1;
-   localparam [1:0] WRITE = 2'd2;
-   localparam [1:0] TLB_RELOAD = 2'd3;
+   localparam [2:0]
+     IDLE		= 3'd0,
+     READ		= 3'd1,
+     WRITE		= 3'd2,
+     TLB_RELOAD		= 3'd3,
+     DC_REFILL		= 3'd4;
 
-   reg [1:0] state;
+   reg [2:0] state;
 
-   // The data bus is accesses by the LSU and not the cache
    assign dbus_access = (!dc_access | tlb_reload_busy | ctrl_op_lsu_store_i) &
-			!dc_refill | (state == WRITE);
+			(state != DC_REFILL) | (state == WRITE);
    reg      dc_refill_r;
 
    always @(posedge clk)
@@ -359,20 +357,24 @@ module mor1kx_lsu_cappuccino
 		    (dbus_access ? dbus_ack : dc_ack);
 
    assign lsu_ldat = dbus_access ? dbus_ldat : dc_ldat;
-   assign dbus_adr_o = (state == WRITE) ? store_buffer_radr :
-		       dbus_access ? dbus_adr : dc_dbus_adr;
-   assign dbus_req_o = dbus_access ? dbus_req : dc_dbus_req;
+   assign dbus_adr_o = (state == WRITE) ? store_buffer_radr : dbus_adr;
+   assign dbus_req_o = dbus_req;
    assign dbus_bsel_o = (state == WRITE) ? store_buffer_bsel :
-			dc_refill ? 4'hf : dbus_bsel;
+			(state == DC_REFILL) ? 4'hf : dbus_bsel;
    assign dbus_dat_o = store_buffer_dat;
 
-   assign dbus_burst_o = dc_refill & !dc_refill_done;
+   assign dbus_burst_o = (state == DC_REFILL) & !dc_refill_done;
+
    //
    // Slightly subtle, but if there is an atomic store coming out from the
    // store buffer, and the link has been broken while it was waiting there,
    // the bus access is still performed as a (discarded) read.
    //
    assign dbus_we_o = dbus_we & (!store_buffer_atomic | atomic_reserve);
+
+   assign next_dbus_adr = (OPTION_DCACHE_BLOCK_WIDTH == 5) ?
+			  {dbus_adr[31:5], dbus_adr[4:0] + 5'd4} : // 32 byte
+			  {dbus_adr[31:4], dbus_adr[3:0] + 4'd4};  // 16 byte
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -419,6 +421,26 @@ module mor1kx_lsu_cappuccino
 		    state <= READ;
 		 end
 	      end
+	   end else if (dc_refill_req) begin
+	      dbus_req <= 1;
+	      dbus_adr <= dc_adr_match;
+	      state <= DC_REFILL;
+	   end
+	end
+
+	DC_REFILL: begin
+	   dbus_req <= 1;
+	   if (dbus_ack_i) begin
+	      dbus_adr <= next_dbus_adr;
+	      if (dc_refill_done) begin
+		 dbus_req <= 0;
+		 state <= IDLE;
+	      end
+	   end
+
+	   if (dbus_err_i) begin
+	      dbus_req <= 0;
+	      state <= IDLE;
 	   end
 	end
 
@@ -607,6 +629,8 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
       end
    end
 
+   wire dc_rst = rst | dbus_err;
+
    assign dc_bsel = dbus_bsel;
    assign dc_we = exec_op_lsu_store_i & !exec_op_lsu_atomic_i & padv_execute_i |
 		  store_buffer_atomic & dbus_we_o & !write_done |
@@ -615,21 +639,17 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 
    /* mor1kx_dcache AUTO_TEMPLATE (
 	    .refill_o			(dc_refill),
+	    .refill_req_o		(dc_refill_req),
 	    .refill_done_o		(dc_refill_done),
 	    .cpu_err_o			(dc_err),
 	    .cpu_ack_o			(dc_ack),
 	    .cpu_dat_o			(dc_ldat),
-	    .dbus_adr_o			(dc_dbus_adr),
-	    .dbus_req_o			(dc_dbus_req),
-	    .dbus_we_o			(dc_dbus_we),
-	    .dbus_bsel_o		(dc_dbus_bsel),
-	    .dbus_dat_o			(dc_dbus_sdat),
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
             .snoop_hit_o                (dc_snoop_hit),
 	    // Inputs
 	    .clk			(clk),
-	    .rst			(rst),
+	    .rst			(dc_rst),
 	    .dc_enable_i		(dc_enabled),
 	    .dc_access_i		(dc_access),
 	    .cpu_dat_i			(dc_sdat),
@@ -639,6 +659,9 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_we_i			(dc_we),
 	    .cpu_bsel_i			(dc_bsel),
 	    .refill_allowed		(dc_refill_allowed),
+	    .wradr_i			(dbus_adr),
+    	    .wrdat_i			(dbus_dat_i),
+	    .we_i			(dbus_ack_i),
             .snoop_valid_i              (snoop_valid),
     );*/
 
@@ -654,20 +677,17 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	   (/*AUTOINST*/
 	    // Outputs
 	    .refill_o			(dc_refill),		 // Templated
+	    .refill_req_o		(dc_refill_req),	 // Templated
 	    .refill_done_o		(dc_refill_done),	 // Templated
 	    .cpu_err_o			(dc_err),		 // Templated
 	    .cpu_ack_o			(dc_ack),		 // Templated
 	    .cpu_dat_o			(dc_ldat),		 // Templated
 	    .snoop_hit_o		(dc_snoop_hit),		 // Templated
-	    .dbus_dat_o			(dc_dbus_sdat),		 // Templated
-	    .dbus_adr_o			(dc_dbus_adr),		 // Templated
-	    .dbus_req_o			(dc_dbus_req),		 // Templated
-	    .dbus_bsel_o		(dc_dbus_bsel),		 // Templated
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),	 // Templated
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
 	    // Inputs
 	    .clk			(clk),			 // Templated
-	    .rst			(rst),			 // Templated
+	    .rst			(dc_rst),		 // Templated
 	    .dc_enable_i		(dc_enabled),		 // Templated
 	    .dc_access_i		(dc_access),		 // Templated
 	    .cpu_dat_i			(dc_sdat),		 // Templated
@@ -677,11 +697,11 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_we_i			(dc_we),		 // Templated
 	    .cpu_bsel_i			(dc_bsel),		 // Templated
 	    .refill_allowed		(dc_refill_allowed),	 // Templated
+	    .wradr_i			(dbus_adr),		 // Templated
+	    .wrdat_i			(dbus_dat_i),		 // Templated
+	    .we_i			(dbus_ack_i),		 // Templated
 	    .snoop_adr_i		(snoop_adr_i[31:0]),
 	    .snoop_valid_i		(snoop_valid),		 // Templated
-	    .dbus_err_i			(dbus_err_i),
-	    .dbus_ack_i			(dbus_ack_i),
-	    .dbus_dat_i			(dbus_dat_i[31:0]),
 	    .spr_bus_addr_i		(spr_bus_addr_i[15:0]),
 	    .spr_bus_we_i		(spr_bus_we_i),
 	    .spr_bus_stb_i		(spr_bus_stb_i),
