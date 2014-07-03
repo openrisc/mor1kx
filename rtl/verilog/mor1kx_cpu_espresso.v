@@ -47,7 +47,6 @@ module mor1kx_cpu_espresso
    parameter OPTION_ICACHE_WAYS		= 2;
    parameter FEATURE_IMMU		= "NONE";
    parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE";
-   parameter FEATURE_PIC		= "ENABLED";
    parameter FEATURE_TIMER		= "ENABLED";
    parameter FEATURE_DEBUGUNIT		= "NONE";
    parameter FEATURE_PERFCOUNTERS	= "NONE";
@@ -57,7 +56,9 @@ module mor1kx_cpu_espresso
    parameter FEATURE_TRAP		= "ENABLED";
    parameter FEATURE_RANGE		= "ENABLED";
 
+   parameter FEATURE_PIC		= "ENABLED";
    parameter OPTION_PIC_TRIGGER		= "LEVEL";
+   parameter OPTION_PIC_NMI_WIDTH	= 0;
 
    parameter FEATURE_DSX		= "NONE";
    parameter FEATURE_FASTCONTEXTS	= "NONE";
@@ -646,6 +647,7 @@ module mor1kx_cpu_espresso
        .FEATURE_PIC(FEATURE_PIC),
        .FEATURE_TIMER(FEATURE_TIMER),
        .OPTION_PIC_TRIGGER(OPTION_PIC_TRIGGER),
+       .OPTION_PIC_NMI_WIDTH(OPTION_PIC_NMI_WIDTH),
        .FEATURE_DSX(FEATURE_DSX),
        .FEATURE_FASTCONTEXTS(FEATURE_FASTCONTEXTS),
        .FEATURE_OVERFLOW(FEATURE_OVERFLOW),

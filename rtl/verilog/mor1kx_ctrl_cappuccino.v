@@ -50,7 +50,6 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_IMMU = "NONE",
     parameter OPTION_IMMU_SET_WIDTH = 6,
     parameter OPTION_IMMU_WAYS = 1,
-    parameter FEATURE_PIC = "ENABLED",
     parameter FEATURE_TIMER = "ENABLED",
     parameter FEATURE_DEBUGUNIT = "NONE",
     parameter FEATURE_PERFCOUNTERS = "NONE",
@@ -58,7 +57,9 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_MAC = "NONE",
     parameter FEATURE_FPU = "NONE",
 
+    parameter FEATURE_PIC = "ENABLED",
     parameter OPTION_PIC_TRIGGER = "LEVEL",
+    parameter OPTION_PIC_NMI_WIDTH = 0,
 
     parameter FEATURE_DSX ="NONE",
     parameter FEATURE_FASTCONTEXTS = "NONE",
@@ -886,7 +887,10 @@ module mor1kx_ctrl_cappuccino
 	  .spr_dat_i		(spr_write_dat),
 	  );*/
 	 mor1kx_pic
-	  #(.OPTION_PIC_TRIGGER(OPTION_PIC_TRIGGER))
+	  #(
+	    .OPTION_PIC_TRIGGER(OPTION_PIC_TRIGGER),
+	    .OPTION_PIC_NMI_WIDTH(OPTION_PIC_NMI_WIDTH)
+	    )
 	 mor1kx_pic
 	   (/*AUTOINST*/
 	    // Outputs

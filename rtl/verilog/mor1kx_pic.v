@@ -23,6 +23,7 @@ module mor1kx_pic
    );
 
    parameter OPTION_PIC_TRIGGER="LEVEL";
+   parameter OPTION_PIC_NMI_WIDTH = 0;
 
    input clk;
    input rst;
@@ -112,13 +113,12 @@ module mor1kx_pic
    endgenerate
 
    // PIC (un)mask register
-   // Bottom two IRQs permanently unmasked
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       spr_picmr <= {30'd0, 2'b11};
+       spr_picmr <= {{(32-OPTION_PIC_NMI_WIDTH){1'b0}},
+		     {OPTION_PIC_NMI_WIDTH{1'b1}}};
      else if (spr_we_i & spr_addr_i==`OR1K_SPR_PICMR_ADDR)
-       spr_picmr <= {spr_dat_i[31:2], 2'b11};
+       spr_picmr <= {spr_dat_i[31:OPTION_PIC_NMI_WIDTH],
+		     {OPTION_PIC_NMI_WIDTH{1'b1}}};
 
 endmodule // mor1kx_pic
-
-
