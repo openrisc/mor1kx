@@ -192,6 +192,7 @@ module mor1kx_cpu_cappuccino
    wire			ctrl_op_lsu_store_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_op_mfspr_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_op_mtspr_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire			ctrl_op_mul_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_op_rfe_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_overflow_clear_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			ctrl_overflow_set_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
@@ -316,6 +317,7 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0] lsu_result_o;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire			lsu_valid_o;		// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire [OPTION_OPERAND_WIDTH-1:0] mul_result_o;// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			overflow_clear_o;	// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			overflow_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			padv_ctrl_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
@@ -532,6 +534,7 @@ module mor1kx_cpu_cappuccino
       .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),
       .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),
       .ctrl_op_mfspr_i			(ctrl_op_mfspr_o),
+      .ctrl_op_mul_i			(ctrl_op_mul_o),
       .decode_rf_wb_i			(decode_rf_wb_o),
       .decode_op_alu_i			(decode_op_alu_o),
       .decode_op_setflag_i		(decode_op_setflag_o),
@@ -574,7 +577,8 @@ module mor1kx_cpu_cappuccino
        .OPTION_RESET_PC(OPTION_RESET_PC),
        .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
        .FEATURE_SYSCALL(FEATURE_SYSCALL),
-       .FEATURE_TRAP(FEATURE_TRAP)
+       .FEATURE_TRAP(FEATURE_TRAP),
+       .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER)
        )
      mor1kx_decode_execute_cappuccino
      (/*AUTOINST*/
@@ -654,6 +658,7 @@ module mor1kx_cpu_cappuccino
       .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),	 // Templated
       .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),	 // Templated
       .ctrl_op_mfspr_i			(ctrl_op_mfspr_o),	 // Templated
+      .ctrl_op_mul_i			(ctrl_op_mul_o),	 // Templated
       .decode_rf_wb_i			(decode_rf_wb_o),	 // Templated
       .decode_op_alu_i			(decode_op_alu_o),	 // Templated
       .decode_op_setflag_i		(decode_op_setflag_o),	 // Templated
@@ -718,7 +723,8 @@ module mor1kx_cpu_cappuccino
       .flag_i				(ctrl_flag_o));		 // Templated
 
    /* mor1kx_execute_alu AUTO_TEMPLATE (
-    .padv_i				(padv_execute_o),
+    .padv_execute_i			(padv_execute_o),
+    .padv_ctrl_i			(padv_ctrl_o),
     .opc_alu_i			        (execute_opc_alu_o),
     .opc_alu_secondary_i		(execute_opc_alu_secondary_o),
     .imm16_i				(execute_imm16_o),
@@ -783,11 +789,13 @@ module mor1kx_cpu_cappuccino
       .overflow_clear_o			(overflow_clear_o),
       .alu_result_o			(alu_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .alu_valid_o			(alu_valid_o),
+      .mul_result_o			(mul_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .adder_result_o			(adder_result_o[OPTION_OPERAND_WIDTH-1:0]),
       // Inputs
       .clk				(clk),
       .rst				(rst),
-      .padv_i				(padv_execute_o),	 // Templated
+      .padv_execute_i			(padv_execute_o),	 // Templated
+      .padv_ctrl_i			(padv_ctrl_o),		 // Templated
       .opc_alu_i			(execute_opc_alu_o),	 // Templated
       .opc_alu_secondary_i		(execute_opc_alu_secondary_o), // Templated
       .imm16_i				(execute_imm16_o),	 // Templated
@@ -921,8 +929,10 @@ module mor1kx_cpu_cappuccino
    /* mor1kx_wb_mux_cappuccino AUTO_TEMPLATE (
     .alu_result_i			(ctrl_alu_result_o),
     .lsu_result_i			(lsu_result_o),
+    .mul_result_i			(mul_result_o),
     .lsu_valid_i			(lsu_valid_o),
     .spr_i				(mfspr_dat_o),
+    .op_mul_i				(ctrl_op_mul_o),
     .op_lsu_load_i			(ctrl_op_lsu_load_o),
     .pc_i				(pc_execute_to_ctrl),
     .op_mfspr_i			        (ctrl_op_mfspr_o),
@@ -940,7 +950,9 @@ module mor1kx_cpu_cappuccino
       .rst				(rst),
       .alu_result_i			(ctrl_alu_result_o),	 // Templated
       .lsu_result_i			(lsu_result_o),		 // Templated
+      .mul_result_i			(mul_result_o),		 // Templated
       .spr_i				(mfspr_dat_o),		 // Templated
+      .op_mul_i				(ctrl_op_mul_o),	 // Templated
       .op_lsu_load_i			(ctrl_op_lsu_load_o),	 // Templated
       .op_mfspr_i			(ctrl_op_mfspr_o),	 // Templated
       .lsu_valid_i			(lsu_valid_o));		 // Templated
@@ -1053,6 +1065,7 @@ module mor1kx_cpu_cappuccino
     .lsu_except_align_i			(lsu_except_align_o),
     .lsu_except_dtlb_miss_i		(lsu_except_dtlb_miss_o),
     .lsu_except_dpagefault_i		(lsu_except_dpagefault_o),
+    .op_mul_i				(execute_op_mul_o),
     .op_lsu_load_i			(execute_op_lsu_load_o),
     .op_lsu_store_i			(execute_op_lsu_store_o),
     .op_lsu_atomic_i			(execute_op_lsu_atomic_o),
@@ -1088,6 +1101,7 @@ module mor1kx_cpu_cappuccino
      #(
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
        .OPTION_RESET_PC(OPTION_RESET_PC),
+       .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER),
        .FEATURE_OVERFLOW(FEATURE_OVERFLOW)
        )
      mor1kx_execute_ctrl_cappuccino
@@ -1107,6 +1121,7 @@ module mor1kx_cpu_cappuccino
       .ctrl_overflow_set_o		(ctrl_overflow_set_o),
       .ctrl_overflow_clear_o		(ctrl_overflow_clear_o),
       .pc_ctrl_o			(pc_execute_to_ctrl),	 // Templated
+      .ctrl_op_mul_o			(ctrl_op_mul_o),
       .ctrl_op_lsu_load_o		(ctrl_op_lsu_load_o),
       .ctrl_op_lsu_store_o		(ctrl_op_lsu_store_o),
       .ctrl_op_lsu_atomic_o		(ctrl_op_lsu_atomic_o),
@@ -1145,6 +1160,7 @@ module mor1kx_cpu_cappuccino
       .lsu_except_dpagefault_i		(lsu_except_dpagefault_o), // Templated
       .execute_except_trap_i		(execute_except_trap_o), // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
+      .op_mul_i				(execute_op_mul_o),	 // Templated
       .op_lsu_load_i			(execute_op_lsu_load_o), // Templated
       .op_lsu_store_i			(execute_op_lsu_store_o), // Templated
       .op_lsu_atomic_i			(execute_op_lsu_atomic_o), // Templated
