@@ -43,6 +43,9 @@ module mor1kx_decode
     parameter FEATURE_CMOV = "NONE",
     parameter FEATURE_FFL1 = "NONE",
     parameter FEATURE_ATOMIC = "ENABLED",
+    parameter FEATURE_MSYNC = "NONE",
+    parameter FEATURE_PSYNC = "NONE",
+    parameter FEATURE_CSYNC = "NONE",
 
     parameter FEATURE_CUST1 = "NONE",
     parameter FEATURE_CUST2 = "NONE",
@@ -465,7 +468,15 @@ module mor1kx_decode
 	       FEATURE_SYSCALL=="ENABLED") ||
 	      (decode_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
 	       `OR1K_SYSTRAPSYNC_OPC_TRAP &&
-	       FEATURE_TRAP=="ENABLED"))
+	       FEATURE_TRAP=="ENABLED") ||
+	      (decode_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
+	       `OR1K_SYSTRAPSYNC_OPC_MSYNC) ||
+	      (decode_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
+	       `OR1K_SYSTRAPSYNC_OPC_PSYNC &&
+	       FEATURE_PSYNC!="NONE") ||
+	      (decode_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
+	       `OR1K_SYSTRAPSYNC_OPC_CSYNC &&
+	       FEATURE_CSYNC!="NONE"))
 	    decode_except_illegal_o = 1'b0;
 	  else
 	    decode_except_illegal_o = 1'b1;

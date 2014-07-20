@@ -78,7 +78,10 @@ module mor1kx_cpu_espresso
    parameter FEATURE_EXT		= "NONE";
    parameter FEATURE_CMOV		= "NONE";
    parameter FEATURE_FFL1		= "NONE";
-   
+   parameter FEATURE_MSYNC		= "NONE";
+   parameter FEATURE_PSYNC		= "NONE";
+   parameter FEATURE_CSYNC		= "NONE";
+
    parameter FEATURE_CUST1		= "NONE";
    parameter FEATURE_CUST2		= "NONE";
    parameter FEATURE_CUST3		= "NONE";
@@ -304,6 +307,9 @@ module mor1kx_cpu_espresso
        .FEATURE_EXT(FEATURE_EXT),
        .FEATURE_CMOV(FEATURE_CMOV),
        .FEATURE_FFL1(FEATURE_FFL1),
+       .FEATURE_MSYNC(FEATURE_MSYNC),
+       .FEATURE_PSYNC(FEATURE_PSYNC),
+       .FEATURE_CSYNC(FEATURE_CSYNC),
        .FEATURE_CUST1(FEATURE_CUST1),
        .FEATURE_CUST2(FEATURE_CUST2),
        .FEATURE_CUST3(FEATURE_CUST3),
