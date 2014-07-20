@@ -59,7 +59,6 @@ module mor1kx
    parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE";
    parameter OPTION_IMMU_SET_WIDTH	= 6;
    parameter OPTION_IMMU_WAYS		= 1;
-   parameter FEATURE_PIC		= "ENABLED";
    parameter FEATURE_TIMER		= "ENABLED";
    parameter FEATURE_DEBUGUNIT		= "NONE";
    parameter FEATURE_PERFCOUNTERS	= "NONE";
@@ -72,7 +71,9 @@ module mor1kx
    parameter FEATURE_TRAP		= "ENABLED";
    parameter FEATURE_RANGE		= "ENABLED";
 
+   parameter FEATURE_PIC		= "ENABLED";
    parameter OPTION_PIC_TRIGGER		= "LEVEL";
+   parameter OPTION_PIC_NMI_WIDTH	= 0;
 
    parameter FEATURE_DSX		= "ENABLED";
    parameter FEATURE_FASTCONTEXTS	= "NONE";
@@ -490,6 +491,7 @@ module mor1kx
 	     .FEATURE_TRAP(FEATURE_TRAP),
 	     .FEATURE_RANGE(FEATURE_RANGE),
 	     .OPTION_PIC_TRIGGER(OPTION_PIC_TRIGGER),
+	     .OPTION_PIC_NMI_WIDTH(OPTION_PIC_NMI_WIDTH),
 	     .FEATURE_DSX(FEATURE_DSX),
 	     .FEATURE_FASTCONTEXTS(FEATURE_FASTCONTEXTS),
 	     .FEATURE_OVERFLOW(FEATURE_OVERFLOW),
