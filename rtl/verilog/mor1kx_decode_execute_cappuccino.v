@@ -31,6 +31,8 @@ module mor1kx_decode_execute_cappuccino
     parameter FEATURE_TRAP = "ENABLED",
     parameter FEATURE_DELAY_SLOT = "ENABLED",
 
+    parameter FEATURE_MULTIPLIER = "THREESTAGE",
+
     parameter FEATURE_INBUILT_CHECKERS = "ENABLED"
     )
    (
@@ -89,6 +91,7 @@ module mor1kx_decode_execute_cappuccino
     input [OPTION_RF_ADDR_WIDTH-1:0] 	  ctrl_rfd_adr_i,
     input 				  ctrl_op_lsu_load_i,
     input 				  ctrl_op_mfspr_i,
+    input 				  ctrl_op_mul_i,
 
     // Control signal inputs from decode stage
     input 				  decode_rf_wb_i,
@@ -436,7 +439,9 @@ module mor1kx_decode_execute_cappuccino
        pc_execute_o <= pc_decode_i;
 
    // Branch detection
-   assign ctrl_to_decode_interlock = (ctrl_op_lsu_load_i | ctrl_op_mfspr_i) &
+   assign ctrl_to_decode_interlock = (ctrl_op_lsu_load_i | ctrl_op_mfspr_i |
+				      ctrl_op_mul_i &
+				      FEATURE_MULTIPLIER=="PIPELINED") &
 				     (decode_rfb_adr_i == ctrl_rfd_adr_i);
 
    assign branch_to_imm = (decode_op_jbr_i &
@@ -503,14 +508,27 @@ module mor1kx_decode_execute_cappuccino
    // the main purpose of this is to stall fetch while the rfe is propagating
    // up to ctrl stage.
 
-   assign decode_bubble_o = ((execute_op_lsu_load_o | execute_op_mfspr_o) &
+   assign decode_bubble_o = (
+			     // load/mfspr/mul
+			     (execute_op_lsu_load_o | execute_op_mfspr_o |
+			      execute_op_mul_o &
+			      FEATURE_MULTIPLIER=="PIPELINED") &
 			     (decode_rfa_adr_i == execute_rfd_adr_o ||
 			      decode_rfb_adr_i == execute_rfd_adr_o) |
+			     // mul
+			     (ctrl_op_mul_i &
+			      FEATURE_MULTIPLIER=="PIPELINED") &
+			     (decode_rfa_adr_i == ctrl_rfd_adr_i ||
+			      decode_rfb_adr_i == ctrl_rfd_adr_i) |
+			     // jr
 			     decode_op_jr_i &
 			     (ctrl_to_decode_interlock |
 			      (decode_rfb_adr_i == execute_rfd_adr_o)) |
+			     // atomic store
 			     execute_op_lsu_store_o & execute_op_lsu_atomic_o |
-			     decode_op_rfe_i) & padv_i;
+			     // rfe
+			     decode_op_rfe_i
+			     ) & padv_i;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)

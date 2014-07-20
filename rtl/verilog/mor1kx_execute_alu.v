@@ -50,7 +50,8 @@ module mor1kx_execute_alu
     input 			      rst,
 
     // pipeline control signal in
-    input 			      padv_i,
+    input 			      padv_execute_i,
+    input 			      padv_ctrl_i,
 
     // inputs to ALU
     input [`OR1K_ALU_OPC_WIDTH-1:0]   opc_alu_i,
@@ -103,6 +104,7 @@ module mor1kx_execute_alu
 
     output [OPTION_OPERAND_WIDTH-1:0] alu_result_o,
     output 			      alu_valid_o,
+    output [OPTION_OPERAND_WIDTH-1:0] mul_result_o,
     output [OPTION_OPERAND_WIDTH-1:0] adder_result_o
     );
 
@@ -231,6 +233,31 @@ endgenerate
 	 assign mul_unsigned_overflow = 0;
 
       end // if (FEATURE_MULTIPLIER=="THREESTAGE")
+      /* verilator lint_off WIDTH */
+      else if (FEATURE_MULTIPLIER=="PIPELINED") begin : pipelinedmultiply
+	 /* verilator lint_on WIDTH */
+         // 32-bit multiplier in sync with cpu pipeline
+         reg [OPTION_OPERAND_WIDTH-1:0]           mul_opa;
+         reg [OPTION_OPERAND_WIDTH-1:0]           mul_opb;
+         reg [OPTION_OPERAND_WIDTH-1:0]           mul_result1;
+
+	 always @(posedge clk) begin
+	    if (padv_execute_i) begin
+	       mul_opa <= a;
+	       mul_opb <= b;
+	    end
+	    if (padv_ctrl_i)
+	      mul_result1 <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
+	 end
+
+         assign mul_result = mul_result1;
+
+         assign mul_valid = 1;
+
+	 // Can't detect unsigned overflow in this implementation
+	 assign mul_unsigned_overflow = 0;
+
+      end // if (FEATURE_MULTIPLIER=="PIPELINED")
       else if (FEATURE_MULTIPLIER=="SERIAL") begin : serialmultiply
          reg [(OPTION_OPERAND_WIDTH*2)-1:0]  mul_prod_r;
          reg [5:0]   serial_mul_cnt;
@@ -335,7 +362,8 @@ endgenerate
    endgenerate
 
    // One signed overflow detection for all multiplication implmentations
-   assign mul_signed_overflow = (FEATURE_MULTIPLIER=="NONE") ? 0 :
+   assign mul_signed_overflow = (FEATURE_MULTIPLIER=="NONE") ||
+				(FEATURE_MULTIPLIER=="PIPELINED") ? 0 :
 				// Same signs, check for negative result
 				// (should be positive)
 				((a[OPTION_OPERAND_WIDTH-1] ==
@@ -346,6 +374,8 @@ endgenerate
 				((a[OPTION_OPERAND_WIDTH-1] ^
 				  b[OPTION_OPERAND_WIDTH-1]) &&
 				 !mul_result[OPTION_OPERAND_WIDTH-1]);
+
+   assign mul_result_o = mul_result;
 
    generate
       /* verilator lint_off WIDTH */

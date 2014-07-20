@@ -23,6 +23,7 @@ module mor1kx_execute_ctrl_cappuccino
     parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
 				 `OR1K_RESET_VECTOR,8'd0},
     parameter OPTION_RF_ADDR_WIDTH = 5,
+    parameter FEATURE_MULTIPLIER = "THREESTAGE",
     parameter FEATURE_OVERFLOW = "NONE"
     )
    (
@@ -45,6 +46,8 @@ module mor1kx_execute_ctrl_cappuccino
     input 				  execute_except_trap_i,
 
     input 				  pipeline_flush_i,
+
+    input 				  op_mul_i,
 
     input 				  op_lsu_load_i,
     input 				  op_lsu_store_i,
@@ -101,6 +104,8 @@ module mor1kx_execute_ctrl_cappuccino
     output reg 				  ctrl_overflow_clear_o,
 
     output reg [OPTION_OPERAND_WIDTH-1:0] pc_ctrl_o,
+
+    output reg 				  ctrl_op_mul_o,
 
     output reg 				  ctrl_op_lsu_load_o,
     output reg 				  ctrl_op_lsu_store_o,
@@ -225,14 +230,28 @@ module mor1kx_execute_ctrl_cappuccino
      else if (padv_i & !execute_bubble_i)
        pc_ctrl_o <= pc_execute_i;
 
+   //
    // The pipeline flush comes when the instruction that has caused
    // an exception or the instruction that has been interrupted is in
    // ctrl stage, so the padv_execute signal has to have higher prioity
    // than the pipeline flush in order to not accidently kill a valid
    // instruction coming in from execute stage.
    //
-   // The tail of the pipeline should also not be flushed when the
-   // pipeline_flush have been caused by a debug unit stall.
+
+generate
+if (FEATURE_MULTIPLIER=="PIPELINED") begin
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       ctrl_op_mul_o <= 0;
+     else if (padv_i)
+       ctrl_op_mul_o <= op_mul_i;
+     else if (pipeline_flush_i)
+       ctrl_op_mul_o <= 0;
+end else begin
+   always @(posedge clk)
+       ctrl_op_mul_o <= 0;
+end
+endgenerate
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
