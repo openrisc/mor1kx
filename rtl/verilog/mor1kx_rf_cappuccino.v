@@ -18,6 +18,8 @@
 
 module mor1kx_rf_cappuccino
   #(
+    parameter FEATURE_FASTCONTEXTS = "NONE",
+    parameter OPTION_RF_NUM_SHADOW_GPR = 0,
     parameter OPTION_RF_ADDR_WIDTH = 5,
     parameter OPTION_RF_WORDS = 32,
     parameter FEATURE_DEBUGUNIT = "NONE",
@@ -49,6 +51,10 @@ module mor1kx_rf_cappuccino
 
     // SPR interface
     input [15:0] 		      spr_bus_addr_i,
+    input 			      spr_bus_stb_i,
+    input 			      spr_bus_we_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_i,
+    output 			      spr_gpr_ack_o,
     output [OPTION_OPERAND_WIDTH-1:0] spr_gpr_dat_o,
 
     // Write back signal indications
@@ -66,6 +72,10 @@ module mor1kx_rf_cappuccino
     output [OPTION_OPERAND_WIDTH-1:0] execute_rfb_o
     );
 
+   localparam RF_ADDR_WIDTH = OPTION_RF_ADDR_WIDTH *
+			      (OPTION_RF_NUM_SHADOW_GPR+1);
+   localparam RF_WORDS = OPTION_RF_WORDS * (OPTION_RF_NUM_SHADOW_GPR+1);
+
    wire [OPTION_OPERAND_WIDTH-1:0]    rfa_ram_o;
    wire [OPTION_OPERAND_WIDTH-1:0]    rfb_ram_o;
 
@@ -76,6 +86,8 @@ module mor1kx_rf_cappuccino
    wire 			      rfb_rden;
 
    wire 			      rf_wren;
+   wire [RF_ADDR_WIDTH-1:0] 	      rf_wradr;
+   wire [OPTION_OPERAND_WIDTH-1:0]    rf_wrdat;
 
    reg 				      flushing;
 
@@ -201,15 +213,43 @@ module mor1kx_rf_cappuccino
      if (padv_decode_i)
        execute_rfb <= decode_rfb_o;
 
+generate
+if (FEATURE_DEBUGUNIT!="NONE" || FEATURE_FASTCONTEXTS!="NONE" ||
+    OPTION_RF_NUM_SHADOW_GPR > 0) begin
+   wire 			   spr_gpr_we;
+   wire 			   spr_gpr_re;
+   assign spr_gpr_we = (spr_bus_addr_i[15:9] == 7'h2) &
+		       spr_bus_stb_i & spr_bus_we_i;
+   assign spr_gpr_re = (spr_bus_addr_i[15:9] == 7'h2) &
+		       spr_bus_stb_i & !spr_bus_we_i & !padv_ctrl_i;
+
+   reg 	spr_gpr_read_ack;
+   always @(posedge clk)
+     spr_gpr_read_ack <= spr_gpr_re;
+
+   assign spr_gpr_ack_o = spr_gpr_we & !wb_rf_wb_i |
+			  spr_gpr_re & spr_gpr_read_ack;
+
+   assign rf_wren =  wb_rf_wb_i | spr_gpr_we;
+   assign rf_wradr = wb_rf_wb_i ? wb_rfd_adr_i : spr_bus_addr_i;
+   assign rf_wrdat = wb_rf_wb_i ? result_i : spr_bus_dat_i;
+end else begin
+   assign spr_gpr_ack_o = 1;
+
+   assign rf_wren =  wb_rf_wb_i;
+   assign rf_wradr = wb_rfd_adr_i;
+   assign rf_wrdat = result_i;
+end
+endgenerate
+
    assign rfa_rden = padv_decode_i;
    assign rfb_rden = fetch_rf_adr_valid_i;
-   assign rf_wren =  wb_rf_wb_i;
 
    mor1kx_rf_ram
      #(
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
-       .OPTION_RF_WORDS(OPTION_RF_WORDS)
+       .OPTION_RF_ADDR_WIDTH(RF_ADDR_WIDTH),
+       .OPTION_RF_WORDS(RF_WORDS)
        )
      rfa
      (
@@ -218,16 +258,16 @@ module mor1kx_rf_cappuccino
       .rdad_i(decode_rfa_adr_i),
       .rden_i(rfa_rden),
       .rdda_o(rfa_ram_o),
-      .wrad_i(wb_rfd_adr_i),
+      .wrad_i(rf_wradr),
       .wren_i(rf_wren),
-      .wrda_i(result_i)
+      .wrda_i(rf_wrdat)
       );
 
    mor1kx_rf_ram
      #(
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
-       .OPTION_RF_WORDS(OPTION_RF_WORDS)
+       .OPTION_RF_ADDR_WIDTH(RF_ADDR_WIDTH),
+       .OPTION_RF_WORDS(RF_WORDS)
        )
    rfb
      (
@@ -236,29 +276,30 @@ module mor1kx_rf_cappuccino
       .rdad_i(fetch_rfb_adr_i),
       .rden_i(rfb_rden),
       .rdda_o(rfb_ram_o),
-      .wrad_i(wb_rfd_adr_i),
+      .wrad_i(rf_wradr),
       .wren_i(rf_wren),
-      .wrda_i(result_i)
+      .wrda_i(rf_wrdat)
       );
 
 generate
-if (FEATURE_DEBUGUNIT!="NONE") begin : rfspr_gen
+if (FEATURE_DEBUGUNIT!="NONE" || FEATURE_FASTCONTEXTS!="NONE" ||
+    OPTION_RF_NUM_SHADOW_GPR > 0) begin : rfspr_gen
    mor1kx_rf_ram
      #(
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
-       .OPTION_RF_WORDS(OPTION_RF_WORDS)
+       .OPTION_RF_ADDR_WIDTH(RF_ADDR_WIDTH),
+       .OPTION_RF_WORDS(RF_WORDS)
        )
    rfspr
      (
       .clk(clk),
       .rst(rst),
-      .rdad_i(spr_bus_addr_i[OPTION_RF_ADDR_WIDTH-1:0]),
+      .rdad_i(spr_bus_addr_i[RF_ADDR_WIDTH-1:0]),
       .rden_i(1'b1),
       .rdda_o(spr_gpr_dat_o),
-      .wrad_i(wb_rfd_adr_i),
+      .wrad_i(rf_wradr),
       .wren_i(rf_wren),
-      .wrda_i(result_i)
+      .wrda_i(rf_wrdat)
       );
 end else begin
    assign spr_gpr_dat_o = 0;

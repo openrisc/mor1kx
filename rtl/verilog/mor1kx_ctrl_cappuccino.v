@@ -63,6 +63,7 @@ module mor1kx_ctrl_cappuccino
 
     parameter FEATURE_DSX ="NONE",
     parameter FEATURE_FASTCONTEXTS = "NONE",
+    parameter OPTION_RF_NUM_SHADOW_GPR = 0,
     parameter FEATURE_OVERFLOW = "NONE",
 
     parameter SPR_SR_WIDTH = 16,
@@ -208,6 +209,7 @@ module mor1kx_ctrl_cappuccino
     input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i,
     input 			      spr_bus_ack_fpu_i,
     input [OPTION_OPERAND_WIDTH-1:0]  spr_gpr_dat_i,
+    input 			      spr_gpr_ack_i,
     output [15:0] 		      spr_sr_o
     );
 
@@ -737,6 +739,7 @@ module mor1kx_ctrl_cappuccino
        .OPTION_PIC_TRIGGER		(OPTION_PIC_TRIGGER),
        .FEATURE_DSX			(FEATURE_DSX),
        .FEATURE_FASTCONTEXTS		(FEATURE_FASTCONTEXTS),
+       .OPTION_RF_NUM_SHADOW_GPR	(OPTION_RF_NUM_SHADOW_GPR),
        .FEATURE_OVERFLOW		(FEATURE_OVERFLOW),
        .FEATURE_DATACACHE		(FEATURE_DATACACHE),
        .OPTION_DCACHE_BLOCK_WIDTH	(OPTION_DCACHE_BLOCK_WIDTH),
@@ -850,8 +853,7 @@ module mor1kx_ctrl_cappuccino
 
        default: begin
 	  // GPR read
-	  if (spr_addr >= `OR1K_SPR_GPR0_ADDR &&
-	      spr_addr < (`OR1K_SPR_GPR0_ADDR + 32))
+	  if (spr_addr[15:9] == 7'h02)
 	    spr_sys_group_read = spr_gpr_dat_i; // Register file
 	  else
 	    // Invalid address - read as zero
@@ -862,11 +864,8 @@ module mor1kx_ctrl_cappuccino
    /* System group read data MUX in */
    assign spr_internal_read_dat[0] = spr_sys_group_read;
    /* System group ack generation */
-   reg spr_sys_group_ack;
-   always @(posedge clk)
-     spr_sys_group_ack <= spr_read_access | spr_write_access;
 
-   assign spr_access_ack[0] = spr_sys_group_ack;
+   assign spr_access_ack[0] = (spr_addr[15:9] == 7'h02) ? spr_gpr_ack_i : 1;
 
    /* Generate data to the register file for mfspr operations */
    assign mfspr_dat_o = spr_internal_read_dat[spr_addr[14:11]];
@@ -1031,7 +1030,9 @@ module mor1kx_ctrl_cappuccino
 			     /* PIC Group */
 			     spr_addr[15:11]==5'h09 ||
 			     /* Tick Group */
-			     spr_addr[15:11]==5'h0a);
+			     spr_addr[15:11]==5'h0a) ||
+			     // GPR
+			     spr_addr[15:9]==7'h02;
 
    generate
       if (FEATURE_DEBUGUNIT!="NONE") begin : du

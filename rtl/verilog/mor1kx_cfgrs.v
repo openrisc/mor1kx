@@ -53,6 +53,7 @@ module mor1kx_cfgrs
 
     parameter FEATURE_DSX                = "NONE",
     parameter FEATURE_FASTCONTEXTS       = "NONE",
+    parameter OPTION_RF_NUM_SHADOW_GPR   = 0,
     parameter FEATURE_OVERFLOW           = "NONE",
 
     parameter FEATURE_DELAYSLOT          = "NONE",
@@ -95,7 +96,7 @@ module mor1kx_cfgrs
    assign spr_upr[`OR1K_SPR_UPR_RESERVED] = 0;
    assign spr_upr[`OR1K_SPR_UPR_CUP] = 0;
 
-   assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_NSGF] = 0;
+   assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_NSGF] = OPTION_RF_NUM_SHADOW_GPR;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_CFG] = 0;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OB32S] = 1;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OB64S] = 0;
