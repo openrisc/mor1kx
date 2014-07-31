@@ -549,10 +549,10 @@ endgenerate
 generate
 if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
    if (OPTION_DCACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
-      assign dc_access = (dc_enabled | ctrl_op_lsu_store_i) &
+      assign dc_access =  ctrl_op_lsu_store_i | dc_enabled &
 			 !(dmmu_cache_inhibit & dmmu_enable_i);
    end else if (OPTION_DCACHE_LIMIT_WIDTH < OPTION_OPERAND_WIDTH) begin
-      assign dc_access = (dc_enabled | ctrl_op_lsu_store_i) &
+      assign dc_access = ctrl_op_lsu_store_i | dc_enabled &
 			 dc_adr_match[OPTION_OPERAND_WIDTH-1:
 				      OPTION_DCACHE_LIMIT_WIDTH] == 0 &
 			 !(dmmu_cache_inhibit & dmmu_enable_i);
