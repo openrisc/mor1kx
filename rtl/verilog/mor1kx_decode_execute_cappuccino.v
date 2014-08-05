@@ -516,10 +516,15 @@ module mor1kx_decode_execute_cappuccino
 			     (decode_rfa_adr_i == execute_rfd_adr_o ||
 			      decode_rfb_adr_i == execute_rfd_adr_o) |
 			     // mul
-			     (ctrl_op_mul_i &
-			      FEATURE_MULTIPLIER=="PIPELINED") &
-			     (decode_rfa_adr_i == ctrl_rfd_adr_i ||
-			      decode_rfb_adr_i == ctrl_rfd_adr_i) |
+			     FEATURE_MULTIPLIER=="PIPELINED" &
+			     (decode_op_mul_i &
+			      (ctrl_to_decode_interlock |
+			       execute_rf_wb_o &
+			       (decode_rfa_adr_i == execute_rfd_adr_o ||
+				decode_rfb_adr_i == execute_rfd_adr_o)) |
+			      ctrl_op_mul_i &
+			      (decode_rfa_adr_i == ctrl_rfd_adr_i ||
+			       decode_rfb_adr_i == ctrl_rfd_adr_i)) |
 			     // jr
 			     decode_op_jr_i &
 			     (ctrl_to_decode_interlock |
