@@ -454,11 +454,13 @@ module mor1kx_decode_execute_cappuccino
    assign branch_to_imm_target = pc_decode_i + {{4{decode_immjbr_upper_i[9]}},
 						decode_immjbr_upper_i,
 						decode_imm16_i,2'b00};
-
-   assign branch_to_reg = decode_op_jr_i & !ctrl_to_decode_interlock;
+   assign branch_to_reg = decode_op_jr_i &
+			  !(ctrl_to_decode_interlock |
+			    execute_rf_wb_o &
+			    (decode_rfb_adr_i == execute_rfd_adr_o));
 
    assign decode_branch_o = (branch_to_imm | branch_to_reg) &
-			    !pipeline_flush_i & !decode_bubble_o;
+			    !pipeline_flush_i;
 
    assign decode_branch_target_o = branch_to_imm ?
 				   branch_to_imm_target :
