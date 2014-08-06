@@ -21,6 +21,8 @@ module mor1kx_execute_alu
     parameter OPTION_OPERAND_WIDTH = 32,
 
     parameter FEATURE_OVERFLOW = "NONE",
+    parameter FEATURE_CARRY_FLAG = "ENABLED",
+
     parameter FEATURE_MULTIPLIER = "THREESTAGE",
     parameter FEATURE_DIVIDER = "NONE",
 
@@ -722,13 +724,15 @@ endgenerate
 			      op_mul_signed_i & !mul_signed_overflow |
 			      op_div_signed_i & !div_by_zero);
 
-   assign carry_set_o = op_add_i & adder_unsigned_overflow |
-			op_mul_unsigned_i & mul_unsigned_overflow |
-			op_div_unsigned_i & div_by_zero;
+   assign carry_set_o = FEATURE_CARRY_FLAG!="NONE" &
+			(op_add_i & adder_unsigned_overflow |
+			 op_mul_unsigned_i & mul_unsigned_overflow |
+			 op_div_unsigned_i & div_by_zero);
 
-   assign carry_clear_o = op_add_i & !adder_unsigned_overflow |
-			  op_mul_unsigned_i & !mul_unsigned_overflow |
-			  op_div_unsigned_i & !div_by_zero;
+   assign carry_clear_o = FEATURE_CARRY_FLAG!="NONE" &
+			  (op_add_i & !adder_unsigned_overflow |
+			   op_mul_unsigned_i & !mul_unsigned_overflow |
+			   op_div_unsigned_i & !div_by_zero);
 
    // Stall logic for multicycle ALU operations
    assign alu_stall = op_div_i & !div_valid |

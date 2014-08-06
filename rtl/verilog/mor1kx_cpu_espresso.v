@@ -63,7 +63,8 @@ module mor1kx_cpu_espresso
    parameter FEATURE_DSX		= "NONE";
    parameter FEATURE_FASTCONTEXTS	= "NONE";
    parameter FEATURE_OVERFLOW		= "NONE";
-   
+   parameter FEATURE_CARRY_FLAG		= "ENABLED";
+
    parameter OPTION_RF_ADDR_WIDTH	= 5;
    parameter OPTION_RF_WORDS		= 32;
 
