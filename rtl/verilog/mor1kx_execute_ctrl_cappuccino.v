@@ -23,8 +23,7 @@ module mor1kx_execute_ctrl_cappuccino
     parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
 				 `OR1K_RESET_VECTOR,8'd0},
     parameter OPTION_RF_ADDR_WIDTH = 5,
-    parameter FEATURE_MULTIPLIER = "THREESTAGE",
-    parameter FEATURE_OVERFLOW = "NONE"
+    parameter FEATURE_MULTIPLIER = "THREESTAGE"
     )
    (
     input 				  clk,
@@ -216,10 +215,8 @@ module mor1kx_execute_ctrl_cappuccino
 	ctrl_flag_clear_o <= flag_clear_i;
 	ctrl_carry_set_o <= carry_set_i;
 	ctrl_carry_clear_o <= carry_clear_i;
-	if (FEATURE_OVERFLOW!="NONE") begin
-	   ctrl_overflow_set_o <= overflow_set_i;
-	   ctrl_overflow_clear_o <= overflow_clear_i;
-	end
+	ctrl_overflow_set_o <= overflow_set_i;
+	ctrl_overflow_clear_o <= overflow_clear_i;
      end
 
    // pc_ctrl should not advance when a nop bubble moves from execute to
