@@ -179,7 +179,7 @@ module mor1kx_fetch_cappuccino
 
    assign fetch_rfa_adr_o = imem_dat[`OR1K_RA_SELECT];
    assign fetch_rfb_adr_o = imem_dat[`OR1K_RB_SELECT];
-   assign fetch_rf_adr_valid_o = imem_ack & padv_i;
+   assign fetch_rf_adr_valid_o = bus_access_done & padv_i;
 
    // Signal to indicate that the ongoing bus access should be flushed
    always @(posedge clk `OR_ASYNC_RST)
