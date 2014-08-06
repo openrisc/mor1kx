@@ -442,7 +442,8 @@ module mor1kx_decode_execute_cappuccino
    assign ctrl_to_decode_interlock = (ctrl_op_lsu_load_i | ctrl_op_mfspr_i |
 				      ctrl_op_mul_i &
 				      FEATURE_MULTIPLIER=="PIPELINED") &
-				     (decode_rfb_adr_i == ctrl_rfd_adr_i);
+				     ((decode_rfa_adr_i == ctrl_rfd_adr_i) ||
+				      (decode_rfb_adr_i == ctrl_rfd_adr_i));
 
    assign branch_to_imm = (decode_op_jbr_i &
 			   // l.j/l.jal
@@ -521,13 +522,11 @@ module mor1kx_decode_execute_cappuccino
 			      (ctrl_to_decode_interlock |
 			       execute_rf_wb_o &
 			       (decode_rfa_adr_i == execute_rfd_adr_o ||
-				decode_rfb_adr_i == execute_rfd_adr_o)) |
-			      ctrl_op_mul_i &
-			      (decode_rfa_adr_i == ctrl_rfd_adr_i ||
-			       decode_rfb_adr_i == ctrl_rfd_adr_i)) |
+				decode_rfb_adr_i == execute_rfd_adr_o))) |
 			     // jr
 			     decode_op_jr_i &
 			     (ctrl_to_decode_interlock |
+			      execute_rf_wb_o &
 			      (decode_rfb_adr_i == execute_rfd_adr_o)) |
 			     // rfe
 			     decode_op_rfe_i
