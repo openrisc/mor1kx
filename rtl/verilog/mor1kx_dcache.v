@@ -481,6 +481,7 @@ module mor1kx_dcache
 	 //
 	 tag_windex = read | write ?
 		      cpu_adr_match_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH] :
+		      (state == INVALIDATE) ? invalidate_adr :
 		      wradr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 
 	 case (state)
@@ -666,7 +667,7 @@ if (OPTION_DCACHE_SNOOP == "ENABLED") begin
       .clk			(clk),
       .raddr			(snoop_index),
       .waddr			(tag_windex),
-      .we			        (tag_we),
+      .we			(tag_we),
       .din			(tag_din));
 end
 endgenerate
