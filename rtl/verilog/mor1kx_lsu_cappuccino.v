@@ -93,9 +93,9 @@ module mor1kx_lsu_cappuccino
 
     // interface to data bus
     output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
-    output 			      dbus_req_o,
+    output reg			      dbus_req_o,
     output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
-    output [3:0] 		      dbus_bsel_o,
+    output reg [3:0] 		      dbus_bsel_o,
     output reg 			      dbus_we_o,
     output 			      dbus_burst_o,
     input 			      dbus_err_i,
@@ -120,16 +120,15 @@ module mor1kx_lsu_cappuccino
 
    reg 				     dbus_ack;
    reg 				     dbus_err;
-   reg [OPTION_OPERAND_WIDTH-1:0]    dbus_ldat;
-   wire [OPTION_OPERAND_WIDTH-1:0]   dbus_sdat;
+   reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat;
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_adr;
    wire [OPTION_OPERAND_WIDTH-1:0]   next_dbus_adr;
-   reg 				     dbus_req;
    reg [3:0] 			     dbus_bsel;
    wire 			     dbus_access;
    wire 			     dbus_stall;
 
    wire [OPTION_OPERAND_WIDTH-1:0]   lsu_ldat;
+   wire [OPTION_OPERAND_WIDTH-1:0]   lsu_sdat;
    wire				     lsu_ack;
 
    wire 			     dc_err;
@@ -183,6 +182,8 @@ module mor1kx_lsu_cappuccino
    wire [OPTION_OPERAND_WIDTH/8-1:0] store_buffer_bsel;
    reg 				     store_buffer_write_pending;
 
+   reg 				     last_write;
+
    // Atomic operations
    reg [OPTION_OPERAND_WIDTH-1:0]    atomic_addr;
    reg 				     atomic_reserve;
@@ -191,12 +192,12 @@ module mor1kx_lsu_cappuccino
 
    assign ctrl_op_lsu = ctrl_op_lsu_load_i | ctrl_op_lsu_store_i;
 
-   assign dbus_sdat = (ctrl_lsu_length_i == 2'b00) ? // byte access
-		      {ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],
-		       ctrl_rfb_i[7:0],ctrl_rfb_i[7:0]} :
-		      (ctrl_lsu_length_i == 2'b01) ? // halfword access
-		      {ctrl_rfb_i[15:0],ctrl_rfb_i[15:0]} :
-		      ctrl_rfb_i;                    // word access
+   assign lsu_sdat = (ctrl_lsu_length_i == 2'b00) ? // byte access
+		     {ctrl_rfb_i[7:0],ctrl_rfb_i[7:0],
+		      ctrl_rfb_i[7:0],ctrl_rfb_i[7:0]} :
+		     (ctrl_lsu_length_i == 2'b01) ? // halfword access
+		     {ctrl_rfb_i[15:0],ctrl_rfb_i[15:0]} :
+		     ctrl_rfb_i;                    // word access
 
    assign align_err_word = |ctrl_lsu_adr_i[1:0];
    assign align_err_short = ctrl_lsu_adr_i[0];
@@ -343,12 +344,10 @@ module mor1kx_lsu_cappuccino
 		    (store_buffer_write | swa_fail & padv_ctrl_i) :
 		    (dbus_access ? dbus_ack : dc_ack);
 
-   assign lsu_ldat = dbus_access ? dbus_ldat : dc_ldat;
-   assign dbus_adr_o = (state == WRITE) ? store_buffer_radr : dbus_adr;
-   assign dbus_req_o = dbus_req;
-   assign dbus_bsel_o = (state == WRITE) ? store_buffer_bsel :
-			(state == DC_REFILL) ? 4'hf : dbus_bsel;
-   assign dbus_dat_o = store_buffer_dat;
+   assign lsu_ldat = dbus_access ? dbus_dat : dc_ldat;
+   assign dbus_adr_o = dbus_adr;
+
+   assign dbus_dat_o = dbus_dat;
 
    assign dbus_burst_o = (state == DC_REFILL) & !dc_refill_done;
 
@@ -368,73 +367,85 @@ module mor1kx_lsu_cappuccino
       tlb_reload_done <= 0;
       case (state)
 	IDLE: begin
-	   dbus_req <= 0;
+	   dbus_req_o <= 0;
 	   dbus_we_o <= 0;
 	   dbus_adr <= 0;
+	   dbus_bsel_o <= 4'hf;
+	   last_write <= 0;
 	   if (store_buffer_write | !store_buffer_empty) begin
 	      state <= WRITE;
-	      dbus_req <= 1;
-	      dbus_we_o <= 1;
 	   end else if (ctrl_op_lsu & dbus_access & !dc_refill & !dbus_ack &
 			!dbus_err & !except_dbus & !access_done &
 			!pipeline_flush_i) begin
 	      if (tlb_reload_req) begin
 		 dbus_adr <= tlb_reload_addr;
-		 dbus_req <= 1;
+		 dbus_req_o <= 1;
 		 state <= TLB_RELOAD;
 	      end else if (dmmu_enable_i) begin
 		 dbus_adr <= dmmu_phys_addr;
 		 if (!tlb_miss & !pagefault & !except_align) begin
 		    if (ctrl_op_lsu_load_i) begin
-		       dbus_req <= 1;
+		       dbus_req_o <= 1;
+		       dbus_bsel_o <= dbus_bsel;
 		       state <= READ;
 		    end
 		 end
 	      end else if (!except_align) begin
 		 dbus_adr <= ctrl_lsu_adr_i;
 		 if (ctrl_op_lsu_load_i) begin
-		    dbus_req <= 1;
+		    dbus_req_o <= 1;
+		    dbus_bsel_o <= dbus_bsel;
 		    state <= READ;
 		 end
 	      end
 	   end else if (dc_refill_req) begin
-	      dbus_req <= 1;
+	      dbus_req_o <= 1;
 	      dbus_adr <= dc_adr_match;
 	      state <= DC_REFILL;
 	   end
 	end
 
 	DC_REFILL: begin
-	   dbus_req <= 1;
+	   dbus_req_o <= 1;
 	   if (dbus_ack_i) begin
 	      dbus_adr <= next_dbus_adr;
 	      if (dc_refill_done) begin
-		 dbus_req <= 0;
+		 dbus_req_o <= 0;
 		 state <= IDLE;
 	      end
 	   end
 
 	   if (dbus_err_i) begin
-	      dbus_req <= 0;
+	      dbus_req_o <= 0;
 	      state <= IDLE;
 	   end
 	end
 
 	READ: begin
 	   dbus_ack <= dbus_ack_i;
-	   dbus_ldat <= dbus_dat_i;
+	   dbus_dat <= dbus_dat_i;
 	   if (dbus_ack_i | dbus_err_i) begin
-	      dbus_req <= 0;
+	      dbus_req_o <= 0;
 	      state <= IDLE;
 	   end
 	end
 
 	WRITE: begin
-	   dbus_req <= 1;
+	   dbus_req_o <= 1;
 	   dbus_we_o <= 1;
-	   if (store_buffer_empty & !store_buffer_write & dbus_ack_i |
-	       dbus_err_i) begin
-	      dbus_req <= 0;
+
+	   if (!dbus_req_o | dbus_ack_i) begin
+	      dbus_bsel_o <= store_buffer_bsel;
+	      dbus_adr <= store_buffer_radr;
+	      dbus_dat <= store_buffer_dat;
+	      last_write <= store_buffer_empty;
+	   end
+
+	   if (store_buffer_write)
+	     last_write <= 0;
+
+	   if (last_write & dbus_ack_i | dbus_err_i) begin
+	      dbus_req_o <= 0;
 	      dbus_we_o <= 0;
 	      state <= IDLE;
 	   end
@@ -450,9 +461,9 @@ module mor1kx_lsu_cappuccino
 	      tlb_reload_done <= 1;
 	   end
 
-	   dbus_req <= tlb_reload_req;
+	   dbus_req_o <= tlb_reload_req;
 	   if (dbus_ack_i | tlb_reload_ack)
-	     dbus_req <= 0;
+	     dbus_req_o <= 0;
 	end
 
 	default:
@@ -519,8 +530,11 @@ endgenerate
 
    assign store_buffer_read = (state == IDLE) & store_buffer_write |
 			      (state == IDLE) & !store_buffer_empty |
-			      (state == WRITE) & dbus_ack_i &
-			      (!store_buffer_empty | store_buffer_write);
+			      (state == WRITE) & (dbus_ack_i | !dbus_req_o) &
+			      (!store_buffer_empty | store_buffer_write) &
+			      !last_write |
+			      (state == WRITE) & last_write &
+			      store_buffer_write & !dbus_ack_i;
 
    assign store_buffer_wadr = dc_adr_match;
 
@@ -536,7 +550,7 @@ endgenerate
 
       .pc_i	(ctrl_epcr_i),
       .adr_i	(store_buffer_wadr),
-      .dat_i	(dbus_sdat),
+      .dat_i	(lsu_sdat),
       .bsel_i	(dbus_bsel),
       .write_i	(store_buffer_write),
 
@@ -553,7 +567,7 @@ endgenerate
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        dc_enable_r <= 0;
-     else if (dc_enable_i & !dbus_req)
+     else if (dc_enable_i & !dbus_req_o)
        dc_enable_r <= 1;
      else if (!dc_enable_i & !dc_refill)
        dc_enable_r <= 0;
@@ -590,7 +604,6 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
    assign dc_bsel = dbus_bsel;
    assign dc_we = exec_op_lsu_store_i & padv_execute_i |
 		  ctrl_op_lsu_store_i & tlb_reload_busy & !tlb_reload_req;
-   assign dc_sdat = dbus_sdat;
 
    /* mor1kx_dcache AUTO_TEMPLATE (
 	    .refill_o			(dc_refill),
@@ -606,7 +619,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .rst			(dc_rst),
 	    .dc_enable_i		(dc_enabled),
 	    .dc_access_i		(dc_access),
-	    .cpu_dat_i			(dc_sdat),
+	    .cpu_dat_i			(lsu_sdat),
 	    .cpu_adr_i			(dc_adr),
 	    .cpu_adr_match_i		(dc_adr_match),
 	    .cpu_req_i			(dc_req),
@@ -614,7 +627,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_bsel_i			(dc_bsel),
 	    .refill_allowed		(dc_refill_allowed),
 	    .wradr_i			(dbus_adr),
-    	    .wrdat_i			(dbus_dat_i),
+	    .wrdat_i			(dbus_dat_i),
 	    .we_i			(dbus_ack_i),
     );*/
 
@@ -642,7 +655,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .rst			(dc_rst),		 // Templated
 	    .dc_enable_i		(dc_enabled),		 // Templated
 	    .dc_access_i		(dc_access),		 // Templated
-	    .cpu_dat_i			(dc_sdat),		 // Templated
+	    .cpu_dat_i			(lsu_sdat),		 // Templated
 	    .cpu_adr_i			(dc_adr),		 // Templated
 	    .cpu_adr_match_i		(dc_adr_match),		 // Templated
 	    .cpu_req_i			(dc_req),		 // Templated
@@ -662,7 +675,6 @@ end else begin
    assign dc_refill_done = 0;
    assign dc_err = 0;
    assign dc_ack = 0;
-   assign dc_sdat = 0;
    assign dc_bsel = 0;
    assign dc_we = 0;
 end
