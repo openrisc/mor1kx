@@ -187,6 +187,8 @@ module mor1kx_lsu_cappuccino
    wire 			     store_buffer_atomic;
    reg 				     store_buffer_write_pending;
 
+   reg 				     dbus_atomic;
+
    reg 				     last_write;
    reg 				     write_done;
 
@@ -368,7 +370,7 @@ module mor1kx_lsu_cappuccino
    // store buffer, and the link has been broken while it was waiting there,
    // the bus access is still performed as a (discarded) read.
    //
-   assign dbus_we_o = dbus_we & (!store_buffer_atomic | atomic_reserve);
+   assign dbus_we_o = dbus_we & (!dbus_atomic | atomic_reserve);
 
    assign next_dbus_adr = (OPTION_DCACHE_BLOCK_WIDTH == 5) ?
 			  {dbus_adr[31:5], dbus_adr[4:0] + 5'd4} : // 32 byte
@@ -392,6 +394,7 @@ module mor1kx_lsu_cappuccino
 	   dbus_we <= 0;
 	   dbus_adr <= 0;
 	   dbus_bsel_o <= 4'hf;
+	   dbus_atomic <= 0;
 	   last_write <= 0;
 	   if (store_buffer_write | !store_buffer_empty) begin
 	      state <= WRITE;
@@ -459,6 +462,7 @@ module mor1kx_lsu_cappuccino
 	      dbus_bsel_o <= store_buffer_bsel;
 	      dbus_adr <= store_buffer_radr;
 	      dbus_dat <= store_buffer_dat;
+	      dbus_atomic <= store_buffer_atomic;
 	      last_write <= store_buffer_empty;
 	   end
 
@@ -622,7 +626,7 @@ endgenerate
 			 {ctrl_lsu_adr_i[OPTION_OPERAND_WIDTH-1:2],2'b0};
 
    assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall &
-		   !(store_buffer_atomic & dbus_we & !atomic_reserve);
+		   !(dbus_atomic & dbus_we & !atomic_reserve);
    assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE);
 
 generate
@@ -646,7 +650,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 
    assign dc_bsel = dbus_bsel;
    assign dc_we = exec_op_lsu_store_i & !exec_op_lsu_atomic_i & padv_execute_i |
-		  store_buffer_atomic & dbus_we_o & !write_done |
+		  dbus_atomic & dbus_we_o & !write_done |
 		  ctrl_op_lsu_store_i & tlb_reload_busy & !tlb_reload_req;
 
    /* mor1kx_dcache AUTO_TEMPLATE (
