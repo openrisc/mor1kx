@@ -9,9 +9,8 @@
   Inputs are opcodes, the immediate field, operands from RF, instruction
   opcode
 
-   Copyright (C) 2012 Authors
-
-  Author(s): Julius Baxter <juliusbaxter@gmail.com>
+  Copyright (C) 2012 Julius Baxter <juliusbaxter@gmail.com>
+  Copyright (C) 2012-2014 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
 
 ***************************************************************************** */
 
@@ -20,6 +19,9 @@
 module mor1kx_execute_alu
   #(
     parameter OPTION_OPERAND_WIDTH = 32,
+
+    parameter FEATURE_OVERFLOW = "NONE",
+    parameter FEATURE_CARRY_FLAG = "ENABLED",
 
     parameter FEATURE_MULTIPLIER = "THREESTAGE",
     parameter FEATURE_DIVIDER = "NONE",
@@ -50,6 +52,7 @@ module mor1kx_execute_alu
     input 			      rst,
 
     // pipeline control signal in
+    input 			      padv_decode_i,
     input 			      padv_execute_i,
     input 			      padv_ctrl_i,
 
@@ -61,7 +64,12 @@ module mor1kx_execute_alu
     input [OPTION_OPERAND_WIDTH-1:0]  immediate_i,
     input 			      immediate_sel_i,
 
+    input [OPTION_OPERAND_WIDTH-1:0]  decode_immediate_i,
+    input 			      decode_immediate_sel_i,
+
     input 			      decode_valid_i,
+
+    input 			      decode_op_mul_i,
 
     input 			      op_alu_i,
     input 			      op_add_i,
@@ -85,6 +93,9 @@ module mor1kx_execute_alu
     // Adder control logic
     input 			      adder_do_sub_i,
     input 			      adder_do_carry_i,
+
+    input [OPTION_OPERAND_WIDTH-1:0]  decode_rfa_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  decode_rfb_i,
 
     input [OPTION_OPERAND_WIDTH-1:0]  rfa_i,
     input [OPTION_OPERAND_WIDTH-1:0]  rfb_i,
@@ -160,6 +171,8 @@ module mor1kx_execute_alu
    wire 				  op_cmov;
    wire [OPTION_OPERAND_WIDTH-1:0]        cmov_result;
 
+   wire [OPTION_OPERAND_WIDTH-1:0]        decode_a;
+   wire [OPTION_OPERAND_WIDTH-1:0]        decode_b;
 generate
 if (CALCULATE_BRANCH_DEST=="TRUE") begin : calculate_branch_dest
    assign a = (op_jbr_i | op_jr_i) ? pc_execute_i : rfa_i;
@@ -169,6 +182,10 @@ if (CALCULATE_BRANCH_DEST=="TRUE") begin : calculate_branch_dest
 end else begin
    assign a = rfa_i;
    assign b = immediate_sel_i ? immediate_i : rfb_i;
+
+   assign decode_a = decode_rfa_i;
+   assign decode_b = decode_immediate_sel_i ? decode_immediate_i : decode_rfb_i;
+
 end
 endgenerate
 
@@ -240,17 +257,20 @@ endgenerate
          reg [OPTION_OPERAND_WIDTH-1:0]           mul_opa;
          reg [OPTION_OPERAND_WIDTH-1:0]           mul_opb;
          reg [OPTION_OPERAND_WIDTH-1:0]           mul_result1;
+         reg [OPTION_OPERAND_WIDTH-1:0]           mul_result2;
 
 	 always @(posedge clk) begin
-	    if (padv_execute_i) begin
-	       mul_opa <= a;
-	       mul_opb <= b;
+	    if (decode_op_mul_i & padv_decode_i) begin
+	       mul_opa <= decode_a;
+	       mul_opb <= decode_b;
 	    end
-	    if (padv_ctrl_i)
+	    if (padv_execute_i)
 	      mul_result1 <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
+
+	    mul_result2 <= mul_result1;
 	 end
 
-         assign mul_result = mul_result1;
+         assign mul_result = mul_result2;
 
          assign mul_valid = 1;
 
@@ -694,21 +714,25 @@ endgenerate
 			 adder_result;
 
    // Carry and overflow flag generation
-   assign overflow_set_o = op_add_i & adder_signed_overflow |
-			   op_mul_signed_i & mul_signed_overflow |
-			   op_div_signed_i & div_by_zero;
+   assign overflow_set_o = FEATURE_OVERFLOW!="NONE" &
+			   (op_add_i & adder_signed_overflow |
+			    op_mul_signed_i & mul_signed_overflow |
+			    op_div_signed_i & div_by_zero);
 
-   assign overflow_clear_o = op_add_i & !adder_signed_overflow |
-			     op_mul_signed_i & !mul_signed_overflow |
-			     op_div_signed_i & !div_by_zero;
+   assign overflow_clear_o = FEATURE_OVERFLOW!="NONE" &
+			     (op_add_i & !adder_signed_overflow |
+			      op_mul_signed_i & !mul_signed_overflow |
+			      op_div_signed_i & !div_by_zero);
 
-   assign carry_set_o = op_add_i & adder_unsigned_overflow |
-			op_mul_unsigned_i & mul_unsigned_overflow |
-			op_div_unsigned_i & div_by_zero;
+   assign carry_set_o = FEATURE_CARRY_FLAG!="NONE" &
+			(op_add_i & adder_unsigned_overflow |
+			 op_mul_unsigned_i & mul_unsigned_overflow |
+			 op_div_unsigned_i & div_by_zero);
 
-   assign carry_clear_o = op_add_i & !adder_unsigned_overflow |
-			  op_mul_unsigned_i & !mul_unsigned_overflow |
-			  op_div_unsigned_i & !div_by_zero;
+   assign carry_clear_o = FEATURE_CARRY_FLAG!="NONE" &
+			  (op_add_i & !adder_unsigned_overflow |
+			   op_mul_unsigned_i & !mul_unsigned_overflow |
+			   op_div_unsigned_i & !div_by_zero);
 
    // Stall logic for multicycle ALU operations
    assign alu_stall = op_div_i & !div_valid |
