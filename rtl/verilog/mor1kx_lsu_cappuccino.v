@@ -447,7 +447,8 @@ module mor1kx_lsu_cappuccino
 	   if (last_write & dbus_ack_i | dbus_err_i) begin
 	      dbus_req_o <= 0;
 	      dbus_we_o <= 0;
-	      state <= IDLE;
+	      if (!store_buffer_write)
+		state <= IDLE;
 	   end
 	end
 
@@ -534,7 +535,7 @@ endgenerate
 			      (!store_buffer_empty | store_buffer_write) &
 			      !last_write |
 			      (state == WRITE) & last_write &
-			      store_buffer_write & !dbus_ack_i;
+			      store_buffer_write;
 
    assign store_buffer_wadr = dc_adr_match;
 
