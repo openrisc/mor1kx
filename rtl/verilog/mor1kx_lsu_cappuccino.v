@@ -467,9 +467,10 @@ module mor1kx_lsu_cappuccino
 
 	   if (last_write & dbus_ack_i | dbus_err_i) begin
 	      dbus_req_o <= 0;
-	      dbus_we <= 0;
+	      dbus_we_o <= 0;
 	      write_done <= 1;
-	      state <= IDLE;
+	      if (!store_buffer_write)
+		state <= IDLE;
 	   end
 	end
 
@@ -553,7 +554,9 @@ endgenerate
 
    // Store buffer logic
    always @(posedge clk)
-     if (store_buffer_write | pipeline_flush_i)
+     if (rst)
+       store_buffer_write_pending <= 0;
+     else if (store_buffer_write | pipeline_flush_i)
        store_buffer_write_pending <= 0;
      else if (ctrl_op_lsu_store_i & padv_ctrl_i & !dbus_stall &
 	      (store_buffer_full | dc_refill | dc_refill_r | dc_snoop_hit))
@@ -571,7 +574,7 @@ endgenerate
 			      (!store_buffer_empty | store_buffer_write) &
 			      !last_write |
 			      (state == WRITE) & last_write &
-			      store_buffer_write & !dbus_ack_i;
+			      store_buffer_write;
 
    assign store_buffer_wadr = dc_adr_match;
 
@@ -720,10 +723,12 @@ end else begin
    assign dc_access = 0;
    assign dc_refill = 0;
    assign dc_refill_done = 0;
+   assign dc_refill_req = 0;
    assign dc_err = 0;
    assign dc_ack = 0;
    assign dc_bsel = 0;
    assign dc_we = 0;
+   assign dc_snoop_hit = 0;
 end
 
 endgenerate
