@@ -527,7 +527,7 @@ if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
 	      (snoop_valid & (snoop_adr_i == atomic_addr)))
        atomic_reserve <= 0;
      else if (ctrl_op_lsu_load_i & ctrl_op_lsu_atomic_i & padv_ctrl_i)
-       atomic_reserve <= 1;
+       atomic_reserve <= !(snoop_valid & (snoop_adr_i == dc_adr_match));
 
    always @(posedge clk)
      if (ctrl_op_lsu_load_i & ctrl_op_lsu_atomic_i & padv_ctrl_i)
