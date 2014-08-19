@@ -628,8 +628,9 @@ module mor1kx_ctrl_cappuccino
 	    spr_sr[`OR1K_SPR_SR_OV   ] <= ctrl_overflow_set_i ? 1 :
 				ctrl_overflow_clear_i ? 0 :
 				spr_sr[`OR1K_SPR_SR_OV   ];
+	  // Skip FO. TODO: make this even more selective.
 	  if (ctrl_op_rfe_i)
-	    spr_sr <= spr_esr;
+	    spr_sr[14:0] <= spr_esr[14:0];
        end
 
 

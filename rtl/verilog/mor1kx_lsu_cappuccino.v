@@ -559,7 +559,9 @@ endgenerate
 
    // Store buffer logic
    always @(posedge clk)
-     if (store_buffer_write | pipeline_flush_i)
+     if (rst)
+       store_buffer_write_pending <= 0;
+     else if (store_buffer_write | pipeline_flush_i)
        store_buffer_write_pending <= 0;
      else if (ctrl_op_lsu_store_i & padv_ctrl_i & !dbus_stall &
 	      (store_buffer_full | dc_refill | dc_refill_r | dc_snoop_hit))
@@ -726,6 +728,7 @@ end else begin
    assign dc_access = 0;
    assign dc_refill = 0;
    assign dc_refill_done = 0;
+   assign dc_refill_req = 0;
    assign dc_err = 0;
    assign dc_ack = 0;
    assign dc_bsel = 0;
