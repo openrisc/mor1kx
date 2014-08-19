@@ -728,6 +728,7 @@ end else begin
    assign dc_ack = 0;
    assign dc_bsel = 0;
    assign dc_we = 0;
+   assign dc_snoop_hit = 0;
 end
 
 endgenerate

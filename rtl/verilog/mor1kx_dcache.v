@@ -213,7 +213,7 @@ module mor1kx_dcache
    // Whether any way hits
    wire 			      snoop_hit;
 
-   assign snoop_hit_o = snoop_hit;
+   assign snoop_hit_o = (OPTION_DCACHE_SNOOP != "ENABLED") ? 0 : snoop_hit;
 
    genvar 			      i;
 
