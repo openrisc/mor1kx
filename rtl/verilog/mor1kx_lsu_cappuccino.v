@@ -676,6 +676,7 @@ end else begin
    assign dc_access = 0;
    assign dc_refill = 0;
    assign dc_refill_done = 0;
+   assign dc_refill_req = 0;
    assign dc_err = 0;
    assign dc_ack = 0;
    assign dc_bsel = 0;
