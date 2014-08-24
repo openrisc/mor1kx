@@ -277,6 +277,26 @@
 `define OR1K_SPR_DRR_FPE  12
 `define OR1K_SPR_DRR_TE   13
 
+// FPCSR bits
+`define OR1K_FPCSR_WIDTH 12
+`define OR1K_FPCSR_FPEE  0
+`define OR1K_FPCSR_RM    2:1
+`define OR1K_FPCSR_OVF   3
+`define OR1K_FPCSR_UNF   4
+`define OR1K_FPCSR_SNF   5
+`define OR1K_FPCSR_QNF   6
+`define OR1K_FPCSR_ZF    7
+`define OR1K_FPCSR_IXF   8
+`define OR1K_FPCSR_IVF   9
+`define OR1K_FPCSR_INF   10
+`define OR1K_FPCSR_DZF   11
+`define OR1K_FPCSR_RES   31:12
+// FPCSR fgags
+`define OR1K_FPCSR_ALLF  `OR1K_FPCSR_DZF:`OR1K_FPCSR_OVF
+// FPCSR sizes of fields
+`define OR1K_FPCSR_RM_SIZE 2
+
+
 // Implementation-specific SPR defines
 `define MOR1KX_SPR_SR_WIDTH 16
 `define MOR1KX_SPR_SR_RESET_VALUE `MOR1KX_SPR_SR_WIDTH'h8001

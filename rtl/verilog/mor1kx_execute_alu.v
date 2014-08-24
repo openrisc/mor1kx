@@ -40,6 +40,8 @@ module mor1kx_execute_alu
     parameter FEATURE_CUST7 = "NONE",
     parameter FEATURE_CUST8 = "NONE",
 
+    parameter FEATURE_FPU   = "NONE", // ENABLED|NONE
+
     parameter OPTION_SHIFTER = "BARREL",
 
     // Pipeline specific internal parameters
@@ -77,6 +79,8 @@ module mor1kx_execute_alu
     input 			      op_mtspr_i,
     input 			      op_mfspr_i,
     input 			      op_movhi_i,
+    input [`OR1K_FPUOP_WIDTH-1:0]   op_fpu_i,
+    input [`OR1K_FPCSR_RM_SIZE-1:0] fpu_round_mode_i,
     input 			      op_jbr_i,
     input 			      op_jr_i,
     input [9:0] 		      immjbr_upper_i,
@@ -101,6 +105,9 @@ module mor1kx_execute_alu
 
     output 			      overflow_set_o,
     output 			      overflow_clear_o,
+
+    output [`OR1K_FPCSR_WIDTH-1:0] fpcsr_o,
+    output                         fpcsr_set_o,
 
     output [OPTION_OPERAND_WIDTH-1:0] alu_result_o,
     output 			      alu_valid_o,
@@ -479,6 +486,223 @@ endgenerate
       end
    endgenerate
 
+
+  // FPU related
+  wire is_op_fpu;
+  wire fpu_valid;
+  wire [OPTION_OPERAND_WIDTH-1:0] fpu_result;
+  reg  fpu_cmp_flag;
+  wire fpu_op_is_comp;
+  generate
+    /* verilator lint_off WIDTH */
+    if (FEATURE_FPU=="ENABLED") begin : fpu_enabled_in_execute_alu
+    /* verilator lint_on WIDTH */
+      wire [`OR1K_FPUOP_WIDTH-1:0] opc_fpu; // alias for op_fpu_i with dropped MSB
+      wire fpu_new_input;
+      wire fpu_op_is_arith, fpu_op_is_conv;
+      wire fpu_arith_done, fpu_conv_done;
+      wire [OPTION_OPERAND_WIDTH-1:0] result_arith, result_conv;
+      wire inf, inv_inf_op_in,snan, snan_in,qnan, 
+           ine, overflow, underflow, zero, dbz, 
+           dbz_in, mul_z_inf, nan_in;
+      wire altb, blta, aeqb, inf_cmp, zero_cmp, 
+           unordered;
+      wire snan_conv, ine_conv, inv_conv, 
+           zero_conv, underflow_conv, 
+           overflow_conv;
+      wire inv_comp;   
+
+   
+      // MSB (set by decode stage) indicates FPU instruction
+      assign is_op_fpu = op_fpu_i[`OR1K_FPUOP_WIDTH-1];
+      assign opc_fpu  = {1'b0,op_fpu_i[`OR1K_FPUOP_WIDTH-2:0]};
+
+      assign fpu_new_input = decode_valid_i & is_op_fpu;
+      
+      assign fpu_op_is_arith = is_op_fpu & (!(|op_fpu_i[3:2]));
+      assign fpu_op_is_conv  = is_op_fpu & (op_fpu_i[2] & !op_fpu_i[3]);   
+      assign fpu_op_is_comp  = is_op_fpu & op_fpu_i[3];
+
+      assign fpu_valid = !decode_valid_i &
+                         ((fpu_op_is_arith & fpu_arith_done) |
+                          (fpu_op_is_conv  & fpu_conv_done)  |
+                          fpu_op_is_comp);
+
+      assign fpcsr_set_o = fpu_valid;
+   
+      // Prepare flags fo FPCSR
+      assign fpcsr_o[`OR1K_FPCSR_OVF] = (overflow & fpu_op_is_arith);
+      assign fpcsr_o[`OR1K_FPCSR_UNF] = (underflow & fpu_op_is_arith) |
+                                        (underflow_conv  & fpu_op_is_conv);
+      assign fpcsr_o[`OR1K_FPCSR_SNF] = (snan  & fpu_op_is_arith)|
+                                        (snan_conv & fpu_op_is_conv);
+      assign fpcsr_o[`OR1K_FPCSR_QNF] = (qnan  & fpu_op_is_arith);
+      assign fpcsr_o[`OR1K_FPCSR_ZF]  = (zero  & fpu_op_is_arith) | 
+                                        (zero_cmp & fpu_op_is_comp) |
+                                        (zero_conv & fpu_op_is_conv);
+      assign fpcsr_o[`OR1K_FPCSR_IXF] = (ine  & fpu_op_is_arith) |
+                                        (ine_conv & fpu_op_is_conv);
+      assign fpcsr_o[`OR1K_FPCSR_IVF] = ((snan_in | dbz_in | inv_inf_op_in | mul_z_inf) & fpu_op_is_arith) |
+                                        ((inv_conv | snan_conv) & fpu_op_is_conv) |
+                                        (inv_comp & fpu_op_is_comp);
+      assign fpcsr_o[`OR1K_FPCSR_INF] = (inf  & fpu_op_is_arith) | 
+                                        (inf_cmp & fpu_op_is_comp);
+      assign fpcsr_o[`OR1K_FPCSR_DZF] = (dbz & fpu_op_is_arith);
+      assign fpcsr_o[`OR1K_FPCSR_RM]  = {`OR1K_FPCSR_RM_SIZE{1'b0}}; // just fill it : doesn't affect spr in ctrl
+      assign fpcsr_o[`OR1K_FPCSR_FPEE]= 0; // just fill it : doesn't affect spr in ctrl
+      
+
+      // Comparison fpu_cmp_flag generation
+      always @*
+        begin
+          // Get rid of top bit - is FPU op valid bit
+          case(opc_fpu)
+            `OR1K_FPCOP_SFEQ: fpu_cmp_flag = aeqb;
+            `OR1K_FPCOP_SFNE: fpu_cmp_flag = !aeqb;
+            `OR1K_FPCOP_SFGT: fpu_cmp_flag = blta & !aeqb;
+            `OR1K_FPCOP_SFGE: fpu_cmp_flag = blta | aeqb;
+            `OR1K_FPCOP_SFLT: fpu_cmp_flag = altb & !aeqb;
+            `OR1K_FPCOP_SFLE: fpu_cmp_flag = altb | aeqb;
+            default:          fpu_cmp_flag = 0;
+          endcase // case (fpu_op_r)
+        end // always@ *
+
+
+      // MUX for outputs from arith and conversion modules
+      assign fpu_result = fpu_op_is_conv ? result_conv : result_arith;   
+   
+      // FPU 100 VHDL core from OpenCores.org: http://opencores.org/project,fpu100
+      // Used only for add,sub,mul,div
+      mor1kx_fpu_arith fpu_arith
+      (
+        .clk(clk),
+        .opa_i(rfa_i),
+        .opb_i(rfb_i),
+        .fpu_op_i({1'b0,opc_fpu[1:0]}), // Only bottom 2 bits
+        .rmode_i(fpu_round_mode_i),
+        .output_o(result_arith),
+        .clr_ready_flag_i(fpu_new_input),
+        .start_i(decode_valid_i & fpu_op_is_arith),
+        .ready_o(fpu_arith_done),
+        .ine_o(ine),
+        .overflow_o(overflow),
+        .underflow_o(underflow),
+        .div_zero_o(dbz),
+        .inf_o(inf),
+        .zero_o(zero),
+        .qnan_o(qnan),
+        .snan_o(snan)
+      );
+
+      // Logic for detection of signaling NaN on input
+      // signaling NaN: exponent is 8hff, [22] is zero, rest of fract is non-zero
+      // quiet NaN: exponent is 8hff, [22] is 1
+      reg a_is_snan, b_is_snan;
+      reg a_is_qnan, b_is_qnan;
+   
+      always @(posedge clk)
+        begin
+          a_is_snan <= (rfa_i[30:23]==8'hff) & !rfa_i[22] & (|rfa_i[21:0]);
+          b_is_snan <= (rfb_i[30:23]==8'hff) & !rfb_i[22] & (|rfb_i[21:0]);
+          a_is_qnan <= (rfa_i[30:23]==8'hff) & rfa_i[22];
+          b_is_qnan <= (rfb_i[30:23]==8'hff) & rfb_i[22];
+        end
+      // Signal to indicate there was rfa_i signaling NaN on input
+      assign snan_in = a_is_snan | b_is_snan;
+
+      // Check for, add with opposite signed infinities, or subtract with 
+      // same signed infinities.
+      reg a_is_inf, b_is_inf, a_b_sign_xor;
+   
+      always @(posedge clk)
+        begin
+          a_is_inf <= (rfa_i[30:23]==8'hff) & !(|rfa_i[22:0]);
+          b_is_inf <= (rfb_i[30:23]==8'hff) & !(|rfa_i[22:0]);
+          a_b_sign_xor <= rfa_i[31] ^ rfb_i[31];
+        end
+   
+      assign inv_inf_op_in = (a_is_inf & b_is_inf) & 
+               ((a_b_sign_xor & (opc_fpu == `OR1K_FPUOP_ADD)) |
+                (!a_b_sign_xor & (opc_fpu == `OR1K_FPUOP_SUB))) ;
+   
+      // Check if it's 0.0/0.0 to generate invalid signal (ignore sign bit)
+      reg a_is_zero, b_is_zero;   
+      always @(posedge clk)
+      begin
+        a_is_zero <= !(|rfa_i[30:0]);
+        b_is_zero <= !(|rfb_i[30:0]);
+      end
+      assign dbz_in = (opc_fpu == `OR1K_FPUOP_DIV) &
+                      (a_is_zero & b_is_zero);
+   
+   
+      assign mul_z_inf = (opc_fpu == `OR1K_FPUOP_MUL) & 
+                         ((a_is_zero & b_is_inf) | (b_is_zero & a_is_inf));
+   
+      assign nan_in = (a_is_snan | b_is_snan | a_is_qnan | b_is_qnan);
+
+      // 32-bit integer <-> single precision floating point conversion unit
+      mor1kx_fpu_intfloat_conv fpu_intfloat_conv
+      (
+        .clk(clk),
+        .rmode(fpu_round_mode_i),
+        .fpu_op(opc_fpu[2:0]),
+        .opa(rfa_i), // will be registered internally
+        .clr_ready_flag_i(fpu_new_input),
+        .start_i(decode_valid_i & fpu_op_is_conv),
+        .out(result_conv),
+        .ready_o(fpu_conv_done),
+        .snan(snan_conv),
+        .ine(ine_conv),
+        .inv(inv_conv),
+        .overflow(overflow_conv),
+        .underflow(underflow_conv),
+        .zero(zero_conv)
+      );
+
+      // Single precision floating point number comparison module
+      mor1kx_fpu_fcmp fpu_fcmp
+      (
+        .clk(clk),
+        .opa(rfa_i), 
+        .opb(rfb_i),
+        .unordered_o(unordered),
+        // I am convinced the comparison logic is wrong way around in this 
+        // module, simplest to swap them on output -- julius       
+        .altb_o(blta), 
+        .blta_o(altb), 
+        .aeqb_o(aeqb), 
+        .inf_o(inf_cmp), 
+        .zero_o(zero_cmp)
+      );
+
+      // Comparison invalid when sNaN in on an equal comparison, or any NaN 
+      // for any other comparison.
+      assign inv_comp =  (snan_in & (opc_fpu == `OR1K_FPCOP_SFEQ)) | 
+                         (nan_in &  (opc_fpu != `OR1K_FPCOP_SFEQ));
+     end
+     /* verilator lint_off WIDTH */
+     else if (FEATURE_FPU=="NONE") begin : fpu_none_in_execute_alu
+     /* verilator lint_on WIDTH */
+       assign is_op_fpu  = 0;
+       assign fpu_valid  = 1; // no block for alu
+       assign fpu_result = {OPTION_OPERAND_WIDTH{1'b0}};
+       assign fpcsr_o = {`OR1K_FPCSR_WIDTH{1'b0}};
+       assign fpcsr_set_o = 0;
+       assign fpu_op_is_comp = 0;
+       always @(posedge clk) fpu_cmp_flag <= 0;
+     end
+     else begin : fpu_undef_in_execute_alu
+         // Incorrect configuration option
+       initial begin
+         $display("%m: Error - chosen FPU implementation (%s) not available",
+                     FEATURE_FPU);
+         $finish;
+       end
+     end   
+   endgenerate // FPU related
+
+
    wire ffl1_valid;
    generate
       if (FEATURE_FFL1!="NONE") begin
@@ -639,10 +863,6 @@ endgenerate
       end
    endgenerate
 
-   // Comparison logic
-   assign flag_set_o = flag_set & op_setflag_i;
-   assign flag_clear_o = !flag_set & op_setflag_i;
-
    // Combinatorial block
    always @*
      case(opc_alu_secondary_i)
@@ -671,6 +891,27 @@ endgenerate
      endcase // case (opc_alu_secondary_i)
 
 
+   // Comparison logic
+   // To update SR[F] either from integer or float point comparision
+   // FPU TODO: does forwading logic compatible with delay on fp-comparision???
+   generate
+     /* verilator lint_off WIDTH */
+     if (FEATURE_FPU=="ENABLED") begin : fpu_enabled2_in_execute_alu
+     /* verilator lint_on WIDTH */
+       assign flag_set_o   = (is_op_fpu ?
+                              (fpu_cmp_flag & fpu_op_is_comp) :
+                              (flag_set & op_setflag_i));
+       assign flag_clear_o = (is_op_fpu ?
+                              (!fpu_cmp_flag & fpu_op_is_comp) :
+                              (!flag_set & op_setflag_i));
+     end
+     else begin : fpu_undef2_in_execute_alu
+       assign flag_set_o = flag_set & op_setflag_i;
+       assign flag_clear_o = !flag_set & op_setflag_i;
+     end
+   endgenerate
+
+
    // Logic operations
    assign and_result = a & b;
    assign or_result = a | b;
@@ -687,6 +928,7 @@ endgenerate
 			 op_xor ? xor_result :
 			 op_cmov ? cmov_result :
 			 op_movhi_i ? immediate_i :
+          is_op_fpu ? fpu_result :
 			 op_mul_i ? mul_result[OPTION_OPERAND_WIDTH-1:0] :
 			 op_shift_i ? shift_result :
 			 op_div_i ? div_result :
@@ -713,6 +955,7 @@ endgenerate
    // Stall logic for multicycle ALU operations
    assign alu_stall = op_div_i & !div_valid |
 		      op_mul_i & !mul_valid |
+            is_op_fpu & !fpu_valid |
 		      op_shift_i & !shift_valid |
 		      op_ffl1_i & !ffl1_valid;
 

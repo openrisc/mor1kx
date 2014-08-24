@@ -199,6 +199,36 @@
 `define OR1K_OPCODE_CUST8   {2'b11, 4'hF}
 
 //
+// ORFPX32 opcodes
+//
+`define OR1K_OPCODE_FPU  {2'b11, 4'h2}
+// FP OPs
+// MSbit indicates FPU operation valid
+`define OR1K_FPUOP_WIDTH	8
+`define OR1K_FPUOP_SELECT 7:0
+// FPU unit from Usselman takes 5 cycles from decode, so 4 ex. cycles
+`define OR1K_FPUOP_CYCLES 3'd4
+// FP instruction is double precision if bit 4 is set. We're a 32-bit 
+// implementation thus do not support double precision FP 
+`define OR1K_FPUOP_DOUBLE_BIT 4
+`define OR1K_FPUOP_ADD       8'b0000_0000
+`define OR1K_FPUOP_SUB       8'b0000_0001
+`define OR1K_FPUOP_MUL       8'b0000_0010
+`define OR1K_FPUOP_DIV       8'b0000_0011
+`define OR1K_FPUOP_ITOF      8'b0000_0100
+`define OR1K_FPUOP_FTOI      8'b0000_0101
+`define OR1K_FPUOP_REM       8'b0000_0110
+`define OR1K_FPUOP_RESERVED  8'b0000_0111
+// FP Compare instructions
+`define OR1K_FPCOP_SFEQ      8'b0000_1000
+`define OR1K_FPCOP_SFNE      8'b0000_1001
+`define OR1K_FPCOP_SFGT      8'b0000_1010
+`define OR1K_FPCOP_SFGE      8'b0000_1011
+`define OR1K_FPCOP_SFLT      8'b0000_1100
+`define OR1K_FPCOP_SFLE      8'b0000_1101
+
+
+//
 // OR1K SPR defines
 //
 `include "mor1kx-sprs.v"

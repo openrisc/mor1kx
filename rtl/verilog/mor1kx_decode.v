@@ -54,7 +54,9 @@ module mor1kx_decode
     parameter FEATURE_CUST5 = "NONE",
     parameter FEATURE_CUST6 = "NONE",
     parameter FEATURE_CUST7 = "NONE",
-    parameter FEATURE_CUST8 = "NONE"
+    parameter FEATURE_CUST8 = "NONE",
+    
+    parameter FEATURE_FPU   = "NONE" // ENABLED|NONE
     )
    (
     input 			      clk,
@@ -112,6 +114,8 @@ module mor1kx_decode
     output 			      decode_op_shift_o,
     output 			      decode_op_ffl1_o,
     output 			      decode_op_movhi_o,
+
+    output [`OR1K_FPUOP_WIDTH-1:0]    decode_op_fpu_o,
 
     // Adder control logic
     output 			      decode_adder_do_sub_o,
@@ -250,6 +254,27 @@ module mor1kx_decode
 			     opc_alu == `OR1K_ALU_OPC_FFL1;
 
    assign decode_op_movhi_o = opc_insn == `OR1K_OPCODE_MOVHI;
+
+   // FPU related
+   generate
+     /* verilator lint_off WIDTH */
+     if (FEATURE_FPU=="ENABLED") begin : fpu_enabled_in_decode
+     /* verilator lint_on WIDTH */
+       assign decode_op_fpu_o  = { (opc_insn == `OR1K_OPCODE_FPU), 
+				    decode_insn_i[`OR1K_FPUOP_WIDTH-2:0] };
+     /* verilator lint_off WIDTH */
+     end else if (FEATURE_FPU=="NONE") begin : fpu_none_in_decode
+     /* verilator lint_on WIDTH */
+       assign decode_op_fpu_o  = {`OR1K_FPUOP_WIDTH{1'b0}};
+     end else begin : fpu_undef_in_decode
+         // Incorrect configuration option
+       initial begin
+         $display("%m: Error - chosen FPU implementation (%s) not available",
+                     FEATURE_FPU);
+         $finish;
+       end
+     end   
+   endgenerate // FPU related
 
    // Which instructions cause writeback?
    assign decode_rf_wb_o = (opc_insn == `OR1K_OPCODE_JAL |
@@ -393,6 +418,8 @@ module mor1kx_decode
 	 decode_except_illegal_o = (FEATURE_CUST7=="NONE");
        `OR1K_OPCODE_CUST8:
 	 decode_except_illegal_o = (FEATURE_CUST8=="NONE");
+       `OR1K_OPCODE_FPU:
+	 decode_except_illegal_o = (FEATURE_FPU=="NONE");
 
        `OR1K_OPCODE_LD,
 	 `OR1K_OPCODE_SD:

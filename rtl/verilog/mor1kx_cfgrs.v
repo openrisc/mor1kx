@@ -72,7 +72,6 @@ module mor1kx_cfgrs
     output [31:0] spr_iccfgr,
     output [31:0] spr_dcfgr,
     output [31:0] spr_pccfgr,
-    output [31:0] spr_fpcsr,
     output [31:0] spr_avr
     );
 
@@ -100,7 +99,7 @@ module mor1kx_cfgrs
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_CFG] = 0;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OB32S] = 1;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OB64S] = 0;
-   assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OF32S] = 0;
+   assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OF32S] = (FEATURE_FPU!="NONE");
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OF64S] = 0;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OV64S] = 0;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_ND] = (FEATURE_DELAYSLOT=="NONE");
@@ -236,6 +235,5 @@ module mor1kx_cfgrs
 
    assign spr_dcfgr = 0;
    assign spr_pccfgr = 0;
-   assign spr_fpcsr = 0;
 
 endmodule // mor1kx_cfgrs
