@@ -200,8 +200,9 @@ module mor1kx_lsu_cappuccino
    wire 			     snoop_valid;
    wire 			     dc_snoop_hit;
 
-   // We have to mask out all our bus accesses
-   assign snoop_valid = snoop_en_i & ~dbus_ack_i;
+   // We have to mask out our snooped bus accesses
+   assign snoop_valid = snoop_en_i &
+			!((snoop_adr_i == dbus_adr_o) & dbus_ack_i);
 
    assign ctrl_op_lsu = ctrl_op_lsu_load_i | ctrl_op_lsu_store_i;
 
