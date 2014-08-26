@@ -440,7 +440,8 @@ module mor1kx_lsu_cappuccino
 	      end
 	   end
 
-	   if (dbus_err_i) begin
+	   // TODO: only abort on snoop-hits to refill address
+	   if (dbus_err_i | dc_snoop_hit) begin
 	      dbus_req_o <= 0;
 	      state <= IDLE;
 	   end
@@ -630,7 +631,8 @@ endgenerate
 
    assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall &
 		   !(dbus_atomic & dbus_we & !atomic_reserve);
-   assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE);
+   assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE) &
+			      !dc_snoop_hit & !snoop_valid;
 
 generate
 if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
