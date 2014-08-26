@@ -415,6 +415,13 @@ module mor1kx_dcache
 		 if (refill_done)
 		   state <= IDLE;
 	      end
+	      // Abort refill on snoop-hit
+	      // TODO: only abort on snoop-hits to refill address
+	      if (snoop_hit) begin
+		 refill_valid <= 0;
+		 refill_valid_r <= 0;
+		 state <= IDLE;
+	      end
 	   end
 
 	   WRITE: begin
