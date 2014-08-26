@@ -265,7 +265,7 @@ module mor1kx_dcache
 
    assign hit = |way_hit;
 
-   assign snoop_hit = (OPTION_DCACHE_SNOOP != "NONE") & dc_enable_i &
+   assign snoop_hit = (OPTION_DCACHE_SNOOP != "NONE") &
 		      |snoop_way_hit & snoop_check;
 
    integer w0;
