@@ -254,11 +254,11 @@ module mor1kx_dcache
 	    // The same for the snoop tag memory
             assign snoop_way_out[i] = snoop_dout[(i+1)*TAGMEM_WAY_WIDTH-1:i*TAGMEM_WAY_WIDTH];
 
-	     assign snoop_check_way_tag[i] = snoop_way_out[i][TAGMEM_WAY_WIDTH-1:0];
-            assign snoop_check_way_match[i] = (snoop_check_way_tag[i] == snoop_tag);
-            assign snoop_check_way_valid[i] = snoop_way_out[i][TAGMEM_WAY_VALID];
+	    assign snoop_check_way_tag[i] = snoop_way_out[i][TAGMEM_WAY_WIDTH-1:0];
+	    assign snoop_check_way_match[i] = (snoop_check_way_tag[i] == snoop_tag);
+	    assign snoop_check_way_valid[i] = snoop_way_out[i][TAGMEM_WAY_VALID];
 
-            assign snoop_way_hit[i] = snoop_check_way_valid[i] & snoop_check_way_match[i];
+	    assign snoop_way_hit[i] = snoop_check_way_valid[i] & snoop_check_way_match[i];
 	 end
       end
    endgenerate
