@@ -38,15 +38,13 @@
 module mor1kx_fpu_intfloat_conv_except
   (
   clk, opa, opb, inf, ind, qnan, snan, opa_nan, opb_nan,
-  opa_00, opb_00, opa_inf, opb_inf, opa_dn, opb_dn
+  opa_00, opb_00, opa_inf, opb_inf
   );
    input    clk;
    input [31:0]   opa, opb;
    output   inf, ind, qnan, snan, opa_nan, opb_nan;
    output   opa_00, opb_00;
    output   opa_inf, opb_inf;
-   output   opa_dn;
-   output   opb_dn;
 
    ////////////////////////////////////////////////////////////////////////
    //
@@ -62,7 +60,6 @@ module mor1kx_fpu_intfloat_conv_except
    reg      expa_00, expb_00, fracta_00, fractb_00;
    reg      opa_00, opb_00;
    reg      opa_inf, opb_inf;
-   reg      opa_dn, opb_dn;
 
    ////////////////////////////////////////////////////////////////////////
    //
@@ -145,11 +142,5 @@ module mor1kx_fpu_intfloat_conv_except
 
    always @(posedge clk)
      opb_00 <=  expb_00 & fractb_00;
-
-   always @(posedge clk)
-     opa_dn <=  expa_00;
-
-   always @(posedge clk)
-     opb_dn <=  expb_00;
 
 endmodule // mor1kx_fpu_intfloat_conv_except

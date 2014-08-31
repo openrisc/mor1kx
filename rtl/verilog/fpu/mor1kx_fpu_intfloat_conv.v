@@ -184,7 +184,6 @@ module mor1kx_fpu_intfloat_conv
    wire     inf_d, ind_d, qnan_d, snan_d, opa_nan;
    wire     opa_00;
    wire     opa_inf;
-   wire     opa_dn;
 
    mor1kx_fpu_intfloat_conv_except u0
      (  .clk(clk),
@@ -199,9 +198,7 @@ module mor1kx_fpu_intfloat_conv
   .opa_00(opa_00),
   .opb_00(),
   .opa_inf(opa_inf),
-  .opb_inf(),
-  .opa_dn(opa_dn),
-  .opb_dn()
+  .opb_inf()
   );
 
    ////////////////////////////////////////////////////////////////////////
@@ -287,11 +284,9 @@ module mor1kx_fpu_intfloat_conv
       .fract_in(fract_denorm),  // Fraction Input
 
       .exp_in(exp_r),     // Exponent Input
-      .opa_dn(opa_dn),    // Operand A Denormalized
       .opa_nan(opa_nan),
       .opa_inf(opa_inf),
 
-      .opb_dn(),    // Operand B Denormalized
       .out(out_d),    // Normalized output (un-registered)
       .ine(ine_d),    // Result Inexact output (un-registered)
       .inv(inv_d),            // Invalid input for f2i operation
