@@ -174,7 +174,7 @@ always @( qnan or snan or opa_inf or opb_inf or signa or signb or exp_eq or exp_
            13'b00_00_00_100_100_?: {altb, blta, aeqb} = 3'b001;
            13'b00_00_11_100_100_?: {altb, blta, aeqb} = 3'b001;
 
-     default: {altb, blta, aeqb} = 3'bxxx;
+     default: {altb, blta, aeqb} = 3'b000;
   endcase
 
 endmodule // mor1kx_fpu_fcmp
