@@ -63,7 +63,7 @@ module mor1kx_fpu_arith
    );
 
    parameter FP_WIDTH = 32;
-   parameter MUL_SERIAL = 1; // 0 for parallel multiplier, 1 for serial
+   //parameter MUL_SERIAL = 1; // 0 for parallel multiplier, 1 for serial
    parameter MUL_COUNT = 34; //11 for parallel multiplier, 34 for serial
    parameter FRAC_WIDTH = 23;
    parameter EXP_WIDTH = 8;
@@ -148,8 +148,8 @@ module mor1kx_fpu_arith
    wire [23:0]         pre_norm_mul_fracta_24 ;
    wire [23:0]         pre_norm_mul_fractb_24 ;
    wire [47:0]         mul_fract_48;
-   wire [47:0]         mul_24_fract_48;
-   wire          mul_24_sign;
+   //wire [47:0]         mul_24_fract_48;
+   //wire          mul_24_sign;
    wire [47:0]         serial_mul_fract_48;
    wire          serial_mul_sign;
    wire          mul_sign;
@@ -309,9 +309,10 @@ module mor1kx_fpu_arith
       );
 
    // Serial or parallel multiplier will be chosen depending on constant
-   // MUL_SERIAL
-   assign mul_fract_48 = MUL_SERIAL ? serial_mul_fract_48 : mul_24_fract_48;
-   assign mul_sign = MUL_SERIAL ? serial_mul_sign : mul_24_sign;
+   //assign mul_fract_48 = MUL_SERIAL ? serial_mul_fract_48 : mul_24_fract_48;
+   //assign mul_sign = MUL_SERIAL ? serial_mul_sign : mul_24_sign;
+   assign mul_fract_48 = serial_mul_fract_48;
+   assign mul_sign = serial_mul_sign;
 
    mor1kx_fpu_post_norm_mul fpu_post_norm_mul
      (

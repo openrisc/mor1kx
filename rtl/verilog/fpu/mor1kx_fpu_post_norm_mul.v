@@ -91,7 +91,7 @@ module mor1kx_fpu_post_norm_mul(
    reg [5:0]        s_shr2;
    reg [5:0]        s_shl2;
    reg [8:0]        s_expo1;
-   wire [8:0]         s_expo2b;
+   wire [8:0]         s_expo2a;
    wire [9:0]         s_exp_10a;
    wire [9:0]         s_exp_10b;
    reg [47:0]         s_frac2a;
@@ -102,7 +102,7 @@ module mor1kx_fpu_post_norm_mul(
    wire [24:0]        s_frac3;
    wire         s_shr3;
    reg [5:0]        s_r_zeros;
-   wire         s_lost;
+   
    wire         s_op_0;
    wire [8:0]         s_expo3;
 
@@ -138,7 +138,7 @@ module mor1kx_fpu_post_norm_mul(
 
 
    always @(posedge clk)
-     if (!s_fract_48_i[47])
+     if (!s_carry)
        casez(s_fract_48_i[46:1])  // synopsys full_case parallel_case
    46'b1?????????????????????????????????????????????: s_zeros <=  0;
    46'b01????????????????????????????????????????????: s_zeros <=  1;
@@ -258,12 +258,18 @@ module mor1kx_fpu_post_norm_mul(
        s_exp_10b[8] ?
        0 : {9'd0,s_carry};
 
-   assign v_shl1 = (s_exp_10a[9] | !(|s_exp_10a)) ?
-       0 :
-       (s_exp_10b[9] | !(|s_exp_10b)) ?
-       {4'd0,s_zeros} - s_exp_10a :
-       s_exp_10b[8] ?
-       0 : {4'd0,s_zeros};
+   assign v_shl1 = 
+       // (e10a =< 0): borrowing from exp isn't possible
+     (s_exp_10a[9] | !(|s_exp_10a)) ? 0 :
+       // borrowing from e10a is possible (e10a > 0)
+       // and number of fract's nlz >= borrowing volume (e10b =< 0)
+       // but we can't borrow more than (e10a - 1)
+       // so denormalized result is possible
+     (s_exp_10b[9] | !(|s_exp_10b)) ? (s_exp_10a - 10'd1)/*{4'd0,s_zeros} - s_exp_10a*/ :
+       // (Bacherov: ??? overflow ???)
+     s_exp_10b[8] ? 0 : 
+       // (Bacherov: ??? no overflow & nlz<e10a ???)
+      {4'd0,s_zeros};
 
 
    always @(posedge clk)
@@ -290,28 +296,34 @@ module mor1kx_fpu_post_norm_mul(
 
 
    // shift the fraction
+   reg s_lost2a;
    always @(posedge clk)
-     if (|s_shr2)
+     if (|s_shr2) begin
        s_frac2a <= s_fract_48_i >> s_shr2;
-     else
+       s_lost2a <= (s_shr2 > s_r_zeros); // there is part lost due to right shift
+     end
+     else begin
        s_frac2a <= s_fract_48_i << s_shl2;
+       s_lost2a <= 0;
+     end
 
-   assign s_expo2b = s_frac2a[46] ? s_expo1 : s_expo1 - 9'd1;
+   assign s_expo2a = s_frac2a[46] ? s_expo1 : s_expo1 - 9'd1;
 
    // signals if precision was last during the right-shift above
-   assign s_lost = (s_shr2 + {5'd0,s_shr3}) > s_r_zeros;
+   //wire s_lost = (s_shr2 + {5'd0,s_shr3}) > s_r_zeros;
 
    // ***Stage 3***
    // Rounding
 
    //                  23
    //                 |
-   //       xx00000000000000000000000grsxxxxxxxxxxxxxxxxxxxx
+   // xx00000000000000000000000grsxxxxxxxxxxxxxxxxxxxx
    // guard bit: s_frac2a[23] (LSB of output)
    // round bit: s_frac2a[22]
    assign s_guard = s_frac2a[22];
    assign s_round = s_frac2a[21];
-   assign s_sticky = (|s_frac2a[20:0]) | s_lost;
+   //assign s_sticky = (|s_frac2a[20:0]) | s_lost;
+   assign s_sticky = (|s_frac2a[20:0]) | s_lost2a; // take into account the part lost due to right shift
 
    assign s_roundup = s_rmode_i==2'b00 ? // round to nearest even
           s_guard & ((s_round | s_sticky) | s_frac2a[23]) :
@@ -322,20 +334,29 @@ module mor1kx_fpu_post_norm_mul(
           0; // round to zero(truncate = no rounding)
 
 
+   reg is_dn2n; // denormalized to normalized
    always @(posedge clk)
-     if (s_roundup)
+     if (s_roundup) begin
        s_frac_rnd <= s_frac2a[47:23] + 1;
-     else
+       is_dn2n <= (!s_frac2a[46]) & (&s_frac2a[45:23]);
+     end
+     else begin
        s_frac_rnd <= s_frac2a[47:23];
+       is_dn2n <= 0;
+     end
 
    assign s_shr3 = s_frac_rnd[24];
+   wire s_lost = s_lost2a | (s_shr3 & s_frac_rnd[0]);  // or one more lost due to one more one shift
 
 
-   assign s_expo3 = (s_shr3 & (s_expo2b!=9'b011111111)) ?
-         s_expo2b + 1 : s_expo2b;
+   assign s_expo3 = 
+     ((s_shr3 | is_dn2n) & (s_expo2a!=9'b011111111)) ? s_expo2a + 1 : 
+     s_expo2a;
 
-   assign s_frac3 = (s_shr3 & (s_expo2b!=9'b011111111)) ?
-         {1'b0,s_frac_rnd[24:1]} : s_frac_rnd;
+   assign s_frac3 = 
+     (s_shr3 & (s_expo2a!=9'b011111111)) ? {1'b0,s_frac_rnd[24:1]} : 
+     (is_dn2n & (s_expo2a!=9'b011111111)) ? {2'd0,s_frac_rnd[22:0]} :
+     s_frac_rnd;
 
    //-***Stage 4****
    // Output
