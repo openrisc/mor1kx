@@ -163,8 +163,10 @@ module mor1kx_fpu_post_norm_div
      else
        s_expo1 <= s_exp_10b[8:0];
 
+   //always @(posedge clk)
+   //  s_shr1 <= v_shr[6] ? 6'b111111 : v_shr[5:0];
    always @(posedge clk)
-     s_shr1 <= v_shr[6] ? 6'b111111 : v_shr[5:0];
+     s_shr1 <= (v_shr > 10'd26) ? 6'd27 : v_shr[5:0];
 
    always @(posedge clk)
      s_shl1 <= v_shl[5:0];
@@ -250,13 +252,13 @@ module mor1kx_fpu_post_norm_div
 
    assign s_opb_0 = !(|s_opb_i[30:0]);
 
-   assign s_infa = &s_expa;
+   assign s_infa = (&s_expa) & (!(|s_opa_i[22:0]));
 
-   assign s_infb = &s_expb;
+   assign s_infb = (&s_expb) & (!(|s_opb_i[22:0]));
 
-   assign s_nan_a = s_infa & (|s_opa_i[22:0]);
+   assign s_nan_a = (&s_expa) & (|s_opa_i[22:0]);
 
-   assign s_nan_b = s_infb & (|s_opb_i[22:0]);
+   assign s_nan_b = (&s_expb) & (|s_opb_i[22:0]);
 
    assign s_nan_in = s_nan_a | s_nan_b;
 
@@ -264,9 +266,9 @@ module mor1kx_fpu_post_norm_div
 
    assign s_inf_result = (&s_expo3[7:0]) | s_expo3[8] | s_opb_0;
 
-   assign s_overflow =  s_inf_result & !(s_infa) & !s_opb_0;
+   assign s_overflow =  s_inf_result & (!s_infa) & (!s_opb_0);
 
-   assign s_ine_o =  !s_op_0 &
+   assign s_ine_o =  !s_op_0 & !s_infa & !s_infb &
          (s_lost | (|s_fraco1[2:0]) | s_overflow | (|s_rmndr_i));
 
    assign s_output_o = (s_nan_in | s_nan_op) ?

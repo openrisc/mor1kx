@@ -493,6 +493,7 @@ endgenerate
   wire [OPTION_OPERAND_WIDTH-1:0] fpu_result;
   reg  fpu_cmp_flag;
   wire fpu_op_is_comp;
+  wire fpu_cmp_valid;
   generate
     /* verilator lint_off WIDTH */
     if (FEATURE_FPU=="ENABLED") begin : fpu_enabled_in_execute_alu
@@ -527,6 +528,8 @@ endgenerate
                          ((fpu_op_is_arith & fpu_arith_done) |
                           (fpu_op_is_conv  & fpu_conv_done)  |
                           fpu_op_is_comp);
+                          
+      assign fpu_cmp_valid = !decode_valid_i; // for fpu flag set/clear logic
 
       assign fpcsr_set_o = fpu_valid;
    
@@ -617,13 +620,14 @@ endgenerate
       always @(posedge clk)
         begin
           a_is_inf <= (rfa_i[30:23]==8'hff) & !(|rfa_i[22:0]);
-          b_is_inf <= (rfb_i[30:23]==8'hff) & !(|rfa_i[22:0]);
+          b_is_inf <= (rfb_i[30:23]==8'hff) & !(|rfb_i[22:0]);
           a_b_sign_xor <= rfa_i[31] ^ rfb_i[31];
         end
    
       assign inv_inf_op_in = (a_is_inf & b_is_inf) & 
                ((a_b_sign_xor & (opc_fpu == `OR1K_FPUOP_ADD)) |
-                (!a_b_sign_xor & (opc_fpu == `OR1K_FPUOP_SUB))) ;
+                (!a_b_sign_xor & (opc_fpu == `OR1K_FPUOP_SUB)) |
+                (opc_fpu == `OR1K_FPUOP_DIV)); // inf/inf
    
       // Check if it's 0.0/0.0 to generate invalid signal (ignore sign bit)
       reg a_is_zero, b_is_zero;   
@@ -690,6 +694,7 @@ endgenerate
        assign fpcsr_o = {`OR1K_FPCSR_WIDTH{1'b0}};
        assign fpcsr_set_o = 0;
        assign fpu_op_is_comp = 0;
+       assign fpu_cmp_valid = 0;
        always @(posedge clk) fpu_cmp_flag <= 0;
      end
      else begin : fpu_undef_in_execute_alu
@@ -898,11 +903,11 @@ endgenerate
      /* verilator lint_off WIDTH */
      if (FEATURE_FPU=="ENABLED") begin : fpu_enabled2_in_execute_alu
      /* verilator lint_on WIDTH */
-       assign flag_set_o   = (is_op_fpu ?
-                              (fpu_cmp_flag & fpu_op_is_comp) :
+       assign flag_set_o   = (fpu_op_is_comp ?
+                              (fpu_cmp_flag & fpu_cmp_valid) :
                               (flag_set & op_setflag_i));
-       assign flag_clear_o = (is_op_fpu ?
-                              (!fpu_cmp_flag & fpu_op_is_comp) :
+       assign flag_clear_o = (fpu_op_is_comp ?
+                              (!fpu_cmp_flag & fpu_cmp_valid) :
                               (!flag_set & op_setflag_i));
      end
      else begin : fpu_undef2_in_execute_alu
