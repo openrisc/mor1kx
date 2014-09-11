@@ -42,30 +42,19 @@ module mor1kx_store_buffer
    localparam FIFO_DATA_WIDTH = OPTION_OPERAND_WIDTH*3 + OPTION_OPERAND_WIDTH/8;
 
    wire [FIFO_DATA_WIDTH-1:0] 		fifo_dout;
-   reg [FIFO_DATA_WIDTH-1:0] 		fifo_dout_r;
    wire [FIFO_DATA_WIDTH-1:0] 		fifo_din;
 
    reg [DEPTH_WIDTH-1:0] 		write_pointer;
    reg [DEPTH_WIDTH-1:0] 		read_pointer;
    wire [DEPTH_WIDTH-1:0] 		prev_read_pointer;
 
-   reg 					read_r;
-
    assign fifo_din = {adr_i, dat_i, bsel_i, pc_i};
-   assign {adr_o, dat_o, bsel_o, pc_o} = read_r ? fifo_dout : fifo_dout_r;
+   assign {adr_o, dat_o, bsel_o, pc_o} = fifo_dout;
 
    assign prev_read_pointer = read_pointer - 1;
 
    assign full_o = write_pointer == prev_read_pointer;
    assign empty_o = write_pointer == read_pointer;
-
-   // TODO: add read enable to RAM?
-   always @(posedge clk)
-     read_r <= read_i;
-
-   always @(posedge clk)
-     if (read_r)
-       fifo_dout_r <= fifo_dout;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -89,8 +78,8 @@ module mor1kx_store_buffer
      (
       .clk			(clk),
       .dout			(fifo_dout),
-      .re			(1'b1),
       .raddr			(read_pointer),
+      .re			(read_i),
       .waddr			(write_pointer),
       .we			(write_i),
       .din			(fifo_din)
