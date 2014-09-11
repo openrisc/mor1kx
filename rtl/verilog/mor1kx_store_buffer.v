@@ -45,8 +45,6 @@ module mor1kx_store_buffer
    reg [FIFO_DATA_WIDTH-1:0] 		fifo_dout_r;
    wire [FIFO_DATA_WIDTH-1:0] 		fifo_din;
 
-   wire [DEPTH_WIDTH-1:0] 		fifo_raddr;
-
    reg [DEPTH_WIDTH-1:0] 		write_pointer;
    reg [DEPTH_WIDTH-1:0] 		read_pointer;
    wire [DEPTH_WIDTH-1:0] 		prev_read_pointer;
@@ -60,8 +58,6 @@ module mor1kx_store_buffer
 
    assign full_o = write_pointer == prev_read_pointer;
    assign empty_o = write_pointer == read_pointer;
-
-   assign fifo_raddr = read_pointer;
 
    // TODO: add read enable to RAM?
    always @(posedge clk)
@@ -93,8 +89,8 @@ module mor1kx_store_buffer
      (
       .clk			(clk),
       .dout			(fifo_dout),
-      .raddr			(fifo_raddr),
       .re			(1'b1),
+      .raddr			(read_pointer),
       .waddr			(write_pointer),
       .we			(write_i),
       .din			(fifo_din)
