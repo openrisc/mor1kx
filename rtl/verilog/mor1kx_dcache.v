@@ -515,6 +515,7 @@ module mor1kx_dcache
 		// Inputs
 		.clk			(clk),
 		.raddr			(way_raddr[i][WAY_WIDTH-3:0]),
+		.re			(1'b1),
 		.waddr			(way_waddr[i][WAY_WIDTH-3:0]),
 		.we			(way_we[i]),
 		.din			(way_din[i][31:0]));
@@ -556,6 +557,7 @@ module mor1kx_dcache
       // Inputs
       .clk				(clk),
       .raddr				(tag_rindex),
+      .re				(1'b1),
       .waddr				(tag_windex),
       .we				(tag_we),
       .din				(tag_din));

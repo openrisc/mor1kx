@@ -21,6 +21,7 @@ module mor1kx_simple_dpram_sclk
    (
     input 		    clk,
     input [ADDR_WIDTH-1:0]  raddr,
+    input 		    re,
     input [ADDR_WIDTH-1:0]  waddr,
     input 		    we,
     input [DATA_WIDTH-1:0]  din,
@@ -38,12 +39,13 @@ if (ENABLE_BYPASS) begin : bypass_gen
    assign dout = bypass ? din_r : rdata;
 
    always @(posedge clk)
-     din_r <= din;
+     if (re)
+       din_r <= din;
 
    always @(posedge clk)
-     if (waddr == raddr && we)
+     if (waddr == raddr && we && re)
        bypass <= 1;
-     else
+     else if (re)
        bypass <= 0;
 end else begin
    assign dout = rdata;
@@ -53,7 +55,8 @@ endgenerate
    always @(posedge clk) begin
       if (we)
 	mem[waddr] <= din;
-      rdata <= mem[raddr];
+      if (re)
+	rdata <= mem[raddr];
    end
 
 endmodule

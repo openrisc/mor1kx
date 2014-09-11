@@ -94,6 +94,7 @@ module mor1kx_store_buffer
       .clk			(clk),
       .dout			(fifo_dout),
       .raddr			(fifo_raddr),
+      .re			(1'b1),
       .waddr			(write_pointer),
       .we			(write_i),
       .din			(fifo_din)
