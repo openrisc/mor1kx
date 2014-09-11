@@ -87,7 +87,7 @@ module mor1kx_store_buffer
      #(
        .ADDR_WIDTH(DEPTH_WIDTH),
        .DATA_WIDTH(FIFO_DATA_WIDTH),
-       .ENABLE_BYPASS("TRUE")
+       .ENABLE_BYPASS(1)
        )
    fifo_ram
      (

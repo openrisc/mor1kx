@@ -506,7 +506,7 @@ module mor1kx_dcache
 	       #(
 		 .ADDR_WIDTH(WAY_WIDTH-2),
 		 .DATA_WIDTH(OPTION_OPERAND_WIDTH),
-		 .ENABLE_BYPASS("TRUE")
+		 .ENABLE_BYPASS(1)
 		 )
 	 way_data_ram
 	       (
@@ -547,7 +547,7 @@ module mor1kx_dcache
      #(
        .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
        .DATA_WIDTH(TAGMEM_WIDTH),
-       .ENABLE_BYPASS("TRUE")
+       .ENABLE_BYPASS(1)
      )
    tag_ram
      (

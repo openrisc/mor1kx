@@ -413,7 +413,7 @@ module mor1kx_icache
 	       #(
 		 .ADDR_WIDTH(WAY_WIDTH-2),
 		 .DATA_WIDTH(OPTION_OPERAND_WIDTH),
-		 .ENABLE_BYPASS("FALSE")
+		 .ENABLE_BYPASS(0)
 		 )
 	 way_data_ram
 	       (/*AUTOINST*/
@@ -463,7 +463,7 @@ module mor1kx_icache
      #(
        .ADDR_WIDTH(OPTION_ICACHE_SET_WIDTH),
        .DATA_WIDTH(TAGMEM_WIDTH),
-       .ENABLE_BYPASS("FALSE")
+       .ENABLE_BYPASS(0)
      )
    tag_ram
      (/*AUTOINST*/

@@ -16,7 +16,7 @@ module mor1kx_simple_dpram_sclk
   #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,
-    parameter ENABLE_BYPASS = "TRUE"
+    parameter ENABLE_BYPASS = 1
     )
    (
     input 		    clk,
@@ -31,7 +31,7 @@ module mor1kx_simple_dpram_sclk
    reg [DATA_WIDTH-1:0]     rdata;
 
 generate
-if (ENABLE_BYPASS == "TRUE") begin : bypass_gen
+if (ENABLE_BYPASS) begin : bypass_gen
    reg [DATA_WIDTH-1:0]     din_r;
    reg 			    bypass;
 
