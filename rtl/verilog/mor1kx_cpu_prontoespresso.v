@@ -698,7 +698,7 @@ module mor1kx_cpu_prontoespresso
 	 if (rf_we_o)
 	   get_gpr = rf_result_o;
 	 else
-	   get_gpr = mor1kx_rf_espresso.rfa.ram[gpr_num];
+	   get_gpr = mor1kx_rf_espresso.rfa.mem[gpr_num];
       end
    endfunction //
    
@@ -710,8 +710,8 @@ module mor1kx_cpu_prontoespresso
       input [4:0] gpr_num;
       input [OPTION_OPERAND_WIDTH-1:0] gpr_value;
       begin
-	 mor1kx_rf_espresso.rfa.ram[gpr_num] = gpr_value;
-	 mor1kx_rf_espresso.rfb.ram[gpr_num] = gpr_value;
+	 mor1kx_rf_espresso.rfa.mem[gpr_num] = gpr_value;
+	 mor1kx_rf_espresso.rfb.mem[gpr_num] = gpr_value;
       end
    endtask
 // synthesis translate_on

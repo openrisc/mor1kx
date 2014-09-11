@@ -282,61 +282,58 @@ endgenerate
    assign rfa_rden = fetch_rf_adr_valid_i;
    assign rfb_rden = fetch_rf_adr_valid_i;
 
-   mor1kx_rf_ram
+   mor1kx_simple_dpram_sclk
      #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-       .OPTION_RF_ADDR_WIDTH(RF_ADDR_WIDTH),
-       .OPTION_RF_WORDS(RF_WORDS)
+       .ADDR_WIDTH	(RF_ADDR_WIDTH),
+       .DATA_WIDTH	(OPTION_OPERAND_WIDTH),
+       .ENABLE_BYPASS	(0)
        )
-     rfa
+   rfa
      (
-      .clk(clk),
-      .rst(rst),
-      .rdad_i(fetch_rfa_adr_i),
-      .rden_i(rfa_rden),
-      .rdda_o(rfa_ram_o),
-      .wrad_i(rf_wradr),
-      .wren_i(rf_wren),
-      .wrda_i(rf_wrdat)
+      .clk		(clk),
+      .dout		(rfa_ram_o),
+      .raddr		(fetch_rfa_adr_i),
+      .re		(rfa_rden),
+      .waddr		(rf_wradr),
+      .we		(rf_wren),
+      .din		(rf_wrdat)
       );
 
-   mor1kx_rf_ram
+   mor1kx_simple_dpram_sclk
      #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-       .OPTION_RF_ADDR_WIDTH(RF_ADDR_WIDTH),
-       .OPTION_RF_WORDS(RF_WORDS)
+       .ADDR_WIDTH	(RF_ADDR_WIDTH),
+       .DATA_WIDTH	(OPTION_OPERAND_WIDTH),
+       .ENABLE_BYPASS	(0)
        )
    rfb
      (
-      .clk(clk),
-      .rst(rst),
-      .rdad_i(fetch_rfb_adr_i),
-      .rden_i(rfb_rden),
-      .rdda_o(rfb_ram_o),
-      .wrad_i(rf_wradr),
-      .wren_i(rf_wren),
-      .wrda_i(rf_wrdat)
+      .clk		(clk),
+      .dout		(rfb_ram_o),
+      .raddr		(fetch_rfb_adr_i),
+      .re		(rfb_rden),
+      .waddr		(rf_wradr),
+      .we		(rf_wren),
+      .din		(rf_wrdat)
       );
 
 generate
 if (FEATURE_DEBUGUNIT!="NONE" || FEATURE_FASTCONTEXTS!="NONE" ||
     OPTION_RF_NUM_SHADOW_GPR > 0) begin : rfspr_gen
-   mor1kx_rf_ram
+   mor1kx_simple_dpram_sclk
      #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-       .OPTION_RF_ADDR_WIDTH(RF_ADDR_WIDTH),
-       .OPTION_RF_WORDS(RF_WORDS)
+       .ADDR_WIDTH	(RF_ADDR_WIDTH),
+       .DATA_WIDTH	(OPTION_OPERAND_WIDTH),
+       .ENABLE_BYPASS	(0)
        )
    rfspr
      (
-      .clk(clk),
-      .rst(rst),
-      .rdad_i(spr_bus_addr_i[RF_ADDR_WIDTH-1:0]),
-      .rden_i(1'b1),
-      .rdda_o(spr_gpr_dat_o),
-      .wrad_i(rf_wradr),
-      .wren_i(rf_wren),
-      .wrda_i(rf_wrdat)
+      .clk		(clk),
+      .dout		(spr_gpr_dat_o),
+      .raddr		(spr_bus_addr_i[RF_ADDR_WIDTH-1:0]),
+      .re		(1'b1),
+      .waddr		(rf_wradr),
+      .we		(rf_wren),
+      .din		(rf_wrdat)
       );
 end else begin
    assign spr_gpr_dat_o = 0;

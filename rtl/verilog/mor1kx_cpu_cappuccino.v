@@ -1072,7 +1072,7 @@ module mor1kx_cpu_cappuccino
 		  mor1kx_rf_cappuccino.wb_rf_wb_i)
 	   get_gpr = mor1kx_rf_cappuccino.result_i;
 	 else
-	   get_gpr = mor1kx_rf_cappuccino.rfa.ram[gpr_num];
+	   get_gpr = mor1kx_rf_cappuccino.rfa.mem[gpr_num];
       end
    endfunction //
 
@@ -1082,8 +1082,8 @@ module mor1kx_cpu_cappuccino
       input [4:0] gpr_num;
       input [OPTION_OPERAND_WIDTH-1:0] gpr_value;
       begin
-	 mor1kx_rf_cappuccino.rfa.ram[gpr_num] = gpr_value;
-	 mor1kx_rf_cappuccino.rfb.ram[gpr_num] = gpr_value;
+	 mor1kx_rf_cappuccino.rfa.mem[gpr_num] = gpr_value;
+	 mor1kx_rf_cappuccino.rfb.mem[gpr_num] = gpr_value;
       end
    endtask
 // synthesis translate_on
