@@ -555,53 +555,45 @@ endgenerate
 
    generate
       /* verilator lint_off WIDTH */
-      if (OPTION_SHIFTER=="BARREL" &&
-          FEATURE_SRA=="ENABLED" &&
-          FEATURE_ROR=="ENABLED") begin : full_barrel_shifter
+      if (OPTION_SHIFTER=="BARREL") begin : barrel_shifter
          /* verilator lint_on WIDTH */
+
+	 function [OPTION_OPERAND_WIDTH-1:0] reverse;
+	    input [OPTION_OPERAND_WIDTH-1:0] in;
+	    integer 			     i;
+	    begin
+	       for (i = 0; i < OPTION_OPERAND_WIDTH; i=i+1) begin
+		  reverse[(OPTION_OPERAND_WIDTH-1)-i] = in[i];
+	       end
+	    end
+	 endfunction
+
+	 wire op_sll = (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL);
+	 wire op_srl = (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL);
+	 wire op_sra = (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) &&
+		       (FEATURE_SRA!="NONE");
+	 wire op_ror = (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_ROR) &&
+		       (FEATURE_ROR!="NONE");
+
+	 wire [OPTION_OPERAND_WIDTH-1:0] shift_right;
+	 wire [OPTION_OPERAND_WIDTH-1:0] shift_lsw;
+	 wire [OPTION_OPERAND_WIDTH-1:0] shift_msw;
+
+	 //
+	 // Bit-reverse on left shift, perform right shift,
+	 // bit-reverse result on left shift.
+	 //
+	 assign shift_lsw = op_sll ? reverse(a) : a;
+	 assign shift_msw = op_sra ?
+			    {OPTION_OPERAND_WIDTH{a[OPTION_OPERAND_WIDTH-1]}} :
+			    op_ror ? a : {OPTION_OPERAND_WIDTH{1'b0}};
+
+	 assign shift_right = {shift_msw, shift_lsw} >> b[4:0];
+	 assign shift_result = op_sll ? reverse(shift_right) : shift_right;
+
          assign shift_valid = 1;
-         assign shift_result =
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
-                               ({32{a[OPTION_OPERAND_WIDTH-1]}} <<
-                                (/*7'd*/OPTION_OPERAND_WIDTH-{2'b0,b[4:0]})) |
-                               a >> b[4:0] :
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_ROR) ?
-                               (a << (6'd32-{1'b0,b[4:0]})) |
-                               (a >> b[4:0]) :
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?
-                               a << b[4:0] :
-                               //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
-                               a >> b[4:0];
-      end // if (OPTION_SHIFTER=="ENABLED" &&...
-      /* verilator lint_off WIDTH */
-      else if (OPTION_SHIFTER=="BARREL" &&
-               FEATURE_SRA=="ENABLED" &&
-               FEATURE_ROR!="ENABLED") begin : full_barrel_shifter_no_ror
-	 /* verilator lint_on WIDTH */
-         assign shift_valid = 1;
-         assign shift_result =
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
-                               ({32{a[OPTION_OPERAND_WIDTH-1]}} <<
-                                (/*7'd*/OPTION_OPERAND_WIDTH-{2'b0,b[4:0]})) |
-                               a >> b[4:0] :
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?
-                               a << b[4:0] :
-                               //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
-                               a >> b[4:0];
-      end // if (OPTION_SHIFTER=="ENABLED" &&...
-      /* verilator lint_off WIDTH */
-      else if (OPTION_SHIFTER=="BARREL" &&
-               FEATURE_SRA!="ENABLED" &&
-               FEATURE_ROR!="ENABLED") begin : full_barrel_shifter_no_ror_sra
-	 /* verilator lint_on WIDTH */
-         assign shift_valid = 1;
-         assign shift_result =
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?
-                               a << b[4:0] :
-                               //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
-                               a >> b[4:0];
-      end
-      else if (OPTION_SHIFTER=="SERIAL") begin : serial_shifter
+
+      end else if (OPTION_SHIFTER=="SERIAL") begin : serial_shifter
          // Serial shifter
          reg [4:0] shift_cnt;
          reg       shift_go;
