@@ -45,13 +45,13 @@ module mor1kx_store_buffer
    wire [FIFO_DATA_WIDTH-1:0] 		fifo_din;
 
    reg [DEPTH_WIDTH-1:0] 		write_pointer;
-   reg [DEPTH_WIDTH-1:0] 		read_pointer;
-   wire [DEPTH_WIDTH-1:0] 		prev_read_pointer;
+   wire [DEPTH_WIDTH-1:0] 		read_pointer;
+   reg [DEPTH_WIDTH-1:0] 		prev_read_pointer;
 
    assign fifo_din = {adr_i, dat_i, bsel_i, pc_i};
    assign {adr_o, dat_o, bsel_o, pc_o} = fifo_dout;
 
-   assign prev_read_pointer = read_pointer - 1;
+   assign read_pointer = prev_read_pointer + 1;
 
    assign full_o = write_pointer == prev_read_pointer;
    assign empty_o = write_pointer == read_pointer;
@@ -64,9 +64,9 @@ module mor1kx_store_buffer
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       read_pointer <= 0;
+       prev_read_pointer <= 2**DEPTH_WIDTH-1;
      else if (read_i)
-       read_pointer <= read_pointer + 1;
+       prev_read_pointer <= read_pointer;
 
    mor1kx_simple_dpram_sclk
      #(
