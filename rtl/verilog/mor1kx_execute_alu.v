@@ -148,12 +148,8 @@ module mor1kx_execute_alu
    reg                                    flag_set; // comb.
 
    // Logic wires
-   wire 				  op_and;
-   wire 				  op_or;
-   wire 				  op_xor;
-   wire [OPTION_OPERAND_WIDTH-1:0]        and_result;
-   wire [OPTION_OPERAND_WIDTH-1:0]        or_result;
-   wire [OPTION_OPERAND_WIDTH-1:0]        xor_result;
+   wire 				  op_logi;
+   reg [OPTION_OPERAND_WIDTH-1:0]        logi_result;
 
    // Multiplier wires
    wire [OPTION_OPERAND_WIDTH-1:0]        mul_result;
@@ -547,7 +543,7 @@ endgenerate
    endgenerate
 
    // Xor result is zero if equal
-   assign a_eq_b = !(|xor_result);
+   assign a_eq_b = (a == b);
    // Signed compare
    assign a_lts_b = !(adder_result_sign == adder_signed_overflow);
    // Unsigned compare
@@ -684,19 +680,37 @@ endgenerate
 
 
    // Logic operations
-   assign and_result = a & b;
-   assign or_result = a | b;
-   assign xor_result = a ^ b;
+   reg [3:0] logi_op_alu;
+   always @*
+     case(opc_alu_i)
+       `OR1K_ALU_OPC_AND:
+         logi_op_alu = 4'b1000;
+       `OR1K_ALU_OPC_OR:
+         logi_op_alu = 4'b1110;
+       `OR1K_ALU_OPC_XOR:
+         logi_op_alu = 4'b0110;
+       default:
+         logi_op_alu = 0;
+     endcase
 
-   assign op_and = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_AND;
-   assign op_or = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_OR;
-   assign op_xor = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_XOR;
+   wire [3:0] logi_op_mxspr;
+   assign logi_op_mxspr = (op_mfspr_i | op_mtspr_i) ? 4'b1110 : 0;
+   wire [3:0] logi_op;
+   assign logi_op = logi_op_alu | logi_op_mxspr;
+
+   integer i;
+   always @*
+
+      for (i = 0; i < OPTION_OPERAND_WIDTH; i=i+1) begin
+        logi_result[i] = logi_op[{a[i], b[i]}];
+       end
+
+   assign op_logi = (op_alu_i & (logi_op_alu != 0)) | (logi_op_mxspr != 0);
+
    assign op_cmov = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_CMOV;
 
    // Result muxing - result is registered in RF
-   assign alu_result_o = op_and ? and_result :
-			 op_or | op_mfspr_i | op_mtspr_i ? or_result :
-			 op_xor ? xor_result :
+   assign alu_result_o = op_logi ? logi_result :
 			 op_cmov ? cmov_result :
 			 op_movhi_i ? immediate_i :
 			 op_mul_i ? mul_result[OPTION_OPERAND_WIDTH-1:0] :
