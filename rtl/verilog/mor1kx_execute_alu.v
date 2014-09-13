@@ -229,7 +229,7 @@ endgenerate
 	       mul_opa <= a;
 	       mul_opb <= b;
 	    end
-	    mul_result1 <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
+	    mul_result1 <= mul_opa * mul_opb;
 	    mul_result2 <= mul_result1;
 	 end
 
@@ -265,7 +265,7 @@ endgenerate
 	       mul_opb <= decode_b;
 	    end
 	    if (padv_execute_i)
-	      mul_result1 <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
+	      mul_result1 <= mul_opa * mul_opb;
 
 	    mul_result2 <= mul_result1;
 	 end
