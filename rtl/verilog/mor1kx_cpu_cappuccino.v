@@ -950,7 +950,6 @@ module mor1kx_cpu_cappuccino
     .alu_result_i			(ctrl_alu_result_o),
     .lsu_result_i			(lsu_result_o),
     .mul_result_i			(mul_result_o),
-    .lsu_valid_i			(lsu_valid_o),
     .spr_i				(mfspr_dat_o),
     .op_mul_i				(ctrl_op_mul_o),
     .op_lsu_load_i			(ctrl_op_lsu_load_o),
@@ -974,8 +973,7 @@ module mor1kx_cpu_cappuccino
       .spr_i				(mfspr_dat_o),		 // Templated
       .op_mul_i				(ctrl_op_mul_o),	 // Templated
       .op_lsu_load_i			(ctrl_op_lsu_load_o),	 // Templated
-      .op_mfspr_i			(ctrl_op_mfspr_o),	 // Templated
-      .lsu_valid_i			(lsu_valid_o));		 // Templated
+      .op_mfspr_i			(ctrl_op_mfspr_o));	 // Templated
 
 
    /* mor1kx_rf_cappuccino AUTO_TEMPLATE (
