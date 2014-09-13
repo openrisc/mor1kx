@@ -38,6 +38,8 @@
 ////                                                             ////
 /////////////////////////////////////////////////////////////////////
 
+`include "mor1kx-defines.v"
+
 /*
 
  FPU Operations (fpu_op):
@@ -65,13 +67,14 @@
 
 module mor1kx_fpu_intfloat_conv
   (
-    clk, rmode, fpu_op, opa,
+    clk, rst, rmode, fpu_op, opa,
     clr_ready_flag_i,
     start_i,
     out, ready_o,
     snan, ine, inv, overflow, underflow, zero
     );
    input    clk;
+   input    rst;
    input [1:0]    rmode;
    input [2:0]    fpu_op;
    input [31:0]   opa;
@@ -116,28 +119,25 @@ module mor1kx_fpu_intfloat_conv
    //
    // Input Registers
    //
-
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) begin
+     opa_r <=  32'd0;
+     rmode_r1 <=  2'd0;
+     rmode_r2 <=  2'd0;
+     rmode_r3 <=  2'd0;
+     fpu_op_r1 <=  3'd0;
+     fpu_op_r2 <=  3'd0;
+     fpu_op_r3 <=  3'd0;
+   end
+   else begin
      opa_r <=  opa;
-
-
-   always @(posedge clk)
      rmode_r1 <=  rmode;
-
-   always @(posedge clk)
      rmode_r2 <=  rmode_r1;
-
-   always @(posedge clk)
      rmode_r3 <=  rmode_r2;
-
-   always @(posedge clk)
      fpu_op_r1 <=  fpu_op;
-
-   always @(posedge clk)
      fpu_op_r2 <=  fpu_op_r1;
-
-   always @(posedge clk)
      fpu_op_r3 <=  fpu_op_r2;
+   end
 
    ////////////////////////////////////////////////////////////////////////
    //
@@ -150,8 +150,12 @@ module mor1kx_fpu_intfloat_conv
             t_state_busy    = 1;
    reg     s_state;
    reg [6:0] fpu_conv_shr;
-   always @(posedge clk) begin
-     if(start_i) begin
+   always @(posedge clk `OR_ASYNC_RST) begin
+     if (rst) begin
+       fpu_conv_shr <= 7'd0;
+       s_state <= t_state_waiting;     
+     end
+     else if(start_i) begin
        fpu_conv_shr <= 7'd1;
        s_state <= t_state_busy;
      end
@@ -187,6 +191,7 @@ module mor1kx_fpu_intfloat_conv
 
    mor1kx_fpu_intfloat_conv_except u0
      (  .clk(clk),
+  .rst(rst),
   .opa(opa_r),
   .opb(),
   .inf(inf_d),
@@ -216,12 +221,16 @@ module mor1kx_fpu_intfloat_conv
 
    // This is all we need from post-norm module for int-float conversion
    reg      opa_sign_r;
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) begin
+     opa_sign_r <= 0;
+     sign_fasu_r <=  0; //sign_fasu;
+   end
+   else begin
      opa_sign_r <= opa_r[31];
-
-   always @(posedge clk)
      sign_fasu_r <=  opa_sign_r; //sign_fasu;
-
+   end
+ 
 
    ////////////////////////////////////////////////////////////////////////
    //
@@ -237,17 +246,27 @@ module mor1kx_fpu_intfloat_conv
    wire     f2i_out_sign;
    wire [47:0]    fract_denorm;
 
-   always @(posedge clk)  // Exponent must be once cycle delayed
+   // Exponent must be once cycle delayed
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) 
+     exp_r <= 0;
+   else begin
      case(fpu_op_r2)
-       //4: exp_r <=  0;
        5: exp_r <=  opa_r1[30:23];
        default: exp_r <=  0;
      endcase
+   end
 
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) 
+     opa_r1 <=  0;
+   else
      opa_r1 <=  opa_r[30:0];
 
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) 
+     fract_i2f <= 0;
+   else
      fract_i2f <=  (fpu_op_r2==5) ?
        (sign_d ?  1-{24'h00, (|opa_r1[30:23]), opa_r1[22:0]}-1 :
         {24'h0, (|opa_r1[30:23]), opa_r1[22:0]})
@@ -255,15 +274,25 @@ module mor1kx_fpu_intfloat_conv
 
    assign fract_denorm = fract_i2f;
 
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) 
+     opas_r1 <=  0;
+   else
      opas_r1 <=  opa_r[31];
 
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) 
+     opas_r2 <=  0;
+   else
      opas_r2 <=  opas_r1;
 
    assign sign_d = opa_sign_r; //sign_fasu;
 
-   always @(posedge clk)
+
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) 
+     sign <=  0;
+   else
      sign <=  (rmode_r2==2'h3) ? !sign_d : sign_d;
 
 
@@ -277,6 +306,7 @@ module mor1kx_fpu_intfloat_conv
    mor1kx_fpu_post_norm_intfloat_conv u4
      (
       .clk(clk),      // System Clock
+      .rst(rst),
       .fpu_op(fpu_op_r3),   // Floating Point Operation
       .opas(opas_r2),     // OPA Sign
       .sign(sign),      // Sign of the result
@@ -307,51 +337,52 @@ module mor1kx_fpu_intfloat_conv
    wire     ine_fasu;
    wire     underflow_fasu;
 
-
-   /*
-    always @(posedge clk)
-    fasu_op_r1 <=  fasu_op;
-
-    always @(posedge clk)
-    fasu_op_r2 <=  fasu_op_r1;
-    */
    // Force pre-set values for non numerical output
+   assign out_fixed = (qnan_d | snan_d | ind_d)  ? QNAN : INF;
 
-   assign out_fixed = ( (qnan_d | snan_d) |
-      (ind_d /*& !fasu_op_r2*/))  ? QNAN : INF;
-
-   always @(posedge clk)
-     out[30:0] <=  /*((inf_d & (fpu_op_r3!=3'b101)) | snan_d | qnan_d)
-        & fpu_op_r3!=3'b100 ? out_fixed :*/ out_d;
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst)
+     out[30:0] <=  0;
+   else
+     out[30:0] <=  out_d;
 
    assign out_d_00 = !(|out_d);
 
-
-   always @(posedge clk)
-     out[31] <= (fpu_op_r3==3'b101) ?
-    f2i_out_sign : sign_fasu_r;
-
-
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst)
+     out[31] <= 0;
+   else
+     out[31] <= (fpu_op_r3==3'b101) ?  f2i_out_sign : sign_fasu_r;
 
    // Exception Outputs
    assign ine_fasu = (ine_d | overflow_d | underflow_d) &
          !(snan_d | qnan_d | inf_d);
 
-   always @(posedge  clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst)
+     ine <=    0;
+   else
      ine <=    fpu_op_r3[2] ? ine_d : ine_fasu;
 
    assign overflow = overflow_d & !(snan_d | qnan_d | inf_d);
    assign underflow = underflow_d & !(inf_d | snan_d | qnan_d);
 
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst)
+     snan <=  0;
+   else
      snan <=  snan_d & (fpu_op_r3==3'b101);  // Only signal sNaN when ftoi
 
    // Status Outputs
    assign output_zero_fasu = out_d_00 & !(inf_d | snan_d | qnan_d);
 
-   always @(posedge clk)
-     zero <=  fpu_op_r3==3'b101 ? out_d_00 & !(snan_d | qnan_d) :
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst)
+     zero <= 0;
+   else
+     zero <=  (fpu_op_r3==3'b101) ? (out_d_00 & !(snan_d | qnan_d)) :
        output_zero_fasu ;
+   
    assign inv = inv_d & !f2i_special_case_no_inv;
 
 endmodule // mor1kx_fpu_intfloat_conv

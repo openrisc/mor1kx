@@ -41,9 +41,12 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 //
 
+`include "mor1kx-defines.v"
+
 module mor1kx_fpu_pre_norm_addsub (
 
       clk,
+      rst,
       opa_i,
       opb_i,
       fracta_28_o,
@@ -63,6 +66,7 @@ module mor1kx_fpu_pre_norm_addsub (
 
 
    input clk;
+   input rst;
    input [FP_WIDTH-1:0] opa_i;
    input [FP_WIDTH-1:0] opb_i;
    // carry(1) & hidden(1) & fraction(23) & guard(1) & round(1) & sticky(1)
@@ -100,11 +104,16 @@ module mor1kx_fpu_pre_norm_addsub (
    assign s_fracta = opa_i[22:0];
    assign s_fractb = opb_i[22:0];
 
-   always @(posedge clk)
-     begin
-  exp_o <= s_exp_o;
-  fracta_28_o <= s_fracta_28_o;
-  fractb_28_o <= s_fractb_28_o;
+   always @(posedge clk `OR_ASYNC_RST) 
+     if (rst) begin
+      exp_o <= 0;
+      fracta_28_o <= 0;
+      fractb_28_o <= 0;
+     end
+     else begin
+      exp_o <= s_exp_o;
+      fracta_28_o <= s_fracta_28_o;
+      fractb_28_o <= s_fractb_28_o;
      end
 
    assign s_expa_eq_expb = (s_expa == s_expb);
@@ -123,7 +132,10 @@ module mor1kx_fpu_pre_norm_addsub (
    // Output larger exponent
    assign s_mux_exp = s_expa_gt_expb;
 
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst)
+     s_exp_o <= 0;
+   else
      s_exp_o <= s_mux_exp ? s_expa : s_expb;
 
    // convert to an easy to handle floating-point format
@@ -135,15 +147,17 @@ module mor1kx_fpu_pre_norm_addsub (
    assign s_mux_diff = {s_expa_gt_expb, s_opa_dn ^ s_opb_dn};
 
    // calculate howmany postions the fraction will be shifted
-   always @(posedge clk)
-     begin
-  case(s_mux_diff)
-     2'b00: s_exp_diff <= s_expb - s_expa;
-     2'b01: s_exp_diff <= s_expb - (s_expa + 8'd1);
-     2'b10: s_exp_diff <= s_expa - s_expb;
-     2'b11: s_exp_diff <= s_expa - (s_expb + 8'd1);
-  endcase
-     end
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst)
+     s_exp_diff <= 0;
+   else begin
+     case(s_mux_diff)
+       2'b00: s_exp_diff <= s_expb - s_expa;
+       2'b01: s_exp_diff <= s_expb - (s_expa + 8'd1);
+       2'b10: s_exp_diff <= s_expa - s_expb;
+       2'b11: s_exp_diff <= s_expa - (s_expb + 8'd1);
+     endcase
+   end
 
    assign s_fract_sm_28 =  s_expa_gt_expb ? s_fractb_28 : s_fracta_28;
 

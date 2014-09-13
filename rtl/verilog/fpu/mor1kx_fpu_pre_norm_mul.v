@@ -41,8 +41,11 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 //
 
+`include "mor1kx-defines.v"
+
 module mor1kx_fpu_pre_norm_mul (
          clk,
+         rst,
          opa_i,
          opb_i,
          exp_10_o,
@@ -62,6 +65,7 @@ module mor1kx_fpu_pre_norm_mul (
 
 
    input clk;
+   input rst;
    input [FP_WIDTH-1:0] opa_i;
    input [FP_WIDTH-1:0] opb_i;
    output reg [EXP_WIDTH+1:0] exp_10_o;
@@ -87,7 +91,10 @@ module mor1kx_fpu_pre_norm_mul (
    assign s_fractb = opb_i[22:0];
 
    // Output Register
-   always @(posedge clk)
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst) 
+     exp_10_o <= 0;
+  else
      exp_10_o <= s_exp_10_o;
 
    // opa or opb is denormalized

@@ -32,15 +32,13 @@
 ////                                                             ////
 /////////////////////////////////////////////////////////////////////
 
+`include "mor1kx-defines.v"
 
-module mor1kx_fpu_fcmp(clk,
-                       opa, opb,
-           unordered_o,
-           altb_o, blta_o, aeqb_o, inf_o, zero_o);
-
-input   clk;
-input [31:0]  opa, opb;
-output reg  unordered_o, altb_o, blta_o, aeqb_o, inf_o, zero_o;
+module mor1kx_fpu_fcmp(
+  input clk, rst,
+  input [31:0]  opa, opb,
+  output reg  unordered_o, altb_o, blta_o, aeqb_o, inf_o, zero_o
+);
 
 ////////////////////////////////////////////////////////////////////////
 //
@@ -66,8 +64,16 @@ wire    all_zero;
 // Registered output
 //  The combination of 'fpu_op_is_conv' and 'decode_valid_o'
 //  block 'fpu_valid' flag till next clock on upper level
-always @(posedge clk)
-begin
+always @(posedge clk `OR_ASYNC_RST)
+if (rst) begin
+  unordered_o <= 0;
+  altb_o      <= 0;
+  blta_o      <= 0;
+  aeqb_o      <= 0;
+  inf_o       <= 0;
+  zero_o      <= 0;
+end
+else begin
   unordered_o <= unordered;
   altb_o      <= altb;
   blta_o      <= blta;

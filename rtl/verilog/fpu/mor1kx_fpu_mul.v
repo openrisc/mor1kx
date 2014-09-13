@@ -41,9 +41,12 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 //
 
+`include "mor1kx-defines.v"
+
 module mor1kx_fpu_mul
 (
    clk,
+   rst,
    fracta_i,
    fractb_i,
    signa_i,
@@ -65,6 +68,7 @@ module mor1kx_fpu_mul
    parameter SNAN = 31'b1111111100000000000000000000001;
 
    input clk;
+   input rst;
    input [FRAC_WIDTH:0] fracta_i;
    input [FRAC_WIDTH:0] fractb_i;
    input    signa_i;
@@ -89,45 +93,59 @@ module mor1kx_fpu_mul
    wire [23:0]         s_tem_prod;
 
    // Input Register
-   always @(posedge clk)
-     begin
-  s_fracta_i <= fracta_i;
-  s_fractb_i <= fractb_i;
-  s_signa_i<= signa_i;
-  s_signb_i<= signb_i;
-  s_start_i <= start_i;
-     end
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst) begin
+    s_fracta_i <= 0;
+    s_fractb_i <= 0;
+    s_signa_i  <= 0;
+    s_signb_i  <= 0;
+    s_start_i  <= 0;
+  end
+  else begin
+    s_fracta_i <= fracta_i;
+    s_fractb_i <= fractb_i;
+    s_signa_i  <= signa_i;
+    s_signb_i  <= signb_i;
+    s_start_i  <= start_i;
+  end
 
    // Output Register
-   always @(posedge clk)
-     begin
-  fract_o <= s_fract_o;
-  sign_o <= s_sign_o;
-  ready_o <= s_ready_o;
-     end
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst) begin
+    fract_o <= 0;
+    sign_o  <= 0;
+    ready_o <= 0;
+  end
+  else begin
+    fract_o <= s_fract_o;
+    sign_o  <= s_sign_o;
+    ready_o <= s_ready_o;
+  end
 
-   assign s_sign_o = signa_i ^ signb_i;
+  assign s_sign_o = signa_i ^ signb_i;
 
    // FSM
-   always @(posedge clk)
-     if (s_start_i)
-       begin
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst) begin
+    s_state   <= t_state_waiting;
+    s_ready_o <= 0;
+    s_count   <= 0;
+  end
+  else if (s_start_i) begin
     s_state <= t_state_busy;
     s_count <= 0;
-       end
-     else if (s_count==23)
-       begin
+  end 
+  else if (s_count==23) begin
     s_state <= t_state_waiting;
     s_ready_o <= 1;
     s_count <=0;
-       end
-     else if (s_state==t_state_busy)
-       s_count <= s_count + 1;
-     else
-       begin
+  end
+  else if (s_state==t_state_busy)
+    s_count <= s_count + 1;
+  else begin
     s_state <= t_state_waiting;
     s_ready_o <= 0;
-       end
+  end
 
    assign s_tem_prod[0] = s_fracta_i[0] & s_fractb_i[s_count];
    assign s_tem_prod[1] = s_fracta_i[1] & s_fractb_i[s_count];
@@ -157,14 +175,17 @@ module mor1kx_fpu_mul
    wire [47:0] v_prod_shl;
    assign v_prod_shl = {24'd0,s_tem_prod} << s_count[4:0];
 
-   always @(posedge clk)
-     if (s_state==t_state_busy)
-       begin
-    if (|s_count)
-      s_fract_o <= v_prod_shl + s_fract_o;
-    else
-      s_fract_o <= v_prod_shl;
-       end
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst)
+    s_fract_o <= 0;
+  else begin  
+    if (s_state==t_state_busy) begin
+      if (|s_count)
+        s_fract_o <= v_prod_shl + s_fract_o;
+      else
+        s_fract_o <= v_prod_shl;
+    end
+  end
 
 endmodule // mor1kx_fpu_mul
 

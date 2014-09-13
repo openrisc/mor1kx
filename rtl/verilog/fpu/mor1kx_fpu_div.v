@@ -41,9 +41,12 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 //
 
+`include "mor1kx-defines.v"
+
 module mor1kx_fpu_div
   (
    clk,
+   rst,
    dvdnd_i,
    dvsor_i,
    sign_dvd_i,
@@ -68,6 +71,7 @@ module mor1kx_fpu_div
 
 
    input clk;
+   input rst;
    input [2*(FRAC_WIDTH+2)-1:0] dvdnd_i;
    input [FRAC_WIDTH+3:0]   dvsor_i;
    input      sign_dvd_i;
@@ -96,14 +100,21 @@ module mor1kx_fpu_div
    reg [FRAC_WIDTH+3:0]   s_dvd;
 
    // Input Register
-   always @(posedge clk)
-     begin
-  s_dvdnd_i <= dvdnd_i;
-  s_dvsor_i <= dvsor_i;
-  s_sign_dvd_i<= sign_dvd_i;
-  s_sign_div_i<= sign_div_i;
-  s_start_i <= start_i;
-     end
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) begin
+     s_dvdnd_i <= 0;
+     s_dvsor_i <= 0;
+     s_sign_dvd_i<= 0;
+     s_sign_div_i<= 0;
+     s_start_i <= 0;
+   end
+   else begin
+     s_dvdnd_i <= dvdnd_i;
+     s_dvsor_i <= dvsor_i;
+     s_sign_dvd_i<= sign_dvd_i;
+     s_sign_div_i<= sign_div_i;
+     s_start_i <= start_i;
+   end
 
    assign qutnt_o = s_qutnt_o;
    assign rmndr_o = s_rmndr_o;
@@ -115,25 +126,26 @@ module mor1kx_fpu_div
    assign s_div_zero_o = !(|s_dvsor_i) & (|s_dvdnd_i);
 
 
-   always @(posedge clk)
-     if (s_start_i)
-       begin
-    s_state <= t_state_busy;
-    s_count <= 26;
-       end
-     else if (!(|s_count) & s_state==t_state_busy)
-       begin
-    s_state <= t_state_waiting;
-    s_ready_o <= 1;
-    s_count <=26;
-       end
-     else if (s_state==t_state_busy)
-       s_count <= s_count - 1;
-     else
-       begin
-    s_state <= t_state_waiting;
-    s_ready_o <= 0;
-       end
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) begin
+     s_state <= t_state_waiting;
+     s_ready_o <= 0;
+   end
+   else if (s_start_i) begin
+     s_state <= t_state_busy;
+     s_count <= 26;
+   end
+   else if (!(|s_count) & s_state==t_state_busy) begin
+     s_state <= t_state_waiting;
+     s_ready_o <= 1;
+     s_count <=26;
+   end
+   else if (s_state==t_state_busy)
+     s_count <= s_count - 1;
+   else begin
+     s_state <= t_state_waiting;
+     s_ready_o <= 0;
+   end
 
    wire [26:0] v_div;
    assign v_div = (s_count==26) ? {3'd0,s_dvdnd_i[49:26]} : s_dvd;
@@ -141,32 +153,28 @@ module mor1kx_fpu_div
    assign v_div_minus_s_dvsor_i = v_div - s_dvsor_i;
 
 
-   always @(posedge clk)
-     begin
-  //Reset
-  if (s_start_i)
-    begin
-       s_qutnt_o <= 0;
-       s_rmndr_o <= 0;
-    end
-  else if (s_state==t_state_busy)
-    begin
-
-       if (v_div < s_dvsor_i)
-         begin
+  always @(posedge clk `OR_ASYNC_RST) begin
+  if (rst) begin
+    s_qutnt_o <= 0;
+    s_rmndr_o <= 0;
+  end
+  else if (s_start_i) begin
+    s_qutnt_o <= 0;
+    s_rmndr_o <= 0;
+  end
+  else if (s_state==t_state_busy) begin
+    if (v_div < s_dvsor_i) begin
       s_qutnt_o[s_count] <= 1'b0;
       s_dvd <= {v_div[25:0],1'b0};
-         end
-       else
-         begin
+    end
+    else begin
       s_qutnt_o[s_count] <= 1'b1;
       s_dvd <= {v_div_minus_s_dvsor_i[25:0],1'b0};
-         end
+    end
 
-       s_rmndr_o <= v_div;
-
-    end // if (s_state==t_state_busy)
-     end // always @ (posedge clk)
+    s_rmndr_o <= v_div;
+  end // if (s_state==t_state_busy)
+  end // posedge
 
 endmodule // mor1kx_fpu_div
 

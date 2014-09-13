@@ -41,9 +41,12 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 //
 
+`include "mor1kx-defines.v"
+
 module mor1kx_fpu_arith
   (
    clk,
+   rst,
    opa_i,
    opb_i,
    fpu_op_i,
@@ -91,6 +94,7 @@ module mor1kx_fpu_arith
    // 11 = round down
 
    input  clk;
+   input  rst;
    input [FP_WIDTH-1:0]      opa_i;
    input [FP_WIDTH-1:0]      opb_i;
    input [2:0]         fpu_op_i;
@@ -183,8 +187,12 @@ module mor1kx_fpu_arith
 
    //////////////////////////////////////////////////////////////////-
    // latch input
-   always @(posedge clk) begin
-     if(start_i) begin
+   always @(posedge clk `OR_ASYNC_RST) begin
+     if (rst) begin
+       opa_r <= 0;
+       opb_r <= 0;
+     end
+     else if(start_i) begin
        opa_r <= opa_i;
        opb_r <= opb_i;
      end
@@ -193,7 +201,10 @@ module mor1kx_fpu_arith
 
    //////////////////////////////////////////////////////////////////-
    // generate start flag for serial divider and multiplier
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) 
+     serial_start <= 0;
+   else
      serial_start <= start_i;
 
 
@@ -202,44 +213,49 @@ module mor1kx_fpu_arith
    // we don't reset ready flag till next fpu instruction
    // but it is blocked by combination of 'is_op_fpu' and 'decode_valid_o'
    // on upper level
-   always @(posedge clk)
-     begin
-       if (clr_ready_flag_i) begin
-   ready_o <= 0;
-   s_count <= s_count;
-   s_state <= t_state_waiting;
-       end
-       else if (serial_start) begin
-   ready_o <= ready_o;
-   s_count <= 0;
-   s_state <= t_state_busy;
-       end
-       else if (s_state == t_state_busy) begin
-   // Ready cases
-   if (((s_count == 6) & ((fpu_op_i==3'd0) | (fpu_op_i==3'd1))) |
-       ((s_count==MUL_COUNT) & (fpu_op_i==3'd2)) |
-       ((s_count==33) & (fpu_op_i==3'd3))) begin
-     ready_o <= 1;
+   always @(posedge clk `OR_ASYNC_RST) begin
+   if (rst) begin
+     ready_o <= 0;
      s_count <= s_count;
      s_state <= t_state_waiting;
    end
+   else if (clr_ready_flag_i) begin
+     ready_o <= 0;
+     s_count <= s_count;
+     s_state <= t_state_waiting;
+   end
+   else if (serial_start) begin
+     ready_o <= ready_o;
+     s_count <= 0;
+     s_state <= t_state_busy;
+   end
+   else if (s_state == t_state_busy) begin
+     // Ready cases
+     if (((s_count == 6) & ((fpu_op_i==3'd0) | (fpu_op_i==3'd1))) |
+         ((s_count==MUL_COUNT) & (fpu_op_i==3'd2)) |
+         ((s_count==33) & (fpu_op_i==3'd3))) begin
+       ready_o <= 1;
+       s_count <= s_count;
+       s_state <= t_state_waiting;
+     end
+     else begin
+       ready_o <= ready_o;
+       s_count <= s_count + 1;
+       s_state <= s_state;
+     end
+   end // busy
    else begin
      ready_o <= ready_o;
-     s_count <= s_count + 1;
+     s_count <= s_count;
      s_state <= s_state;
-   end
-       end // busy
-       else begin
-   ready_o <= ready_o;
-   s_count <= s_count;
-   s_state <= s_state;
-       end // not ready yet / ready
-     end // posedge clock
+   end // not ready yet / ready
+   end // posedge clock
 
    //***Add/Substract units***
    mor1kx_fpu_pre_norm_addsub fpu_prenorm_addsub
    (
       .clk(clk),
+      .rst(rst),
       .opa_i(opa_r),
       .opb_i(opb_r),
       .fracta_28_o(prenorm_addsub_fracta_28_o),
@@ -249,6 +265,7 @@ module mor1kx_fpu_arith
    mor1kx_fpu_addsub fpu_addsub
      (
       .clk(clk),
+      .rst(rst),
       .fpu_op_i(fpu_op_i[0]),
       .fracta_i(prenorm_addsub_fracta_28_o),
       .fractb_i(prenorm_addsub_fractb_28_o),
@@ -260,6 +277,7 @@ module mor1kx_fpu_arith
    mor1kx_fpu_post_norm_addsub fpu_postnorm_addsub
      (
       .clk(clk),
+      .rst(rst),
       .opa_i(opa_r),
       .opb_i(opb_r),
       .fract_28_i(addsub_fract_o),
@@ -276,6 +294,7 @@ module mor1kx_fpu_arith
    mor1kx_fpu_pre_norm_mul fpu_pre_norm_mul
      (
       .clk(clk),
+      .rst(rst),
       .opa_i(opa_r),
       .opb_i(opb_r),
       .exp_10_o(pre_norm_mul_exp_10),
@@ -285,6 +304,7 @@ module mor1kx_fpu_arith
     mul_24 i_mul_24
     (
     .clk(clk),
+      .rst(rst),
     .fracta_i(pre_norm_mul_fracta_24),
     .fractb_i(pre_norm_mul_fractb_24),
     .signa_i(opa_r[31]),
@@ -298,6 +318,7 @@ module mor1kx_fpu_arith
    mor1kx_fpu_mul fpu_mul
      (
       .clk(clk),
+      .rst(rst),
       .fracta_i(pre_norm_mul_fracta_24),
       .fractb_i(pre_norm_mul_fractb_24),
       .signa_i(opa_r[31]),
@@ -317,6 +338,7 @@ module mor1kx_fpu_arith
    mor1kx_fpu_post_norm_mul fpu_post_norm_mul
      (
       .clk(clk),
+      .rst(rst),
       .opa_i(opa_r),
       .opb_i(opb_r),
       .exp_10_i(pre_norm_mul_exp_10),
@@ -332,6 +354,7 @@ module mor1kx_fpu_arith
    mor1kx_fpu_pre_norm_div fpu_pre_norm_div
      (
       .clk(clk),
+      .rst(rst),
       .opa_i(opa_r),
       .opb_i(opb_r),
       .exp_10_o(pre_norm_div_exp),
@@ -341,6 +364,7 @@ module mor1kx_fpu_arith
    mor1kx_fpu_div fpu_div
      (
       .clk(clk),
+      .rst(rst),
       .dvdnd_i(pre_norm_div_dvdnd),
       .dvsor_i(pre_norm_div_dvsor),
       .sign_dvd_i(opa_r[31]),
@@ -355,6 +379,7 @@ module mor1kx_fpu_arith
    mor1kx_fpu_post_norm_div fpu_post_norm_div
      (
       .clk(clk),
+      .rst(rst),
       .opa_i(opa_r),
       .opb_i(opb_r),
       .qutnt_i(serial_div_qutnt),
@@ -368,46 +393,56 @@ module mor1kx_fpu_arith
 
    //////////////////////////////////////////////////////////////////-
    // Output registers
-   always @(posedge clk)
-     begin
-  output_o <= s_output_o;
-  ine_o <= s_ine_o;
-  overflow_o <= s_overflow_o;
-  underflow_o <= s_underflow_o;
-  div_zero_o <= s_div_zero_o & !s_infa;
-  inf_o <= s_inf_o;
-  zero_o <= s_zero_o;
-  qnan_o <= s_qnan_o;
-  snan_o <= s_snan_o;
-     end
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) begin
+     output_o <= 0;
+     ine_o <= 0;
+     overflow_o <= 0;
+     underflow_o <= 0;
+     div_zero_o <= 0;
+     inf_o <= 0;
+     zero_o <= 0;
+     qnan_o <= 0;
+     snan_o <= 0;
+   end
+   else begin
+     output_o <= s_output_o;
+     ine_o <= s_ine_o;
+     overflow_o <= s_overflow_o;
+     underflow_o <= s_underflow_o;
+     div_zero_o <= s_div_zero_o & !s_infa;
+     inf_o <= s_inf_o;
+     zero_o <= s_zero_o;
+     qnan_o <= s_qnan_o;
+     snan_o <= s_snan_o;
+   end
 
    //// Output Multiplexer
-   always @(posedge clk)
-     begin
-  case(fpu_op_i)
-    3'd0,
-      3'd1: begin
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) begin
+     s_output1 <= 0;
+     s_ine_o <= 0;
+   end
+   else begin
+     case(fpu_op_i)
+       3'd0,3'd1: begin
          s_output1 <= postnorm_addsub_output_o;
          s_ine_o <= postnorm_addsub_ine_o;
-      end
-    3'd2: begin
-       s_output1 <= post_norm_mul_output;
-       s_ine_o <= post_norm_mul_ine;
-    end
-    3'd3: begin
-       s_output1 <= post_norm_div_output;
-       s_ine_o <= post_norm_div_ine;
-    end
-    //    3'd4: begin
-    //          s_output1   <= post_norm_sqrt_output;
-    //    s_ine_o   <= post_norm_sqrt_ine_o;
-    //  end
-    default: begin
-       s_output1 <= 0;
-       s_ine_o <= 0;
-    end
-  endcase // case (fpu_op_i)
-     end // always @ (posedge clk)
+       end
+       3'd2: begin
+         s_output1 <= post_norm_mul_output;
+         s_ine_o <= post_norm_mul_ine;
+       end
+       3'd3: begin
+         s_output1 <= post_norm_div_output;
+         s_ine_o <= post_norm_div_ine;
+       end
+       default: begin
+         s_output1 <= 0;
+         s_ine_o <= 0;
+       end
+     endcase // case (fpu_op_i)
+   end // always @ (posedge clk)
 
    // Infinte exponent
    assign s_infa = &opa_r[30:23];

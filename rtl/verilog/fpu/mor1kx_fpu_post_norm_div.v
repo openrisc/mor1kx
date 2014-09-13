@@ -41,10 +41,12 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 //
 
+`include "mor1kx-defines.v"
 
 module mor1kx_fpu_post_norm_div
   (
    clk,
+   rst,
    opa_i,
    opb_i,
    qutnt_i,
@@ -67,6 +69,7 @@ module mor1kx_fpu_post_norm_div
    parameter SNAN = 31'b1111111100000000000000000000001;
 
    input clk;
+   input rst;
    input [FP_WIDTH-1:0] opa_i;
    input [FP_WIDTH-1:0] opb_i;
    input [FRAC_WIDTH+3:0] qutnt_i;
@@ -110,25 +113,41 @@ module mor1kx_fpu_post_norm_div
    wire          s_nan_in, s_nan_op, s_nan_a, s_nan_b;
    wire          s_inf_result;
 
-   always @(posedge clk)
-     begin
-  s_opa_i <= opa_i;
-  s_opb_i <= opb_i;
-  s_expa <= opa_i[30:23];
-  s_expb <= opb_i[30:23];
-  s_qutnt_i <= qutnt_i;
-  s_rmndr_i <= rmndr_i;
-  s_exp_10_i <= exp_10_i;
-  s_sign_i <= sign_i;
-  s_rmode_i <= rmode_i;
-     end
+   // Input Register
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst) begin
+    s_opa_i <= 0;
+    s_opb_i <= 0;
+    s_expa <= 0;
+    s_expb <= 0;
+    s_qutnt_i <= 0;
+    s_rmndr_i <= 0;
+    s_exp_10_i <= 0;
+    s_sign_i <= 0;
+    s_rmode_i <= 0;
+  end
+  else begin
+    s_opa_i <= opa_i;
+    s_opb_i <= opb_i;
+    s_expa <= opa_i[30:23];
+    s_expb <= opb_i[30:23];
+    s_qutnt_i <= qutnt_i;
+    s_rmndr_i <= rmndr_i;
+    s_exp_10_i <= exp_10_i;
+    s_sign_i <= sign_i;
+    s_rmode_i <= rmode_i;
+  end
 
    // Output Register
-   always @(posedge clk)
-     begin
-  output_o <= s_output_o;
-  ine_o <= s_ine_o;
-     end
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst) begin
+    output_o <= 0;
+    ine_o <= 0;
+  end
+  else begin
+    output_o <= s_output_o;
+    ine_o <= s_ine_o;
+  end
 
     // qutnt_i
     // 26 25                    3
@@ -157,29 +176,39 @@ module mor1kx_fpu_post_norm_div
        s_exp_10b[8] ?
        0 : {9'd0,s_qutdn};
 
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) 
+     s_expo1 <= 0;
+   else begin
      if (s_exp_10b[9] | !(|s_exp_10b))
        s_expo1 <= 9'd1;
      else
        s_expo1 <= s_exp_10b[8:0];
+   end
 
-   //always @(posedge clk)
-   //  s_shr1 <= v_shr[6] ? 6'b111111 : v_shr[5:0];
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) begin
+     s_shr1 <= 0;
+     s_shl1 <= 0;
+   end
+   else begin
      s_shr1 <= (v_shr > 10'd26) ? 6'd27 : v_shr[5:0];
-
-   always @(posedge clk)
      s_shl1 <= v_shl[5:0];
+   end
 
    // *** Stage 2 ***
    // Shifting the fraction and rounding
 
    // shift the fraction
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst)
+     s_fraco1 <= 0;
+   else begin
      if (|s_shr1)
        s_fraco1 <= s_qutnt_i >> s_shr1;
      else
        s_fraco1 <= s_qutnt_i << s_shl1;
+   end
 
    assign s_expo2 = s_fraco1[26] ? s_expo1 : s_expo1 - 9'd1;
 
@@ -237,11 +266,15 @@ module mor1kx_fpu_post_norm_div
            {1'b0,s_fraco1[26:3]};
    assign s_shr2 = s_frac_rnd[24];
 
-   always @(posedge clk)
-     begin
-  s_expo3 <= s_shr2 ? s_expo2 + "1" : s_expo2;
-  s_fraco2 <= s_shr2 ? {1'b0,s_frac_rnd[24:1]} : s_frac_rnd;
-     end
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) begin
+     s_expo3 <= 0;
+     s_fraco2 <= 0;
+   end
+   else begin
+     s_expo3 <= s_shr2 ? s_expo2 + "1" : s_expo2;
+     s_fraco2 <= s_shr2 ? {1'b0,s_frac_rnd[24:1]} : s_frac_rnd;
+   end
    //
    // ***Stage 4****
    // Output

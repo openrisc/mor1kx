@@ -41,9 +41,12 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 //
 
+`include "mor1kx-defines.v"
+
 module mor1kx_fpu_pre_norm_div
   (
    clk,
+   rst,
    opa_i,
    opb_i,
    exp_10_o,
@@ -63,6 +66,7 @@ module mor1kx_fpu_pre_norm_div
    parameter SNAN = 31'b1111111100000000000000000000001;
 
    input clk;
+   input rst;
    input [FP_WIDTH-1:0] opa_i;
    input [FP_WIDTH-1:0] opb_i;
    output reg [EXP_WIDTH+1:0] exp_10_o;
@@ -96,7 +100,10 @@ module mor1kx_fpu_pre_norm_div
    assign dvsor_27_o  = s_dvsor_27_o;
 
    // Output Register
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) 
+     exp_10_o <= 0;
+   else
      exp_10_o <= s_exp_10_o;
 
    assign s_opa_dn = !(|s_expa);
@@ -177,14 +184,18 @@ module mor1kx_fpu_pre_norm_div
 
    assign s_dvsor_27_o = {3'd0,fractb_lshift_intermediate};
 
-   always @(posedge clk)
-     begin
-  // pre-calculate exponent
-  s_expa_in <= {2'd0,s_expa} + {9'd0,s_opa_dn};
-  s_expb_in <= {2'd0,s_expb} + {9'd0,s_opb_dn};
-  s_exp_10_o <= s_expa_in - s_expb_in + 10'b0001111111 -
-          {4'd0,s_dvd_zeros} + {4'd0,s_div_zeros};
-     end
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst) begin
+    s_expa_in <= 0;
+    s_expb_in <= 0;
+    s_exp_10_o <= 0;
+  end
+  else begin // pre-calculate exponent
+    s_expa_in <= {2'd0,s_expa} + {9'd0,s_opa_dn};
+    s_expb_in <= {2'd0,s_expb} + {9'd0,s_opb_dn};
+    s_exp_10_o <= s_expa_in - s_expb_in + 10'b0001111111 -
+                  {4'd0,s_dvd_zeros} + {4'd0,s_div_zeros};
+  end
 
 
 endmodule // mor1kx_fpu_pre_norm_div

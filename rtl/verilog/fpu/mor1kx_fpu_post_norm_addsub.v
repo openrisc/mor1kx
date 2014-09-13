@@ -41,9 +41,12 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 //
 
+`include "mor1kx-defines.v"
+
 module mor1kx_fpu_post_norm_addsub
   (
    clk,
+   rst,
    opa_i,
    opb_i,
    fract_28_i,
@@ -66,6 +69,7 @@ module mor1kx_fpu_post_norm_addsub
    parameter SNAN = 31'b1111111100000000000000000000001;
 
    input     clk;
+   input     rst;
    input [FP_WIDTH-1:0] opa_i;
    input [FP_WIDTH-1:0] opb_i;
    input [FRAC_WIDTH+4:0] fract_28_i;
@@ -118,11 +122,15 @@ module mor1kx_fpu_post_norm_addsub
    assign s_rmode_i = rmode_i;
 
    // Output Register
-   always @(posedge clk)
-     begin
-  output_o <= s_output_o;
-  ine_o <= s_ine_o;
-     end
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst) begin
+    output_o <= 0;
+    ine_o <= 0;
+  end
+  else begin
+    output_o <= s_output_o;
+    ine_o <= s_ine_o;
+  end
    //*** Stage 1 ****
    // figure out the output exponent and how much the fraction has to be
    // shiftd right/left
@@ -168,42 +176,48 @@ module mor1kx_fpu_post_norm_addsub
    // negative flag & large flag & exp
    assign s_exp10 = {2'd0,s_exp_i} + {9'd0,s_carry} - {4'd0,s_zeros};
 
-   always @(posedge clk)
-     begin
-  if (s_exp10[9] | !(|s_exp10))
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst) begin
+    s_shr1 <= 0;
+    s_shl1 <= 0;
+    s_expo9_1 <= 0;
+  end
+  else  begin
+    if (s_exp10[9] | !(|s_exp10))
     begin
-       s_shr1 <= 0;
-       s_expo9_1 <= 9'd1;
+      s_shr1 <= 0;
+      s_expo9_1 <= 9'd1;
 
-       if (|s_exp_i)
-         s_shl1 <= s_exp_i[5:0] - 6'd1;
-       else
-         s_shl1 <= 0;
-
+      if (|s_exp_i)
+        s_shl1 <= s_exp_i[5:0] - 6'd1;
+      else
+        s_shl1 <= 0;
     end
-  else if (s_exp10[8])
-    begin
-       s_shr1 <= 0;
-       s_shl1 <= 0;
-       s_expo9_1 <= 9'b011111111;
+    else if (s_exp10[8]) begin
+      s_shr1 <= 0;
+      s_shl1 <= 0;
+      s_expo9_1 <= 9'b011111111;
     end
-  else
-    begin
-       s_shr1 <= {5'd0,s_carry};
-       s_shl1 <= s_zeros;
-       s_expo9_1 <= s_exp10[8:0];
+    else begin
+      s_shr1 <= {5'd0,s_carry};
+      s_shl1 <= s_zeros;
+      s_expo9_1 <= s_exp10[8:0];
     end // else: !if(s_exp10[8])
-     end // always @ (posedge clk)
+  end // always @ (posedge clk)
 
    //-
    // *** Stage 2 ***
    // Shifting the fraction and rounding
 
-   always @(posedge clk)
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst) 
+    s_fracto28_1 <= 0;
+  else begin
      if (|s_shr1)
        s_fracto28_1 <= s_fract_28_i >> s_shr1;
      else
        s_fracto28_1 <= s_fract_28_i << s_shl1;
+  end
 
    assign s_expo9_2 = (s_fracto28_1[27:26]==2'b00) ?
           s_expo9_1 - 9'd1 : s_expo9_1;

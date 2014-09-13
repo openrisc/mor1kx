@@ -35,12 +35,16 @@
 ////                                                             ////
 /////////////////////////////////////////////////////////////////////
 
+
+`include "mor1kx-defines.v"
+
 module mor1kx_fpu_intfloat_conv_except
   (
-  clk, opa, opb, inf, ind, qnan, snan, opa_nan, opb_nan,
+  clk, rst, opa, opb, inf, ind, qnan, snan, opa_nan, opb_nan,
   opa_00, opb_00, opa_inf, opb_inf
   );
    input    clk;
+   input    rst;
    input [31:0]   opa, opb;
    output   inf, ind, qnan, snan, opa_nan, opb_nan;
    output   opa_00, opb_00;
@@ -76,71 +80,54 @@ module mor1kx_fpu_intfloat_conv_except
    // Determine if any of the input operators is a INF or NAN or any other
    // special number
    //
-
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) begin
+     expa_ff <=  0;
+     expb_ff <=  0;
+     infa_f_r <= 0;
+     infb_f_r <= 0;
+     qnan_r_a <= 0;
+     snan_r_a <= 0;
+     qnan_r_b <= 0;
+     snan_r_b <= 0; 
+     ind  <= 0;
+     inf  <= 0;
+     qnan <= 0;
+     snan <= 0;
+     opa_nan <= 0;
+     opb_nan <= 0;
+     opa_inf <= 0;
+     opb_inf <= 0;
+     expa_00 <= 0;
+     expb_00 <= 0;
+     fracta_00 <= 0;
+     fractb_00 <= 0;
+     opa_00 <= 0;
+     opb_00 <= 0;
+   end
+   else begin
      expa_ff <=  &expa;
-
-   always @(posedge clk)
      expb_ff <=  &expb;
-
-   always @(posedge clk)
      infa_f_r <=  !(|fracta);
-
-   always @(posedge clk)
      infb_f_r <=  !(|fractb);
-
-   always @(posedge clk)
      qnan_r_a <=   fracta[22];
-
-   always @(posedge clk)
      snan_r_a <=  !fracta[22] & |fracta[21:0];
-
-   always @(posedge clk)
      qnan_r_b <=   fractb[22];
-
-   always @(posedge clk)
      snan_r_b <=  !fractb[22]; // & |fractb[21:0];
-
-   always @(posedge clk)
      ind  <=  (expa_ff & infa_f_r); // & (expb_ff & infb_f_r);
-
-   always @(posedge clk)
      inf  <=  (expa_ff & infa_f_r); // | (expb_ff & infb_f_r);
-
-   always @(posedge clk)
      qnan <=  (expa_ff & qnan_r_a); // | (expb_ff & qnan_r_b);
-
-   always @(posedge clk)
      snan <=  (expa_ff & snan_r_a); // | (expb_ff & snan_r_b);
-
-   always @(posedge clk)
      opa_nan <=  &expa & (|fracta[22:0]);
-
-   always @(posedge clk)
      opb_nan <=  &expb & (|fractb[22:0]);
-
-   always @(posedge clk)
      opa_inf <=  (expa_ff & infa_f_r);
-
-   always @(posedge clk)
      opb_inf <=  (expb_ff & infb_f_r);
-
-   always @(posedge clk)
      expa_00 <=  !(|expa);
-
-   always @(posedge clk)
      expb_00 <=  !(|expb);
-
-   always @(posedge clk)
      fracta_00 <=  !(|fracta);
-
-   always @(posedge clk)
      fractb_00 <=  !(|fractb);
-
-   always @(posedge clk)
      opa_00 <=  expa_00 & fracta_00;
-
-   always @(posedge clk)
      opb_00 <=  expb_00 & fractb_00;
+   end
 
 endmodule // mor1kx_fpu_intfloat_conv_except

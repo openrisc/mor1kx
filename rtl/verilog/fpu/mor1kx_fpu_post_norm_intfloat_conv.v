@@ -34,13 +34,17 @@
 ////                                                             ////
 /////////////////////////////////////////////////////////////////////
 
+
+`include "mor1kx-defines.v"
+
 module mor1kx_fpu_post_norm_intfloat_conv
   (
-    clk, fpu_op, opas, sign, rmode, fract_in,
+    clk, rst, fpu_op, opas, sign, rmode, fract_in,
     exp_in, opa_nan, opa_inf, out,
     ine, inv, overflow, underflow, f2i_out_sign
     );
    input    clk;
+   input    rst;
    input [2:0]    fpu_op;
    input    opas;
    input    sign;
@@ -119,8 +123,10 @@ module mor1kx_fpu_post_norm_intfloat_conv
 
    // ---------------------------------------------------------------------
    // Count Leading zeros in fraction
-
-   always @(/*fract_in*/ posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst)
+     fi_ldz <= 0;
+   else begin
      casez(fract_in)  // synopsys full_case parallel_case
        48'b1???????????????????????????????????????????????: fi_ldz <=  1;
        48'b01??????????????????????????????????????????????: fi_ldz <=  2;
@@ -171,6 +177,7 @@ module mor1kx_fpu_post_norm_intfloat_conv
        48'b00000000000000000000000000000000000000000000001?: fi_ldz <=  47;
        48'b00000000000000000000000000000000000000000000000?: fi_ldz <=  48;
      endcase
+   end
 
 
    // ---------------------------------------------------------------------
@@ -187,8 +194,11 @@ module mor1kx_fpu_post_norm_intfloat_conv
 
    assign fract_out_7fffff = &fract_out;
    assign fract_out_00     = !(|fract_out);
-   //assign fract_in_00      = !(|fract_in);
-   always @(posedge clk)
+   
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) 
+     fract_in_00  <= 0;
+   else
      fract_in_00  <= !(|fract_in);
 
    assign rm_nearest = (rmode==2'b00);
@@ -253,7 +263,10 @@ module mor1kx_fpu_post_norm_intfloat_conv
            0 : fract_in<<conv_shft[5:0];
 
    // Final fraction output
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst)
+     {fract_out,fract_trunc} <= 48'd0;
+   else
      {fract_out,fract_trunc} <= fract_in_shftl;
 
    // Incremented fraction for rounding
@@ -292,7 +305,10 @@ module mor1kx_fpu_post_norm_intfloat_conv
    assign conv_exp  = op_f2i ? exp_f2i : exp_i2f;
 
    //assign exp_out = conv_exp;
-   always @(posedge clk)
+   always @(posedge clk `OR_ASYNC_RST)
+   if (rst) 
+     exp_out <= 8'd0;
+   else
      exp_out <= conv_exp;
 
 

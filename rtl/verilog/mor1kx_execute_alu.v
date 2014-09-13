@@ -579,6 +579,7 @@ endgenerate
       mor1kx_fpu_arith fpu_arith
       (
         .clk(clk),
+        .rst(rst),
         .opa_i(rfa_i),
         .opb_i(rfb_i),
         .fpu_op_i({1'b0,opc_fpu[1:0]}), // Only bottom 2 bits
@@ -603,8 +604,14 @@ endgenerate
       reg a_is_snan, b_is_snan;
       reg a_is_qnan, b_is_qnan;
    
-      always @(posedge clk)
-        begin
+      always @(posedge clk `OR_ASYNC_RST)
+        if (rst) begin
+          a_is_snan <= 0;
+          b_is_snan <= 0;
+          a_is_qnan <= 0;
+          b_is_qnan <= 0;
+        end
+        else begin
           a_is_snan <= (rfa_i[30:23]==8'hff) & !rfa_i[22] & (|rfa_i[21:0]);
           b_is_snan <= (rfb_i[30:23]==8'hff) & !rfb_i[22] & (|rfb_i[21:0]);
           a_is_qnan <= (rfa_i[30:23]==8'hff) & rfa_i[22];
@@ -617,8 +624,13 @@ endgenerate
       // same signed infinities.
       reg a_is_inf, b_is_inf, a_b_sign_xor;
    
-      always @(posedge clk)
-        begin
+      always @(posedge clk `OR_ASYNC_RST)
+        if (rst) begin
+          a_is_inf <= 0;
+          b_is_inf <= 0;
+          a_b_sign_xor <= 0;
+        end
+        else begin
           a_is_inf <= (rfa_i[30:23]==8'hff) & !(|rfa_i[22:0]);
           b_is_inf <= (rfb_i[30:23]==8'hff) & !(|rfb_i[22:0]);
           a_b_sign_xor <= rfa_i[31] ^ rfb_i[31];
@@ -631,11 +643,16 @@ endgenerate
    
       // Check if it's 0.0/0.0 to generate invalid signal (ignore sign bit)
       reg a_is_zero, b_is_zero;   
-      always @(posedge clk)
-      begin
-        a_is_zero <= !(|rfa_i[30:0]);
-        b_is_zero <= !(|rfb_i[30:0]);
-      end
+      always @(posedge clk `OR_ASYNC_RST)
+        if (rst) begin
+          a_is_zero <= 0;
+          b_is_zero <= 0;
+        end
+        else begin
+          a_is_zero <= !(|rfa_i[30:0]);
+          b_is_zero <= !(|rfb_i[30:0]);
+        end
+        
       assign dbz_in = (opc_fpu == `OR1K_FPUOP_DIV) &
                       (a_is_zero & b_is_zero);
    
@@ -649,6 +666,7 @@ endgenerate
       mor1kx_fpu_intfloat_conv fpu_intfloat_conv
       (
         .clk(clk),
+        .rst(rst),
         .rmode(fpu_round_mode_i),
         .fpu_op(opc_fpu[2:0]),
         .opa(rfa_i), // will be registered internally
@@ -668,6 +686,7 @@ endgenerate
       mor1kx_fpu_fcmp fpu_fcmp
       (
         .clk(clk),
+        .rst(rst),
         .opa(rfa_i), 
         .opb(rfb_i),
         .unordered_o(unordered),

@@ -42,8 +42,11 @@
 //  POSSIBILITY OF SUCH DAMAGE.                                     //
 //////////////////////////////////////////////////////////////////////
 
+`include "mor1kx-defines.v"
+
 module mor1kx_fpu_addsub(
     clk,
+    rst,
     fpu_op_i,
     fracta_i,
     fractb_i,
@@ -65,6 +68,7 @@ module mor1kx_fpu_addsub(
   parameter SNAN = 31'b1111111100000000000000000000001;
 
   input clk;
+  input rst;
   input fpu_op_i;
   input [FRAC_WIDTH+4:0] fracta_i;
   input [FRAC_WIDTH+4:0] fractb_i;
@@ -88,11 +92,15 @@ module mor1kx_fpu_addsub(
   assign s_signb_i  = signb_i;
   assign s_fpu_op_i = fpu_op_i;
 
-  always @(posedge clk)
-    begin
-      fract_o <= s_fract_o;
-      sign_o <= s_sign_o;
-    end
+  always @(posedge clk `OR_ASYNC_RST)
+  if (rst) begin
+    fract_o <= 0;
+    sign_o <= 0;
+  end
+  else begin
+    fract_o <= s_fract_o;
+    sign_o <= s_sign_o;
+  end
 
   assign fracta_gt_fractb = s_fracta_i > s_fractb_i;
 
