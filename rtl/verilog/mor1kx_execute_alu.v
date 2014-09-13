@@ -367,7 +367,7 @@ endgenerate
       end
       else if (FEATURE_MULTIPLIER=="NONE") begin
          // No multiplier
-         assign mul_result = adder_result;
+         assign mul_result = 0;
          assign mul_valid = 1'b1;
 	 assign mul_unsigned_overflow = 0;
       end
@@ -485,7 +485,7 @@ endgenerate
 
       end
       else if (FEATURE_DIVIDER=="NONE") begin
-         assign div_result = adder_result;
+         assign div_result = 0;
          assign div_valid = 1'b1;
 	 assign div_by_zero = 0;
       end
@@ -541,7 +541,7 @@ endgenerate
 	 end
       end
       else begin
-	 assign ffl1_result = adder_result;
+	 assign ffl1_result = 0;
 	 assign ffl1_valid = 1'b1;
       end
    endgenerate
