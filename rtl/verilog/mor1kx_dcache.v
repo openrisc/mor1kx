@@ -348,6 +348,7 @@ module mor1kx_dcache
 		 state <= IDLE;
 	      end
 	   end
+
 	   REFILL: begin
 	      if (we_i) begin
 		 refill_valid[wradr_i[OPTION_DCACHE_BLOCK_WIDTH-1:2]] <= 1;
@@ -439,7 +440,7 @@ module mor1kx_dcache
 		way_wr_dat[7:0] = cpu_dat_o[7:0];
 
 	      way_we = way_hit;
-	      
+
 	      tag_lru_in = next_lru_history;
 
 	      tag_we = 1'b1;
