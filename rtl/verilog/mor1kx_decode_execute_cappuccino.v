@@ -477,7 +477,8 @@ module mor1kx_decode_execute_cappuccino
    assign ctrl_to_decode_interlock = (ctrl_op_lsu_load_i | ctrl_op_mfspr_i |
 				      ctrl_op_mul_i &
 				      FEATURE_MULTIPLIER=="PIPELINED") &
-				     (decode_rfb_adr_i == ctrl_rfd_adr_i);
+				     ((decode_rfa_adr_i == ctrl_rfd_adr_i) ||
+				      (decode_rfb_adr_i == ctrl_rfd_adr_i));
 
    assign branch_to_imm = (decode_op_jbr_i &
 			   // l.j/l.jal
@@ -488,11 +489,13 @@ module mor1kx_decode_execute_cappuccino
    assign branch_to_imm_target = pc_decode_i + {{4{decode_immjbr_upper_i[9]}},
 						decode_immjbr_upper_i,
 						decode_imm16_i,2'b00};
-
-   assign branch_to_reg = decode_op_jr_i & !ctrl_to_decode_interlock;
+   assign branch_to_reg = decode_op_jr_i &
+			  !(ctrl_to_decode_interlock |
+			    execute_rf_wb_o &
+			    (decode_rfb_adr_i == execute_rfd_adr_o));
 
    assign decode_branch_o = (branch_to_imm | branch_to_reg) &
-			    !pipeline_flush_i & !decode_bubble_o;
+			    !pipeline_flush_i;
 
    assign decode_branch_target_o = branch_to_imm ?
 				   branch_to_imm_target :
@@ -551,13 +554,16 @@ module mor1kx_decode_execute_cappuccino
 			     (decode_rfa_adr_i == execute_rfd_adr_o ||
 			      decode_rfb_adr_i == execute_rfd_adr_o) |
 			     // mul
-			     (ctrl_op_mul_i &
-			      FEATURE_MULTIPLIER=="PIPELINED") &
-			     (decode_rfa_adr_i == ctrl_rfd_adr_i ||
-			      decode_rfb_adr_i == ctrl_rfd_adr_i) |
+			     FEATURE_MULTIPLIER=="PIPELINED" &
+			     (decode_op_mul_i &
+			      (ctrl_to_decode_interlock |
+			       execute_rf_wb_o &
+			       (decode_rfa_adr_i == execute_rfd_adr_o ||
+				decode_rfb_adr_i == execute_rfd_adr_o))) |
 			     // jr
 			     decode_op_jr_i &
 			     (ctrl_to_decode_interlock |
+			      execute_rf_wb_o &
 			      (decode_rfb_adr_i == execute_rfd_adr_o)) |
 			     // rfe
 			     decode_op_rfe_i

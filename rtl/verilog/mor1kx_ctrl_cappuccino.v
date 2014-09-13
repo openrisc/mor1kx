@@ -65,6 +65,7 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_FASTCONTEXTS = "NONE",
     parameter OPTION_RF_NUM_SHADOW_GPR = 0,
     parameter FEATURE_OVERFLOW = "NONE",
+    parameter FEATURE_CARRY_FLAG = "ENABLED",
 
     parameter SPR_SR_WIDTH = 16,
     parameter SPR_SR_RESET_VALUE = 16'h8001,
@@ -472,8 +473,9 @@ module mor1kx_ctrl_cappuccino
 			ctrl_flag_set;
 
    // Carry output
-   assign ctrl_carry_o = (!ctrl_carry_clear_i & spr_sr[`OR1K_SPR_SR_CY]) |
-			 ctrl_carry_set_i;
+   assign ctrl_carry_o = FEATURE_CARRY_FLAG!="NONE" &
+			 (!ctrl_carry_clear_i & spr_sr[`OR1K_SPR_SR_CY] |
+			 ctrl_carry_set_i);
 
    // Ctrl stage pipeline advance signal is one cycle behind execute stage's
    always @(posedge clk `OR_ASYNC_RST)
@@ -664,7 +666,8 @@ module mor1kx_ctrl_cappuccino
 	  if (FEATURE_FASTCONTEXTS!="NONE")
 	    spr_sr[`OR1K_SPR_SR_CE  ] <= spr_write_dat[`OR1K_SPR_SR_CE  ];
 
-	  spr_sr[`OR1K_SPR_SR_CY  ] <= spr_write_dat[`OR1K_SPR_SR_CY  ];
+	  if (FEATURE_CARRY_FLAG!="NONE")
+	    spr_sr[`OR1K_SPR_SR_CY] <= spr_write_dat[`OR1K_SPR_SR_CY];
 
 	  if (FEATURE_OVERFLOW!="NONE") begin
 	     spr_sr[`OR1K_SPR_SR_OV  ] <= spr_write_dat[`OR1K_SPR_SR_OV  ];
@@ -681,15 +684,18 @@ module mor1kx_ctrl_cappuccino
 	  spr_sr[`OR1K_SPR_SR_F   ] <= ctrl_flag_set ? 1 :
 				       ctrl_flag_clear ? 0 :
 				       spr_sr[`OR1K_SPR_SR_F   ];
-	  spr_sr[`OR1K_SPR_SR_CY   ] <= ctrl_carry_set_i ? 1 :
-					ctrl_carry_clear_i ? 0 :
-					spr_sr[`OR1K_SPR_SR_CY   ];
+
+	  if (FEATURE_CARRY_FLAG!="NONE")
+	    spr_sr[`OR1K_SPR_SR_CY] <= ctrl_carry_set_i ? 1 :
+				       ctrl_carry_clear_i ? 0 :
+				       spr_sr[`OR1K_SPR_SR_CY];
 	  if (FEATURE_OVERFLOW!="NONE")
 	    spr_sr[`OR1K_SPR_SR_OV   ] <= ctrl_overflow_set_i ? 1 :
 				ctrl_overflow_clear_i ? 0 :
 				spr_sr[`OR1K_SPR_SR_OV   ];
+	  // Skip FO. TODO: make this even more selective.
 	  if (ctrl_op_rfe_i)
-	    spr_sr <= spr_esr;
+	    spr_sr[14:0] <= spr_esr[14:0];
        end
 
 
@@ -707,10 +713,12 @@ module mor1kx_ctrl_cappuccino
 	       else if (ctrl_overflow_clear_i)
 		 spr_esr[`OR1K_SPR_SR_OV] <= 1'b0;
 	    end
-	  if (ctrl_carry_set_i)
-	    spr_esr[`OR1K_SPR_SR_CY] <= 1'b1;
-	  else if (ctrl_carry_clear_i)
-	    spr_esr[`OR1K_SPR_SR_CY] <= 1'b0;
+	  if (FEATURE_CARRY_FLAG!="NONE") begin
+	     if (ctrl_carry_set_i)
+	       spr_esr[`OR1K_SPR_SR_CY] <= 1'b1;
+	     else if (ctrl_carry_clear_i)
+	       spr_esr[`OR1K_SPR_SR_CY] <= 1'b0;
+	  end
        end
      else if (spr_we & spr_addr==`OR1K_SPR_ESR0_ADDR)
        spr_esr <= spr_write_dat[SPR_SR_WIDTH-1:0];

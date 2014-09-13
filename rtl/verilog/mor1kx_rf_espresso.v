@@ -143,41 +143,38 @@ module mor1kx_rf_espresso
 	  rfb_o_using_last <= 0;
      end
 
-   
-   mor1kx_rf_ram
+   mor1kx_simple_dpram_sclk
      #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
-       .OPTION_RF_WORDS(OPTION_RF_WORDS)
+       .ADDR_WIDTH	(OPTION_RF_ADDR_WIDTH),
+       .DATA_WIDTH	(OPTION_OPERAND_WIDTH),
+       .ENABLE_BYPASS	(0)
        )
-     rfa
+   rfa
      (
-      .clk(clk), 
-      .rst(rst),
-      .rdad_i(rfa_adr_i),
-      .rden_i(rfa_rden),
-      .rdda_o(rfa_ram_o),
-      .wrad_i(rfd_adr_i),
-      .wren_i(rf_wren),
-      .wrda_i(result_i)
+      .clk		(clk),
+      .dout		(rfa_ram_o),
+      .raddr		(rfa_adr_i),
+      .re		(rfa_rden),
+      .waddr		(rfd_adr_i),
+      .we		(rf_wren),
+      .din		(result_i)
       );
 
-   mor1kx_rf_ram
+   mor1kx_simple_dpram_sclk
      #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-       .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
-       .OPTION_RF_WORDS(OPTION_RF_WORDS)
+       .ADDR_WIDTH	(OPTION_RF_ADDR_WIDTH),
+       .DATA_WIDTH	(OPTION_OPERAND_WIDTH),
+       .ENABLE_BYPASS	(0)
        )
    rfb
      (
-      .clk(clk), 
-      .rst(rst),
-      .rdad_i(rfb_adr_i),
-      .rden_i(rfb_rden),
-      .rdda_o(rfb_ram_o),
-      .wrad_i(rfd_adr_i),
-      .wren_i(rf_wren),
-      .wrda_i(result_i)
+      .clk		(clk),
+      .dout		(rfb_ram_o),
+      .raddr		(rfb_adr_i),
+      .re		(rfb_rden),
+      .waddr		(rfd_adr_i),
+      .we		(rf_wren),
+      .din		(result_i)
       );
 
 endmodule // mor1kx_execute_alu

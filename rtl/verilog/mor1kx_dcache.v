@@ -506,7 +506,7 @@ module mor1kx_dcache
 	       #(
 		 .ADDR_WIDTH(WAY_WIDTH-2),
 		 .DATA_WIDTH(OPTION_OPERAND_WIDTH),
-		 .ENABLE_BYPASS("TRUE")
+		 .ENABLE_BYPASS(1)
 		 )
 	 way_data_ram
 	       (
@@ -515,6 +515,7 @@ module mor1kx_dcache
 		// Inputs
 		.clk			(clk),
 		.raddr			(way_raddr[i][WAY_WIDTH-3:0]),
+		.re			(1'b1),
 		.waddr			(way_waddr[i][WAY_WIDTH-3:0]),
 		.we			(way_we[i]),
 		.din			(way_din[i][31:0]));
@@ -547,7 +548,7 @@ module mor1kx_dcache
      #(
        .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
        .DATA_WIDTH(TAGMEM_WIDTH),
-       .ENABLE_BYPASS("TRUE")
+       .ENABLE_BYPASS(1)
      )
    tag_ram
      (
@@ -556,6 +557,7 @@ module mor1kx_dcache
       // Inputs
       .clk				(clk),
       .raddr				(tag_rindex),
+      .re				(1'b1),
       .waddr				(tag_windex),
       .we				(tag_we),
       .din				(tag_din));

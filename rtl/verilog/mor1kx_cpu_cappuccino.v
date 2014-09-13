@@ -14,134 +14,137 @@
 
 `include "mor1kx-defines.v"
 
-module mor1kx_cpu_cappuccino #(
-   parameter OPTION_OPERAND_WIDTH = 32,
+module mor1kx_cpu_cappuccino
+  #(
+    parameter OPTION_OPERAND_WIDTH = 32,
 
-   parameter FEATURE_DATACACHE = "NONE",
-   parameter OPTION_DCACHE_BLOCK_WIDTH = 5,
-   parameter OPTION_DCACHE_SET_WIDTH = 9,
-   parameter OPTION_DCACHE_WAYS = 2,
-   parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
-   parameter FEATURE_DMMU = "NONE",
-   parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
-   parameter OPTION_DMMU_SET_WIDTH = 6,
-   parameter OPTION_DMMU_WAYS = 1,
-   parameter FEATURE_INSTRUCTIONCACHE = "NONE",
-   parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
-   parameter OPTION_ICACHE_SET_WIDTH = 9,
-   parameter OPTION_ICACHE_WAYS = 2,
-   parameter OPTION_ICACHE_LIMIT_WIDTH = 32,
-   parameter FEATURE_IMMU = "NONE",
-   parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE",
-   parameter OPTION_IMMU_SET_WIDTH = 6,
-   parameter OPTION_IMMU_WAYS = 1,
-   parameter FEATURE_TIMER = "ENABLED",
-   parameter FEATURE_DEBUGUNIT = "NONE",
-   parameter FEATURE_PERFCOUNTERS = "NONE",
-   parameter FEATURE_MAC = "NONE",
+    parameter FEATURE_DATACACHE = "NONE",
+    parameter OPTION_DCACHE_BLOCK_WIDTH = 5,
+    parameter OPTION_DCACHE_SET_WIDTH = 9,
+    parameter OPTION_DCACHE_WAYS = 2,
+    parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
+    parameter FEATURE_DMMU = "NONE",
+    parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
+    parameter OPTION_DMMU_SET_WIDTH = 6,
+    parameter OPTION_DMMU_WAYS = 1,
+    parameter FEATURE_INSTRUCTIONCACHE = "NONE",
+    parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
+    parameter OPTION_ICACHE_SET_WIDTH = 9,
+    parameter OPTION_ICACHE_WAYS = 2,
+    parameter OPTION_ICACHE_LIMIT_WIDTH = 32,
+    parameter FEATURE_IMMU = "NONE",
+    parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE",
+    parameter OPTION_IMMU_SET_WIDTH = 6,
+    parameter OPTION_IMMU_WAYS = 1,
+    parameter FEATURE_TIMER = "ENABLED",
+    parameter FEATURE_DEBUGUNIT = "NONE",
+    parameter FEATURE_PERFCOUNTERS = "NONE",
+    parameter FEATURE_MAC = "NONE",
 
-   parameter FEATURE_SYSCALL = "ENABLED",
-   parameter FEATURE_TRAP = "ENABLED",
-   parameter FEATURE_RANGE = "ENABLED",
+    parameter FEATURE_SYSCALL = "ENABLED",
+    parameter FEATURE_TRAP = "ENABLED",
+    parameter FEATURE_RANGE = "ENABLED",
 
-   parameter FEATURE_PIC = "ENABLED",
-   parameter OPTION_PIC_TRIGGER = "LEVEL",
-   parameter OPTION_PIC_NMI_WIDTH = 0,
+    parameter FEATURE_PIC = "ENABLED",
+    parameter OPTION_PIC_TRIGGER = "LEVEL",
+    parameter OPTION_PIC_NMI_WIDTH = 0,
 
-   parameter FEATURE_DSX = "NONE",
-   parameter FEATURE_OVERFLOW = "NONE",
+    parameter FEATURE_DSX = "NONE",
+    parameter FEATURE_OVERFLOW = "NONE",
+    parameter FEATURE_CARRY_FLAG = "ENABLED",
 
-   parameter FEATURE_FASTCONTEXTS = "NONE",
-   parameter OPTION_RF_NUM_SHADOW_GPR = 0,
-   parameter OPTION_RF_ADDR_WIDTH = 5,
-   parameter OPTION_RF_WORDS = 32,
+    parameter FEATURE_FASTCONTEXTS = "NONE",
+    parameter OPTION_RF_NUM_SHADOW_GPR = 0,
+    parameter OPTION_RF_ADDR_WIDTH = 5,
+    parameter OPTION_RF_WORDS = 32,
 
-   parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
-				`OR1K_RESET_VECTOR,8'd0},
+    parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
+				 `OR1K_RESET_VECTOR,8'd0},
 
-   parameter FEATURE_MULTIPLIER = "THREESTAGE",
-   parameter FEATURE_DIVIDER = "NONE",
+    parameter FEATURE_MULTIPLIER = "THREESTAGE",
+    parameter FEATURE_DIVIDER = "NONE",
 
-   parameter FEATURE_ADDC = "NONE",
-   parameter FEATURE_SRA = "ENABLED",
-   parameter FEATURE_ROR = "NONE",
-   parameter FEATURE_EXT = "NONE",
-   parameter FEATURE_CMOV = "NONE",
-   parameter FEATURE_FFL1 = "NONE",
-   parameter FEATURE_MSYNC = "NONE",
-   parameter FEATURE_PSYNC = "NONE",
-   parameter FEATURE_CSYNC = "NONE",
+    parameter OPTION_SHIFTER = "BARREL",
 
-   parameter FEATURE_ATOMIC = "ENABLED",
+    parameter FEATURE_ADDC = "NONE",
+    parameter FEATURE_SRA = "ENABLED",
+    parameter FEATURE_ROR = "NONE",
+    parameter FEATURE_EXT = "NONE",
+    parameter FEATURE_CMOV = "NONE",
+    parameter FEATURE_FFL1 = "NONE",
+    parameter FEATURE_MSYNC = "NONE",
+    parameter FEATURE_PSYNC = "NONE",
+    parameter FEATURE_CSYNC = "NONE",
+
+    parameter FEATURE_ATOMIC = "ENABLED",
 
 
-   parameter FEATURE_CUST1 = "NONE",
-   parameter FEATURE_CUST2 = "NONE",
-   parameter FEATURE_CUST3 = "NONE",
-   parameter FEATURE_CUST4 = "NONE",
-   parameter FEATURE_CUST5 = "NONE",
-   parameter FEATURE_CUST6 = "NONE",
-   parameter FEATURE_CUST7 = "NONE",
-   parameter FEATURE_CUST8 = "NONE",
 
-   parameter FEATURE_FPU   = "NONE", // ENABLED|NONE: pipeline cappuccino
+    parameter FEATURE_FPU   = "NONE", // ENABLED|NONE: pipeline cappuccino
+    parameter FEATURE_CUST1 = "NONE",
+    parameter FEATURE_CUST2 = "NONE",
+    parameter FEATURE_CUST3 = "NONE",
+    parameter FEATURE_CUST4 = "NONE",
+    parameter FEATURE_CUST5 = "NONE",
+    parameter FEATURE_CUST6 = "NONE",
+    parameter FEATURE_CUST7 = "NONE",
+    parameter FEATURE_CUST8 = "NONE",
 
-   parameter OPTION_SHIFTER = "ENABLED",
-   parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8
-  )
-  (/*AUTOARG*/
-   // clocks & reset
-   input clk,
-   input rst,
+    parameter FEATURE_STORE_BUFFER = "ENABLED",
+    parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8
+    )
+   (
+    input 			      clk,
+    input 			      rst,
 
-   // Instruction bus
-   input ibus_err_i,
-   input ibus_ack_i,
-   input [`OR1K_INSN_WIDTH-1:0] ibus_dat_i,
-   output [OPTION_OPERAND_WIDTH-1:0] ibus_adr_o,
-   output 			     ibus_req_o,
-   output 			     ibus_burst_o,
+    // Instruction bus
+    input 			      ibus_err_i,
+    input 			      ibus_ack_i,
+    input [`OR1K_INSN_WIDTH-1:0]      ibus_dat_i,
+    output [OPTION_OPERAND_WIDTH-1:0] ibus_adr_o,
+    output 			      ibus_req_o,
+    output 			      ibus_burst_o,
 
-   // Data bus
-   input 			     dbus_err_i,
-   input 			     dbus_ack_i,
-   input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
-   output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
-   output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
-   output 			     dbus_req_o,
-   output [3:0] 		     dbus_bsel_o,
-   output 			     dbus_we_o,
-   output 			     dbus_burst_o,
+    // Data bus
+    input 			      dbus_err_i,
+    input 			      dbus_ack_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
+    output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
+    output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
+    output 			      dbus_req_o,
+    output [3:0] 		      dbus_bsel_o,
+    output 			      dbus_we_o,
+    output 			      dbus_burst_o,
 
-   // Interrupts
-   input [31:0] 		     irq_i,
+    // Interrupts
+    input [31:0] 		      irq_i,
 
-   // Debug interface
-   input [15:0] 		     du_addr_i,
-   input 			     du_stb_i,
-   input [OPTION_OPERAND_WIDTH-1:0]  du_dat_i,
-   input 			     du_we_i,
-   output [OPTION_OPERAND_WIDTH-1:0] du_dat_o,
-   output 			     du_ack_o,
-   // Stall control from debug interface
-   input 			     du_stall_i,
-   output 			     du_stall_o,
+    // Debug interface
+    input [15:0] 		      du_addr_i,
+    input 			      du_stb_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  du_dat_i,
+    input 			      du_we_i,
+    output [OPTION_OPERAND_WIDTH-1:0] du_dat_o,
+    output 			      du_ack_o,
+    // Stall control from debug interface
+    input 			      du_stall_i,
+    output 			      du_stall_o,
 
-   // SPR accesses to external units (cache, mmu, etc.)
-   output [15:0] 		     spr_bus_addr_o,
-   output 			     spr_bus_we_o,
-   output 			     spr_bus_stb_o,
-   output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_mac_i,
-   input 			     spr_bus_ack_mac_i,
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pmu_i,
-   input 			     spr_bus_ack_pmu_i,
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pcu_i,
-   input 			     spr_bus_ack_pcu_i,
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i,
-   input 			     spr_bus_ack_fpu_i,
-   output [15:0] 		     spr_sr_o
-  );
+    // SPR accesses to external units (cache, mmu, etc.)
+    output [15:0] 		      spr_bus_addr_o,
+    output 			      spr_bus_we_o,
+    output 			      spr_bus_stb_o,
+    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_mac_i,
+    input 			      spr_bus_ack_mac_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pmu_i,
+    input 			      spr_bus_ack_pmu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pcu_i,
+    input 			      spr_bus_ack_pcu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i,
+    input 			      spr_bus_ack_fpu_i,
+    output [15:0] 		      spr_sr_o
+    );
 
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_fetch_to_decode;
    wire [`OR1K_INSN_WIDTH-1:0] 	     insn_fetch_to_decode;
@@ -248,6 +251,7 @@ module mor1kx_cpu_cappuccino #(
    wire [`OR1K_OPCODE_WIDTH-1:0] decode_opc_insn_o;// From mor1kx_decode of mor1kx_decode.v
    wire			decode_rf_wb_o;		// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfa_adr_o;// From mor1kx_decode of mor1kx_decode.v
+   wire [OPTION_OPERAND_WIDTH-1:0] decode_rfa_o;// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfb_adr_o;// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] decode_rfb_o;// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfd_adr_o;// From mor1kx_decode of mor1kx_decode.v
@@ -308,6 +312,7 @@ module mor1kx_cpu_cappuccino #(
    wire			execute_valid_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire			fetch_exception_taken_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			fetch_rf_adr_valid_o;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa_adr_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			fetch_valid_o;		// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire			flag_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
@@ -402,6 +407,7 @@ module mor1kx_cpu_cappuccino #(
       .pc_decode_o			(pc_fetch_to_decode),	 // Templated
       .decode_insn_o			(insn_fetch_to_decode),	 // Templated
       .fetch_valid_o			(fetch_valid_o),
+      .fetch_rfa_adr_o			(fetch_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .fetch_rfb_adr_o			(fetch_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
       .fetch_rf_adr_valid_o		(fetch_rf_adr_valid_o),
       .decode_except_ibus_err_o		(decode_except_ibus_err_o),
@@ -737,14 +743,18 @@ module mor1kx_cpu_cappuccino #(
       .flag_i				(ctrl_flag_o));		 // Templated
 
    /* mor1kx_execute_alu AUTO_TEMPLATE (
+    .padv_decode_i			(padv_decode_o),
     .padv_execute_i			(padv_execute_o),
     .padv_ctrl_i			(padv_ctrl_o),
     .opc_alu_i			        (execute_opc_alu_o),
     .opc_alu_secondary_i		(execute_opc_alu_secondary_o),
     .imm16_i				(execute_imm16_o),
+    .decode_immediate_i			(decode_immediate_o),
+    .decode_immediate_sel_i		(decode_immediate_sel_o),
     .immediate_i			(execute_immediate_o),
     .immediate_sel_i			(execute_immediate_sel_o),
     .decode_valid_i			(decode_valid_o),
+    .decode_op_mul_i			(decode_op_mul_o),
     .op_alu_i				(execute_op_alu_o),
     .op_add_i				(execute_op_add_o),
     .op_mul_i				(execute_op_mul_o),
@@ -767,6 +777,8 @@ module mor1kx_cpu_cappuccino #(
     .pc_execute_i			(pc_decode_to_execute),
     .adder_do_sub_i			(execute_adder_do_sub_o),
     .adder_do_carry_i			(execute_adder_do_carry_o),
+    .decode_rfa_i			(decode_rfa_o),
+    .decode_rfb_i			(decode_rfb_o),
     .rfa_i				(execute_rfa_o),
     .rfb_i				(execute_rfb_o),
     .flag_i				(ctrl_flag_o),
@@ -775,6 +787,8 @@ module mor1kx_cpu_cappuccino #(
    mor1kx_execute_alu
      #(
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .FEATURE_OVERFLOW(FEATURE_OVERFLOW),
+       .FEATURE_CARRY_FLAG(FEATURE_CARRY_FLAG),
        .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER),
        .FEATURE_DIVIDER(FEATURE_DIVIDER),
        .FEATURE_ADDC(FEATURE_ADDC),
@@ -813,6 +827,7 @@ module mor1kx_cpu_cappuccino #(
       // Inputs
       .clk				(clk),
       .rst				(rst),
+      .padv_decode_i			(padv_decode_o),	 // Templated
       .padv_execute_i			(padv_execute_o),	 // Templated
       .padv_ctrl_i			(padv_ctrl_o),		 // Templated
       .opc_alu_i			(execute_opc_alu_o),	 // Templated
@@ -820,7 +835,10 @@ module mor1kx_cpu_cappuccino #(
       .imm16_i				(execute_imm16_o),	 // Templated
       .immediate_i			(execute_immediate_o),	 // Templated
       .immediate_sel_i			(execute_immediate_sel_o), // Templated
+      .decode_immediate_i		(decode_immediate_o),	 // Templated
+      .decode_immediate_sel_i		(decode_immediate_sel_o), // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
+      .decode_op_mul_i			(decode_op_mul_o),	 // Templated
       .op_alu_i				(execute_op_alu_o),	 // Templated
       .op_add_i				(execute_op_add_o),	 // Templated
       .op_mul_i				(execute_op_mul_o),	 // Templated
@@ -843,6 +861,8 @@ module mor1kx_cpu_cappuccino #(
       .pc_execute_i			(pc_decode_to_execute),	 // Templated
       .adder_do_sub_i			(execute_adder_do_sub_o), // Templated
       .adder_do_carry_i			(execute_adder_do_carry_o), // Templated
+      .decode_rfa_i			(decode_rfa_o),		 // Templated
+      .decode_rfb_i			(decode_rfb_o),		 // Templated
       .rfa_i				(execute_rfa_o),	 // Templated
       .rfb_i				(execute_rfb_o),	 // Templated
       .flag_i				(ctrl_flag_o),		 // Templated
@@ -890,6 +910,7 @@ module mor1kx_cpu_cappuccino #(
        .FEATURE_DMMU_HW_TLB_RELOAD(FEATURE_DMMU_HW_TLB_RELOAD),
        .OPTION_DMMU_SET_WIDTH(OPTION_DMMU_SET_WIDTH),
        .OPTION_DMMU_WAYS(OPTION_DMMU_WAYS),
+       .FEATURE_STORE_BUFFER(FEATURE_STORE_BUFFER),
        .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH),
        .FEATURE_ATOMIC(FEATURE_ATOMIC)
        )
@@ -984,6 +1005,7 @@ module mor1kx_cpu_cappuccino #(
     .padv_execute_i			(padv_execute_o),
     .padv_ctrl_i			(padv_ctrl_o),
     .fetch_rf_adr_valid_i		(fetch_rf_adr_valid_o),
+    .fetch_rfa_adr_i			(fetch_rfa_adr_o),
     .fetch_rfb_adr_i			(fetch_rfb_adr_o),
     .decode_valid_i			(decode_valid_o),
     .decode_rfa_adr_i  			(decode_rfa_adr_o),
@@ -1016,6 +1038,7 @@ module mor1kx_cpu_cappuccino #(
       // Outputs
       .spr_gpr_ack_o			(spr_gpr_ack_o),
       .spr_gpr_dat_o			(spr_gpr_dat_o[OPTION_OPERAND_WIDTH-1:0]),
+      .decode_rfa_o			(decode_rfa_o[OPTION_OPERAND_WIDTH-1:0]),
       .decode_rfb_o			(decode_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
       .execute_rfa_o			(execute_rfa_o[OPTION_OPERAND_WIDTH-1:0]),
       .execute_rfb_o			(execute_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -1027,6 +1050,7 @@ module mor1kx_cpu_cappuccino #(
       .padv_ctrl_i			(padv_ctrl_o),		 // Templated
       .decode_valid_i			(decode_valid_o),	 // Templated
       .fetch_rf_adr_valid_i		(fetch_rf_adr_valid_o),	 // Templated
+      .fetch_rfa_adr_i			(fetch_rfa_adr_o),	 // Templated
       .fetch_rfb_adr_i			(fetch_rfb_adr_o),	 // Templated
       .decode_rfa_adr_i			(decode_rfa_adr_o),	 // Templated
       .decode_rfb_adr_i			(decode_rfb_adr_o),	 // Templated
@@ -1063,7 +1087,7 @@ module mor1kx_cpu_cappuccino #(
 		  mor1kx_rf_cappuccino.wb_rf_wb_i)
 	   get_gpr = mor1kx_rf_cappuccino.result_i;
 	 else
-	   get_gpr = mor1kx_rf_cappuccino.rfa.ram[gpr_num];
+	   get_gpr = mor1kx_rf_cappuccino.rfa.mem[gpr_num];
       end
    endfunction //
 
@@ -1073,8 +1097,8 @@ module mor1kx_cpu_cappuccino #(
       input [4:0] gpr_num;
       input [OPTION_OPERAND_WIDTH-1:0] gpr_value;
       begin
-	 mor1kx_rf_cappuccino.rfa.ram[gpr_num] = gpr_value;
-	 mor1kx_rf_cappuccino.rfb.ram[gpr_num] = gpr_value;
+	 mor1kx_rf_cappuccino.rfa.mem[gpr_num] = gpr_value;
+	 mor1kx_rf_cappuccino.rfb.mem[gpr_num] = gpr_value;
       end
    endtask
 // synthesis translate_on
@@ -1134,8 +1158,7 @@ module mor1kx_cpu_cappuccino #(
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
        .OPTION_RESET_PC(OPTION_RESET_PC),
        .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER),
-       .FEATURE_FPU(FEATURE_FPU), // pipeline cappuccino: execute_ctrl instance
-       .FEATURE_OVERFLOW(FEATURE_OVERFLOW)
+       .FEATURE_FPU(FEATURE_FPU) // pipeline cappuccino: execute_ctrl instance
        )
      mor1kx_execute_ctrl_cappuccino
      (/*AUTOINST*/
@@ -1306,7 +1329,8 @@ module mor1kx_cpu_cappuccino #(
        .FEATURE_DSX(FEATURE_DSX),
        .FEATURE_FASTCONTEXTS(FEATURE_FASTCONTEXTS),
        .OPTION_RF_NUM_SHADOW_GPR(OPTION_RF_NUM_SHADOW_GPR),
-       .FEATURE_OVERFLOW(FEATURE_OVERFLOW)
+       .FEATURE_OVERFLOW(FEATURE_OVERFLOW),
+       .FEATURE_CARRY_FLAG(FEATURE_CARRY_FLAG)
        )
      mor1kx_ctrl_cappuccino
      (/*AUTOINST*/
