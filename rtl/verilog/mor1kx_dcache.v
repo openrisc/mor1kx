@@ -549,7 +549,7 @@ module mor1kx_dcache
      #(
        .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
        .DATA_WIDTH(TAGMEM_WIDTH),
-       .ENABLE_BYPASS(1)
+       .ENABLE_BYPASS(0)
      )
    tag_ram
      (
