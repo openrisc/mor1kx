@@ -16,159 +16,145 @@
 `include "mor1kx-defines.v"
 
 module mor1kx
-  (/*AUTOARG*/
-   // Outputs
-   iwbm_adr_o, iwbm_stb_o, iwbm_cyc_o, iwbm_sel_o, iwbm_we_o,
-   iwbm_cti_o, iwbm_bte_o, iwbm_dat_o, dwbm_adr_o, dwbm_stb_o,
-   dwbm_cyc_o, dwbm_sel_o, dwbm_we_o, dwbm_cti_o, dwbm_bte_o,
-   dwbm_dat_o, avm_d_address_o, avm_d_byteenable_o, avm_d_read_o,
-   avm_d_burstcount_o, avm_d_write_o, avm_d_writedata_o,
-   avm_i_address_o, avm_i_byteenable_o, avm_i_read_o,
-   avm_i_burstcount_o, du_dat_o, du_ack_o, du_stall_o,
-   // Inputs
-   clk, rst, iwbm_err_i, iwbm_ack_i, iwbm_dat_i, iwbm_rty_i,
-   dwbm_err_i, dwbm_ack_i, dwbm_dat_i, dwbm_rty_i, avm_d_readdata_i,
-   avm_d_waitrequest_i, avm_d_readdatavalid_i, avm_i_readdata_i,
-   avm_i_waitrequest_i, avm_i_readdatavalid_i, irq_i, du_addr_i,
-   du_stb_i, du_dat_i, du_we_i, du_stall_i
-   );
+  #(
+    parameter OPTION_OPERAND_WIDTH	= 32,
 
-   parameter OPTION_OPERAND_WIDTH	= 32;
+    parameter OPTION_CPU0		= "CAPPUCCINO",
 
-   parameter OPTION_CPU0		= "CAPPUCCINO";
+    parameter FEATURE_DATACACHE		= "NONE",
+    parameter OPTION_DCACHE_BLOCK_WIDTH	= 5,
+    parameter OPTION_DCACHE_SET_WIDTH	= 9,
+    parameter OPTION_DCACHE_WAYS	= 2,
+    parameter OPTION_DCACHE_LIMIT_WIDTH	= 32,
+    parameter FEATURE_DMMU		= "NONE",
+    parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
+    parameter OPTION_DMMU_SET_WIDTH	= 6,
+    parameter OPTION_DMMU_WAYS		= 1,
+    parameter FEATURE_INSTRUCTIONCACHE	= "NONE",
+    parameter OPTION_ICACHE_BLOCK_WIDTH	= 5,
+    parameter OPTION_ICACHE_SET_WIDTH	= 9,
+    parameter OPTION_ICACHE_WAYS	= 2,
+    parameter OPTION_ICACHE_LIMIT_WIDTH	= 32,
+    parameter FEATURE_IMMU		= "NONE",
+    parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE",
+    parameter OPTION_IMMU_SET_WIDTH	= 6,
+    parameter OPTION_IMMU_WAYS		= 1,
+    parameter FEATURE_TIMER		= "ENABLED",
+    parameter FEATURE_DEBUGUNIT		= "NONE",
+    parameter FEATURE_PERFCOUNTERS	= "NONE",
+    parameter FEATURE_MAC		= "NONE",
 
-   parameter FEATURE_DATACACHE		= "NONE";
-   parameter OPTION_DCACHE_BLOCK_WIDTH	= 5;
-   parameter OPTION_DCACHE_SET_WIDTH	= 9;
-   parameter OPTION_DCACHE_WAYS		= 2;
-   parameter OPTION_DCACHE_LIMIT_WIDTH	= 32;
-   parameter FEATURE_DMMU		= "NONE";
-   parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE";
-   parameter OPTION_DMMU_SET_WIDTH	= 6;
-   parameter OPTION_DMMU_WAYS		= 1;
-   parameter FEATURE_INSTRUCTIONCACHE	= "NONE";
-   parameter OPTION_ICACHE_BLOCK_WIDTH	= 5;
-   parameter OPTION_ICACHE_SET_WIDTH	= 9;
-   parameter OPTION_ICACHE_WAYS		= 2;
-   parameter OPTION_ICACHE_LIMIT_WIDTH	= 32;
-   parameter FEATURE_IMMU		= "NONE";
-   parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE";
-   parameter OPTION_IMMU_SET_WIDTH	= 6;
-   parameter OPTION_IMMU_WAYS		= 1;
-   parameter FEATURE_TIMER		= "ENABLED";
-   parameter FEATURE_DEBUGUNIT		= "NONE";
-   parameter FEATURE_PERFCOUNTERS	= "NONE";
-   parameter FEATURE_MAC		= "NONE";
+    parameter FEATURE_SYSCALL		= "ENABLED",
+    parameter FEATURE_TRAP		= "ENABLED",
+    parameter FEATURE_RANGE		= "ENABLED",
 
-   parameter FEATURE_SYSCALL		= "ENABLED";
-   parameter FEATURE_TRAP		= "ENABLED";
-   parameter FEATURE_RANGE		= "ENABLED";
+    parameter FEATURE_PIC		= "ENABLED",
+    parameter OPTION_PIC_TRIGGER	= "LEVEL",
+    parameter OPTION_PIC_NMI_WIDTH	= 0,
 
-   parameter FEATURE_PIC		= "ENABLED";
-   parameter OPTION_PIC_TRIGGER		= "LEVEL";
-   parameter OPTION_PIC_NMI_WIDTH	= 0;
+    parameter FEATURE_DSX		= "ENABLED",
+    parameter FEATURE_OVERFLOW		= "ENABLED",
+    parameter FEATURE_CARRY_FLAG	= "ENABLED",
 
-   parameter FEATURE_DSX		= "ENABLED";
-   parameter FEATURE_OVERFLOW		= "ENABLED";
-   parameter FEATURE_CARRY_FLAG		= "ENABLED";
+    parameter FEATURE_FASTCONTEXTS	= "NONE",
+    parameter OPTION_RF_NUM_SHADOW_GPR	= 0,
+    parameter OPTION_RF_ADDR_WIDTH	= 5,
+    parameter OPTION_RF_WORDS		= 32,
 
-   parameter FEATURE_FASTCONTEXTS	= "NONE";
-   parameter OPTION_RF_NUM_SHADOW_GPR	= 0;
-   parameter OPTION_RF_ADDR_WIDTH	= 5;
-   parameter OPTION_RF_WORDS		= 32;
+    parameter OPTION_RESET_PC		= {{(OPTION_OPERAND_WIDTH-13){1'b0}},
+					   `OR1K_RESET_VECTOR,8'd0},
 
-   parameter OPTION_RESET_PC		= {{(OPTION_OPERAND_WIDTH-13){1'b0}},
-					   `OR1K_RESET_VECTOR,8'd0};
+    parameter FEATURE_MULTIPLIER	= "THREESTAGE",
+    parameter FEATURE_DIVIDER		= "SERIAL",
 
-   parameter FEATURE_MULTIPLIER		= "THREESTAGE";
-   parameter FEATURE_DIVIDER		= "SERIAL";
+    parameter FEATURE_ADDC		= "ENABLED",
+    parameter FEATURE_SRA		= "ENABLED",
+    parameter FEATURE_ROR		= "NONE",
+    parameter FEATURE_EXT		= "NONE",
+    parameter FEATURE_CMOV		= "ENABLED",
+    parameter FEATURE_FFL1		= "ENABLED",
+    parameter FEATURE_ATOMIC		= "ENABLED",
 
-   parameter FEATURE_ADDC		= "ENABLED";
-   parameter FEATURE_SRA		= "ENABLED";
-   parameter FEATURE_ROR		= "NONE";
-   parameter FEATURE_EXT		= "NONE";
-   parameter FEATURE_CMOV		= "ENABLED";
-   parameter FEATURE_FFL1		= "ENABLED";
-   parameter FEATURE_ATOMIC		= "ENABLED";
+    parameter FEATURE_CUST1		= "NONE",
+    parameter FEATURE_CUST2		= "NONE",
+    parameter FEATURE_CUST3		= "NONE",
+    parameter FEATURE_CUST4		= "NONE",
+    parameter FEATURE_CUST5		= "NONE",
+    parameter FEATURE_CUST6		= "NONE",
+    parameter FEATURE_CUST7		= "NONE",
+    parameter FEATURE_CUST8		= "NONE",
 
-   parameter FEATURE_CUST1		= "NONE";
-   parameter FEATURE_CUST2		= "NONE";
-   parameter FEATURE_CUST3		= "NONE";
-   parameter FEATURE_CUST4		= "NONE";
-   parameter FEATURE_CUST5		= "NONE";
-   parameter FEATURE_CUST6		= "NONE";
-   parameter FEATURE_CUST7		= "NONE";
-   parameter FEATURE_CUST8		= "NONE";
+    parameter OPTION_SHIFTER		= "BARREL",
+    parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
 
-   parameter OPTION_SHIFTER		= "BARREL";
-   parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8;
+    parameter BUS_IF_TYPE		= "WISHBONE32",
 
-   parameter BUS_IF_TYPE		= "WISHBONE32";
+    parameter IBUS_WB_TYPE		= "B3_READ_BURSTING",
+    parameter DBUS_WB_TYPE		= "CLASSIC"
+    )
+   (
+    input 			      clk,
+    input 			      rst,
 
-   parameter IBUS_WB_TYPE		= "B3_READ_BURSTING";
-   parameter DBUS_WB_TYPE		= "CLASSIC";
+    // Wishbone interface
+    output [31:0] 		      iwbm_adr_o,
+    output 			      iwbm_stb_o,
+    output 			      iwbm_cyc_o,
+    output [3:0] 		      iwbm_sel_o,
+    output 			      iwbm_we_o,
+    output [2:0] 		      iwbm_cti_o,
+    output [1:0] 		      iwbm_bte_o,
+    output [31:0] 		      iwbm_dat_o,
+    input 			      iwbm_err_i,
+    input 			      iwbm_ack_i,
+    input [31:0] 		      iwbm_dat_i,
+    input 			      iwbm_rty_i,
 
-   input clk, rst;
+    output [31:0] 		      dwbm_adr_o,
+    output 			      dwbm_stb_o,
+    output 			      dwbm_cyc_o,
+    output [3:0] 		      dwbm_sel_o,
+    output 			      dwbm_we_o,
+    output [2:0] 		      dwbm_cti_o,
+    output [1:0] 		      dwbm_bte_o,
+    output [31:0] 		      dwbm_dat_o,
+    input 			      dwbm_err_i,
+    input 			      dwbm_ack_i,
+    input [31:0] 		      dwbm_dat_i,
+    input 			      dwbm_rty_i,
 
-   // Wishbone interface
-   output [31:0] iwbm_adr_o;
-   output 	 iwbm_stb_o;
-   output 	 iwbm_cyc_o;
-   output [3:0]  iwbm_sel_o;
-   output 	 iwbm_we_o;
-   output [2:0]  iwbm_cti_o;
-   output [1:0]  iwbm_bte_o;
-   output [31:0] iwbm_dat_o;
-   input 	 iwbm_err_i;
-   input 	 iwbm_ack_i;
-   input [31:0]  iwbm_dat_i;
-   input 	 iwbm_rty_i;
+    // Avalon interface
+    output [31:0] 		      avm_d_address_o,
+    output [3:0] 		      avm_d_byteenable_o,
+    output 			      avm_d_read_o,
+    input [31:0] 		      avm_d_readdata_i,
+    output [3:0] 		      avm_d_burstcount_o,
+    output 			      avm_d_write_o,
+    output [31:0] 		      avm_d_writedata_o,
+    input 			      avm_d_waitrequest_i,
+    input 			      avm_d_readdatavalid_i,
 
-   output [31:0] dwbm_adr_o;
-   output 	 dwbm_stb_o;
-   output 	 dwbm_cyc_o;
-   output [3:0]  dwbm_sel_o;
-   output 	 dwbm_we_o;
-   output [2:0]  dwbm_cti_o;
-   output [1:0]  dwbm_bte_o;
-   output [31:0] dwbm_dat_o;
-   input 	 dwbm_err_i;
-   input 	 dwbm_ack_i;
-   input [31:0]  dwbm_dat_i;
-   input 	 dwbm_rty_i;
+    output [31:0] 		      avm_i_address_o,
+    output [3:0] 		      avm_i_byteenable_o,
+    output 			      avm_i_read_o,
+    input [31:0] 		      avm_i_readdata_i,
+    output [3:0] 		      avm_i_burstcount_o,
+    input 			      avm_i_waitrequest_i,
+    input 			      avm_i_readdatavalid_i,
 
-   // Avalon interface
-   output [31:0] avm_d_address_o;
-   output [3:0]  avm_d_byteenable_o;
-   output 	 avm_d_read_o;
-   input [31:0]  avm_d_readdata_i;
-   output [3:0]  avm_d_burstcount_o;
-   output 	 avm_d_write_o;
-   output [31:0] avm_d_writedata_o;
-   input 	 avm_d_waitrequest_i;
-   input 	 avm_d_readdatavalid_i;
+    input [31:0] 		      irq_i,
 
-   output [31:0] avm_i_address_o;
-   output [3:0]  avm_i_byteenable_o;
-   output 	 avm_i_read_o;
-   input [31:0]  avm_i_readdata_i;
-   output [3:0]  avm_i_burstcount_o;
-   input 	 avm_i_waitrequest_i;
-   input 	 avm_i_readdatavalid_i;
-
-   input [31:0]  irq_i;
-
-   // Debug interface
-   input [15:0]  du_addr_i;
-   input 	 du_stb_i;
-   input [OPTION_OPERAND_WIDTH-1:0] du_dat_i;
-   input 			    du_we_i;
-   output [OPTION_OPERAND_WIDTH-1:0] du_dat_o;
-   output 			     du_ack_o;
-   // Stall control from debug interface
-   input 			     du_stall_i;
-   output 			     du_stall_o;
-
+    // Debug interface
+    input [15:0] 		      du_addr_i,
+    input 			      du_stb_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  du_dat_i,
+    input 			      du_we_i,
+    output [OPTION_OPERAND_WIDTH-1:0] du_dat_o,
+    output 			      du_ack_o,
+    // Stall control from debug interface
+    input 			      du_stall_i,
+    output 			      du_stall_o
+    );
 
    /*AUTOWIRE*/
    // Beginning of automatic wires (for undeclared instantiated-module outputs)
