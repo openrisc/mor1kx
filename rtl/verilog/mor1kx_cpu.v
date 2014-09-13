@@ -94,6 +94,7 @@ module mor1kx_cpu
     parameter FEATURE_CUST7		= "NONE",
     parameter FEATURE_CUST8		= "NONE",
 
+    parameter FEATURE_STORE_BUFFER	= "ENABLED",
     parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8
     )
    (
@@ -233,6 +234,7 @@ module mor1kx_cpu
 	     .FEATURE_CUST7(FEATURE_CUST7),
 	     .FEATURE_CUST8(FEATURE_CUST8),
 	     .OPTION_SHIFTER(OPTION_SHIFTER),
+	     .FEATURE_STORE_BUFFER(FEATURE_STORE_BUFFER),
 	     .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH)
 	     )
 	   mor1kx_cpu
