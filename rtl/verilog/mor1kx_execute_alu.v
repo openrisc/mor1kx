@@ -148,8 +148,8 @@ module mor1kx_execute_alu
    reg                                    flag_set; // comb.
 
    // Logic wires
-   wire 				  op_logi;
-   reg [OPTION_OPERAND_WIDTH-1:0]        logi_result;
+   wire 				  op_logic;
+   reg [OPTION_OPERAND_WIDTH-1:0] 	  logic_result;
 
    // Multiplier wires
    wire [OPTION_OPERAND_WIDTH-1:0]        mul_result;
@@ -678,39 +678,42 @@ endgenerate
          flag_set = 0;
      endcase // case (opc_alu_secondary_i)
 
-
+   //
    // Logic operations
-   reg [3:0] logi_op_alu;
-   always @*
+   //
+   // Create a look-up-table for AND/OR/XOR
+   reg [3:0] logic_lut;
+   always @(*) begin
      case(opc_alu_i)
        `OR1K_ALU_OPC_AND:
-         logi_op_alu = 4'b1000;
+	 logic_lut = 4'b1000;
        `OR1K_ALU_OPC_OR:
-         logi_op_alu = 4'b1110;
+	 logic_lut = 4'b1110;
        `OR1K_ALU_OPC_XOR:
-         logi_op_alu = 4'b0110;
+	 logic_lut = 4'b0110;
        default:
-         logi_op_alu = 0;
+	 logic_lut = 0;
      endcase
+      if (!op_alu_i)
+	logic_lut = 0;
+      // Threat mfspr/mtspr as 'OR'
+      if (op_mfspr_i | op_mtspr_i)
+	logic_lut = 4'b1110;
+   end
 
-   wire [3:0] logi_op_mxspr;
-   assign logi_op_mxspr = (op_mfspr_i | op_mtspr_i) ? 4'b1110 : 0;
-   wire [3:0] logi_op;
-   assign logi_op = logi_op_alu | logi_op_mxspr;
-
+   // Extract the result, bit-for-bit, from the look-up-table
    integer i;
-   always @*
+   always @(*)
+     for (i = 0; i < OPTION_OPERAND_WIDTH; i=i+1) begin
+        logic_result[i] = logic_lut[{a[i], b[i]}];
+     end
 
-      for (i = 0; i < OPTION_OPERAND_WIDTH; i=i+1) begin
-        logi_result[i] = logi_op[{a[i], b[i]}];
-       end
-
-   assign op_logi = (op_alu_i & (logi_op_alu != 0)) | (logi_op_mxspr != 0);
+   assign op_logic = |logic_lut;
 
    assign op_cmov = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_CMOV;
 
    // Result muxing - result is registered in RF
-   assign alu_result_o = op_logi ? logi_result :
+   assign alu_result_o = op_logic ? logic_result :
 			 op_cmov ? cmov_result :
 			 op_movhi_i ? immediate_i :
 			 op_mul_i ? mul_result[OPTION_OPERAND_WIDTH-1:0] :
