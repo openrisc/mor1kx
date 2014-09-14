@@ -1436,8 +1436,4 @@ module mor1kx_ctrl_espresso
       end
    endgenerate
 
-
-
-
 endmodule // mor1kx_ctrl_espresso
-

@@ -285,4 +285,3 @@ module mor1kx_fetch_espresso
        wait_for_exception_after_ibus_err <= 1;
 
 endmodule // mor1kx_fetch_espresso
-

@@ -855,5 +855,3 @@ module mor1kx_cpu_prontoespresso
 	.rf_wb_i			(decode_rf_wb_o));	 // Templated
 
 endmodule // mor1kx_cpu_prontoespresso
-
-

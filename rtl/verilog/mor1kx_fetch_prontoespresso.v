@@ -547,5 +547,3 @@ module mor1kx_fetch_prontoespresso
    assign spr_bus_dat_ic_o = {OPTION_OPERAND_WIDTH{1'b0}};
 
 endmodule // mor1kx_fetch_prontoespresso
-
-

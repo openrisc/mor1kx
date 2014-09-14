@@ -465,6 +465,3 @@ module mor1kx_fetch_tcm_prontoespresso
    assign long_stall = {padv_r,padv_i}==5'b10000 && execute_waiting_i;
 
 endmodule // mor1kx_fetch_tcm_prontoespresso
-
-
-

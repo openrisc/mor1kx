@@ -51,12 +51,3 @@ module mor1kx_wb_mux_espresso
 			alu_result_i;
 
 endmodule // mor1kx_wb_mux_espresso
-
-
-
-
-
-
-
-
-
