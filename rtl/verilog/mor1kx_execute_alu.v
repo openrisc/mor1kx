@@ -231,10 +231,8 @@ endgenerate
 
          assign mul_result = mul_result2;
 
-         always @(posedge clk `OR_ASYNC_RST)
-           if (rst)
-             mul_valid_shr <= 3'b000;
-           else if (decode_valid_i)
+         always @(posedge clk)
+           if (decode_valid_i)
              mul_valid_shr <= {2'b00, op_mul_i};
            else
              mul_valid_shr <= mul_valid_shr[2] ? mul_valid_shr:
@@ -412,30 +410,24 @@ endgenerate
 
          /* Cycle counter */
          always @(posedge clk `OR_ASYNC_RST)
-           if (rst)
-	     /* verilator lint_off WIDTH */
-             div_count <= 0;
-           else if (decode_valid_i)
-             div_count <= OPTION_OPERAND_WIDTH;
-	    /* verilator lint_on WIDTH */
-           else if (|div_count)
-             div_count <= div_count - 1;
-
-         always @(posedge clk `OR_ASYNC_RST) begin
             if (rst) begin
-               div_n <= 0;
-               div_d <= 0;
-               div_r <= 0;
-               div_neg <= 1'b0;
-               div_done <= 1'b0;
-	       div_by_zero_r <= 1'b0;
+               div_done <= 0;
+               div_count <= 0;
             end else if (decode_valid_i & op_div_i) begin
-	       div_n <= rfa_i;
+               div_done <= 0;
+               div_count <= OPTION_OPERAND_WIDTH;
+            end else if (div_count == 1)
+               div_done <= 1;
+            else if (!div_done)
+               div_count <= div_count - 1;
+
+         always @(posedge clk) begin
+            if (decode_valid_i & op_div_i) begin
+               div_n <= rfa_i;
                div_d <= rfb_i;
                div_r <= 0;
                div_neg <= 1'b0;
-               div_done <= 1'b0;
-	       div_by_zero_r <= !(|rfb_i);
+               div_by_zero_r <= !(|rfb_i);
 
                /*
                 * Convert negative operands in the case of signed division.
@@ -462,8 +454,6 @@ endgenerate
                             div_n[OPTION_OPERAND_WIDTH-1]};
                   div_n <= {div_n[OPTION_OPERAND_WIDTH-2:0], 1'b0};
                end
-               if (div_count == 1)
-                 div_done <= 1'b1;
            end
          end
 
