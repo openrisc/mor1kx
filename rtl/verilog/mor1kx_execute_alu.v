@@ -588,7 +588,9 @@ endgenerate
 
 
       // MUX for outputs from arith and conversion modules
-      assign fpu_result = fpu_op_is_conv ? result_conv : result_arith;   
+      assign fpu_result = fpu_op_is_conv  ? result_conv : 
+                          fpu_op_is_arith ? result_arith : 
+                          {OPTION_OPERAND_WIDTH{1'b0}};   
    
       // FPU 100 VHDL core from OpenCores.org: http://opencores.org/project,fpu100
       // Used only for add,sub,mul,div
@@ -981,7 +983,7 @@ endgenerate
    assign alu_result_o = op_logic ? logic_result :
 			 op_cmov ? cmov_result :
 			 op_movhi_i ? immediate_i :
-          is_op_fpu ? fpu_result :
+       is_op_fpu ? fpu_result :
 			 op_mul_i ? mul_result[OPTION_OPERAND_WIDTH-1:0] :
 			 op_shift_i ? shift_result :
 			 op_div_i ? div_result :
@@ -1012,7 +1014,7 @@ endgenerate
    // Stall logic for multicycle ALU operations
    assign alu_stall = op_div_i & !div_valid |
 		      op_mul_i & !mul_valid |
-            is_op_fpu & !fpu_valid |
+          is_op_fpu & !fpu_valid |
 		      op_shift_i & !shift_valid |
 		      op_ffl1_i & !ffl1_valid;
 
