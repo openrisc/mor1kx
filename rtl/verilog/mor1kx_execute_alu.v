@@ -155,12 +155,8 @@ module mor1kx_execute_alu
    reg                                    flag_set; // comb.
 
    // Logic wires
-   wire 				  op_and;
-   wire 				  op_or;
-   wire 				  op_xor;
-   wire [OPTION_OPERAND_WIDTH-1:0]        and_result;
-   wire [OPTION_OPERAND_WIDTH-1:0]        or_result;
-   wire [OPTION_OPERAND_WIDTH-1:0]        xor_result;
+   wire 				  op_logic;
+   reg [OPTION_OPERAND_WIDTH-1:0] 	  logic_result;
 
    // Multiplier wires
    wire [OPTION_OPERAND_WIDTH-1:0]        mul_result;
@@ -236,7 +232,7 @@ endgenerate
 	       mul_opa <= a;
 	       mul_opb <= b;
 	    end
-	    mul_result1 <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
+	    mul_result1 <= mul_opa * mul_opb;
 	    mul_result2 <= mul_result1;
 	 end
 
@@ -272,7 +268,7 @@ endgenerate
 	       mul_opb <= decode_b;
 	    end
 	    if (padv_execute_i)
-	      mul_result1 <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
+	      mul_result1 <= mul_opa * mul_opb;
 
 	    mul_result2 <= mul_result1;
 	 end
@@ -374,7 +370,7 @@ endgenerate
       end
       else if (FEATURE_MULTIPLIER=="NONE") begin
          // No multiplier
-         assign mul_result = adder_result;
+         assign mul_result = 0;
          assign mul_valid = 1'b1;
 	 assign mul_unsigned_overflow = 0;
       end
@@ -492,7 +488,7 @@ endgenerate
 
       end
       else if (FEATURE_DIVIDER=="NONE") begin
-         assign div_result = adder_result;
+         assign div_result = 0;
          assign div_valid = 1'b1;
 	 assign div_by_zero = 0;
       end
@@ -789,13 +785,13 @@ endgenerate
 	 end
       end
       else begin
-	 assign ffl1_result = adder_result;
+	 assign ffl1_result = 0;
 	 assign ffl1_valid = 1'b1;
       end
    endgenerate
 
    // Xor result is zero if equal
-   assign a_eq_b = !(|xor_result);
+   assign a_eq_b = (a == b);
    // Signed compare
    assign a_lts_b = !(adder_result_sign == adder_signed_overflow);
    // Unsigned compare
@@ -926,7 +922,7 @@ endgenerate
          flag_set = 0;
      endcase // case (opc_alu_secondary_i)
 
-
+   //
    // Comparison logic
    // To update SR[F] either from integer or float point comparision
    // FPU TODO: does forwading logic compatible with delay on fp-comparision???
@@ -949,19 +945,40 @@ endgenerate
 
 
    // Logic operations
-   assign and_result = a & b;
-   assign or_result = a | b;
-   assign xor_result = a ^ b;
+   //
+   // Create a look-up-table for AND/OR/XOR
+   reg [3:0] logic_lut;
+   always @(*) begin
+     case(opc_alu_i)
+       `OR1K_ALU_OPC_AND:
+	 logic_lut = 4'b1000;
+       `OR1K_ALU_OPC_OR:
+	 logic_lut = 4'b1110;
+       `OR1K_ALU_OPC_XOR:
+	 logic_lut = 4'b0110;
+       default:
+	 logic_lut = 0;
+     endcase
+      if (!op_alu_i)
+	logic_lut = 0;
+      // Threat mfspr/mtspr as 'OR'
+      if (op_mfspr_i | op_mtspr_i)
+	logic_lut = 4'b1110;
+   end
 
-   assign op_and = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_AND;
-   assign op_or = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_OR;
-   assign op_xor = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_XOR;
+   // Extract the result, bit-for-bit, from the look-up-table
+   integer i;
+   always @(*)
+     for (i = 0; i < OPTION_OPERAND_WIDTH; i=i+1) begin
+        logic_result[i] = logic_lut[{a[i], b[i]}];
+     end
+
+   assign op_logic = |logic_lut;
+
    assign op_cmov = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_CMOV;
 
    // Result muxing - result is registered in RF
-   assign alu_result_o = op_and ? and_result :
-			 op_or | op_mfspr_i | op_mtspr_i ? or_result :
-			 op_xor ? xor_result :
+   assign alu_result_o = op_logic ? logic_result :
 			 op_cmov ? cmov_result :
 			 op_movhi_i ? immediate_i :
           is_op_fpu ? fpu_result :
