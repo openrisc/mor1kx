@@ -29,7 +29,7 @@ module mor1kx_pic
    input rst;
 
    input [31:0] irq_i;
-   
+
    output [31:0] spr_picmr_o;
    output [31:0] spr_picsr_o;
 
@@ -58,7 +58,7 @@ module mor1kx_pic
    assign irq_unmasked = spr_picmr & irq_i;
 
    generate
-      
+
       genvar 	 irqline;
 
       if (OPTION_PIC_TRIGGER=="EDGE") begin : edge_triggered
