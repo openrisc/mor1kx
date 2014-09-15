@@ -23,6 +23,7 @@ module mor1kx_ticktimer
    output [31:0] spr_ttcr_o,
 
    // SPR Bus interface
+   input         spr_access_i,
    input 	 spr_we_i,
    input [15:0]  spr_addr_i,
    input [31:0]  spr_dat_i,
@@ -41,11 +42,11 @@ module mor1kx_ticktimer
 
    assign spr_ttmr_o = spr_ttmr;
    assign spr_ttcr_o = spr_ttcr;
-   assign spr_bus_ack = 1'b1;
-   assign spr_dat_o = (spr_addr_i==`OR1K_SPR_TTCR_ADDR) ?
-		      spr_ttcr :
-		      (spr_addr_i==`OR1K_SPR_TTMR_ADDR) ?
-		      spr_ttmr : 0;
+   assign spr_bus_ack = spr_access_i;
+   assign spr_dat_o = (spr_access_i && (`SPR_OFFSET(spr_addr_i)==`SPR_OFFSET(`OR1K_SPR_TTCR_ADDR))) ?
+                      spr_ttcr :
+                      (spr_access_i && (`SPR_OFFSET(spr_addr_i)==`SPR_OFFSET(`OR1K_SPR_TTMR_ADDR))) ?
+                      spr_ttmr : 0;
 
    assign ttcr_match = spr_ttcr[27:0] == spr_ttmr[27:0];
 
