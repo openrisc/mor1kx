@@ -79,12 +79,12 @@ module mor1kx_pic
       end // if (OPTION_PIC_TRIGGER=="EDGE")
 
       else if (OPTION_PIC_TRIGGER=="LEVEL") begin : level_triggered
-	 for(irqline=0;irqline<32;irqline=irqline+1)
-	   begin: picsrlevelgenerate
-	      // PIC status register
-	      always @(posedge clk `OR_ASYNC_RST)
-		spr_picsr[irqline] <= irq_unmasked[irqline];
-	   end
+         for(irqline=0;irqline<32;irqline=irqline+1)
+           begin: picsrlevelgenerate
+              // PIC status register
+              always @(*)
+                spr_picsr[irqline] <= irq_unmasked[irqline];
+           end
       end // if (OPTION_PIC_TRIGGER=="LEVEL")
 
       else if (OPTION_PIC_TRIGGER=="LATCHED_LEVEL") begin : latched_level
