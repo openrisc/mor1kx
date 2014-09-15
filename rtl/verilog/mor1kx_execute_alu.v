@@ -532,7 +532,7 @@ endgenerate
       end
    endgenerate
 
-   // Xor result is zero if equal
+   // Equal compare
    assign a_eq_b = (a == b);
    // Signed compare
    assign a_lts_b = !(adder_result_sign == adder_signed_overflow);
