@@ -17,46 +17,41 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_bus_if_wb32
-  (/*AUTOARG*/
-   // Outputs
-   cpu_err_o, cpu_ack_o, cpu_dat_o, wbm_adr_o, wbm_stb_o, wbm_cyc_o,
-   wbm_sel_o, wbm_we_o, wbm_cti_o, wbm_bte_o, wbm_dat_o,
-   // Inputs
-   clk, rst, cpu_adr_i, cpu_dat_i, cpu_req_i, cpu_bsel_i, cpu_we_i,
-   cpu_burst_i, wbm_err_i, wbm_ack_i, wbm_dat_i, wbm_rty_i
-   );
+  #(
+    parameter BUS_IF_TYPE = "CLASSIC",
+    parameter burst_length = 8
+    )
+   (
+    input         clk,
+    input         rst,
 
-   input clk, rst;
+    output        cpu_err_o,
+    output        cpu_ack_o,
+    output [31:0] cpu_dat_o,
+    input [31:0]  cpu_adr_i,
+    input [31:0]  cpu_dat_i,
+    input         cpu_req_i,
+    input [3:0]   cpu_bsel_i,
+    input         cpu_we_i,
+    input         cpu_burst_i,
 
-   output cpu_err_o;
-   output cpu_ack_o;
-   output [31:0] cpu_dat_o;
-   input [31:0]  cpu_adr_i;
-   input [31:0]  cpu_dat_i;
-   input 	 cpu_req_i;
-   input [3:0] 	 cpu_bsel_i;
-   input  	 cpu_we_i;
-   input 	 cpu_burst_i;
+    output [31:0] wbm_adr_o,
+    output        wbm_stb_o,
+    output        wbm_cyc_o,
+    output [3:0]  wbm_sel_o,
+    output        wbm_we_o,
+    output [2:0]  wbm_cti_o,
+    output [1:0]  wbm_bte_o,
+    output [31:0] wbm_dat_o,
+    input         wbm_err_i,
+    input         wbm_ack_i,
+    input [31:0]  wbm_dat_i,
+    input         wbm_rty_i
+    );
 
-   output [31:0] wbm_adr_o;
-   output 	 wbm_stb_o;
-   output 	 wbm_cyc_o;
-   output [3:0]  wbm_sel_o;
-   output 	 wbm_we_o;
-   output [2:0]  wbm_cti_o;
-   output [1:0]  wbm_bte_o;
-   output [31:0] wbm_dat_o;
-   input 	 wbm_err_i;
-   input 	 wbm_ack_i;
-   input [31:0]  wbm_dat_i;
-   input 	 wbm_rty_i;
-
-   parameter BUS_IF_TYPE = "CLASSIC";
-
-   parameter  burst_length = 8;
-   parameter  baddr_with = (burst_length==4) ? 2 :
-			   (burst_length==8) ? 3 :
-			   (burst_length==16)? 4 : 30;
+   localparam  baddr_with = (burst_length==4) ? 2 :
+                            (burst_length==8) ? 3 :
+                            (burst_length==16)? 4 : 30;
 
    initial
      $display("%m: Wishbone bus IF is %s",BUS_IF_TYPE);
