@@ -19,7 +19,7 @@
 module mor1kx_bus_if_wb32
   #(
     parameter BUS_IF_TYPE = "CLASSIC",
-    parameter burst_length = 8
+    parameter BURST_LENGTH = 8
     )
    (
     input         clk,
@@ -49,9 +49,9 @@ module mor1kx_bus_if_wb32
     input         wbm_rty_i
     );
 
-   localparam  baddr_with = (burst_length==4) ? 2 :
-                            (burst_length==8) ? 3 :
-                            (burst_length==16)? 4 : 30;
+   localparam  BADDR_WITH = (BURST_LENGTH==4) ? 2 :
+                            (BURST_LENGTH==8) ? 3 :
+                            (BURST_LENGTH==16)? 4 : 30;
 
    initial
      $display("%m: Wishbone bus IF is %s",BUS_IF_TYPE);
@@ -66,8 +66,8 @@ module mor1kx_bus_if_wb32
 	 reg 			      finish_burst_r;
 	 reg 			      bursting;
 	 reg [31:2] 		      burst_address;
-	 reg [baddr_with-1:0]	      burst_wrap_start;
-	 wire [baddr_with-1:0]	      burst_wrap_finish;
+	 reg [BADDR_WITH-1:0]	      burst_wrap_start;
+	 wire [BADDR_WITH-1:0]	      burst_wrap_finish;
 	 wire 			      address_differs;
 
 	 always @(posedge clk `OR_ASYNC_RST)
@@ -89,18 +89,18 @@ module mor1kx_bus_if_wb32
 	   else if (cpu_req_i & !bursting)
 	     begin
 		burst_address <= cpu_adr_i[31:2];
-		burst_wrap_start <= cpu_adr_i[baddr_with+2-1:2];
+		burst_wrap_start <= cpu_adr_i[BADDR_WITH+2-1:2];
 	     end
 	   else if (wbm_ack_i)
-	     burst_address[baddr_with+2-1:2] <= burst_address[baddr_with+2-1:2]
+	     burst_address[BADDR_WITH+2-1:2] <= burst_address[BADDR_WITH+2-1:2]
 		  + 1;
 
 
 	 assign address_differs = (burst_address!=cpu_adr_i[31:2]);
 	 assign burst_wrap_finish = burst_wrap_start - 1;
 	 assign finish_burst = (bursting & (
-		      (burst_length!=0 &&
-		       burst_address[baddr_with+2-1:2]==(burst_wrap_finish))
+		      (BURST_LENGTH!=0 &&
+		       burst_address[BADDR_WITH+2-1:2]==(burst_wrap_finish))
 					    | address_differs
 					    | !cpu_req_i
 					    )
@@ -121,9 +121,9 @@ module mor1kx_bus_if_wb32
 	 assign wbm_we_o = cpu_we_i;
 	 assign wbm_cti_o = bursting ? (finish_burst ? 3'b111 : 3'b010) :
 			    3'b000;
-	 assign wbm_bte_o = burst_length==4  ? 2'b01 :
-			    burst_length==8  ? 2'b10 :
-			    burst_length==16 ? 2'b11 :
+	 assign wbm_bte_o = BURST_LENGTH==4  ? 2'b01 :
+			    BURST_LENGTH==8  ? 2'b10 :
+			    BURST_LENGTH==16 ? 2'b11 :
 			    2'b00; // Linear burst
 
 	 assign wbm_dat_o = cpu_dat_i;
@@ -143,9 +143,9 @@ module mor1kx_bus_if_wb32
 	 assign wbm_sel_o = cpu_bsel_i;
 	 assign wbm_we_o = cpu_we_i;
 	 assign wbm_cti_o = cpu_burst_i ? 3'b010 : 3'b111;
-	 assign wbm_bte_o = burst_length==4  ? 2'b01 :
-			    burst_length==8  ? 2'b10 :
-			    burst_length==16 ? 2'b11 :
+	 assign wbm_bte_o = BURST_LENGTH==4  ? 2'b01 :
+			    BURST_LENGTH==8  ? 2'b10 :
+			    BURST_LENGTH==16 ? 2'b11 :
 			    2'b00; // Linear burst
 
 	 assign wbm_dat_o = cpu_dat_i;
