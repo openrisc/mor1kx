@@ -33,8 +33,7 @@ module mor1kx_wb_mux_cappuccino
 
     input 			      op_mul_i,
     input 			      op_lsu_load_i,
-    input 			      op_mfspr_i,
-    input 			      lsu_valid_i
+    input 			      op_mfspr_i
     );
 
    reg [OPTION_OPERAND_WIDTH-1:0]     rf_result;

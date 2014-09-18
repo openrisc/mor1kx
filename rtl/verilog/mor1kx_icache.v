@@ -403,6 +403,7 @@ module mor1kx_icache
       .dout			(way_dout[i][OPTION_OPERAND_WIDTH-1:0]),
       // Inputs
       .raddr			(way_raddr[i][WAY_WIDTH-3:0]),
+      .re			(1'b1),
       .waddr			(way_waddr[i][WAY_WIDTH-3:0]),
       .we			(way_we[i]),
       .din			(way_din[i][31:0]));
@@ -413,7 +414,7 @@ module mor1kx_icache
 	       #(
 		 .ADDR_WIDTH(WAY_WIDTH-2),
 		 .DATA_WIDTH(OPTION_OPERAND_WIDTH),
-		 .ENABLE_BYPASS("FALSE")
+		 .ENABLE_BYPASS(0)
 		 )
 	 way_data_ram
 	       (/*AUTOINST*/
@@ -422,6 +423,7 @@ module mor1kx_icache
 		// Inputs
 		.clk			(clk),
 		.raddr			(way_raddr[i][WAY_WIDTH-3:0]), // Templated
+		.re			(1'b1),			 // Templated
 		.waddr			(way_waddr[i][WAY_WIDTH-3:0]), // Templated
 		.we			(way_we[i]),		 // Templated
 		.din			(way_din[i][31:0]));	 // Templated
@@ -455,6 +457,7 @@ module mor1kx_icache
       .dout			(tag_dout[TAGMEM_WIDTH-1:0]),
       // Inputs
       .raddr			(tag_rindex),
+      .re			(1'b1),
       .waddr			(tag_windex),
       .we			(tag_we),
       .din			(tag_din));
@@ -463,7 +466,7 @@ module mor1kx_icache
      #(
        .ADDR_WIDTH(OPTION_ICACHE_SET_WIDTH),
        .DATA_WIDTH(TAGMEM_WIDTH),
-       .ENABLE_BYPASS("FALSE")
+       .ENABLE_BYPASS(0)
      )
    tag_ram
      (/*AUTOINST*/
@@ -472,6 +475,7 @@ module mor1kx_icache
       // Inputs
       .clk				(clk),
       .raddr				(tag_rindex),		 // Templated
+      .re				(1'b1),			 // Templated
       .waddr				(tag_windex),		 // Templated
       .we				(tag_we),		 // Templated
       .din				(tag_din));		 // Templated

@@ -45,35 +45,17 @@ module mor1kx_store_buffer
 				OPTION_OPERAND_WIDTH/8 + 1;
 
    wire [FIFO_DATA_WIDTH-1:0] 		fifo_dout;
-   reg [FIFO_DATA_WIDTH-1:0] 		fifo_dout_r;
    wire [FIFO_DATA_WIDTH-1:0] 		fifo_din;
 
-   wire [DEPTH_WIDTH-1:0] 		fifo_raddr;
-
-   reg [DEPTH_WIDTH-1:0] 		write_pointer;
-   reg [DEPTH_WIDTH-1:0] 		read_pointer;
-   wire [DEPTH_WIDTH-1:0] 		prev_read_pointer;
-
-   reg 					read_r;
+   reg [DEPTH_WIDTH:0]                  write_pointer;
+   reg [DEPTH_WIDTH:0]                  read_pointer;
 
    assign fifo_din = {adr_i, dat_i, bsel_i, pc_i, atomic_i};
-   assign {adr_o, dat_o, bsel_o, pc_o, atomic_o} = read_r ?
-						   fifo_dout : fifo_dout_r;
+   assign {adr_o, dat_o, bsel_o, pc_o, atomic_o} = fifo_dout;
 
-   assign prev_read_pointer = read_pointer - 1;
-
-   assign full_o = write_pointer == prev_read_pointer;
+   assign full_o = (write_pointer[DEPTH_WIDTH] != read_pointer[DEPTH_WIDTH]) &&
+                   (write_pointer[DEPTH_WIDTH-1:0] == read_pointer[DEPTH_WIDTH-1:0]);
    assign empty_o = write_pointer == read_pointer;
-
-   assign fifo_raddr = read_pointer;
-
-   // TODO: add read enable to RAM?
-   always @(posedge clk)
-     read_r <= read_i;
-
-   always @(posedge clk)
-     if (read_r)
-       fifo_dout_r <= fifo_dout;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -91,13 +73,14 @@ module mor1kx_store_buffer
      #(
        .ADDR_WIDTH(DEPTH_WIDTH),
        .DATA_WIDTH(FIFO_DATA_WIDTH),
-       .ENABLE_BYPASS("TRUE")
+       .ENABLE_BYPASS(1)
        )
    fifo_ram
      (
       .clk			(clk),
       .dout			(fifo_dout),
-      .raddr			(fifo_raddr),
+      .raddr			(read_pointer),
+      .re			(read_i),
       .waddr			(write_pointer),
       .we			(write_i),
       .din			(fifo_din)

@@ -148,12 +148,8 @@ module mor1kx_execute_alu
    reg                                    flag_set; // comb.
 
    // Logic wires
-   wire 				  op_and;
-   wire 				  op_or;
-   wire 				  op_xor;
-   wire [OPTION_OPERAND_WIDTH-1:0]        and_result;
-   wire [OPTION_OPERAND_WIDTH-1:0]        or_result;
-   wire [OPTION_OPERAND_WIDTH-1:0]        xor_result;
+   wire 				  op_logic;
+   reg [OPTION_OPERAND_WIDTH-1:0] 	  logic_result;
 
    // Multiplier wires
    wire [OPTION_OPERAND_WIDTH-1:0]        mul_result;
@@ -229,16 +225,14 @@ endgenerate
 	       mul_opa <= a;
 	       mul_opb <= b;
 	    end
-	    mul_result1 <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
+	    mul_result1 <= mul_opa * mul_opb;
 	    mul_result2 <= mul_result1;
 	 end
 
          assign mul_result = mul_result2;
 
-         always @(posedge clk `OR_ASYNC_RST)
-           if (rst)
-             mul_valid_shr <= 3'b000;
-           else if (decode_valid_i)
+         always @(posedge clk)
+           if (decode_valid_i)
              mul_valid_shr <= {2'b00, op_mul_i};
            else
              mul_valid_shr <= mul_valid_shr[2] ? mul_valid_shr:
@@ -265,7 +259,7 @@ endgenerate
 	       mul_opb <= decode_b;
 	    end
 	    if (padv_execute_i)
-	      mul_result1 <= (mul_opa * mul_opb) & {OPTION_OPERAND_WIDTH{1'b1}};
+	      mul_result1 <= mul_opa * mul_opb;
 
 	    mul_result2 <= mul_result1;
 	 end
@@ -367,7 +361,7 @@ endgenerate
       end
       else if (FEATURE_MULTIPLIER=="NONE") begin
          // No multiplier
-         assign mul_result = adder_result;
+         assign mul_result = 0;
          assign mul_valid = 1'b1;
 	 assign mul_unsigned_overflow = 0;
       end
@@ -416,30 +410,24 @@ endgenerate
 
          /* Cycle counter */
          always @(posedge clk `OR_ASYNC_RST)
-           if (rst)
-	     /* verilator lint_off WIDTH */
-             div_count <= 0;
-           else if (decode_valid_i)
-             div_count <= OPTION_OPERAND_WIDTH;
-	    /* verilator lint_on WIDTH */
-           else if (|div_count)
-             div_count <= div_count - 1;
-
-         always @(posedge clk `OR_ASYNC_RST) begin
             if (rst) begin
-               div_n <= 0;
-               div_d <= 0;
-               div_r <= 0;
-               div_neg <= 1'b0;
-               div_done <= 1'b0;
-	       div_by_zero_r <= 1'b0;
+               div_done <= 0;
+               div_count <= 0;
             end else if (decode_valid_i & op_div_i) begin
-	       div_n <= rfa_i;
+               div_done <= 0;
+               div_count <= OPTION_OPERAND_WIDTH;
+            end else if (div_count == 1)
+               div_done <= 1;
+            else if (!div_done)
+               div_count <= div_count - 1;
+
+         always @(posedge clk) begin
+            if (decode_valid_i & op_div_i) begin
+               div_n <= rfa_i;
                div_d <= rfb_i;
                div_r <= 0;
                div_neg <= 1'b0;
-               div_done <= 1'b0;
-	       div_by_zero_r <= !(|rfb_i);
+               div_by_zero_r <= !(|rfb_i);
 
                /*
                 * Convert negative operands in the case of signed division.
@@ -466,8 +454,6 @@ endgenerate
                             div_n[OPTION_OPERAND_WIDTH-1]};
                   div_n <= {div_n[OPTION_OPERAND_WIDTH-2:0], 1'b0};
                end
-               if (div_count == 1)
-                 div_done <= 1'b1;
            end
          end
 
@@ -485,7 +471,7 @@ endgenerate
 
       end
       else if (FEATURE_DIVIDER=="NONE") begin
-         assign div_result = adder_result;
+         assign div_result = 0;
          assign div_valid = 1'b1;
 	 assign div_by_zero = 0;
       end
@@ -541,13 +527,13 @@ endgenerate
 	 end
       end
       else begin
-	 assign ffl1_result = adder_result;
+	 assign ffl1_result = 0;
 	 assign ffl1_valid = 1'b1;
       end
    endgenerate
 
-   // Xor result is zero if equal
-   assign a_eq_b = !(|xor_result);
+   // Equal compare
+   assign a_eq_b = (a == b);
    // Signed compare
    assign a_lts_b = !(adder_result_sign == adder_signed_overflow);
    // Unsigned compare
@@ -555,53 +541,45 @@ endgenerate
 
    generate
       /* verilator lint_off WIDTH */
-      if (OPTION_SHIFTER=="BARREL" &&
-          FEATURE_SRA=="ENABLED" &&
-          FEATURE_ROR=="ENABLED") begin : full_barrel_shifter
+      if (OPTION_SHIFTER=="BARREL") begin : barrel_shifter
          /* verilator lint_on WIDTH */
+
+	 function [OPTION_OPERAND_WIDTH-1:0] reverse;
+	    input [OPTION_OPERAND_WIDTH-1:0] in;
+	    integer 			     i;
+	    begin
+	       for (i = 0; i < OPTION_OPERAND_WIDTH; i=i+1) begin
+		  reverse[(OPTION_OPERAND_WIDTH-1)-i] = in[i];
+	       end
+	    end
+	 endfunction
+
+	 wire op_sll = (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL);
+	 wire op_srl = (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL);
+	 wire op_sra = (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) &&
+		       (FEATURE_SRA!="NONE");
+	 wire op_ror = (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_ROR) &&
+		       (FEATURE_ROR!="NONE");
+
+	 wire [OPTION_OPERAND_WIDTH-1:0] shift_right;
+	 wire [OPTION_OPERAND_WIDTH-1:0] shift_lsw;
+	 wire [OPTION_OPERAND_WIDTH-1:0] shift_msw;
+
+	 //
+	 // Bit-reverse on left shift, perform right shift,
+	 // bit-reverse result on left shift.
+	 //
+	 assign shift_lsw = op_sll ? reverse(a) : a;
+	 assign shift_msw = op_sra ?
+			    {OPTION_OPERAND_WIDTH{a[OPTION_OPERAND_WIDTH-1]}} :
+			    op_ror ? a : {OPTION_OPERAND_WIDTH{1'b0}};
+
+	 assign shift_right = {shift_msw, shift_lsw} >> b[4:0];
+	 assign shift_result = op_sll ? reverse(shift_right) : shift_right;
+
          assign shift_valid = 1;
-         assign shift_result =
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
-                               ({32{a[OPTION_OPERAND_WIDTH-1]}} <<
-                                (/*7'd*/OPTION_OPERAND_WIDTH-{2'b0,b[4:0]})) |
-                               a >> b[4:0] :
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_ROR) ?
-                               (a << (6'd32-{1'b0,b[4:0]})) |
-                               (a >> b[4:0]) :
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?
-                               a << b[4:0] :
-                               //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
-                               a >> b[4:0];
-      end // if (OPTION_SHIFTER=="ENABLED" &&...
-      /* verilator lint_off WIDTH */
-      else if (OPTION_SHIFTER=="BARREL" &&
-               FEATURE_SRA=="ENABLED" &&
-               FEATURE_ROR!="ENABLED") begin : full_barrel_shifter_no_ror
-	 /* verilator lint_on WIDTH */
-         assign shift_valid = 1;
-         assign shift_result =
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRA) ?
-                               ({32{a[OPTION_OPERAND_WIDTH-1]}} <<
-                                (/*7'd*/OPTION_OPERAND_WIDTH-{2'b0,b[4:0]})) |
-                               a >> b[4:0] :
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?
-                               a << b[4:0] :
-                               //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
-                               a >> b[4:0];
-      end // if (OPTION_SHIFTER=="ENABLED" &&...
-      /* verilator lint_off WIDTH */
-      else if (OPTION_SHIFTER=="BARREL" &&
-               FEATURE_SRA!="ENABLED" &&
-               FEATURE_ROR!="ENABLED") begin : full_barrel_shifter_no_ror_sra
-	 /* verilator lint_on WIDTH */
-         assign shift_valid = 1;
-         assign shift_result =
-                               (opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SLL) ?
-                               a << b[4:0] :
-                               //(opc_alu_shr==`OR1K_ALU_OPC_SECONDARY_SHRT_SRL) ?
-                               a >> b[4:0];
-      end
-      else if (OPTION_SHIFTER=="SERIAL") begin : serial_shifter
+
+      end else if (OPTION_SHIFTER=="SERIAL") begin : serial_shifter
          // Serial shifter
          reg [4:0] shift_cnt;
          reg       shift_go;
@@ -690,21 +668,42 @@ endgenerate
          flag_set = 0;
      endcase // case (opc_alu_secondary_i)
 
-
+   //
    // Logic operations
-   assign and_result = a & b;
-   assign or_result = a | b;
-   assign xor_result = a ^ b;
+   //
+   // Create a look-up-table for AND/OR/XOR
+   reg [3:0] logic_lut;
+   always @(*) begin
+     case(opc_alu_i)
+       `OR1K_ALU_OPC_AND:
+	 logic_lut = 4'b1000;
+       `OR1K_ALU_OPC_OR:
+	 logic_lut = 4'b1110;
+       `OR1K_ALU_OPC_XOR:
+	 logic_lut = 4'b0110;
+       default:
+	 logic_lut = 0;
+     endcase
+      if (!op_alu_i)
+	logic_lut = 0;
+      // Threat mfspr/mtspr as 'OR'
+      if (op_mfspr_i | op_mtspr_i)
+	logic_lut = 4'b1110;
+   end
 
-   assign op_and = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_AND;
-   assign op_or = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_OR;
-   assign op_xor = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_XOR;
+   // Extract the result, bit-for-bit, from the look-up-table
+   integer i;
+   always @(*)
+     for (i = 0; i < OPTION_OPERAND_WIDTH; i=i+1) begin
+        logic_result[i] = logic_lut[{a[i], b[i]}];
+     end
+
+   assign op_logic = |logic_lut;
+
    assign op_cmov = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_CMOV;
 
    // Result muxing - result is registered in RF
-   assign alu_result_o = op_and ? and_result :
-			 op_or | op_mfspr_i | op_mtspr_i ? or_result :
-			 op_xor ? xor_result :
+   assign alu_result_o = op_logic ? logic_result :
 			 op_cmov ? cmov_result :
 			 op_movhi_i ? immediate_i :
 			 op_mul_i ? mul_result[OPTION_OPERAND_WIDTH-1:0] :

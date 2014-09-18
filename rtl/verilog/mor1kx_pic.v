@@ -19,7 +19,7 @@ module mor1kx_pic
    // Outputs
    spr_picmr_o, spr_picsr_o, spr_bus_ack, spr_dat_o,
    // Inputs
-   clk, rst, irq_i, spr_we_i, spr_addr_i, spr_dat_i
+   clk, rst, irq_i, spr_access_i, spr_we_i, spr_addr_i, spr_dat_i
    );
 
    parameter OPTION_PIC_TRIGGER="LEVEL";
@@ -29,11 +29,12 @@ module mor1kx_pic
    input rst;
 
    input [31:0] irq_i;
-   
+
    output [31:0] spr_picmr_o;
    output [31:0] spr_picsr_o;
 
    // SPR Bus interface
+   input         spr_access_i;
    input 	 spr_we_i;
    input [15:0]  spr_addr_i;
    input [31:0]  spr_dat_i;
@@ -49,16 +50,16 @@ module mor1kx_pic
    assign spr_picmr_o = spr_picmr;
    assign spr_picsr_o = spr_picsr;
 
-   assign spr_bus_ack = 1'b1;
-   assign spr_dat_o =  (spr_addr_i==`OR1K_SPR_PICSR_ADDR) ?
-		       spr_picsr :
-		       (spr_addr_i==`OR1K_SPR_PICMR_ADDR) ?
-		       spr_picmr : 0;
+   assign spr_bus_ack = spr_access_i;
+   assign spr_dat_o =  (spr_access_i && (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PICSR_ADDR))) ?
+                       spr_picsr :
+                       (spr_access_i && (`SPR_OFFSET(spr_addr_i) ==`SPR_OFFSET(`OR1K_SPR_PICMR_ADDR))) ?
+                       spr_picmr : 0;
 
    assign irq_unmasked = spr_picmr & irq_i;
 
    generate
-      
+
       genvar 	 irqline;
 
       if (OPTION_PIC_TRIGGER=="EDGE") begin : edge_triggered
@@ -79,12 +80,12 @@ module mor1kx_pic
       end // if (OPTION_PIC_TRIGGER=="EDGE")
 
       else if (OPTION_PIC_TRIGGER=="LEVEL") begin : level_triggered
-	 for(irqline=0;irqline<32;irqline=irqline+1)
-	   begin: picsrlevelgenerate
-	      // PIC status register
-	      always @(posedge clk `OR_ASYNC_RST)
-		spr_picsr[irqline] <= irq_unmasked[irqline];
-	   end
+         for(irqline=0;irqline<32;irqline=irqline+1)
+           begin: picsrlevelgenerate
+              // PIC status register
+              always @(*)
+                spr_picsr[irqline] <= irq_unmasked[irqline];
+           end
       end // if (OPTION_PIC_TRIGGER=="LEVEL")
 
       else if (OPTION_PIC_TRIGGER=="LATCHED_LEVEL") begin : latched_level

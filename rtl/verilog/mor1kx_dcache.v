@@ -532,9 +532,9 @@ module mor1kx_dcache
 		 if (!cpu_bsel_i[0])
 		   way_wr_dat[7:0] = cpu_dat_o[7:0];
 
-		 way_we = way_hit;
+	      way_we = way_hit;
 
-		 tag_lru_in = next_lru_history;
+	      tag_lru_in = next_lru_history;
 
 		 tag_we = 1'b1;
 	      end
@@ -605,7 +605,7 @@ module mor1kx_dcache
 	       #(
 		 .ADDR_WIDTH(WAY_WIDTH-2),
 		 .DATA_WIDTH(OPTION_OPERAND_WIDTH),
-		 .ENABLE_BYPASS("TRUE")
+		 .ENABLE_BYPASS(1)
 		 )
 	 way_data_ram
 	       (
@@ -614,6 +614,7 @@ module mor1kx_dcache
 		// Inputs
 		.clk			(clk),
 		.raddr			(way_raddr[i][WAY_WIDTH-3:0]),
+		.re			(1'b1),
 		.waddr			(way_waddr[i][WAY_WIDTH-3:0]),
 		.we			(way_we[i]),
 		.din			(way_din[i][31:0]));
@@ -646,7 +647,7 @@ module mor1kx_dcache
      #(
        .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
        .DATA_WIDTH(TAGMEM_WIDTH),
-       .ENABLE_BYPASS("TRUE")
+       .ENABLE_BYPASS(0)
      )
    tag_ram
      (
@@ -655,6 +656,7 @@ module mor1kx_dcache
       // Inputs
       .clk				(clk),
       .raddr				(tag_rindex),
+      .re				(1'b1),
       .waddr				(tag_windex),
       .we				(tag_we),
       .din				(tag_din));
@@ -665,7 +667,7 @@ if (OPTION_DCACHE_SNOOP != "NONE") begin
      #(
        .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
        .DATA_WIDTH(TAGMEM_WIDTH),
-       .ENABLE_BYPASS("TRUE")
+       .ENABLE_BYPASS(1) // CHECKME: needed?
        )
    snoop_tag_ram
      (
@@ -674,6 +676,7 @@ if (OPTION_DCACHE_SNOOP != "NONE") begin
       // Inputs
       .clk			(clk),
       .raddr			(snoop_index),
+      .re			(1'b1),
       .waddr			(tag_windex),
       .we			(tag_we),
       .din			(tag_din));

@@ -30,6 +30,7 @@ module mor1kx_lsu_cappuccino
     parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
     parameter OPTION_DMMU_SET_WIDTH = 6,
     parameter OPTION_DMMU_WAYS = 1,
+    parameter FEATURE_STORE_BUFFER = "ENABLED",
     parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
     parameter FEATURE_ATOMIC = "ENABLED"
     )
@@ -354,8 +355,13 @@ module mor1kx_lsu_cappuccino
    always @(posedge clk)
      dc_refill_r <= dc_refill;
 
+   wire     store_buffer_ack;
+   assign store_buffer_ack = (FEATURE_STORE_BUFFER!="NONE") ?
+			     store_buffer_write :
+			     write_done;
+
    assign lsu_ack = (ctrl_op_lsu_store_i | state == WRITE) ?
-		    (store_buffer_write & !ctrl_op_lsu_atomic_i |
+		    (store_buffer_ack & !ctrl_op_lsu_atomic_i |
 		     write_done & ctrl_op_lsu_atomic_i) :
 		    (dbus_access ? dbus_ack : dc_ack);
 
@@ -575,6 +581,8 @@ endgenerate
 			       !store_buffer_full & !dc_refill & !dc_refill_r &
 			       !dbus_stall & !dc_snoop_hit;
 
+generate
+if (FEATURE_STORE_BUFFER!="NONE") begin : store_buffer_gen
    assign store_buffer_read = (state == IDLE) & store_buffer_write |
 			      (state == IDLE) & !store_buffer_empty |
 			      (state == WRITE) & (dbus_ack_i | !dbus_req_o) &
@@ -582,8 +590,6 @@ endgenerate
 			      !last_write |
 			      (state == WRITE) & last_write &
 			      store_buffer_write;
-
-   assign store_buffer_wadr = dc_adr_match;
 
    mor1kx_store_buffer
      #(
@@ -612,6 +618,24 @@ endgenerate
       .full_o	(store_buffer_full),
       .empty_o	(store_buffer_empty)
       );
+end else begin
+   assign store_buffer_epcr_o = ctrl_epcr_i;
+   assign store_buffer_radr = store_buffer_wadr;
+   assign store_buffer_dat = lsu_sdat;
+   assign store_buffer_bsel = dbus_bsel;
+   assign store_buffer_empty = 1'b1;
+
+   reg store_buffer_full_r;
+   always @(posedge clk)
+     if (store_buffer_write)
+       store_buffer_full_r <= 1;
+     else if (write_done)
+       store_buffer_full_r <= 0;
+
+   assign store_buffer_full = store_buffer_full_r & !write_done;
+end
+endgenerate
+   assign store_buffer_wadr = dc_adr_match;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)

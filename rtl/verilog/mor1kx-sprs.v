@@ -1,20 +1,23 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
   Description: SPR definitions
-  
+
   Copyright (C) 2012 Authors
- 
+
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
+
 ***************************************************************************** */
+`define SPR_BASE(x)   (x/(2**11))
+`define SPR_OFFSET(x) (x%(2**11))
 
 //
 // Addresses
 //
+`define OR1K_SPR_SYS_BASE       {5'd0}
 `define OR1K_SPR_VR_ADDR        {5'd0,11'd0}
 `define OR1K_SPR_UPR_ADDR       {5'd0,11'd1}
 `define OR1K_SPR_CPUCFGR_ADDR   {5'd0,11'd2}
@@ -40,13 +43,13 @@
 `define OR1K_SPR_COREID_ADDR    {5'd0,11'd128}
 `define OR1K_SPR_NUMCORES_ADDR  {5'd0,11'd129}
 `define OR1K_SPR_GPR0_ADDR      {5'd0,11'd1024}
+
+`define OR1K_SPR_DMMU_BASE      {5'd1}
 `define OR1K_SPR_DMMUCR_ADDR    {5'd1,11'd0}
 `define OR1K_SPR_DMMUPR_ADDR    {5'd1,11'd1}
 `define OR1K_SPR_DTLBEIR_ADDR   {5'd1,11'd2}
-
 `define OR1K_SPR_DATBMR0_ADDR   {5'd1,11'd4}
 `define OR1K_SPR_DATBTR0_ADDR   {5'd1,11'd8}
-
 `define OR1K_SPR_DTLBW0MR0_ADDR {5'd1,11'd512}
 `define OR1K_SPR_DTLBW0TR0_ADDR {5'd1,11'd640}
 `define OR1K_SPR_DTLBW1MR0_ADDR {5'd1,11'd768}
@@ -56,6 +59,7 @@
 `define OR1K_SPR_DTLBW3MR0_ADDR {5'd1,11'd1280}
 `define OR1K_SPR_DTLBW3TR0_ADDR {5'd1,11'd1408}
 
+`define OR1K_SPR_IMMU_BASE      {5'd2}
 `define OR1K_SPR_IMMUCR_ADDR    {5'd2,11'd0}
 `define OR1K_SPR_IMMUPR_ADDR    {5'd2,11'd1}
 `define OR1K_SPR_ITLBEIR_ADDR   {5'd2,11'd2}
@@ -70,18 +74,25 @@
 `define OR1K_SPR_ITLBW3MR0_ADDR {5'd2,11'd1280}
 `define OR1K_SPR_ITLBW3TR0_ADDR {5'd2,11'd1408}
 
+`define OR1K_SPR_DC_BASE        {5'd3}
 `define OR1K_SPR_DCCR_ADDR      {5'd3,11'd0}
 `define OR1K_SPR_DCBPR_ADDR     {5'd3,11'd1}
 `define OR1K_SPR_DCBFR_ADDR     {5'd3,11'd2}
 `define OR1K_SPR_DCBIR_ADDR     {5'd3,11'd3}
 `define OR1K_SPR_DCBWR_ADDR     {5'd3,11'd4}
 `define OR1K_SPR_DCBLR_ADDR     {5'd3,11'd5}
+
+`define OR1K_SPR_IC_BASE        {5'd4}
 `define OR1K_SPR_ICCR_ADDR      {5'd4,11'd0}
 `define OR1K_SPR_ICBPR_ADDR     {5'd4,11'd1}
 `define OR1K_SPR_ICBIR_ADDR     {5'd4,11'd2}
 `define OR1K_SPR_ICBLR_ADDR     {5'd4,11'd3}
+
+`define OR1K_SPR_MAC_BASE       {5'd5}
 `define OR1K_SPR_MACLO_ADDR     {5'd5,11'd1}
 `define OR1K_SPR_MACHI_ADDR     {5'd5,11'd2}
+
+`define OR1K_SPR_DU_BASE        {5'd6}
 `define OR1K_SPR_DVR0_ADDR      {5'd6,11'd0}
 `define OR1K_SPR_DCR0_ADDR      {5'd6,11'd8}
 `define OR1K_SPR_DMR1_ADDR      {5'd6,11'd16}
@@ -89,13 +100,23 @@
 `define OR1K_SPR_DCWR0_ADDR     {5'd6,11'd18}
 `define OR1K_SPR_DSR_ADDR       {5'd6,11'd20}
 `define OR1K_SPR_DRR_ADDR       {5'd6,11'd21}
+
+`define OR1K_SPR_PC_BASE        {5'd7}
 `define OR1K_SPR_PCCR0_ADDR     {5'd7,11'd0}
 `define OR1K_SPR_PCMR0_ADDR     {5'd7,11'd8}
+
+`define OR1K_SPR_PM_BASE        {5'd8}
 `define OR1K_SPR_PMR_ADDR       {5'd8,11'd0}
+
+`define OR1K_SPR_PIC_BASE       {5'd9}
 `define OR1K_SPR_PICMR_ADDR     {5'd9,11'd0}
 `define OR1K_SPR_PICSR_ADDR     {5'd9,11'd2}
+
+`define OR1K_SPR_TT_BASE        {5'd10}
 `define OR1K_SPR_TTMR_ADDR      {5'd10,11'd0}
 `define OR1K_SPR_TTCR_ADDR      {5'd10,11'd1}
+
+`define OR1K_SPR_FPU_BASE       {5'd11}
 
 //
 // Register bit defines

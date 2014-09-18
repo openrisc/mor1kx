@@ -15,161 +15,151 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_cpu_cappuccino
-  (/*AUTOARG*/
-   // Outputs
-   ibus_adr_o, ibus_req_o, ibus_burst_o, dbus_adr_o, dbus_dat_o,
-   dbus_req_o, dbus_bsel_o, dbus_we_o, dbus_burst_o, du_dat_o,
-   du_ack_o, du_stall_o, traceport_exec_valid_o, traceport_exec_pc_o,
-   traceport_exec_insn_o, traceport_exec_wbdata_o,
-   traceport_exec_wbreg_o, traceport_exec_wben_o, spr_bus_addr_o,
-   spr_bus_we_o, spr_bus_stb_o, spr_bus_dat_o, spr_sr_o,
-   // Inputs
-   clk, rst, ibus_err_i, ibus_ack_i, ibus_dat_i, dbus_err_i,
-   dbus_ack_i, dbus_dat_i, irq_i, du_addr_i, du_stb_i, du_dat_i,
-   du_we_i, du_stall_i, spr_bus_dat_mac_i, spr_bus_ack_mac_i,
-   spr_bus_dat_pmu_i, spr_bus_ack_pmu_i, spr_bus_dat_pcu_i,
-   spr_bus_ack_pcu_i, spr_bus_dat_fpu_i, spr_bus_ack_fpu_i,
-   multicore_coreid_i, multicore_numcores_i, snoop_adr_i, snoop_en_i
+  #(
+    parameter OPTION_OPERAND_WIDTH = 32,
+
+    parameter FEATURE_DATACACHE = "NONE",
+    parameter OPTION_DCACHE_BLOCK_WIDTH = 5,
+    parameter OPTION_DCACHE_SET_WIDTH = 9,
+    parameter OPTION_DCACHE_WAYS = 2,
+    parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
+    parameter FEATURE_DMMU = "NONE",
+    parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
+    parameter OPTION_DMMU_SET_WIDTH = 6,
+    parameter OPTION_DMMU_WAYS = 1,
+    parameter FEATURE_INSTRUCTIONCACHE = "NONE",
+    parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
+    parameter OPTION_ICACHE_SET_WIDTH = 9,
+    parameter OPTION_ICACHE_WAYS = 2,
+    parameter OPTION_ICACHE_LIMIT_WIDTH = 32,
+    parameter FEATURE_IMMU = "NONE",
+    parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE",
+    parameter OPTION_IMMU_SET_WIDTH = 6,
+    parameter OPTION_IMMU_WAYS = 1,
+    parameter FEATURE_TIMER = "ENABLED",
+    parameter FEATURE_DEBUGUNIT = "NONE",
+    parameter FEATURE_PERFCOUNTERS = "NONE",
+    parameter FEATURE_MAC = "NONE",
+
+    parameter FEATURE_SYSCALL = "ENABLED",
+    parameter FEATURE_TRAP = "ENABLED",
+    parameter FEATURE_RANGE = "ENABLED",
+
+    parameter FEATURE_PIC = "ENABLED",
+    parameter OPTION_PIC_TRIGGER = "LEVEL",
+    parameter OPTION_PIC_NMI_WIDTH = 0,
+
+    parameter FEATURE_DSX = "NONE",
+    parameter FEATURE_OVERFLOW = "NONE",
+    parameter FEATURE_CARRY_FLAG = "ENABLED",
+
+    parameter FEATURE_FASTCONTEXTS = "NONE",
+    parameter OPTION_RF_NUM_SHADOW_GPR = 0,
+    parameter OPTION_RF_ADDR_WIDTH = 5,
+    parameter OPTION_RF_WORDS = 32,
+
+    parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
+				 `OR1K_RESET_VECTOR,8'd0},
+
+    parameter FEATURE_MULTIPLIER = "THREESTAGE",
+    parameter FEATURE_DIVIDER = "NONE",
+
+    parameter OPTION_SHIFTER = "BARREL",
+
+    parameter FEATURE_ADDC = "NONE",
+    parameter FEATURE_SRA = "ENABLED",
+    parameter FEATURE_ROR = "NONE",
+    parameter FEATURE_EXT = "NONE",
+    parameter FEATURE_CMOV = "NONE",
+    parameter FEATURE_FFL1 = "NONE",
+    parameter FEATURE_MSYNC = "NONE",
+    parameter FEATURE_PSYNC = "NONE",
+    parameter FEATURE_CSYNC = "NONE",
+
+    parameter FEATURE_ATOMIC = "ENABLED",
+
+
+    parameter FEATURE_CUST1 = "NONE",
+    parameter FEATURE_CUST2 = "NONE",
+    parameter FEATURE_CUST3 = "NONE",
+    parameter FEATURE_CUST4 = "NONE",
+    parameter FEATURE_CUST5 = "NONE",
+    parameter FEATURE_CUST6 = "NONE",
+    parameter FEATURE_CUST7 = "NONE",
+    parameter FEATURE_CUST8 = "NONE",
+
+    parameter FEATURE_STORE_BUFFER = "ENABLED",
+    parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
+
+    parameter FEATURE_MULTICORE = "NONE",
+
+    parameter FEATURE_TRACEPORT_EXEC = "NONE"
+    )
+   (
+    input 			      clk,
+    input 			      rst,
+
+    // Instruction bus
+    input 			      ibus_err_i,
+    input 			      ibus_ack_i,
+    input [`OR1K_INSN_WIDTH-1:0]      ibus_dat_i,
+    output [OPTION_OPERAND_WIDTH-1:0] ibus_adr_o,
+    output 			      ibus_req_o,
+    output 			      ibus_burst_o,
+
+    // Data bus
+    input 			      dbus_err_i,
+    input 			      dbus_ack_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
+    output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
+    output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
+    output 			      dbus_req_o,
+    output [3:0] 		      dbus_bsel_o,
+    output 			      dbus_we_o,
+    output 			      dbus_burst_o,
+
+    // Interrupts
+    input [31:0] 		      irq_i,
+
+    // Debug interface
+    input [15:0] 		      du_addr_i,
+    input 			      du_stb_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  du_dat_i,
+    input 			      du_we_i,
+    output [OPTION_OPERAND_WIDTH-1:0] du_dat_o,
+    output 			      du_ack_o,
+    // Stall control from debug interface
+    input 			      du_stall_i,
+    output 			      du_stall_o,
+
+    output reg	                      traceport_exec_valid_o,
+    output reg [31:0]                 traceport_exec_pc_o,
+    output reg [`OR1K_INSN_WIDTH-1:0] traceport_exec_insn_o,
+    output [OPTION_OPERAND_WIDTH-1:0] traceport_exec_wbdata_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0] traceport_exec_wbreg_o,
+    output                            traceport_exec_wben_o,
+
+    // SPR accesses to external units (cache, mmu, etc.)
+    output [15:0] 		      spr_bus_addr_o,
+    output 			      spr_bus_we_o,
+    output 			      spr_bus_stb_o,
+    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_mac_i,
+    input 			      spr_bus_ack_mac_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pmu_i,
+    input 			      spr_bus_ack_pmu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pcu_i,
+    input 			      spr_bus_ack_pcu_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i,
+    input 			      spr_bus_ack_fpu_i,
+    output [15:0] 		      spr_sr_o,
+
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i,
+
+    input [31:0] 		     snoop_adr_i,
+    input 			     snoop_en_i
    );
-
-   input clk, rst;
-
-   parameter OPTION_OPERAND_WIDTH = 32;
-
-   parameter FEATURE_DATACACHE = "NONE";
-   parameter OPTION_DCACHE_BLOCK_WIDTH = 5;
-   parameter OPTION_DCACHE_SET_WIDTH = 9;
-   parameter OPTION_DCACHE_WAYS = 2;
-   parameter OPTION_DCACHE_LIMIT_WIDTH = 32;
-   parameter FEATURE_DMMU = "NONE";
-   parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE";
-   parameter OPTION_DMMU_SET_WIDTH = 6;
-   parameter OPTION_DMMU_WAYS = 1;
-   parameter FEATURE_INSTRUCTIONCACHE = "NONE";
-   parameter OPTION_ICACHE_BLOCK_WIDTH = 5;
-   parameter OPTION_ICACHE_SET_WIDTH = 9;
-   parameter OPTION_ICACHE_WAYS = 2;
-   parameter OPTION_ICACHE_LIMIT_WIDTH = 32;
-   parameter FEATURE_IMMU = "NONE";
-   parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE";
-   parameter OPTION_IMMU_SET_WIDTH = 6;
-   parameter OPTION_IMMU_WAYS = 1;
-   parameter FEATURE_TIMER = "ENABLED";
-   parameter FEATURE_DEBUGUNIT = "NONE";
-   parameter FEATURE_PERFCOUNTERS = "NONE";
-   parameter FEATURE_MAC = "NONE";
-   parameter FEATURE_MULTICORE = "NONE";
-
-   parameter FEATURE_TRACEPORT_EXEC = "NONE";
-
-   parameter FEATURE_SYSCALL = "ENABLED";
-   parameter FEATURE_TRAP = "ENABLED";
-   parameter FEATURE_RANGE = "ENABLED";
-
-   parameter FEATURE_PIC = "ENABLED";
-   parameter OPTION_PIC_TRIGGER = "LEVEL";
-   parameter OPTION_PIC_NMI_WIDTH = 0;
-
-   parameter FEATURE_DSX = "NONE";
-   parameter FEATURE_OVERFLOW = "NONE";
-   parameter FEATURE_CARRY_FLAG = "ENABLED";
-
-   parameter FEATURE_FASTCONTEXTS = "NONE";
-   parameter OPTION_RF_NUM_SHADOW_GPR = 0;
-   parameter OPTION_RF_ADDR_WIDTH = 5;
-   parameter OPTION_RF_WORDS = 32;
-
-   parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
-				`OR1K_RESET_VECTOR,8'd0};
-
-   parameter FEATURE_MULTIPLIER = "THREESTAGE";
-   parameter FEATURE_DIVIDER = "NONE";
-
-   parameter FEATURE_ADDC = "NONE";
-   parameter FEATURE_SRA = "ENABLED";
-   parameter FEATURE_ROR = "NONE";
-   parameter FEATURE_EXT = "NONE";
-   parameter FEATURE_CMOV = "NONE";
-   parameter FEATURE_FFL1 = "NONE";
-   parameter FEATURE_MSYNC = "NONE";
-   parameter FEATURE_PSYNC = "NONE";
-   parameter FEATURE_CSYNC = "NONE";
-
-   parameter FEATURE_ATOMIC = "ENABLED";
-
-
-   parameter FEATURE_CUST1 = "NONE";
-   parameter FEATURE_CUST2 = "NONE";
-   parameter FEATURE_CUST3 = "NONE";
-   parameter FEATURE_CUST4 = "NONE";
-   parameter FEATURE_CUST5 = "NONE";
-   parameter FEATURE_CUST6 = "NONE";
-   parameter FEATURE_CUST7 = "NONE";
-   parameter FEATURE_CUST8 = "NONE";
-
-   parameter OPTION_SHIFTER = "ENABLED";
-   parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8;
-
-   // Instruction bus
-   input ibus_err_i;
-   input ibus_ack_i;
-   input [`OR1K_INSN_WIDTH-1:0] ibus_dat_i;
-   output [OPTION_OPERAND_WIDTH-1:0] ibus_adr_o;
-   output 			     ibus_req_o;
-   output 			     ibus_burst_o;
-
-   // Data bus
-   input 			     dbus_err_i;
-   input 			     dbus_ack_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i;
-   output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o;
-   output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o;
-   output 			     dbus_req_o;
-   output [3:0] 		     dbus_bsel_o;
-   output 			     dbus_we_o;
-   output 			     dbus_burst_o;
-
-   // Interrupts
-   input [31:0] 		     irq_i;
-
-   // Debug interface
-   input [15:0] 		     du_addr_i;
-   input 			     du_stb_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  du_dat_i;
-   input 			     du_we_i;
-   output [OPTION_OPERAND_WIDTH-1:0] du_dat_o;
-   output 			     du_ack_o;
-   // Stall control from debug interface
-   input 			     du_stall_i;
-   output 			     du_stall_o;
-
-   output reg			         traceport_exec_valid_o;
-   output reg [31:0] 			 traceport_exec_pc_o;
-   output reg [`OR1K_INSN_WIDTH-1:0] 	 traceport_exec_insn_o;
-   output [OPTION_OPERAND_WIDTH-1:0] 	 traceport_exec_wbdata_o;
-   output [OPTION_RF_ADDR_WIDTH-1:0] 	 traceport_exec_wbreg_o;
-   output				 traceport_exec_wben_o;
-
-   // SPR accesses to external units (cache, mmu, etc.)
-   output [15:0] 		     spr_bus_addr_o;
-   output 			     spr_bus_we_o;
-   output 			     spr_bus_stb_o;
-   output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_mac_i;
-   input 			     spr_bus_ack_mac_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pmu_i;
-   input 			     spr_bus_ack_pmu_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pcu_i;
-   input 			     spr_bus_ack_pcu_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i;
-   input 			     spr_bus_ack_fpu_i;
-   output [15:0] 		     spr_sr_o;
-
-   input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i;
-   input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i;
-
-   input [31:0] 		     snoop_adr_i;
-   input 			     snoop_en_i;
 
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_fetch_to_decode;
    wire [`OR1K_INSN_WIDTH-1:0] 	     insn_fetch_to_decode;
@@ -916,6 +906,7 @@ module mor1kx_cpu_cappuccino
        .FEATURE_DMMU_HW_TLB_RELOAD(FEATURE_DMMU_HW_TLB_RELOAD),
        .OPTION_DMMU_SET_WIDTH(OPTION_DMMU_SET_WIDTH),
        .OPTION_DMMU_WAYS(OPTION_DMMU_WAYS),
+       .FEATURE_STORE_BUFFER(FEATURE_STORE_BUFFER),
        .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH),
        .FEATURE_ATOMIC(FEATURE_ATOMIC)
        )
@@ -979,7 +970,6 @@ module mor1kx_cpu_cappuccino
     .alu_result_i			(ctrl_alu_result_o),
     .lsu_result_i			(lsu_result_o),
     .mul_result_i			(mul_result_o),
-    .lsu_valid_i			(lsu_valid_o),
     .spr_i				(mfspr_dat_o),
     .op_mul_i				(ctrl_op_mul_o),
     .op_lsu_load_i			(ctrl_op_lsu_load_o),
@@ -1003,8 +993,7 @@ module mor1kx_cpu_cappuccino
       .spr_i				(mfspr_dat_o),		 // Templated
       .op_mul_i				(ctrl_op_mul_o),	 // Templated
       .op_lsu_load_i			(ctrl_op_lsu_load_o),	 // Templated
-      .op_mfspr_i			(ctrl_op_mfspr_o),	 // Templated
-      .lsu_valid_i			(lsu_valid_o));		 // Templated
+      .op_mfspr_i			(ctrl_op_mfspr_o));	 // Templated
 
 
    /* mor1kx_rf_cappuccino AUTO_TEMPLATE (
@@ -1094,7 +1083,7 @@ module mor1kx_cpu_cappuccino
 		  mor1kx_rf_cappuccino.wb_rf_wb_i)
 	   get_gpr = mor1kx_rf_cappuccino.result_i;
 	 else
-	   get_gpr = mor1kx_rf_cappuccino.rfa.ram[gpr_num];
+	   get_gpr = mor1kx_rf_cappuccino.rfa.mem[gpr_num];
       end
    endfunction //
 
@@ -1104,8 +1093,8 @@ module mor1kx_cpu_cappuccino
       input [4:0] gpr_num;
       input [OPTION_OPERAND_WIDTH-1:0] gpr_value;
       begin
-	 mor1kx_rf_cappuccino.rfa.ram[gpr_num] = gpr_value;
-	 mor1kx_rf_cappuccino.rfb.ram[gpr_num] = gpr_value;
+	 mor1kx_rf_cappuccino.rfa.mem[gpr_num] = gpr_value;
+	 mor1kx_rf_cappuccino.rfb.mem[gpr_num] = gpr_value;
       end
    endtask
 // synthesis translate_on
