@@ -141,8 +141,6 @@ module mor1kx_cpu_espresso
     input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i
    );
 
-
-
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_fetch_to_decode;
    wire [`OR1K_INSN_WIDTH-1:0] 	     insn_fetch_to_decode;
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_decode_to_execute;

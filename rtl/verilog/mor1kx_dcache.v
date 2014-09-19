@@ -647,7 +647,7 @@ module mor1kx_dcache
      #(
        .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
        .DATA_WIDTH(TAGMEM_WIDTH),
-       .ENABLE_BYPASS(0)
+       .ENABLE_BYPASS(1)
      )
    tag_ram
      (
@@ -667,7 +667,7 @@ if (OPTION_DCACHE_SNOOP != "NONE") begin
      #(
        .ADDR_WIDTH(OPTION_DCACHE_SET_WIDTH),
        .DATA_WIDTH(TAGMEM_WIDTH),
-       .ENABLE_BYPASS(1) // CHECKME: needed?
+       .ENABLE_BYPASS(1)
        )
    snoop_tag_ram
      (

@@ -873,11 +873,14 @@ module mor1kx_ctrl_cappuccino
          `SPR_OFFSET(`OR1K_SPR_COREID_ADDR):
            // If the multicore feature is activated this address returns the
            // core identifier, 0 otherwise
-           spr_sys_group_read = (FEATURE_MULTICORE != "NONE") ? multicore_coreid_i : 0;
+           spr_sys_group_read = (FEATURE_MULTICORE!="NONE") ?
+                                multicore_coreid_i : 0;
          `SPR_OFFSET(`OR1K_SPR_NUMCORES_ADDR):
            // If the multicore feature is activated this address returns the
            // core identifier, 0 otherwise
-           spr_sys_group_read = (FEATURE_MULTICORE != "NONE") ? multicore_numcores_i : 0;
+           spr_sys_group_read = (FEATURE_MULTICORE!="NONE") ?
+                                multicore_numcores_i : 0;
+
          default:
             // GPR read
             if (spr_addr[10:9] == 2'h2)
@@ -889,9 +892,9 @@ module mor1kx_ctrl_cappuccino
    assign spr_internal_read_dat[`OR1K_SPR_SYS_BASE] = spr_sys_group_read;
    /* System group ack generation */
 
-   assign spr_access_ack[`OR1K_SPR_SYS_BASE] = (spr_addr[10:9] == 2'h2) ?
-                                               spr_gpr_ack_i :
-                                               spr_access[`OR1K_SPR_SYS_BASE];
+   assign spr_access_ack[`OR1K_SPR_SYS_BASE] = spr_access[`OR1K_SPR_SYS_BASE] &
+                                               ((spr_addr[10:9] == 2'h2) ?
+                                                 spr_gpr_ack_i : 1);
 
    //
    // Generate data to the register file for mfspr operations
@@ -1066,10 +1069,10 @@ module mor1kx_ctrl_cappuccino
        endcase
     end
 
-    assign spr_ack = (|spr_access_ack) | !spr_access_valid;
+    // Is the SPR in the design?
+    assign spr_access_valid = |spr_access;
 
-   /* Is the SPR in the design? */
-   assign spr_access_valid = |spr_access;
+    assign spr_ack = (|spr_access_ack) | !spr_access_valid;
 
    /* Is a SPR bus access needed, or is the requested SPR in this file? */
    assign spr_bus_access = /* Any of the units we don't have in this file */
@@ -1088,8 +1091,6 @@ module mor1kx_ctrl_cappuccino
    generate
       if (FEATURE_DEBUGUNIT!="NONE") begin : du
 
-         wire [3:0]                     spr_group;
-
 	 reg [OPTION_OPERAND_WIDTH-1:0] du_read_dat;
 
 	 reg 				du_ack;
@@ -1097,10 +1098,6 @@ module mor1kx_ctrl_cappuccino
 	 reg [1:0] 			branch_step;
 
 	 assign du_access = du_stb_i;
-
-         // Generate a SPR group signal - generate invalid if the group is not
-         // present in the design
-         assign spr_group = (spr_access_valid) ? spr_addr[14:11] : 4'd12;
 
 	 // Generate ack back to the debug interface bus
 	 always @(posedge clk `OR_ASYNC_RST)
@@ -1116,7 +1113,7 @@ module mor1kx_ctrl_cappuccino
 
 	 /* Data back to the debug bus */
 	 always @(posedge clk)
-	   du_read_dat <= spr_internal_read_dat[spr_group];
+	   du_read_dat <= mfspr_dat_o;
 
 	 assign du_dat_o = du_read_dat;
 
@@ -1301,109 +1298,104 @@ module mor1kx_ctrl_cappuccino
 	end
    endgenerate
 
-   /* Controls to generate ACKs from units that are external to this module */
-   generate
-      if (FEATURE_DMMU!="NONE") begin : dmmu_ctrl
-         assign spr_access_ack[`OR1K_SPR_DMMU_BASE] = spr_bus_ack_dmmu_i;
-         assign spr_internal_read_dat[`OR1K_SPR_DMMU_BASE] =
-                  spr_bus_dat_dmmu_i &
-                  {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_DMMU_BASE]}};
-      end
-      else begin
-         assign spr_access_ack[`OR1K_SPR_DMMU_BASE] = 0;
-         assign spr_internal_read_dat[`OR1K_SPR_DMMU_BASE] = 0;
-      end
-   endgenerate
+// Controls to generate ACKs from units that are external to this module
+generate
+if (FEATURE_DMMU!="NONE") begin : dmmu_ctrl
+   assign spr_access_ack[`OR1K_SPR_DMMU_BASE] = spr_bus_ack_dmmu_i &
+                                                spr_access[`OR1K_SPR_DMMU_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_DMMU_BASE] =
+     spr_bus_dat_dmmu_i &
+     {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_DMMU_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_DMMU_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_DMMU_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_IMMU!="NONE") begin : immu_ctrl
-         assign spr_access_ack[`OR1K_SPR_IMMU_BASE] = spr_bus_ack_immu_i;
-         assign spr_internal_read_dat[`OR1K_SPR_IMMU_BASE] =
-                  spr_bus_dat_immu_i &
-                  {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_IMMU_BASE]}};
-      end
-      else begin
-         assign spr_access_ack[`OR1K_SPR_IMMU_BASE] = 0;
-         assign spr_internal_read_dat[`OR1K_SPR_IMMU_BASE] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_IMMU!="NONE") begin : immu_ctrl
+   assign spr_access_ack[`OR1K_SPR_IMMU_BASE] = spr_bus_ack_immu_i &
+                                                spr_access[`OR1K_SPR_IMMU_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_IMMU_BASE] =
+     spr_bus_dat_immu_i &
+     {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_IMMU_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_IMMU_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_IMMU_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_DATACACHE!="NONE") begin : datacache_ctrl
-         assign spr_access_ack[`OR1K_SPR_DC_BASE] = spr_bus_ack_dc_i;
-         assign spr_internal_read_dat[`OR1K_SPR_DC_BASE] =
-                  spr_bus_dat_dc_i &
-                  {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_DC_BASE]}};
-      end
-      else begin
-         assign spr_access_ack[`OR1K_SPR_DC_BASE] = 0;
-         assign spr_internal_read_dat[`OR1K_SPR_DC_BASE] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_DATACACHE!="NONE") begin : datacache_ctrl
+   assign spr_access_ack[`OR1K_SPR_DC_BASE] = spr_bus_ack_dc_i &
+                                              spr_access[`OR1K_SPR_DC_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_DC_BASE] =
+     spr_bus_dat_dc_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_DC_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_DC_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_DC_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : instructioncache_ctrl
-         assign spr_access_ack[`OR1K_SPR_IC_BASE] = spr_bus_ack_ic_i;
-         assign spr_internal_read_dat[`OR1K_SPR_IC_BASE] =
-                  spr_bus_dat_ic_i &
-                  {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_IC_BASE]}};
-      end
-      else begin
-         assign spr_access_ack[`OR1K_SPR_IC_BASE] = 0;
-         assign spr_internal_read_dat[`OR1K_SPR_IC_BASE] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : instructioncache_ctrl
+   assign spr_access_ack[`OR1K_SPR_IC_BASE] = spr_bus_ack_ic_i &
+                                              spr_access[`OR1K_SPR_IC_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_IC_BASE] =
+     spr_bus_dat_ic_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_IC_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_IC_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_IC_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_MAC!="NONE") begin : mac_ctrl
-         assign spr_access_ack[`OR1K_SPR_MAC_BASE] = spr_bus_ack_mac_i;
-         assign spr_internal_read_dat[`OR1K_SPR_MAC_BASE] =
-                  spr_bus_dat_mac_i &
-                  {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_MAC_BASE]}};
-      end
-      else begin
-         assign spr_access_ack[`OR1K_SPR_MAC_BASE] = 0;
-         assign spr_internal_read_dat[`OR1K_SPR_MAC_BASE] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_MAC!="NONE") begin : mac_ctrl
+   assign spr_access_ack[`OR1K_SPR_MAC_BASE] = spr_bus_ack_mac_i &
+                                               spr_access[`OR1K_SPR_MAC_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_MAC_BASE] =
+      spr_bus_dat_mac_i &
+      {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_MAC_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_MAC_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_MAC_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_PERFCOUNTERS!="NONE") begin : perfcounters_ctrl
-         assign spr_access_ack[`OR1K_SPR_PC_BASE] = spr_bus_ack_pcu_i;
-         assign spr_internal_read_dat[`OR1K_SPR_PC_BASE] =
-                  spr_bus_dat_pcu_i &
-                  {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_PC_BASE]}};
-      end
-      else begin
-         assign spr_access_ack[`OR1K_SPR_PC_BASE] = 0;
-         assign spr_internal_read_dat[`OR1K_SPR_PC_BASE] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_PERFCOUNTERS!="NONE") begin : perfcounters_ctrl
+   assign spr_access_ack[`OR1K_SPR_PC_BASE] = spr_bus_ack_pcu_i &
+                                              spr_access[`OR1K_SPR_PC_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_PC_BASE] =
+     spr_bus_dat_pcu_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_PC_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_PC_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_PC_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_PMU!="NONE") begin : pmu_ctrl
-         assign spr_access_ack[`OR1K_SPR_PM_BASE] = spr_bus_ack_pmu_i;
-         assign spr_internal_read_dat[`OR1K_SPR_PM_BASE] =
-                  spr_bus_dat_pmu_i &
-                  {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_PM_BASE]}};
-      end
-      else begin
-         assign spr_access_ack[`OR1K_SPR_PM_BASE] = 0;
-         assign spr_internal_read_dat[`OR1K_SPR_PM_BASE] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_PMU!="NONE") begin : pmu_ctrl
+   assign spr_access_ack[`OR1K_SPR_PM_BASE] = spr_bus_ack_pmu_i &
+                                              spr_access[`OR1K_SPR_PM_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_PM_BASE] =
+     spr_bus_dat_pmu_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_PM_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_PM_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_PM_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_FPU!="NONE") begin : fpu_ctrl
-         assign spr_access_ack[`OR1K_SPR_FPU_BASE] = spr_bus_ack_fpu_i;
-         assign spr_internal_read_dat[`OR1K_SPR_FPU_BASE] =
-                  spr_bus_dat_fpu_i &
-                  {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_FPU_BASE]}};
-      end
-      else begin
-         assign spr_access_ack[`OR1K_SPR_FPU_BASE] = 0;
-         assign spr_internal_read_dat[`OR1K_SPR_FPU_BASE] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_FPU!="NONE") begin : fpu_ctrl
+   assign spr_access_ack[`OR1K_SPR_FPU_BASE] = spr_bus_ack_fpu_i;
+   assign spr_internal_read_dat[`OR1K_SPR_FPU_BASE] =
+     spr_bus_dat_fpu_i &
+     {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_FPU_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_FPU_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_FPU_BASE] = 0;
+end
+endgenerate
 
 endmodule // mor1kx_ctrl_cappuccino

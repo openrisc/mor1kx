@@ -97,7 +97,7 @@ module mor1kx_cpu
     parameter FEATURE_STORE_BUFFER	= "ENABLED",
     parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
 
-    parameter FEATURE_MULTICORE          = "NONE",
+    parameter FEATURE_MULTICORE = "NONE",
 
     parameter FEATURE_TRACEPORT_EXEC = "NONE"
     )

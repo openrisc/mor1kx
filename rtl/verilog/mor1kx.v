@@ -236,7 +236,7 @@ module mor1kx
 
 	 mor1kx_bus_if_wb32
 	   #(.BUS_IF_TYPE(IBUS_WB_TYPE),
-	     .burst_length((FEATURE_INSTRUCTIONCACHE != "NONE") ?
+	     .BURST_LENGTH((FEATURE_INSTRUCTIONCACHE != "NONE") ?
 			   ((OPTION_ICACHE_BLOCK_WIDTH == 4) ? 4 :
 			    ((OPTION_ICACHE_BLOCK_WIDTH == 5) ? 8 : 1))
 			   : 1 ))
@@ -295,7 +295,7 @@ module mor1kx
 
 	 mor1kx_bus_if_wb32
 	   #(.BUS_IF_TYPE(DBUS_WB_TYPE),
-	     .burst_length((FEATURE_DATACACHE != "NONE") ?
+	     .BURST_LENGTH((FEATURE_DATACACHE != "NONE") ?
 			   ((OPTION_DCACHE_BLOCK_WIDTH == 4) ? 4 :
 			    ((OPTION_DCACHE_BLOCK_WIDTH == 5) ? 8 : 1))
 			   : 1 ))

@@ -78,7 +78,8 @@ module mor1kx_ctrl_prontoespresso
    parameter FEATURE_PMU                = "NONE";
    parameter FEATURE_MAC                = "NONE";
    parameter FEATURE_FPU                = "NONE";
-   parameter FEATURE_MULTICORE          = 0;
+
+   parameter FEATURE_MULTICORE          = "NONE";
 
    parameter FEATURE_PIC                = "ENABLED";
    parameter OPTION_PIC_TRIGGER         = "LEVEL";

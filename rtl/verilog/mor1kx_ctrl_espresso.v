@@ -77,7 +77,8 @@ module mor1kx_ctrl_espresso
    parameter FEATURE_PMU                = "NONE";
    parameter FEATURE_MAC                = "NONE";
    parameter FEATURE_FPU                = "NONE";
-   parameter FEATURE_MULTICORE          = 0;
+
+   parameter FEATURE_MULTICORE          = "NONE";
 
    parameter FEATURE_PIC                = "ENABLED";
    parameter OPTION_PIC_TRIGGER         = "LEVEL";
@@ -930,9 +931,11 @@ module mor1kx_ctrl_espresso
 	 spr_sys_group_read = spr_isr[7];
 
        `OR1K_SPR_COREID_ADDR:
-	 // If the multicore feature is activated this address returns the
-	 // core identifier, 0 otherwise
-	 spr_sys_group_read = (FEATURE_MULTICORE != "NONE") ? multicore_coreid_i : 0;
+         // If the multicore feature is activated this address returns the
+         // core identifier, 0 otherwise
+         spr_sys_group_read = (FEATURE_MULTICORE != "NONE") ?
+                              multicore_coreid_i : 0;
+
        default: begin
           /* GPR read */
           if (spr_addr >= `OR1K_SPR_GPR0_ADDR &&
