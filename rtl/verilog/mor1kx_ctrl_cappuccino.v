@@ -892,9 +892,9 @@ module mor1kx_ctrl_cappuccino
    assign spr_internal_read_dat[`OR1K_SPR_SYS_BASE] = spr_sys_group_read;
    /* System group ack generation */
 
-   assign spr_access_ack[`OR1K_SPR_SYS_BASE] = (spr_addr[10:9] == 2'h2) ?
-                                               spr_gpr_ack_i :
-                                               spr_access[`OR1K_SPR_SYS_BASE];
+   assign spr_access_ack[`OR1K_SPR_SYS_BASE] = spr_access[`OR1K_SPR_SYS_BASE] &
+                                               ((spr_addr[10:9] == 2'h2) ?
+                                                 spr_gpr_ack_i : 1);
 
    //
    // Generate data to the register file for mfspr operations
@@ -1069,10 +1069,10 @@ module mor1kx_ctrl_cappuccino
        endcase
     end
 
-    assign spr_ack = (|spr_access_ack) | !spr_access_valid;
+    // Is the SPR in the design?
+    assign spr_access_valid = |spr_access;
 
-   /* Is the SPR in the design? */
-   assign spr_access_valid = |spr_access;
+    assign spr_ack = (|spr_access_ack) | !spr_access_valid;
 
    /* Is a SPR bus access needed, or is the requested SPR in this file? */
    assign spr_bus_access = /* Any of the units we don't have in this file */
@@ -1091,8 +1091,6 @@ module mor1kx_ctrl_cappuccino
    generate
       if (FEATURE_DEBUGUNIT!="NONE") begin : du
 
-         wire [3:0]                     spr_group;
-
 	 reg [OPTION_OPERAND_WIDTH-1:0] du_read_dat;
 
 	 reg 				du_ack;
@@ -1100,10 +1098,6 @@ module mor1kx_ctrl_cappuccino
 	 reg [1:0] 			branch_step;
 
 	 assign du_access = du_stb_i;
-
-         // Generate a SPR group signal - generate invalid if the group is not
-         // present in the design
-         assign spr_group = (spr_access_valid) ? spr_addr[14:11] : 4'd12;
 
 	 // Generate ack back to the debug interface bus
 	 always @(posedge clk `OR_ASYNC_RST)
@@ -1119,7 +1113,7 @@ module mor1kx_ctrl_cappuccino
 
 	 /* Data back to the debug bus */
 	 always @(posedge clk)
-	   du_read_dat <= spr_internal_read_dat[spr_group];
+	   du_read_dat <= mfspr_dat_o;
 
 	 assign du_dat_o = du_read_dat;
 
