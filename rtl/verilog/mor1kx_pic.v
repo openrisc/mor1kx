@@ -19,7 +19,7 @@ module mor1kx_pic
    // Outputs
    spr_picmr_o, spr_picsr_o, spr_bus_ack, spr_dat_o,
    // Inputs
-   clk, rst, irq_i, spr_we_i, spr_addr_i, spr_dat_i
+   clk, rst, irq_i, spr_access_i, spr_we_i, spr_addr_i, spr_dat_i
    );
 
    parameter OPTION_PIC_TRIGGER="LEVEL";
@@ -29,36 +29,46 @@ module mor1kx_pic
    input rst;
 
    input [31:0] irq_i;
-   
+
    output [31:0] spr_picmr_o;
    output [31:0] spr_picsr_o;
 
    // SPR Bus interface
-   input 	 spr_we_i;
+   input         spr_access_i;
+   input         spr_we_i;
    input [15:0]  spr_addr_i;
    input [31:0]  spr_dat_i;
-   output 	 spr_bus_ack;
+   output        spr_bus_ack;
    output [31:0] spr_dat_o;
 
    // Registers
-   reg [31:0] 	 spr_picmr;
-   reg [31:0] 	 spr_picsr;
+   reg [31:0]    spr_picmr;
+   reg [31:0]    spr_picsr;
 
-   wire [31:0] 	 irq_unmasked;
+   wire spr_picmr_access;
+   wire spr_picsr_access;
+
+   wire [31:0]   irq_unmasked;
 
    assign spr_picmr_o = spr_picmr;
    assign spr_picsr_o = spr_picsr;
 
-   assign spr_bus_ack = 1'b1;
-   assign spr_dat_o =  (spr_addr_i==`OR1K_SPR_PICSR_ADDR) ?
-		       spr_picsr :
-		       (spr_addr_i==`OR1K_SPR_PICMR_ADDR) ?
-		       spr_picmr : 0;
+   assign spr_picmr_access =
+     spr_access_i &
+     (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PICMR_ADDR));
+   assign spr_picsr_access =
+     spr_access_i &
+     (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PICSR_ADDR));
+
+   assign spr_bus_ack = spr_access_i;
+   assign spr_dat_o =  (spr_access_i & spr_picsr_access) ? spr_picsr :
+                       (spr_access_i & spr_picmr_access) ? spr_picmr :
+                       0;
 
    assign irq_unmasked = spr_picmr & irq_i;
 
    generate
-      
+
       genvar 	 irqline;
 
       if (OPTION_PIC_TRIGGER=="EDGE") begin : edge_triggered
@@ -69,7 +79,7 @@ module mor1kx_pic
 		if (rst)
 		  spr_picsr[irqline] <= 0;
 	      // Clear
-		else if (spr_we_i & spr_addr_i==`OR1K_SPR_PICSR_ADDR)
+		else if (spr_we_i & spr_picsr_access)
 		  spr_picsr[irqline] <= spr_dat_i[irqline] ? 0 :
 					       spr_picsr[irqline];
 	      // Set
@@ -79,12 +89,12 @@ module mor1kx_pic
       end // if (OPTION_PIC_TRIGGER=="EDGE")
 
       else if (OPTION_PIC_TRIGGER=="LEVEL") begin : level_triggered
-	 for(irqline=0;irqline<32;irqline=irqline+1)
-	   begin: picsrlevelgenerate
-	      // PIC status register
-	      always @(posedge clk `OR_ASYNC_RST)
-		spr_picsr[irqline] <= irq_unmasked[irqline];
-	   end
+         for(irqline=0;irqline<32;irqline=irqline+1)
+           begin: picsrlevelgenerate
+              // PIC status register
+              always @(*)
+                spr_picsr[irqline] <= irq_unmasked[irqline];
+           end
       end // if (OPTION_PIC_TRIGGER=="LEVEL")
 
       else if (OPTION_PIC_TRIGGER=="LATCHED_LEVEL") begin : latched_level
@@ -94,7 +104,7 @@ module mor1kx_pic
 	      always @(posedge clk `OR_ASYNC_RST)
 		if (rst)
 		  spr_picsr[irqline] <= 0;
-		else if (spr_we_i & spr_addr_i==`OR1K_SPR_PICSR_ADDR)
+		else if (spr_we_i && spr_picsr_access)
 		  spr_picsr[irqline] <= irq_unmasked[irqline] |
 					       spr_dat_i[irqline];
 		else
@@ -117,7 +127,7 @@ module mor1kx_pic
      if (rst)
        spr_picmr <= {{(32-OPTION_PIC_NMI_WIDTH){1'b0}},
 		     {OPTION_PIC_NMI_WIDTH{1'b1}}};
-     else if (spr_we_i & spr_addr_i==`OR1K_SPR_PICMR_ADDR)
+     else if (spr_we_i && spr_picmr_access)
        spr_picmr <= {spr_dat_i[31:OPTION_PIC_NMI_WIDTH],
 		     {OPTION_PIC_NMI_WIDTH{1'b1}}};
 

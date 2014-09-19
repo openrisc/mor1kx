@@ -23,29 +23,39 @@ module mor1kx_ticktimer
    output [31:0] spr_ttcr_o,
 
    // SPR Bus interface
-   input 	 spr_we_i,
+   input         spr_access_i,
+   input         spr_we_i,
    input [15:0]  spr_addr_i,
    input [31:0]  spr_dat_i,
-   output 	 spr_bus_ack,
+   output        spr_bus_ack,
    output [31:0] spr_dat_o
    );
 
    // Registers
-   reg [31:0] 	 spr_ttmr;
-   reg [31:0] 	 spr_ttcr;
+   reg [31:0]    spr_ttmr;
+   reg [31:0]    spr_ttcr;
+
+   wire spr_ttmr_access;
+   wire spr_ttcr_access;
 
    // ttcr control wires
-   wire 	 ttcr_clear;
-   wire 	 ttcr_run;
-   wire 	 ttcr_match;
+   wire          ttcr_clear;
+   wire          ttcr_run;
+   wire          ttcr_match;
 
    assign spr_ttmr_o = spr_ttmr;
    assign spr_ttcr_o = spr_ttcr;
-   assign spr_bus_ack = 1'b1;
-   assign spr_dat_o = (spr_addr_i==`OR1K_SPR_TTCR_ADDR) ?
-		      spr_ttcr :
-		      (spr_addr_i==`OR1K_SPR_TTMR_ADDR) ?
-		      spr_ttmr : 0;
+
+   assign spr_ttmr_access =
+     spr_access_i &
+     (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_TTMR_ADDR));
+   assign spr_ttcr_access =
+     spr_access_i &
+     (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_TTCR_ADDR));
+
+   assign spr_bus_ack = spr_access_i;
+   assign spr_dat_o = (spr_access_i & spr_ttcr_access) ? spr_ttcr :
+                      (spr_access_i & spr_ttmr_access) ? spr_ttmr : 0;
 
    assign ttcr_match = spr_ttcr[27:0] == spr_ttmr[27:0];
 
@@ -53,7 +63,7 @@ module mor1kx_ticktimer
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_ttmr <= 0;
-     else if (spr_we_i && spr_addr_i==`OR1K_SPR_TTMR_ADDR)
+     else if (spr_we_i & spr_ttmr_access)
        spr_ttmr <= spr_dat_i[31:0];
      else if (ttcr_match & spr_ttmr[29])
        spr_ttmr[28] <= 1; // Generate interrupt
@@ -70,7 +80,7 @@ module mor1kx_ticktimer
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_ttcr <= 0;
-     else if (spr_we_i && spr_addr_i==`OR1K_SPR_TTCR_ADDR)
+     else if (spr_we_i & spr_ttcr_access)
        spr_ttcr <= spr_dat_i[31:0];
      else if (ttcr_clear)
        spr_ttcr <= 0;

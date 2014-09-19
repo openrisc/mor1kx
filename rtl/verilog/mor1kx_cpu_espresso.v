@@ -1,15 +1,15 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
   Description: Espresso pipeline CPU module
-  
+
   Copyright (C) 2012 Authors
- 
+
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
+
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
@@ -76,7 +76,9 @@ module mor1kx_cpu_espresso
     parameter FEATURE_CUST7		= "NONE",
     parameter FEATURE_CUST8		= "NONE",
 
-    parameter OPTION_SHIFTER		= "BARREL"
+    parameter OPTION_SHIFTER		= "BARREL",
+
+    parameter FEATURE_MULTICORE         = "NONE"
     )
    (
     input 			      clk,
@@ -132,14 +134,16 @@ module mor1kx_cpu_espresso
     input 			      spr_bus_ack_pcu_i,
     input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i,
     input 			      spr_bus_ack_fpu_i,
-    output [15:0] 		      spr_sr_o
+    output [15:0] 		      spr_sr_o,
+
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i
    );
 
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_fetch_to_decode;
    wire [`OR1K_INSN_WIDTH-1:0] 	     insn_fetch_to_decode;
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_decode_to_execute;
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_execute_to_ctrl;
-   
+
    /*AUTOWIRE*/
    // Beginning of automatic wires (for undeclared instantiated-module outputs)
    wire [OPTION_OPERAND_WIDTH-1:0] adder_result_o;// From mor1kx_execute_alu of mor1kx_execute_alu.v
@@ -417,7 +421,7 @@ module mor1kx_cpu_espresso
        .FEATURE_CUST8(FEATURE_CUST8),
        .OPTION_SHIFTER(OPTION_SHIFTER)
        )
-     mor1kx_execute_alu 
+     mor1kx_execute_alu
      (/*AUTOINST*/
       // Outputs
       .flag_set_o			(flag_set_o),
@@ -466,7 +470,7 @@ module mor1kx_cpu_espresso
       .flag_i				(flag_o),		 // Templated
       .carry_i				(carry_o));		 // Templated
 
-   
+
    /* mor1kx_lsu_espresso AUTO_TEMPLATE (
     .padv_fetch_i			(padv_fetch_o),
     .lsu_adr_i				(adder_result_o),
@@ -515,12 +519,12 @@ module mor1kx_cpu_espresso
       .dbus_ack_i			(dbus_ack_i),
       .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
 
-   
+
    /* mor1kx_wb_mux_espresso AUTO_TEMPLATE (
     .alu_result_i			(alu_result_o),
     .lsu_result_i			(lsu_result_o),
     .spr_i				(mfspr_dat_o),
-    .op_jal_i				(decode_op_jal_o),    
+    .op_jal_i				(decode_op_jal_o),
     .op_lsu_load_i			(decode_op_lsu_load_o),
     .ppc_i 			        (spr_ppc_o),
     .op_mfspr_i			        (decode_op_mfspr_o),
@@ -545,8 +549,7 @@ module mor1kx_cpu_espresso
       .op_jal_i				(decode_op_jal_o),	 // Templated
       .op_lsu_load_i			(decode_op_lsu_load_o),	 // Templated
       .op_mfspr_i			(decode_op_mfspr_o));	 // Templated
-   
-   
+
    /* mor1kx_rf_espresso AUTO_TEMPLATE (
     .rf_we_i    			(rf_we_o),
     .rf_re_i    			(fetch_advancing_o),
@@ -576,7 +579,7 @@ module mor1kx_cpu_espresso
       .rf_re_i				(fetch_advancing_o),	 // Templated
       .result_i				(rf_result_o));		 // Templated
 
-   	 
+
    /* Debug signals required for the debug monitor */
    function [OPTION_OPERAND_WIDTH-1:0] get_gpr;
       // verilator public
@@ -590,7 +593,7 @@ module mor1kx_cpu_espresso
 	   get_gpr = mor1kx_rf_espresso.rfa.mem[gpr_num];
       end
    endfunction
-   
+
 `ifndef SYNTHESIS
 // synthesis translate_off
    task set_gpr;
@@ -605,19 +608,19 @@ module mor1kx_cpu_espresso
 // synthesis translate_on
 `endif
 
-   /* mor1kx_ctrl_espresso AUTO_TEMPLATE (   
+   /* mor1kx_ctrl_espresso AUTO_TEMPLATE (
     .ctrl_alu_result_i		(alu_result_o),
     .ctrl_rfb_i			(rfb_o),
     .ctrl_flag_set_i		(flag_set_o),
     .ctrl_flag_clear_i		(flag_clear_o),
     .pc_ctrl_i			(),
-    .pc_fetch_i 		(pc_fetch_o),    
+    .pc_fetch_i 		(pc_fetch_o),
     .ctrl_opc_insn_i		(decode_opc_insn_o),
     .ctrl_branch_target_i	(ctrl_branch_target_o),
     .op_lsu_load_i		(decode_op_lsu_load_o),
     .op_lsu_store_i		(decode_op_lsu_store_o),
-    .alu_valid_i		(alu_valid_o),	 
-    .lsu_valid_i		(lsu_valid_o),	 
+    .alu_valid_i		(alu_valid_o),
+    .lsu_valid_i		(lsu_valid_o),
     .op_jr_i			(decode_op_jr_o),
     .op_jbr_i			(decode_op_jbr_o),
     .except_ibus_err_i		(decode_except_ibus_err_o),
@@ -665,6 +668,7 @@ module mor1kx_cpu_espresso
        .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
        .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
        .FEATURE_MAC(FEATURE_MAC),
+       .FEATURE_MULTICORE(FEATURE_MULTICORE),
        .FEATURE_SYSCALL(FEATURE_SYSCALL),
        .FEATURE_TRAP(FEATURE_TRAP),
        .FEATURE_RANGE(FEATURE_RANGE)
@@ -748,7 +752,7 @@ module mor1kx_cpu_espresso
 	.spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
 	.spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
 	.spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
+	.multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
 	.rf_wb_i			(decode_rf_wb_o));	 // Templated
 
 endmodule // mor1kx_cpu_espresso
-

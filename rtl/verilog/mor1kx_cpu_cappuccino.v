@@ -91,7 +91,9 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_CUST8 = "NONE",
 
     parameter FEATURE_STORE_BUFFER = "ENABLED",
-    parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8
+    parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
+
+    parameter FEATURE_MULTICORE = "NONE"
     )
    (
     input 			      clk,
@@ -143,7 +145,10 @@ module mor1kx_cpu_cappuccino
     input 			      spr_bus_ack_pcu_i,
     input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i,
     input 			      spr_bus_ack_fpu_i,
-    output [15:0] 		      spr_sr_o
+    output [15:0] 		      spr_sr_o,
+
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i
     );
 
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_fetch_to_decode;
@@ -237,7 +242,7 @@ module mor1kx_cpu_cappuccino
    wire			decode_op_lsu_load_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_lsu_store_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mfspr_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire  		decode_op_movhi_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_movhi_o;	// From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_FPUOP_WIDTH-1:0] decode_op_fpu_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mtspr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mul_o;	// From mor1kx_decode of mor1kx_decode.v
@@ -1321,6 +1326,7 @@ module mor1kx_cpu_cappuccino
        .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
        .FEATURE_MAC(FEATURE_MAC),
        .FEATURE_FPU(FEATURE_FPU), // pipeline cappuccino: ctrl instance
+       .FEATURE_MULTICORE(FEATURE_MULTICORE),
        .FEATURE_SYSCALL(FEATURE_SYSCALL),
        .FEATURE_TRAP(FEATURE_TRAP),
        .FEATURE_RANGE(FEATURE_RANGE),
@@ -1427,6 +1433,8 @@ module mor1kx_cpu_cappuccino
       .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
       .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
       .spr_gpr_dat_i			(spr_gpr_dat_o),	 // Templated
-      .spr_gpr_ack_i			(spr_gpr_ack_o));	 // Templated
+      .spr_gpr_ack_i			(spr_gpr_ack_o),	 // Templated
+      .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
+      .multicore_numcores_i		(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
 
 endmodule // mor1kx_cpu_cappuccino

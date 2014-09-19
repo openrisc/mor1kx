@@ -96,7 +96,9 @@ module mor1kx_cpu
     parameter FEATURE_CUST8		= "NONE",
 
     parameter FEATURE_STORE_BUFFER	= "ENABLED",
-    parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8
+    parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
+
+    parameter FEATURE_MULTICORE = "NONE"
     )
    (
     input 			      clk,
@@ -152,10 +154,15 @@ module mor1kx_cpu
     input 			      spr_bus_ack_pcu_i,
     input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i,
     input 			      spr_bus_ack_fpu_i,
-    output [15:0] 		      spr_sr_o
+    output [15:0] 		      spr_sr_o,
+
+    // The multicore core identifier
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i,
+    // The number of cores
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i
     );
 
-   wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_execute_insn/* verilator public */;   
+   wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_execute_insn/* verilator public */;
    wire 			     monitor_execute_advance/* verilator public */;
    wire 			     monitor_flag_set/* verilator public */;
    wire 			     monitor_flag_clear/* verilator public */;
@@ -201,6 +208,7 @@ module mor1kx_cpu
 	     .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
 	     .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
 	     .FEATURE_MAC(FEATURE_MAC),
+	     .FEATURE_MULTICORE(FEATURE_MULTICORE),
 	     .FEATURE_SYSCALL(FEATURE_SYSCALL),
 	     .FEATURE_TRAP(FEATURE_TRAP),
 	     .FEATURE_RANGE(FEATURE_RANGE),
@@ -281,7 +289,9 @@ module mor1kx_cpu
 	    .spr_bus_dat_pcu_i		(spr_bus_dat_pcu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
+	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
+	    .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .multicore_numcores_i	(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
 
 	 // synthesis translate_off
 `ifndef SYNTHESIS
@@ -336,6 +346,7 @@ module mor1kx_cpu
 	     .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
 	     .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
 	     .FEATURE_MAC(FEATURE_MAC),
+	     .FEATURE_MULTICORE(FEATURE_MULTICORE),
 	     .FEATURE_SYSCALL(FEATURE_SYSCALL),
 	     .FEATURE_TRAP(FEATURE_TRAP),
 	     .FEATURE_RANGE(FEATURE_RANGE),
@@ -416,7 +427,8 @@ module mor1kx_cpu
 	    .spr_bus_dat_pcu_i		(spr_bus_dat_pcu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
+	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
+	    .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]));
 
 	 // synthesis translate_off
 `ifndef SYNTHESIS
@@ -426,7 +438,7 @@ module mor1kx_cpu
 	 assign monitor_clk = clk;
 	 assign monitor_execute_insn = espresso.mor1kx_cpu.mor1kx_fetch_espresso.decode_insn_o;
 	 assign monitor_execute_advance = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.execute_done;
- 	 assign monitor_flag_set = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.ctrl_flag_set_i;
+	 assign monitor_flag_set = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.ctrl_flag_set_i;
 	 assign monitor_flag_clear = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.ctrl_flag_clear_i;
 	 assign monitor_flag_sr = espresso.mor1kx_cpu.mor1kx_ctrl_espresso.flag;
 	 assign monitor_spr_sr = {16'd0,espresso.mor1kx_cpu.mor1kx_ctrl_espresso.spr_sr[15:`OR1K_SPR_SR_F+1],
@@ -464,6 +476,7 @@ module mor1kx_cpu
 	     .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
 	     .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
 	     .FEATURE_MAC(FEATURE_MAC),
+	     .FEATURE_MULTICORE(FEATURE_MULTICORE),
 	     .FEATURE_SYSCALL(FEATURE_SYSCALL),
 	     .FEATURE_TRAP(FEATURE_TRAP),
 	     .FEATURE_RANGE(FEATURE_RANGE),
@@ -545,7 +558,8 @@ module mor1kx_cpu
 	    .spr_bus_dat_pcu_i		(spr_bus_dat_pcu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i));
+	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
+	    .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]));
 
 	 // synthesis translate_off
 `ifndef SYNTHESIS
@@ -555,7 +569,7 @@ module mor1kx_cpu
 	 assign monitor_clk = clk;
 	 assign monitor_execute_insn = prontoespresso.mor1kx_cpu.insn_fetch_to_decode;
 	 assign monitor_execute_advance = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.execute_done;
- 	 assign monitor_flag_set = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.ctrl_flag_set_i;
+	 assign monitor_flag_set = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.ctrl_flag_set_i;
 	 assign monitor_flag_clear = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.ctrl_flag_clear_i;
 	 assign monitor_flag_sr = prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.flag;
 	 assign monitor_spr_sr = {16'd0,prontoespresso.mor1kx_cpu.mor1kx_ctrl_prontoespresso.spr_sr[15:`OR1K_SPR_SR_F+1],

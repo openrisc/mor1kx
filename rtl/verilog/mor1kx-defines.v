@@ -93,7 +93,7 @@
 `define OR1K_OPCODE_CSYNC   {2'b00, 4'h8}
  */
 `define OR1K_OPCODE_SYSTRAPSYNC {2'b00, 4'h8}
-`define OR1K_OPCODE_RFE     {2'b00, 4'h9} 
+`define OR1K_OPCODE_RFE     {2'b00, 4'h9}
 
 `define OR1K_OPCODE_JR      {2'b01, 4'h1}
 `define OR1K_OPCODE_JALR    {2'b01, 4'h2}

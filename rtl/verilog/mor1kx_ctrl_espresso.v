@@ -1,28 +1,28 @@
 /* ****************************************************************************
-  This Source Code Form is subject to the terms of the 
-  Open Hardware Description License, v. 1.0. If a copy 
-  of the OHDL was not distributed with this file, You 
+  This Source Code Form is subject to the terms of the
+  Open Hardware Description License, v. 1.0. If a copy
+  of the OHDL was not distributed with this file, You
   can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
-  Description: mor1kx espresso pipeline control unit              
-                                                  
-  inputs from execute stage                       
-                                                  
-  generate pipeline controls                      
-                                                  
-  manage SPRs                                     
-                                                  
-  issue addresses for exceptions to fetch stage  
-  control branches going to fetch stage   
-                                                  
-  contains tick timer                             
-                                                  
-  contains PIC logic                             
-   
+  Description: mor1kx espresso pipeline control unit
+
+  inputs from execute stage
+
+  generate pipeline controls
+
+  manage SPRs
+
+  issue addresses for exceptions to fetch stage
+  control branches going to fetch stage
+
+  contains tick timer
+
+  contains PIC logic
+
   Copyright (C) 2012 Authors
- 
+
   Author(s): Julius Baxter <juliusbaxter@gmail.com>
- 
+
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
@@ -50,7 +50,7 @@ module mor1kx_ctrl_espresso
    spr_bus_dat_immu_i, spr_bus_ack_immu_i, spr_bus_dat_mac_i,
    spr_bus_ack_mac_i, spr_bus_dat_pmu_i, spr_bus_ack_pmu_i,
    spr_bus_dat_pcu_i, spr_bus_ack_pcu_i, spr_bus_dat_fpu_i,
-   spr_bus_ack_fpu_i, rf_wb_i
+   spr_bus_ack_fpu_i, multicore_coreid_i, rf_wb_i
    );
 
    parameter OPTION_OPERAND_WIDTH       = 32;
@@ -76,7 +76,9 @@ module mor1kx_ctrl_espresso
    parameter FEATURE_PERFCOUNTERS       = "NONE";
    parameter FEATURE_PMU                = "NONE";
    parameter FEATURE_MAC                = "NONE";
-   parameter FEATURE_FPU                = "NONE";   
+   parameter FEATURE_FPU                = "NONE";
+
+   parameter FEATURE_MULTICORE          = "NONE";
 
    parameter FEATURE_PIC                = "ENABLED";
    parameter OPTION_PIC_TRIGGER         = "LEVEL";
@@ -93,46 +95,46 @@ module mor1kx_ctrl_espresso
 
    // ALU result - either jump target, SPR address
    input [OPTION_OPERAND_WIDTH-1:0] ctrl_alu_result_i;
-   
+
    // Operand B from RF might be jump address, might be value for SPR
    input [OPTION_OPERAND_WIDTH-1:0] ctrl_rfb_i;
-   
+
    input                            ctrl_flag_set_i, ctrl_flag_clear_i;
    output                           flag_o;
- 			    
+
    output [OPTION_OPERAND_WIDTH-1:0] spr_npc_o;
    output [OPTION_OPERAND_WIDTH-1:0] spr_ppc_o;
 
    input [`OR1K_OPCODE_WIDTH-1:0]   ctrl_opc_insn_i;
-   
+
    // PC of execute stage (NPC)
    input [OPTION_OPERAND_WIDTH-1:0] pc_fetch_i;
    input                            fetch_advancing_i;
-   
-   
+
+
    // Exception inputs, registered on output of execute stage
-   input                            except_ibus_err_i, 
-                                    except_illegal_i, 
-                                    except_syscall_i, except_dbus_i, 
+   input                            except_ibus_err_i,
+                                    except_illegal_i,
+                                    except_syscall_i, except_dbus_i,
                                     except_trap_i, except_align_i;
-   
+
    // Inputs from two units that can stall proceedings
    input                            next_fetch_done_i;
-   
+
    input                            alu_valid_i, lsu_valid_i;
-   
+
    input                            op_lsu_load_i, op_lsu_store_i;
    input                            op_jr_i, op_jbr_i;
 
    // External IRQ lines in
    input [31:0]                     irq_i;
-   
+
    // SPR data out
    output [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o;
-   
+
    // WE to RF for l.mfspr
    output                            ctrl_mfspr_we_o;
-   
+
    // Flag out to branch control, combinatorial
    reg                               flag;
 
@@ -142,15 +144,15 @@ module mor1kx_ctrl_espresso
    input 			     carry_clear_i;
    input 			     overflow_set_i;
    input 			     overflow_clear_i;
-   
+
    // Branch indicator from control unit (l.rfe/exception)
    wire                              ctrl_branch_exception;
    // PC out to fetch stage for l.rfe, exceptions
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc;
-   
+
    // Clear instructions from decode and fetch stage
    output                            pipeline_flush_o;
-   
+
    output                            padv_fetch_o;
    output                            padv_decode_o;
    output                            padv_execute_o;
@@ -161,10 +163,10 @@ module mor1kx_ctrl_espresso
    // This indicates to other parts of the CPU that we've handled an excption
    // so can be used to clear exception indication registers
    output                            exception_taken_o;
-   
+
    output                            execute_waiting_o;
    output                            stepping_o;
-   
+
    // Debug bus
    input [15:0]                      du_addr_i;
    input                             du_stb_i;
@@ -177,75 +179,78 @@ module mor1kx_ctrl_espresso
    output                            du_stall_o;
    output [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;
    output                            du_restart_o;
-   
+
    // SPR accesses to external units (cache, mmu, etc.)
    output [15:0]                     spr_bus_addr_o;
    output                            spr_bus_we_o;
    output                            spr_bus_stb_o;
    output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dc_i;
-   input                             spr_bus_ack_dc_i;   
+   input                             spr_bus_ack_dc_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_ic_i;
-   input                             spr_bus_ack_ic_i;   
+   input                             spr_bus_ack_ic_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_dmmu_i;
-   input                             spr_bus_ack_dmmu_i;   
+   input                             spr_bus_ack_dmmu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_immu_i;
-   input                             spr_bus_ack_immu_i;   
+   input                             spr_bus_ack_immu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_mac_i;
-   input                             spr_bus_ack_mac_i;   
+   input                             spr_bus_ack_mac_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pmu_i;
-   input                             spr_bus_ack_pmu_i;   
+   input                             spr_bus_ack_pmu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_pcu_i;
-   input                             spr_bus_ack_pcu_i;   
+   input                             spr_bus_ack_pcu_i;
    input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_fpu_i;
-   input                             spr_bus_ack_fpu_i;   
+   input                             spr_bus_ack_fpu_i;
    output [15:0]             spr_sr_o;
-   
+
+   // The multicore core identifier
+   input [OPTION_OPERAND_WIDTH-1:0] multicore_coreid_i;
+
    // Internal signals
    reg [SPR_SR_WIDTH-1:0]            spr_sr;
    reg [SPR_SR_WIDTH-1:0]            spr_esr;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_epcr;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_eear;
-   
+
    // Programmable Interrupt Control SPRs
    wire [31:0] 			     spr_picmr;
    wire [31:0] 			     spr_picsr;
-   
+
    // Tick Timer SPRs
-   wire [31:0]                        spr_ttmr;
-   wire [31:0]                        spr_ttcr;
+   wire [31:0]                       spr_ttmr;
+   wire [31:0]                       spr_ttcr;
 
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_npc;
    reg                               execute_delay_slot;
    reg                               delay_slot_rf_we_done;
-   
+
    output [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_target_o;
 
    reg                               execute_go;
    wire                              execute_done;
 
    reg                               execute_waiting_r;
-   
+
    reg                               decode_execute_halt;
-   
+
    reg                               exception_taken;
-   
+
    reg [OPTION_OPERAND_WIDTH-1:0]    last_branch_insn_pc;
    reg [OPTION_OPERAND_WIDTH-1:0]    last_branch_target_pc;
 
    reg                               take_exception;
    reg                               exception_r;
-   
+
    reg [OPTION_OPERAND_WIDTH-1:0]    exception_pc_addr;
-   
+
    reg                               waiting_for_fetch;
    reg                               branched_and_waiting_for_fetch;
-   
+
    reg                               doing_rfe_r;
    wire                              doing_rfe;
    wire                              deassert_doing_rfe;
-   
+
    wire                              exception, exception_pending;
 
    wire                              execute_stage_exceptions;
@@ -260,9 +265,9 @@ module mor1kx_ctrl_espresso
    wire                              except_pic_nonsrmasked;
 
    wire 			     except_range;
-   
+
    wire [15:0]                       spr_addr;
-   
+
    wire                              op_mtspr;
    wire                              op_mfspr;
    wire                              op_rfe;
@@ -272,7 +277,7 @@ module mor1kx_ctrl_espresso
    wire                              execute_waiting;
 
    wire                              execute_valid;
-   
+
    wire                              deassert_decode_execute_halt;
 
    wire                              ctrl_branch_occur;
@@ -284,13 +289,13 @@ module mor1kx_ctrl_espresso
    wire                              fetch_advance;
    wire                              rfete;
    wire 			     stall_on_trap;
-   
+
    /* Debug SPRs */
    reg [31:0]                        spr_dmr1;
    reg [31:0]                        spr_dmr2;
    reg [31:0]                        spr_dsr;
    reg [31:0]                        spr_drr;
-   
+
    /* DU internal control signals */
    wire                              du_access;
    wire                              cpu_stall;
@@ -301,7 +306,7 @@ module mor1kx_ctrl_espresso
    wire                              du_npc_write;
    reg                               du_npc_written;
    reg [OPTION_OPERAND_WIDTH-1:0]    du_spr_npc;
-   
+
    /* Wires for SPR management */
    wire                              spr_group_present;
    wire [3:0]                        spr_group;
@@ -329,32 +334,32 @@ module mor1kx_ctrl_espresso
    wire [31:0] 			     spr_pccfgr;
    wire [31:0] 			     spr_fpcsr;
    wire [31:0] 			     spr_isr [0:7];
-   
+
    assign b = ctrl_rfb_i;
 
-   assign ctrl_branch_exception = (exception_r | (op_rfe | doing_rfe)) & 
+   assign ctrl_branch_exception = (exception_r | (op_rfe | doing_rfe)) &
                                   !exception_taken;
-   assign exception_pending = (except_ibus_err_i | except_ibus_align | 
+   assign exception_pending = (except_ibus_err_i | except_ibus_align |
                                except_illegal_i | except_syscall_i |
-                               except_dbus_i | except_align_i | 
+                               except_dbus_i | except_align_i |
                                except_ticktimer | except_range |
                                except_pic | except_trap_i );
-      
+
    assign exception = exception_pending;
-   
-   assign fetch_take_exception_branch_o =  (take_exception | op_rfe) & 
+
+   assign fetch_take_exception_branch_o =  (take_exception | op_rfe) &
                                            !stepping;
-   
+
    assign execute_stage_exceptions = except_dbus_i | except_align_i |
 				     except_range;
    assign decode_stage_exceptions = except_trap_i | except_illegal_i;
 
    assign exception_re = exception & !exception_r & !exception_taken;
-   
+
    assign deassert_decode_execute_halt = ctrl_branch_occur &
                                          decode_execute_halt;
-   
-   assign ctrl_branch_except_pc = (op_rfe | doing_rfe) & !rfete ? spr_epcr : 
+
+   assign ctrl_branch_except_pc = (op_rfe | doing_rfe) & !rfete ? spr_epcr :
                                   exception_pc_addr;
 
    // Exceptions take precedence
@@ -365,7 +370,7 @@ module mor1kx_ctrl_espresso
                                 // is l.bf/bnf and flag is right
                                 (ctrl_opc_insn_i[2]==flag))) |
                               (op_jr_i & !(except_ibus_align));
-   
+
    assign ctrl_branch_occur_o = // Usual branch signaling
                                 ((ctrl_branch_occur | ctrl_branch_exception) &
                                 fetch_advance) |
@@ -374,8 +379,8 @@ module mor1kx_ctrl_espresso
                                 // there was fetch stalls between the branch
                                 // and the delay slot insn
                                 (execute_delay_slot);
-      
-   assign ctrl_branch_target_o = ctrl_branch_exception ? 
+
+   assign ctrl_branch_target_o = ctrl_branch_exception ?
                                  ctrl_branch_except_pc :
                                  // jump or branch?
                                  op_jbr_i ? ctrl_alu_result_i :
@@ -383,8 +388,8 @@ module mor1kx_ctrl_espresso
 
    // Do writeback when we register our output to the next stage, or if
    // we're doing mfspr
-   assign rf_we_o = (execute_done & !delay_slot_rf_we_done) & 
-                    ((rf_wb_i & !op_mfspr 
+   assign rf_we_o = (execute_done & !delay_slot_rf_we_done) &
+                    ((rf_wb_i & !op_mfspr
                       & !((op_lsu_load_i | op_lsu_store_i) &
                           except_dbus_i | except_align_i)) |
                      (op_mfspr));
@@ -392,14 +397,14 @@ module mor1kx_ctrl_espresso
    assign except_range = (FEATURE_RANGE!="NONE") ? spr_sr[`OR1K_SPR_SR_OVE] &&
 			 (spr_sr[`OR1K_SPR_SR_OV] | overflow_set_i & 
 			  execute_done)  & !doing_rfe : 0;
-   
+
    // Check for unaligned jump address from register
    assign except_ibus_align = op_jr_i & (|ctrl_rfb_i[1:0]);
 
    // Return from exception to exception (if pending tick or PIC ints)
    assign rfete = (spr_esr[`OR1K_SPR_SR_IEE] & except_pic_nonsrmasked) |
                   (spr_esr[`OR1K_SPR_SR_TEE] & except_ticktimer_nonsrmasked);
-   
+
    always @(posedge clk)
      if (rst)
        exception_pc_addr <= OPTION_RESET_PC;
@@ -412,7 +417,7 @@ module mor1kx_ctrl_espresso
               except_syscall_i,
               except_trap_i,
               except_dbus_i,
-	      except_range,
+              except_range,
               except_pic_nonsrmasked,
               except_ticktimer_nonsrmasked
               }
@@ -438,7 +443,7 @@ module mor1kx_ctrl_espresso
          default:
            exception_pc_addr <= {19'd0,`OR1K_TT_VECTOR,8'd0};
        endcase // casex (...
-   
+
    assign op_mtspr = ctrl_opc_insn_i==`OR1K_OPCODE_MTSPR;
    assign op_mfspr = ctrl_opc_insn_i==`OR1K_OPCODE_MFSPR;
    assign op_rfe = ctrl_opc_insn_i==`OR1K_OPCODE_RFE;
@@ -452,26 +457,26 @@ module mor1kx_ctrl_espresso
      else if (fetch_take_exception_branch_o)
        waiting_for_except_fetch <= 1;
 
-   assign fetch_advance = (next_fetch_done_i | except_ibus_err_i) & 
+   assign fetch_advance = (next_fetch_done_i | except_ibus_err_i) &
                           !execute_waiting & !cpu_stall &
-                          (!stepping | 
+                          (!stepping |
                            (stepping & pstep[0] & !next_fetch_done_i));
 
-   assign padv_fetch_o = fetch_advance & !exception_pending & !doing_rfe_r & 
+   assign padv_fetch_o = fetch_advance & !exception_pending & !doing_rfe_r &
                          !cpu_stall;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        take_exception <= 0;
      else
-       take_exception <= (exception_pending | exception_r | doing_rfe_r) & 
+       take_exception <= (exception_pending | exception_r | doing_rfe_r) &
                          (fetch_advance |
                           // Cause exception to always be 'taken' if stepping
                           (stepping & execute_done)
                           ) &
                          // Would like this as only a single pulse
                          !take_exception;
-   
+
    reg                               padv_decode_r;
    // Some bits of the pipeline (execute_alu for instance) require a falling
    // edge of the decode signal to start work on multi-cycle ops.
@@ -480,14 +485,14 @@ module mor1kx_ctrl_espresso
        padv_decode_r <= 0;
      else
        padv_decode_r <= padv_fetch_o;
-   
+
    assign padv_decode_o = padv_decode_r;
-   
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        execute_go <= 0;
      else
-       execute_go <= padv_fetch_o | execute_waiting | 
+       execute_go <= padv_fetch_o | execute_waiting |
                      (stepping & next_fetch_done_i);
 
    assign execute_done = execute_go & !execute_waiting;
@@ -498,8 +503,8 @@ module mor1kx_ctrl_espresso
 
    assign execute_waiting = !execute_valid & !waiting_for_fetch;
    assign execute_waiting_o = execute_waiting;
-   
-   
+
+
    assign padv_execute_o = execute_done;
 
    assign spr_addr = du_access ? du_addr_i : ctrl_alu_result_i[15:0];
@@ -510,7 +515,7 @@ module mor1kx_ctrl_espresso
                              (exception_re) |
                              cpu_stall;
 
-   // Flag 
+   // Flag
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        flag <= 0;
@@ -545,7 +550,7 @@ module mor1kx_ctrl_espresso
        exception_r <= 0;
      else if (exception & !exception_r)
        exception_r <= 1;
-   
+
    // Signal to indicate that the incoming exception or l.rfe has been taken
    // and we're waiting for it to propagate through the pipeline.
    always @(posedge clk `OR_ASYNC_RST)
@@ -557,7 +562,7 @@ module mor1kx_ctrl_espresso
        exception_taken <= 1;
 
    assign exception_taken_o = exception_taken;
-   
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        last_branch_insn_pc <= 0;
@@ -590,15 +595,15 @@ module mor1kx_ctrl_espresso
        branched_and_waiting_for_fetch <= 1;
      else if (branched_and_waiting_for_fetch)
        branched_and_waiting_for_fetch <= !next_fetch_done_i;
-   
-   
 
-   assign doing_rfe = ((execute_done & op_rfe) | doing_rfe_r) & 
+
+
+   assign doing_rfe = ((execute_done & op_rfe) | doing_rfe_r) &
                       !deassert_doing_rfe;
 
    // Basically, the fetch stage should always take the rfe immediately
    assign deassert_doing_rfe =  doing_rfe_r;
-      
+
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        doing_rfe_r <= 0;
@@ -606,7 +611,7 @@ module mor1kx_ctrl_espresso
        doing_rfe_r <= 0;
      else if (execute_done)
        doing_rfe_r <= op_rfe;
-   
+
    assign spr_sr_o = spr_sr;
 
    // Supervision register
@@ -615,11 +620,11 @@ module mor1kx_ctrl_espresso
        spr_sr <= SPR_SR_RESET_VALUE;
      else if (fetch_take_exception_branch_o)
        begin
-          if (op_rfe & !rfete) 
+          if (op_rfe & !rfete)
             begin
                spr_sr <= spr_esr;
             end
-          else 
+          else
             begin
                // Go into supervisor mode, disable interrupts, MMUs
                spr_sr[`OR1K_SPR_SR_SM  ] <= 1'b1;
@@ -648,8 +653,8 @@ module mor1kx_ctrl_espresso
 	    spr_sr[`OR1K_SPR_SR_OV   ] <= overflow_set_i ? 1 :
 				overflow_clear_i ? 0 :
 				spr_sr[`OR1K_SPR_SR_OV   ];
-	  
-	  if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) && 
+
+	  if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) &&
               spr_addr==`OR1K_SPR_SR_ADDR)
             begin
                spr_sr[`OR1K_SPR_SR_SM  ] <= spr_write_dat[`OR1K_SPR_SR_SM  ];
@@ -661,32 +666,32 @@ module mor1kx_ctrl_espresso
 
                if (FEATURE_PIC!="NONE")
                  spr_sr[`OR1K_SPR_SR_IEE ] <= spr_write_dat[`OR1K_SPR_SR_IEE ];
-               
+
                if (FEATURE_DATACACHE!="NONE")
                  spr_sr[`OR1K_SPR_SR_DCE ] <= spr_write_dat[`OR1K_SPR_SR_DCE ];
-               
+
                if (FEATURE_INSTRUCTIONCACHE!="NONE")
                  spr_sr[`OR1K_SPR_SR_ICE ] <= spr_write_dat[`OR1K_SPR_SR_ICE ];
 
                if (FEATURE_DMMU!="NONE")
                  spr_sr[`OR1K_SPR_SR_DME ] <= spr_write_dat[`OR1K_SPR_SR_DME ];
-               
+
                if (FEATURE_IMMU!="NONE")
                  spr_sr[`OR1K_SPR_SR_IME ] <= spr_write_dat[`OR1K_SPR_SR_IME ];
-               
+
                if (FEATURE_FASTCONTEXTS!="NONE")
                  spr_sr[`OR1K_SPR_SR_CE  ] <= spr_write_dat[`OR1K_SPR_SR_CE  ];
-               
+
                spr_sr[`OR1K_SPR_SR_CY  ] <= spr_write_dat[`OR1K_SPR_SR_CY  ];
-               
+
                if (FEATURE_OVERFLOW!="NONE") begin
                   spr_sr[`OR1K_SPR_SR_OV  ] <= spr_write_dat[`OR1K_SPR_SR_OV  ];
                   spr_sr[`OR1K_SPR_SR_OVE ] <= spr_write_dat[`OR1K_SPR_SR_OVE ];
                end
-               
+
                if (FEATURE_DSX!="NONE")
                  spr_sr[`OR1K_SPR_SR_DSX ] <= spr_write_dat[`OR1K_SPR_SR_DSX ];
-               
+
                spr_sr[`OR1K_SPR_SR_EPH ] <= spr_write_dat[`OR1K_SPR_SR_EPH ];
 
             end // if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] | du_access)) &&...
@@ -700,7 +705,7 @@ module mor1kx_ctrl_espresso
        end // if (execute_done)
 
    assign carry_o = spr_sr[`OR1K_SPR_SR_CY];
-   
+
    // Exception SR
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -708,7 +713,7 @@ module mor1kx_ctrl_espresso
      else if (exception_re)
        begin
           spr_esr <= spr_sr;
-          /* 
+          /*
            A bit odd, but if we had a l.sf instruction on an exception rising
            edge, EPCR will point to the insn past the l.sf but the flag will
            not have been saved to the SR properly. So we must put it in here
@@ -737,7 +742,7 @@ module mor1kx_ctrl_espresso
        end
      else if (spr_we & spr_addr==`OR1K_SPR_ESR0_ADDR)
        spr_esr <= spr_write_dat[SPR_SR_WIDTH-1:0];
-   
+
    // Exception PC
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -752,7 +757,7 @@ module mor1kx_ctrl_espresso
           else if (except_ticktimer | except_pic)
             spr_epcr <= branched_and_waiting_for_fetch ? spr_npc :
 			execute_delay_slot ? spr_ppc-4 : spr_ppc+4;
-          else if (execute_stage_exceptions | 
+          else if (execute_stage_exceptions |
 		   // Don't update EPCR on software breakpoint
 		   (decode_stage_exceptions & !(stall_on_trap & except_trap_i)))
             spr_epcr <= execute_delay_slot ? spr_ppc-4 : spr_ppc;
@@ -761,8 +766,8 @@ module mor1kx_ctrl_espresso
        end
      else if (spr_we && spr_addr==`OR1K_SPR_EPCR0_ADDR)
        spr_epcr <= spr_write_dat;
-   
-   // Exception Effective Address 
+
+   // Exception Effective Address
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_eear <= {OPTION_OPERAND_WIDTH{1'b0}};
@@ -788,8 +793,8 @@ module mor1kx_ctrl_espresso
        spr_npc <= exception_pc_addr;
      else if (fetch_advance)
        // PC we're now executing
-       spr_npc <= fetch_take_exception_branch_o ? exception_pc_addr : 
-                  ctrl_branch_occur ? ctrl_branch_target_o : pc_fetch_i; 
+       spr_npc <= fetch_take_exception_branch_o ? exception_pc_addr :
+                  ctrl_branch_occur ? ctrl_branch_target_o : pc_fetch_i;
 
    // Previous PC (PPC)
    always @(posedge clk `OR_ASYNC_RST)
@@ -800,13 +805,13 @@ module mor1kx_ctrl_espresso
 
    assign spr_npc_o = spr_npc;
    assign spr_ppc_o = spr_ppc;
-   
+
    // Remember when we're in a delay slot in execute stage.
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
         execute_delay_slot <= 0;
      else if (execute_done)
-       execute_delay_slot <= execute_delay_slot ? 0 : 
+       execute_delay_slot <= execute_delay_slot ? 0 :
                              ctrl_branch_occur;
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -814,7 +819,7 @@ module mor1kx_ctrl_espresso
        delay_slot_rf_we_done <= 0;
      else
        delay_slot_rf_we_done <= rf_we_o & execute_delay_slot;
-   
+
    mor1kx_cfgrs
      #(.FEATURE_PIC			(FEATURE_PIC),
        .FEATURE_TIMER			(FEATURE_TIMER),
@@ -865,7 +870,7 @@ module mor1kx_ctrl_espresso
    assign spr_isr[5] = 0;
    assign spr_isr[6] = 0;
    assign spr_isr[7] = 0;
-   
+
    // System group (0) SPR data out
    always @*
      case(spr_addr)
@@ -893,10 +898,10 @@ module mor1kx_ctrl_espresso
          spr_sys_group_read = spr_pccfgr;
        `OR1K_SPR_NPC_ADDR:
          spr_sys_group_read = spr_npc;
-       `OR1K_SPR_SR_ADDR: 
+       `OR1K_SPR_SR_ADDR:
          spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-SPR_SR_WIDTH){1'b0}},
                                spr_sr};
-       
+
        `OR1K_SPR_PPC_ADDR:
          spr_sys_group_read = spr_ppc;
        `OR1K_SPR_FPCSR_ADDR:
@@ -924,7 +929,13 @@ module mor1kx_ctrl_espresso
 	 spr_sys_group_read = spr_isr[6];
        `OR1K_SPR_ISR0_ADDR +7:
 	 spr_sys_group_read = spr_isr[7];
-       
+
+       `OR1K_SPR_COREID_ADDR:
+         // If the multicore feature is activated this address returns the
+         // core identifier, 0 otherwise
+         spr_sys_group_read = (FEATURE_MULTICORE != "NONE") ?
+                              multicore_coreid_i : 0;
+
        default: begin
           /* GPR read */
           if (spr_addr >= `OR1K_SPR_GPR0_ADDR &&
@@ -941,12 +952,12 @@ module mor1kx_ctrl_espresso
    /* System group ack generation */
    /* TODO - might be delay for register file reads! */
    assign spr_access_ack[0] = 1;
-   
 
-   
+
+
    /* Generate data to the register file for mfspr operations */
    assign mfspr_dat_o = spr_internal_read_dat[spr_addr[14:11]];
-   
+
    // PIC SPR control
    generate
       if (FEATURE_PIC !="NONE") begin : pic
@@ -981,14 +992,14 @@ module mor1kx_ctrl_espresso
 	    .spr_addr_i			(spr_addr),		 // Templated
 	    .spr_dat_i			(spr_write_dat));	 // Templated
 
-         assign except_pic_nonsrmasked = (|spr_picsr) &  
-                             !op_mtspr & 
-                             // Stops back-to-back branch addresses going to 
+         assign except_pic_nonsrmasked = (|spr_picsr) &
+                             !op_mtspr &
+                             // Stops back-to-back branch addresses going to
                              // fetch stage
                              !ctrl_branch_occur &
                              // Stops issues with PC when branching
                              !execute_delay_slot;
-         
+
          assign except_pic = spr_sr[`OR1K_SPR_SR_IEE] & except_pic_nonsrmasked &
                              !doing_rfe;
       end
@@ -1001,11 +1012,11 @@ module mor1kx_ctrl_espresso
 	 assign spr_internal_read_dat[9] = 0;
       end // else: !if(FEATURE_PIC !="NONE")
    endgenerate
-   
-   
+
+
    generate
       if (FEATURE_TIMER!="NONE") begin : tt
-	 
+
 	 /* mor1kx_ticktimer AUTO_TEMPLATE (
 	  .spr_ttmr_o		(spr_ttmr),
 	  .spr_ttcr_o		(spr_ttcr),
@@ -1031,14 +1042,14 @@ module mor1kx_ctrl_espresso
 			  .spr_dat_i		(spr_write_dat)); // Templated
 
          assign except_ticktimer_nonsrmasked = spr_ttmr[28] &
-                                   (!op_mtspr & !(spr_esr[`OR1K_SPR_SR_TEE] & execute_done)) & 
-                                   // Stops back-to-back branch addresses to 
+                                   (!op_mtspr & !(spr_esr[`OR1K_SPR_SR_TEE] & execute_done)) &
+                                   // Stops back-to-back branch addresses to
                                    // fetch stage.
                                    !ctrl_branch_occur &
                                    // Stops issues with PC when branching
                                    !execute_delay_slot;
-         
-         assign except_ticktimer = except_ticktimer_nonsrmasked & 
+
+         assign except_ticktimer = except_ticktimer_nonsrmasked &
                                    spr_sr[`OR1K_SPR_SR_TEE] & !doing_rfe;
       end // if (FEATURE_TIMER!="NONE")
       else begin
@@ -1056,14 +1067,14 @@ module mor1kx_ctrl_espresso
    assign spr_read_access = (op_mfspr | (du_access & !du_we_i));
    assign spr_write_access = ((execute_done & op_mtspr) | (du_access & du_we_i));
 
-   assign spr_write_dat = du_access ? du_dat_i : b;   
+   assign spr_write_dat = du_access ? du_dat_i : b;
    assign spr_we = spr_write_access & spr_group_present;
    assign spr_read = spr_read_access & spr_group_present;
 
    /* A bus out to other units that live outside of the control unit */
    assign spr_bus_addr_o = spr_addr;
    assign spr_bus_we_o = spr_write_access & spr_group_present & spr_bus_access;
-   assign spr_bus_stb_o = (spr_read_access | spr_write_access) & 
+   assign spr_bus_stb_o = (spr_read_access | spr_write_access) &
                           spr_group_present & spr_bus_access;
    assign spr_bus_dat_o = spr_write_dat;
 
@@ -1071,19 +1082,19 @@ module mor1kx_ctrl_espresso
    assign spr_group_present = (// System group
                                (spr_addr[15:11]==5'h00) ||
                                // DMMU
-                               (spr_addr[15:11]==5'h01 && 
+                               (spr_addr[15:11]==5'h01 &&
                                 FEATURE_DMMU!="NONE") ||
                                // IMMU
-                               (spr_addr[15:11]==5'h02 && 
+                               (spr_addr[15:11]==5'h02 &&
                                 FEATURE_IMMU!="NONE") ||
                                // Data cache
-                               (spr_addr[15:11]==5'h03 && 
+                               (spr_addr[15:11]==5'h03 &&
                                 FEATURE_DATACACHE!="NONE") ||
                                // Instruction cache
-                               (spr_addr[15:11]==5'h04 && 
+                               (spr_addr[15:11]==5'h04 &&
                                 FEATURE_INSTRUCTIONCACHE!= "NONE") ||
                                // MAC unit
-                               (spr_addr[15:11]==5'h05 && 
+                               (spr_addr[15:11]==5'h05 &&
                                 FEATURE_MAC!="NONE") ||
                                // Debug unit
                                (spr_addr[15:11]==5'h06 &&
@@ -1105,13 +1116,13 @@ module mor1kx_ctrl_espresso
                                 FEATURE_FPU!="NONE")
                                );
 
-   /* Generate a SPR group signal - generate invalid if the group is not 
+   /* Generate a SPR group signal - generate invalid if the group is not
     present in the design */
    assign spr_group = (spr_group_present) ? spr_addr[14:11] : 4'd12;
 
    /* Default group when a selected one is not present - it reads as zero */
    assign spr_internal_read_dat[12] = 0;
-   
+
    /* Is a SPR bus access needed, or is the requested SPR in this file? */
    assign spr_bus_access = /* Any of the units we don't have in this file */
                            /* System group */
@@ -1124,21 +1135,21 @@ module mor1kx_ctrl_espresso
                              spr_addr[15:11]==5'h0a);
 
    assign stepping_o = stepping;
-   
+
    generate
       if (FEATURE_DEBUGUNIT!="NONE") begin : du
-         
+
          reg [OPTION_OPERAND_WIDTH-1:0] du_read_dat;
-         
+
          reg                            du_ack;
          reg                            du_stall_r;
          reg [1:0]                      pstep_r;
          reg [1:0]                      branch_step;
          reg                            stepped_into_exception;
          reg                            stepped_into_rfe;
-         
+
          assign du_access = du_stb_i;
-         
+
          // Generate ack back to the debug interface bus
          always @(posedge clk `OR_ASYNC_RST)
            if (rst)
@@ -1153,9 +1164,9 @@ module mor1kx_ctrl_espresso
                 /* actual access occurred */
                 du_ack <= 1;
            end
-         
+
          assign du_ack_o = du_ack;
-         
+
          /* Data back to the debug bus */
          always @(posedge clk `OR_ASYNC_RST)
            if (rst)
@@ -1170,13 +1181,13 @@ module mor1kx_ctrl_espresso
           Why? Potentially an instruction like l.mfspr from an external unit
           hasn't completed fully, gets interrupted, and it's assumed it's
           completed, but actually hasn't. */
-         assign cpu_stall = du_stall_i | du_restart_from_stall;          
-         
+         assign cpu_stall = du_stall_i | du_restart_from_stall;
+
          /* goes out to the debug interface and comes back 1 cycle later
           via du_stall_i */
          assign du_stall_o = (stepping & execute_done)|
 			     (stall_on_trap & execute_done & except_trap_i);
-         
+
          /* Pulse to indicate we're restarting after a stall */
          assign du_restart_from_stall = du_stall_r & !du_stall_i;
 
@@ -1196,7 +1207,7 @@ module mor1kx_ctrl_espresso
              du_npc_written <= 0;
            else if (du_npc_write)
              du_npc_written <= 1;
-         
+
          always @(posedge clk `OR_ASYNC_RST)
            if (rst)
              du_spr_npc <= 0;
@@ -1210,7 +1221,7 @@ module mor1kx_ctrl_espresso
              stepped_into_exception <= 0;
            else if (stepping & execute_done)
              stepped_into_exception <= exception;
-         
+
          always @(posedge clk `OR_ASYNC_RST)
            if (rst)
              stepped_into_rfe <= 0;
@@ -1218,14 +1229,14 @@ module mor1kx_ctrl_espresso
              stepped_into_rfe <= 0;
            else if (stepping & execute_done)
              stepped_into_rfe <= op_rfe;
-         
+
          assign du_restart_pc_o = du_npc_written ? du_spr_npc :
                                   stepped_into_rfe ? spr_epcr :
                                   stepped_into_delay_slot ?
                                   last_branch_target_pc : spr_npc;
 
          assign du_restart_o = du_restart_from_stall;
-         
+
          /* Indicate when we're stepping */
          assign stepping = spr_dmr1[`OR1K_SPR_DMR1_ST] &
                            spr_dsr[`OR1K_SPR_DSR_TE];
@@ -1239,7 +1250,7 @@ module mor1kx_ctrl_espresso
                     /* decode is always single cycle */
                     (pstep[1] & execute_done))
              pstep_r <= {pstep_r[0],1'b0};
-         
+
          assign pstep = pstep_r;
 
          always @(posedge clk `OR_ASYNC_RST)
@@ -1251,7 +1262,7 @@ module mor1kx_ctrl_espresso
              branch_step <= {branch_step[0], execute_delay_slot};
 
          assign stepped_into_delay_slot = branch_step[1];
-         
+
          /* Signals for waveform debuging */
          wire [31:0] spr_read_data_group_0;
          assign spr_read_data_group_0 = spr_internal_read_dat[0];
@@ -1273,8 +1284,8 @@ module mor1kx_ctrl_espresso
          assign spr_read_data_group_8 = spr_internal_read_dat[8];
          wire [31:0] spr_read_data_group_9;
          assign spr_read_data_group_9 = spr_internal_read_dat[9];
-         
-         
+
+
          /* always single cycle access */
          assign spr_access_ack[6] = 1;
          assign spr_internal_read_dat[6] = (spr_addr==`OR1K_SPR_DMR1_ADDR) ?
@@ -1330,7 +1341,7 @@ module mor1kx_ctrl_espresso
            assign du_restart_o = 0;
            assign du_restart_pc_o = 0;
            assign stepping = 0;
-           assign du_npc_write = 0;        
+           assign du_npc_write = 0;
            assign stepped_into_delay_slot = 0;
            assign du_dat_o = 0;
            assign du_restart_from_stall = 0;
@@ -1377,7 +1388,7 @@ module mor1kx_ctrl_espresso
       end
       else begin
          assign spr_access_ack[3] = 0;
-         assign spr_internal_read_dat[3] = 0;    
+         assign spr_internal_read_dat[3] = 0;
       end
    endgenerate
 
@@ -1402,7 +1413,7 @@ module mor1kx_ctrl_espresso
          assign spr_internal_read_dat[5] = 0;
       end
    endgenerate
-   
+
    generate
       if (FEATURE_PERFCOUNTERS!="NONE") begin : perfcounters_ctrl
          assign spr_access_ack[7] = spr_bus_ack_pcu_i;
@@ -1436,8 +1447,4 @@ module mor1kx_ctrl_espresso
       end
    endgenerate
 
-   
-   
-   
 endmodule // mor1kx_ctrl_espresso
-

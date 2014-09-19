@@ -56,6 +56,7 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_PMU = "NONE",
     parameter FEATURE_MAC = "NONE",
     parameter FEATURE_FPU = "NONE",
+    parameter FEATURE_MULTICORE = "NONE",
 
     parameter FEATURE_PIC = "ENABLED",
     parameter OPTION_PIC_TRIGGER = "LEVEL",
@@ -218,7 +219,10 @@ module mor1kx_ctrl_cappuccino
     input 			      spr_bus_ack_fpu_i,
     input [OPTION_OPERAND_WIDTH-1:0]  spr_gpr_dat_i,
     input 			      spr_gpr_ack_i,
-    output [15:0] 		      spr_sr_o
+    output [15:0] 		      spr_sr_o,
+
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i
     );
 
    // Internal signals
@@ -306,13 +310,14 @@ module mor1kx_ctrl_cappuccino
    wire 			     stall_on_trap;
 
    /* Wires for SPR management */
-   wire 			     spr_group_present;
-   wire [3:0] 			     spr_group;
+   wire                              spr_access_valid;
    wire 			     spr_we;
-      wire 			     spr_read;
+   wire                              spr_read;
+   wire                              spr_ack;
    wire [OPTION_OPERAND_WIDTH-1:0]   spr_write_dat;
-   wire [12:0] 			     spr_access_ack;
-   wire [31:0] 			     spr_internal_read_dat [0:12];
+   reg [11:0]                        spr_access;
+   wire [11:0] 			     spr_access_ack;
+   wire [31:0] 			     spr_internal_read_dat [0:11];
    wire 			     spr_read_access;
    wire 			     spr_write_access;
    wire 			     spr_bus_access;
@@ -457,8 +462,8 @@ module mor1kx_ctrl_cappuccino
    assign padv_ctrl_o = padv_ctrl;
 
    assign spr_addr = du_access ? du_addr_i : ctrl_alu_result_i[15:0];
-   assign ctrl_mfspr_ack_o = spr_access_ack[spr_group];
-   assign ctrl_mtspr_ack_o = spr_access_ack[spr_group];
+   assign ctrl_mfspr_ack_o = spr_ack;
+   assign ctrl_mtspr_ack_o = spr_ack;
 
    // Pipeline flush
    assign pipeline_flush_o = (padv_ctrl & ctrl_op_rfe_i) |
@@ -586,8 +591,9 @@ module mor1kx_ctrl_cappuccino
            spr_fpcsr[`OR1K_FPCSR_RM]   <= spr_fpcsr[`OR1K_FPCSR_RM];
            spr_fpcsr[`OR1K_FPCSR_FPEE] <= 1'b0;
          end  
-         else if ( (spr_we & ((spr_sr[`OR1K_SPR_SR_SM] & padv_ctrl) | du_access)) &&
-                   (spr_addr==`OR1K_SPR_FPCSR_ADDR) )
+         else if ((spr_we & spr_access[`OR1K_SPR_SYS_BASE] &
+                  (spr_sr[`OR1K_SPR_SR_SM] & padv_ctrl | du_access)) &&
+                  `SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_FPCSR_ADDR))
            spr_fpcsr <= spr_write_dat[`OR1K_FPCSR_WIDTH-1:0]; // update all fields
          else if (padv_ctrl & ctrl_fpcsr_set_i) begin
            spr_fpcsr[`OR1K_FPCSR_ALLF] <= ctrl_fpcsr_i[`OR1K_FPCSR_ALLF];
@@ -638,8 +644,9 @@ module mor1kx_ctrl_cappuccino
 	  if (FEATURE_OVERFLOW!="NONE")
 	    spr_sr[`OR1K_SPR_SR_OVE ] <= 1'b0;
        end
-     else if ((spr_we & (spr_sr[`OR1K_SPR_SR_SM] & padv_ctrl | du_access)) &&
-	      spr_addr==`OR1K_SPR_SR_ADDR)
+     else if ((spr_we & spr_access[`OR1K_SPR_SYS_BASE] &
+               (spr_sr[`OR1K_SPR_SR_SM] & padv_ctrl | du_access)) &&
+              `SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_SR_ADDR))
        begin
 	  spr_sr[`OR1K_SPR_SR_SM  ] <= spr_write_dat[`OR1K_SPR_SR_SM  ];
 
@@ -720,7 +727,8 @@ module mor1kx_ctrl_cappuccino
 	       spr_esr[`OR1K_SPR_SR_CY] <= 1'b0;
 	  end
        end
-     else if (spr_we & spr_addr==`OR1K_SPR_ESR0_ADDR)
+     else if (spr_we && spr_access[`OR1K_SPR_SYS_BASE] &&
+              `SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_ESR0_ADDR))
        spr_esr <= spr_write_dat[SPR_SR_WIDTH-1:0];
 
    always @(posedge clk `OR_ASYNC_RST)
@@ -743,7 +751,8 @@ module mor1kx_ctrl_cappuccino
 	// Don't update EPCR on software breakpoint
 	else if (!(stall_on_trap & except_trap_i))
 	  spr_epcr <= ctrl_epcr_o;
-     end else if (spr_we && spr_addr==`OR1K_SPR_EPCR0_ADDR) begin
+     end else if (spr_we && spr_access[`OR1K_SPR_SYS_BASE] &&
+                  `SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_EPCR0_ADDR)) begin
 	spr_epcr <= spr_write_dat;
      end
 
@@ -794,7 +803,8 @@ module mor1kx_ctrl_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        spr_evbar <= {OPTION_OPERAND_WIDTH{1'b0}};
-     else if (spr_we && spr_addr==`OR1K_SPR_EVBAR_ADDR)
+     else if (spr_we && spr_access[`OR1K_SPR_SYS_BASE] &&
+              `SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_EVBAR_ADDR))
        spr_evbar <= {spr_write_dat[OPTION_OPERAND_WIDTH-1:13], 13'd0};
 
    // Remember when we're in a delay slot in execute stage.
@@ -809,7 +819,6 @@ module mor1kx_ctrl_cappuccino
        ctrl_delay_slot <= 0;
      else if (padv_execute_o)
        ctrl_delay_slot <= execute_delay_slot;
-
 
    mor1kx_cfgrs
      #(.FEATURE_PIC			(FEATURE_PIC),
@@ -869,131 +878,160 @@ module mor1kx_ctrl_cappuccino
    assign spr_isr[7] = 0;
 
    // System group (0) SPR data out
-   always @*
-     case(spr_addr)
-       `OR1K_SPR_VR_ADDR:
-	 spr_sys_group_read = spr_vr;
-       `OR1K_SPR_VR2_ADDR:
-	 spr_sys_group_read = {spr_vr2[31:8], `MOR1KX_PIPEID_CAPPUCCINO};
-       `OR1K_SPR_AVR_ADDR:
-	 spr_sys_group_read = spr_avr;
-       `OR1K_SPR_UPR_ADDR:
-	 spr_sys_group_read = spr_upr;
-       `OR1K_SPR_CPUCFGR_ADDR:
-	 spr_sys_group_read = spr_cpucfgr;
-       `OR1K_SPR_DMMUCFGR_ADDR:
-	 spr_sys_group_read = spr_dmmucfgr;
-       `OR1K_SPR_IMMUCFGR_ADDR:
-	 spr_sys_group_read = spr_immucfgr;
-       `OR1K_SPR_DCCFGR_ADDR:
-	 spr_sys_group_read = spr_dccfgr;
-       `OR1K_SPR_ICCFGR_ADDR:
-	 spr_sys_group_read = spr_iccfgr;
-       `OR1K_SPR_DCFGR_ADDR:
-	 spr_sys_group_read = spr_dcfgr;
-       `OR1K_SPR_PCCFGR_ADDR:
-	 spr_sys_group_read = spr_pccfgr;
-       `OR1K_SPR_NPC_ADDR:
-	 spr_sys_group_read = spr_npc;
-       `OR1K_SPR_SR_ADDR:
-	 spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-SPR_SR_WIDTH){1'b0}},
-			       spr_sr};
+   always @* begin
+     spr_sys_group_read = 0;
+     if (spr_access[`OR1K_SPR_SYS_BASE])
+       case(`SPR_OFFSET(spr_addr))
+         `SPR_OFFSET(`OR1K_SPR_VR_ADDR):
+           spr_sys_group_read = spr_vr;
+         `SPR_OFFSET(`OR1K_SPR_VR2_ADDR):
+           spr_sys_group_read = {spr_vr2[31:8], `MOR1KX_PIPEID_CAPPUCCINO};
+         `SPR_OFFSET(`OR1K_SPR_AVR_ADDR):
+           spr_sys_group_read = spr_avr;
+         `SPR_OFFSET(`OR1K_SPR_UPR_ADDR):
+           spr_sys_group_read = spr_upr;
+         `SPR_OFFSET(`OR1K_SPR_CPUCFGR_ADDR):
+           spr_sys_group_read = spr_cpucfgr;
+         `SPR_OFFSET(`OR1K_SPR_DMMUCFGR_ADDR):
+           spr_sys_group_read = spr_dmmucfgr;
+         `SPR_OFFSET(`OR1K_SPR_IMMUCFGR_ADDR):
+           spr_sys_group_read = spr_immucfgr;
+         `SPR_OFFSET(`OR1K_SPR_DCCFGR_ADDR):
+           spr_sys_group_read = spr_dccfgr;
+         `SPR_OFFSET(`OR1K_SPR_ICCFGR_ADDR):
+           spr_sys_group_read = spr_iccfgr;
+         `SPR_OFFSET(`OR1K_SPR_DCFGR_ADDR):
+           spr_sys_group_read = spr_dcfgr;
+         `SPR_OFFSET(`OR1K_SPR_PCCFGR_ADDR):
+           spr_sys_group_read = spr_pccfgr;
+         `SPR_OFFSET(`OR1K_SPR_NPC_ADDR):
+           spr_sys_group_read = spr_npc;
+         `SPR_OFFSET(`OR1K_SPR_SR_ADDR):
+           spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-SPR_SR_WIDTH){1'b0}},
+                                 spr_sr};
 
-       `OR1K_SPR_PPC_ADDR:
-	 spr_sys_group_read = spr_ppc;
-       `OR1K_SPR_FPCSR_ADDR:
-	 spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-`OR1K_FPCSR_WIDTH){1'b0}},
-			       spr_fpcsr};
-       `OR1K_SPR_EPCR0_ADDR:
-	 spr_sys_group_read = spr_epcr;
-       `OR1K_SPR_EEAR0_ADDR:
-	 spr_sys_group_read = spr_eear;
-       `OR1K_SPR_ESR0_ADDR:
-	 spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-SPR_SR_WIDTH){1'b0}},
-			       spr_esr};
-       `OR1K_SPR_EVBAR_ADDR:
-	 spr_sys_group_read = spr_evbar;
-       `OR1K_SPR_ISR0_ADDR:
-	 spr_sys_group_read = spr_isr[0];
-       `OR1K_SPR_ISR0_ADDR +1:
-	 spr_sys_group_read = spr_isr[1];
-       `OR1K_SPR_ISR0_ADDR +2:
-	 spr_sys_group_read = spr_isr[2];
-       `OR1K_SPR_ISR0_ADDR +3:
-	 spr_sys_group_read = spr_isr[3];
-       `OR1K_SPR_ISR0_ADDR +4:
-	 spr_sys_group_read = spr_isr[4];
-       `OR1K_SPR_ISR0_ADDR +5:
-	 spr_sys_group_read = spr_isr[5];
-       `OR1K_SPR_ISR0_ADDR +6:
-	 spr_sys_group_read = spr_isr[6];
-       `OR1K_SPR_ISR0_ADDR +7:
-	 spr_sys_group_read = spr_isr[7];
+         `SPR_OFFSET(`OR1K_SPR_PPC_ADDR):
+           spr_sys_group_read = spr_ppc;
+         `SPR_OFFSET(`OR1K_SPR_FPCSR_ADDR):
+           spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-`OR1K_FPCSR_WIDTH){1'b0}},
+                                 spr_fpcsr};
+         `SPR_OFFSET(`OR1K_SPR_EPCR0_ADDR):
+           spr_sys_group_read = spr_epcr;
+         `SPR_OFFSET(`OR1K_SPR_EEAR0_ADDR):
+           spr_sys_group_read = spr_eear;
+         `SPR_OFFSET(`OR1K_SPR_ESR0_ADDR):
+           spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-SPR_SR_WIDTH){1'b0}},
+                                 spr_esr};
+         `SPR_OFFSET(`OR1K_SPR_EVBAR_ADDR):
+           spr_sys_group_read = spr_evbar;
+         `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR):
+           spr_sys_group_read = spr_isr[0];
+         `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +1:
+           spr_sys_group_read = spr_isr[1];
+         `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +2:
+           spr_sys_group_read = spr_isr[2];
+         `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +3:
+           spr_sys_group_read = spr_isr[3];
+         `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +4:
+           spr_sys_group_read = spr_isr[4];
+         `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +5:
+           spr_sys_group_read = spr_isr[5];
+         `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +6:
+           spr_sys_group_read = spr_isr[6];
+         `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +7:
+           spr_sys_group_read = spr_isr[7];
 
-       default: begin
-	  // GPR read
-	  if (spr_addr[15:9] == 7'h02)
-	    spr_sys_group_read = spr_gpr_dat_i; // Register file
-	  else
-	    // Invalid address - read as zero
-	    spr_sys_group_read = 0;
-       end
-     endcase // case (spr_addr)
+         `SPR_OFFSET(`OR1K_SPR_COREID_ADDR):
+           // If the multicore feature is activated this address returns the
+           // core identifier, 0 otherwise
+           spr_sys_group_read = (FEATURE_MULTICORE!="NONE") ?
+                                multicore_coreid_i : 0;
+         `SPR_OFFSET(`OR1K_SPR_NUMCORES_ADDR):
+           // If the multicore feature is activated this address returns the
+           // core identifier, 0 otherwise
+           spr_sys_group_read = (FEATURE_MULTICORE!="NONE") ?
+                                multicore_numcores_i : 0;
+
+         default:
+            // GPR read
+            if (spr_addr[10:9] == 2'h2)
+              spr_sys_group_read = spr_gpr_dat_i; // Register file
+       endcase
+    end
 
    /* System group read data MUX in */
-   assign spr_internal_read_dat[0] = spr_sys_group_read;
+   assign spr_internal_read_dat[`OR1K_SPR_SYS_BASE] = spr_sys_group_read;
    /* System group ack generation */
 
-   assign spr_access_ack[0] = (spr_addr[15:9] == 7'h02) ? spr_gpr_ack_i : 1;
+   assign spr_access_ack[`OR1K_SPR_SYS_BASE] = spr_access[`OR1K_SPR_SYS_BASE] &
+                                               ((spr_addr[10:9] == 2'h2) ?
+                                                 spr_gpr_ack_i : 1);
 
-   /* Generate data to the register file for mfspr operations */
-   assign mfspr_dat_o = spr_internal_read_dat[spr_addr[14:11]];
+   //
+   // Generate data to the register file for mfspr operations
+   // Read datas are simply ORed since set to 0 when not
+   // concerned by spr access.
+   //
+   assign mfspr_dat_o = spr_internal_read_dat[`OR1K_SPR_SYS_BASE]  |
+                        spr_internal_read_dat[`OR1K_SPR_DMMU_BASE] |
+                        spr_internal_read_dat[`OR1K_SPR_IMMU_BASE] |
+                        spr_internal_read_dat[`OR1K_SPR_DC_BASE]   |
+                        spr_internal_read_dat[`OR1K_SPR_IC_BASE]   |
+                        spr_internal_read_dat[`OR1K_SPR_MAC_BASE]  |
+                        spr_internal_read_dat[`OR1K_SPR_DU_BASE]   |
+                        spr_internal_read_dat[`OR1K_SPR_PC_BASE]   |
+                        spr_internal_read_dat[`OR1K_SPR_PM_BASE]   |
+                        spr_internal_read_dat[`OR1K_SPR_PIC_BASE]  |
+                        spr_internal_read_dat[`OR1K_SPR_TT_BASE]   |
+                        spr_internal_read_dat[`OR1K_SPR_FPU_BASE];
 
    // PIC SPR control
    generate
 
       if (FEATURE_PIC !="NONE") begin : pic
 
-	 /* mor1kx_pic AUTO_TEMPLATE (
-	  .spr_picsr_o		(spr_picsr),
-	  .spr_picmr_o		(spr_picmr),
-	  .spr_bus_ack		(spr_access_ack[9]),
-	  .spr_dat_o		(spr_internal_read_dat[9]),
-	  // Inputs
-	  .spr_we_i		(spr_we),
-	  .spr_addr_i		(spr_addr),
-	  .spr_dat_i		(spr_write_dat),
-	  );*/
-	 mor1kx_pic
-	  #(
-	    .OPTION_PIC_TRIGGER(OPTION_PIC_TRIGGER),
-	    .OPTION_PIC_NMI_WIDTH(OPTION_PIC_NMI_WIDTH)
-	    )
-	 mor1kx_pic
-	   (/*AUTOINST*/
-	    // Outputs
-	    .spr_picmr_o		(spr_picmr),		 // Templated
-	    .spr_picsr_o		(spr_picsr),		 // Templated
-	    .spr_bus_ack		(spr_access_ack[9]),	 // Templated
-	    .spr_dat_o			(spr_internal_read_dat[9]), // Templated
-	    // Inputs
-	    .clk			(clk),
-	    .rst			(rst),
-	    .irq_i			(irq_i[31:0]),
-	    .spr_we_i			(spr_we),		 // Templated
-	    .spr_addr_i			(spr_addr),		 // Templated
-	    .spr_dat_i			(spr_write_dat));	 // Templated
+         /* mor1kx_pic AUTO_TEMPLATE (
+          .spr_picsr_o          (spr_picsr),
+          .spr_picmr_o          (spr_picmr),
+          .spr_bus_ack          (spr_access_ack[`OR1K_SPR_PIC_BASE]),
+          .spr_dat_o            (spr_internal_read_dat[`OR1K_SPR_PIC_BASE]),
+          // Inputs
+          .spr_we_i             (spr_we),
+          .spr_access_i         (spr_access[`OR1K_SPR_PIC_BASE])
+          .spr_addr_i           (spr_addr),
+          .spr_dat_i            (spr_write_dat),
+          );*/
+         mor1kx_pic
+          #(
+            .OPTION_PIC_TRIGGER(OPTION_PIC_TRIGGER),
+            .OPTION_PIC_NMI_WIDTH(OPTION_PIC_NMI_WIDTH)
+            )
+         mor1kx_pic
+           (/*AUTOINST*/
+            // Outputs
+            .spr_picmr_o        (spr_picmr),                // Templated
+            .spr_picsr_o        (spr_picsr),                // Templated
+            .spr_bus_ack        (spr_access_ack[`OR1K_SPR_PIC_BASE]), // Templated
+            .spr_dat_o          (spr_internal_read_dat[`OR1K_SPR_PIC_BASE]), // Templated
+            // Inputs
+            .clk                (clk),
+            .rst                (rst),
+            .irq_i              (irq_i[31:0]),
+            .spr_access_i       (spr_access[`OR1K_SPR_PIC_BASE]), // Templated
+            .spr_we_i           (spr_we),                 // Templated
+            .spr_addr_i         (spr_addr),               // Templated
+            .spr_dat_i          (spr_write_dat));         // Templated
 
 
 	 assign except_pic = (|spr_picsr) & spr_sr[`OR1K_SPR_SR_IEE] &
 			     !ctrl_op_mtspr_i & !doing_rfe;
       end
       else begin
-	 assign except_pic = 0;
-	 assign spr_picsr = 0;
-	 assign spr_picmr = 0;
-	 assign spr_access_ack[9] = 0;
-	 assign spr_internal_read_dat[9] = 0;
+         assign except_pic = 0;
+         assign spr_picsr = 0;
+         assign spr_picmr = 0;
+         assign spr_access_ack[`OR1K_SPR_PIC_BASE] = 0;
+         assign spr_internal_read_dat[`OR1K_SPR_PIC_BASE] = 0;
       end // else: !if(FEATURE_PIC !="NONE")
    endgenerate
 
@@ -1001,40 +1039,42 @@ module mor1kx_ctrl_cappuccino
    generate
       if (FEATURE_TIMER!="NONE") begin : tt
 
-	 /* mor1kx_ticktimer AUTO_TEMPLATE (
-	  .spr_ttmr_o		(spr_ttmr),
-	  .spr_ttcr_o		(spr_ttcr),
-	  .spr_bus_ack		(spr_access_ack[10]),
-	  .spr_dat_o		(spr_internal_read_dat[10]),
-	  // Inputs
-	  .spr_we_i		(spr_we),
-	  .spr_addr_i		(spr_addr),
-	  .spr_dat_i		(spr_write_dat),
-	  );*/
-	 mor1kx_ticktimer mor1kx_ticktimer
-			 (/*AUTOINST*/
-			  // Outputs
-			  .spr_ttmr_o		(spr_ttmr),	 // Templated
-			  .spr_ttcr_o		(spr_ttcr),	 // Templated
-			  .spr_bus_ack		(spr_access_ack[10]), // Templated
-			  .spr_dat_o		(spr_internal_read_dat[10]), // Templated
-			  // Inputs
-			  .clk			(clk),
-			  .rst			(rst),
-			  .spr_we_i		(spr_we),	 // Templated
-			  .spr_addr_i		(spr_addr),	 // Templated
-			  .spr_dat_i		(spr_write_dat)); // Templated
+         /* mor1kx_ticktimer AUTO_TEMPLATE (
+          .spr_ttmr_o           (spr_ttmr),
+          .spr_ttcr_o           (spr_ttcr),
+          .spr_bus_ack          (spr_access_ack[`OR1K_SPR_TT_BASE]),
+          .spr_dat_o            (spr_internal_read_dat[`OR1K_SPR_TT_BASE]),
+          // Inputs
+          .spr_access_i         (spr_access[`OR1K_SPR_TT_BASE]),
+          .spr_we_i             (spr_we),
+          .spr_addr_i           (spr_addr),
+          .spr_dat_i            (spr_write_dat),
+          );*/
+         mor1kx_ticktimer mor1kx_ticktimer
+                         (/*AUTOINST*/
+                          // Outputs
+                          .spr_ttmr_o           (spr_ttmr),                  // Templated
+                          .spr_ttcr_o           (spr_ttcr),                  // Templated
+                          .spr_bus_ack          (spr_access_ack[`OR1K_SPR_TT_BASE]), // Templated
+                          .spr_dat_o            (spr_internal_read_dat[`OR1K_SPR_TT_BASE]), // Templated
+                          // Inputs
+                          .clk                  (clk),
+                          .rst                  (rst),
+                          .spr_access_i         (spr_access[`OR1K_SPR_TT_BASE]), // Templated
+                          .spr_we_i             (spr_we),         // Templated
+                          .spr_addr_i           (spr_addr),       // Templated
+                          .spr_dat_i            (spr_write_dat)); // Templated
 
 	 assign except_ticktimer = spr_ttmr[28] & spr_sr[`OR1K_SPR_SR_TEE] &
 				   !ctrl_op_mtspr_i & !doing_rfe;
 
       end // if (FEATURE_TIMER!="NONE")
       else begin
-	 assign except_ticktimer = 0;
-	 assign spr_ttmr = 0;
-	 assign spr_ttcr = 0;
-	 assign spr_access_ack[10] = 0;
-	 assign spr_internal_read_dat[10] = 0;
+         assign except_ticktimer = 0;
+         assign spr_ttmr = 0;
+         assign spr_ttcr = 0;
+         assign spr_access_ack[`OR1K_SPR_TT_BASE] = 0;
+         assign spr_internal_read_dat[`OR1K_SPR_TT_BASE] = 0;
       end // else: !if(FEATURE_TIMER!="NONE")
    endgenerate
 
@@ -1044,74 +1084,80 @@ module mor1kx_ctrl_cappuccino
    assign spr_write_access = (ctrl_op_mtspr_i | (du_access & du_we_i));
 
    assign spr_write_dat = du_access ? du_dat_i : b;
-   assign spr_we = spr_write_access & spr_group_present;
-   assign spr_read = spr_read_access & spr_group_present;
+   assign spr_we = spr_write_access & spr_access_valid;
+   assign spr_read = spr_read_access & spr_access_valid;
 
    /* A bus out to other units that live outside of the control unit */
    assign spr_bus_addr_o = spr_addr;
-   assign spr_bus_we_o = spr_write_access & spr_group_present & spr_bus_access;
+   assign spr_bus_we_o = spr_write_access & spr_access_valid & spr_bus_access;
    assign spr_bus_stb_o = (spr_read_access | spr_write_access) &
-			  spr_group_present & spr_bus_access;
+                          spr_access_valid & spr_bus_access;
    assign spr_bus_dat_o = spr_write_dat;
 
-   /* Is the SPR in the design? */
-   assign spr_group_present = (// System group
-			       (spr_addr[15:11]==5'h00) ||
-			       // DMMU
-			       (spr_addr[15:11]==5'h01 &&
-				FEATURE_DMMU!="NONE") ||
-			       // IMMU
-			       (spr_addr[15:11]==5'h02 &&
-				FEATURE_IMMU!="NONE") ||
-			       // Data cache
-			       (spr_addr[15:11]==5'h03 &&
-				FEATURE_DATACACHE!="NONE") ||
-			       // Instruction cache
-			       (spr_addr[15:11]==5'h04 &&
-				FEATURE_INSTRUCTIONCACHE!= "NONE") ||
-			       // MAC unit
-			       (spr_addr[15:11]==5'h05 &&
-				FEATURE_MAC!="NONE") ||
-			       // Debug unit
-			       (spr_addr[15:11]==5'h06 &&
-				FEATURE_DEBUGUNIT!="NONE") ||
-			       // Performance counters
-			       (spr_addr[15:11]==5'h07 &&
-				FEATURE_PERFCOUNTERS!="NONE") ||
-			       // Power Management
-			       (spr_addr[15:11]==5'h08 &&
-				FEATURE_PMU!="NONE") ||
-			       // PIC
-			       (spr_addr[15:11]==5'h09 &&
-				FEATURE_PIC!="NONE") ||
-			       // Tick timer
-			       (spr_addr[15:11]==5'h0a &&
-				FEATURE_TIMER!="NONE") ||
-			       // FPU
-			       (spr_addr[15:11]==5'h0b &&
-				FEATURE_FPU!="NONE")
-			       );
+   /* Select spr */
+   always @(*) begin
+     spr_access <= 0;
+      case(`SPR_BASE(spr_addr))
+         // System group
+         `OR1K_SPR_SYS_BASE:
+           spr_access[`OR1K_SPR_SYS_BASE] <= 1'b1;
+         // DMMU
+         `OR1K_SPR_DMMU_BASE:
+           spr_access[`OR1K_SPR_DMMU_BASE] <= (FEATURE_DMMU!="NONE");
+         // IMMU
+         `OR1K_SPR_IMMU_BASE:
+           spr_access[`OR1K_SPR_IMMU_BASE] <= (FEATURE_IMMU!="NONE");
+         // Data cache
+         `OR1K_SPR_DC_BASE:
+           spr_access[`OR1K_SPR_DC_BASE] <= (FEATURE_DATACACHE!="NONE");
+         // Instruction cache
+         `OR1K_SPR_IC_BASE:
+           spr_access[`OR1K_SPR_IC_BASE] <= (FEATURE_INSTRUCTIONCACHE!= "NONE");
+         // MAC unit
+         `OR1K_SPR_MAC_BASE:
+           spr_access[`OR1K_SPR_MAC_BASE] <= (FEATURE_MAC!="NONE");
+         // Debug unit
+         `OR1K_SPR_DU_BASE:
+           spr_access[`OR1K_SPR_DU_BASE] <= (FEATURE_DEBUGUNIT!="NONE");
+         // Performance counters
+         `OR1K_SPR_PC_BASE:
+           spr_access[`OR1K_SPR_PC_BASE] <= (FEATURE_PERFCOUNTERS!="NONE");
+         // Power Management
+         `OR1K_SPR_PM_BASE:
+           spr_access[`OR1K_SPR_PM_BASE] <= (FEATURE_PMU!="NONE");
+         // PIC
+         `OR1K_SPR_PIC_BASE:
+           spr_access[`OR1K_SPR_PIC_BASE] <= (FEATURE_PIC!="NONE");
+         // Tick timer
+         `OR1K_SPR_TT_BASE:
+           spr_access[`OR1K_SPR_TT_BASE] <= (FEATURE_TIMER!="NONE");
+         // FPU
+         `OR1K_SPR_FPU_BASE:
+           spr_access[`OR1K_SPR_FPU_BASE] <= (FEATURE_FPU!="NONE");
+         /* generate invalid if the group is not present in the design  */
+         default:
+           spr_access <= 0;
+       endcase
+    end
 
-   /* Generate a SPR group signal - generate invalid if the group is not
-    present in the design */
-   assign spr_group = (spr_group_present) ? spr_addr[14:11] : 4'd12;
+    // Is the SPR in the design?
+    assign spr_access_valid = |spr_access;
 
-   /* Default group when a selected one is not present - it reads as zero */
-   assign spr_internal_read_dat[12] = 0;
-   assign spr_access_ack[12] = 1;
+    assign spr_ack = (|spr_access_ack) | !spr_access_valid;
 
    /* Is a SPR bus access needed, or is the requested SPR in this file? */
    assign spr_bus_access = /* Any of the units we don't have in this file */
-			   /* System group */
-			   !(spr_addr[15:11]==5'h00 ||
-			     /* Debug Group */
-			     spr_addr[15:11]==5'h06 ||
-			     /* PIC Group */
-			     spr_addr[15:11]==5'h09 ||
-			     /* Tick Group */
-			     spr_addr[15:11]==5'h0a) ||
-			     // GPR
-			     spr_addr[15:9]==7'h02;
+                           /* System group */
+                           !(spr_access[`OR1K_SPR_SYS_BASE] ||
+                             /* Debug Group */
+                             spr_access[`OR1K_SPR_DU_BASE] ||
+                             /* PIC Group */
+                             spr_access[`OR1K_SPR_PIC_BASE] ||
+                             /* Tick Group */
+                             spr_access[`OR1K_SPR_TT_BASE]) ||
+                             // GPR
+                             (spr_access[`OR1K_SPR_SYS_BASE] &&
+                              spr_addr[10:9]==2'h2);
 
    generate
       if (FEATURE_DEBUGUNIT!="NONE") begin : du
@@ -1131,19 +1177,14 @@ module mor1kx_ctrl_cappuccino
 	   else if (du_ack)
 	     du_ack <= 0;
 	   else if (du_stb_i) begin
-	      if (!spr_group_present)
-		/* Unit doesn't exist, ACK to clear the access, nothing done */
-		du_ack <= 1;
-	      else if (spr_access_ack[spr_group])
-		/* actual access occurred */
-		du_ack <= 1;
+           	  du_ack <= spr_ack;
 	   end
 
 	 assign du_ack_o = du_ack;
 
 	 /* Data back to the debug bus */
 	 always @(posedge clk)
-	   du_read_dat <= spr_internal_read_dat[spr_group];
+	   du_read_dat <= mfspr_dat_o;
 
 	 assign du_dat_o = du_read_dat;
 
@@ -1255,16 +1296,17 @@ module mor1kx_ctrl_cappuccino
 	 assign spr_read_data_group_9 = spr_internal_read_dat[9];
 
 
-	 /* always single cycle access */
-	 assign spr_access_ack[6] = 1;
-	 assign spr_internal_read_dat[6] = (spr_addr==`OR1K_SPR_DMR1_ADDR) ?
-					   spr_dmr1 :
-					   (spr_addr==`OR1K_SPR_DMR2_ADDR) ?
-					   spr_dmr2 :
-					   (spr_addr==`OR1K_SPR_DSR_ADDR) ?
-					   spr_dsr :
-					   (spr_addr==`OR1K_SPR_DRR_ADDR) ?
-					   spr_drr : 0;
+         /* always single cycle access */
+         assign spr_access_ack[`OR1K_SPR_DU_BASE] = spr_access[`OR1K_SPR_DU_BASE];
+         assign spr_internal_read_dat[`OR1K_SPR_DU_BASE] =
+                                           (spr_addr==`OR1K_SPR_DMR1_ADDR) ?
+                                           spr_dmr1 :
+                                           (spr_addr==`OR1K_SPR_DMR2_ADDR) ?
+                                           spr_dmr2 :
+                                           (spr_addr==`OR1K_SPR_DSR_ADDR) ?
+                                           spr_dsr :
+                                           (spr_addr==`OR1K_SPR_DRR_ADDR) ?
+                                           spr_drr : 0;
 
 	 /* Put the incoming stall signal through a register to detect FE */
 	 always @(posedge clk `OR_ASYNC_RST)
@@ -1313,7 +1355,7 @@ module mor1kx_ctrl_cappuccino
 	   assign stepped_into_delay_slot = 0;
 	   assign du_dat_o = 0;
 	   assign du_restart_from_stall = 0;
-	   assign spr_access_ack[6] = 1;
+           assign spr_access_ack[`OR1K_SPR_DU_BASE] = 1;
 
 	   always @(posedge clk)
 	     begin
@@ -1327,93 +1369,104 @@ module mor1kx_ctrl_cappuccino
 	end
    endgenerate
 
-   /* Controls to generate ACKs from units that are external to this module */
-   generate
-      if (FEATURE_DMMU!="NONE") begin : dmmu_ctrl
-	 assign spr_access_ack[1] = spr_bus_ack_dmmu_i;
-	 assign spr_internal_read_dat[1] = spr_bus_dat_dmmu_i;
-      end
-      else begin
-	 assign spr_access_ack[1] = 1;
-	 assign spr_internal_read_dat[1] = 0;
-      end
-   endgenerate
+// Controls to generate ACKs from units that are external to this module
+generate
+if (FEATURE_DMMU!="NONE") begin : dmmu_ctrl
+   assign spr_access_ack[`OR1K_SPR_DMMU_BASE] = spr_bus_ack_dmmu_i &
+                                                spr_access[`OR1K_SPR_DMMU_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_DMMU_BASE] =
+     spr_bus_dat_dmmu_i &
+     {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_DMMU_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_DMMU_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_DMMU_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_IMMU!="NONE") begin : immu_ctrl
-	 assign spr_access_ack[2] = spr_bus_ack_immu_i;
-	 assign spr_internal_read_dat[2] = spr_bus_dat_immu_i;
-      end
-      else begin
-	 assign spr_access_ack[2] = 1;
-	 assign spr_internal_read_dat[2] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_IMMU!="NONE") begin : immu_ctrl
+   assign spr_access_ack[`OR1K_SPR_IMMU_BASE] = spr_bus_ack_immu_i &
+                                                spr_access[`OR1K_SPR_IMMU_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_IMMU_BASE] =
+     spr_bus_dat_immu_i &
+     {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_IMMU_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_IMMU_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_IMMU_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_DATACACHE!="NONE") begin : datacache_ctrl
-	 assign spr_access_ack[3] = spr_bus_ack_dc_i;
-	 assign spr_internal_read_dat[3] = spr_bus_dat_dc_i;
-      end
-      else begin
-	 assign spr_access_ack[3] = 1;
-	 assign spr_internal_read_dat[3] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_DATACACHE!="NONE") begin : datacache_ctrl
+   assign spr_access_ack[`OR1K_SPR_DC_BASE] = spr_bus_ack_dc_i &
+                                              spr_access[`OR1K_SPR_DC_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_DC_BASE] =
+     spr_bus_dat_dc_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_DC_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_DC_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_DC_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : instructioncache_ctrl
-	 assign spr_access_ack[4] = spr_bus_ack_ic_i;
-	 assign spr_internal_read_dat[4] = spr_bus_dat_ic_i;
-      end
-      else begin
-	 assign spr_access_ack[4] = 1;
-	 assign spr_internal_read_dat[4] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : instructioncache_ctrl
+   assign spr_access_ack[`OR1K_SPR_IC_BASE] = spr_bus_ack_ic_i &
+                                              spr_access[`OR1K_SPR_IC_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_IC_BASE] =
+     spr_bus_dat_ic_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_IC_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_IC_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_IC_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_MAC!="NONE") begin : mac_ctrl
-	 assign spr_access_ack[5] = spr_bus_ack_mac_i;
-	 assign spr_internal_read_dat[5] = spr_bus_dat_mac_i;
-      end
-      else begin
-	 assign spr_access_ack[5] = 1;
-	 assign spr_internal_read_dat[5] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_MAC!="NONE") begin : mac_ctrl
+   assign spr_access_ack[`OR1K_SPR_MAC_BASE] = spr_bus_ack_mac_i &
+                                               spr_access[`OR1K_SPR_MAC_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_MAC_BASE] =
+      spr_bus_dat_mac_i &
+      {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_MAC_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_MAC_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_MAC_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_PERFCOUNTERS!="NONE") begin : perfcounters_ctrl
-	 assign spr_access_ack[7] = spr_bus_ack_pcu_i;
-	 assign spr_internal_read_dat[7] = spr_bus_dat_pcu_i;
-      end
-      else begin
-	 assign spr_access_ack[7] = 1;
-	 assign spr_internal_read_dat[7] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_PERFCOUNTERS!="NONE") begin : perfcounters_ctrl
+   assign spr_access_ack[`OR1K_SPR_PC_BASE] = spr_bus_ack_pcu_i &
+                                              spr_access[`OR1K_SPR_PC_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_PC_BASE] =
+     spr_bus_dat_pcu_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_PC_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_PC_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_PC_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_PMU!="NONE") begin : pmu_ctrl
-	 assign spr_access_ack[8] = spr_bus_ack_pmu_i;
-	 assign spr_internal_read_dat[8] = spr_bus_dat_pcu_i;
-      end
-      else begin
-	 assign spr_access_ack[8] = 1;
-	 assign spr_internal_read_dat[8] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_PMU!="NONE") begin : pmu_ctrl
+   assign spr_access_ack[`OR1K_SPR_PM_BASE] = spr_bus_ack_pmu_i &
+                                              spr_access[`OR1K_SPR_PM_BASE];
+   assign spr_internal_read_dat[`OR1K_SPR_PM_BASE] =
+     spr_bus_dat_pmu_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_PM_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_PM_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_PM_BASE] = 0;
+end
+endgenerate
 
-   generate
-      if (FEATURE_FPU!="NONE") begin : fpu_enable_spr_bus_in_ctrl
-	 assign spr_access_ack[11] = spr_bus_ack_fpu_i;
-	 assign spr_internal_read_dat[11] = spr_bus_dat_fpu_i;
-      end
-      else begin : fpu_undef_spr_bus_in_ctrl
-	 assign spr_access_ack[11] = 1;
-	 assign spr_internal_read_dat[11] = 0;
-      end
-   endgenerate
+generate
+if (FEATURE_FPU!="NONE") begin : fpu_ctrl
+   assign spr_access_ack[`OR1K_SPR_FPU_BASE] = spr_bus_ack_fpu_i;
+   assign spr_internal_read_dat[`OR1K_SPR_FPU_BASE] =
+     spr_bus_dat_fpu_i &
+     {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_FPU_BASE]}};
+end else begin
+   assign spr_access_ack[`OR1K_SPR_FPU_BASE] = 0;
+   assign spr_internal_read_dat[`OR1K_SPR_FPU_BASE] = 0;
+end
+endgenerate
 
 endmodule // mor1kx_ctrl_cappuccino
