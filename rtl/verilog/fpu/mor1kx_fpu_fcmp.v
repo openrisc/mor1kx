@@ -6,6 +6,10 @@
 ////  Author: Rudolf Usselmann                                   ////
 ////          rudi@asics.ws                                      ////
 ////                                                             ////
+//// Update for mor1kx, bug fixing and further development       ////
+////             Andrey Bacherov, 2014,                          ////
+////             avbacherov@opencores.org                        ////
+////                                                             ////
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
 //// Copyright (C) 2000 Rudolf Usselmann                         ////

@@ -17,10 +17,13 @@
 //          Jidan Al-eryani, jidan@gmx.net                          //
 //        - Conv. to Verilog and inclusion in OR1200 -              //
 //          Julius Baxter, julius@opencores.org                     //
+//        - Update for mor1kx,                                      //
+//          bug fixing and further development -                    //
+//          Andrey Bacherov, avbacherov@opencores.org               //
 //                                                                  //
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
-//  Copyright (C) 2006, 2010                                        //
+//  Copyright (C) 2006, 2010, 2014                                  //
 //                                                                  //
 //  This source file may be used and distributed without            //
 //  restriction provided that this copyright statement is not       //
@@ -44,38 +47,29 @@
 
 `include "mor1kx-defines.v"
 
-module mor1kx_fpu_addsub(
-    clk,
-    rst,
-    fpu_op_i,
-    fracta_i,
-    fractb_i,
-    signa_i,
-    signb_i,
-    fract_o,
-    sign_o
+module mor1kx_fpu_addsub
+#(
+  parameter FP_WIDTH = 32,
+  parameter MUL_SERIAL = 0, // 0 for parallel multiplier, 1 for serial
+  parameter MUL_COUNT = 11, //11 for parallel multiplier, 34 for serial
+  parameter FRAC_WIDTH = 23,
+  parameter EXP_WIDTH = 8,
+  parameter ZERO_VECTOR = 31'd0,
+  parameter INF = 31'b1111111100000000000000000000000,
+  parameter QNAN = 31'b1111111110000000000000000000000,
+  parameter SNAN = 31'b1111111100000000000000000000001
+)
+(
+  input                       clk,
+  input                       rst,
+  input                       fpu_op_i,
+  input [FRAC_WIDTH+4:0]      fracta_i,
+  input [FRAC_WIDTH+4:0]      fractb_i,
+  input                       signa_i,
+  input                       signb_i,
+  output reg [FRAC_WIDTH+4:0] fract_o,
+  output reg                  sign_o
 );
-
-
-  parameter FP_WIDTH = 32;
-  parameter MUL_SERIAL = 0; // 0 for parallel multiplier, 1 for serial
-  parameter MUL_COUNT = 11; //11 for parallel multiplier, 34 for serial
-  parameter FRAC_WIDTH = 23;
-  parameter EXP_WIDTH = 8;
-  parameter ZERO_VECTOR = 31'd0;
-  parameter INF = 31'b1111111100000000000000000000000;
-  parameter QNAN = 31'b1111111110000000000000000000000;
-  parameter SNAN = 31'b1111111100000000000000000000001;
-
-  input clk;
-  input rst;
-  input fpu_op_i;
-  input [FRAC_WIDTH+4:0] fracta_i;
-  input [FRAC_WIDTH+4:0] fractb_i;
-  input      signa_i;
-  input      signb_i;
-  output reg [FRAC_WIDTH+4:0] fract_o;
-  output reg            sign_o;
 
   wire [FRAC_WIDTH+4:0]       s_fracta_i;
   wire [FRAC_WIDTH+4:0]       s_fractb_i;

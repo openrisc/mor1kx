@@ -8,6 +8,9 @@
 //// Modified by Julius Baxter, July, 2010                       ////
 ////             julius.baxter@orsoc.se                          ////
 ////                                                             ////
+//// Update for mor1kx, bug fixing and further development       ////
+////             Andrey Bacherov, 2014,                          ////
+////             avbacherov@opencores.org                        ////
 ////                                                             ////
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
@@ -39,16 +42,14 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_fpu_intfloat_conv_except
-  (
-  clk, rst, opa, opb, inf, ind, qnan, snan, opa_nan, opb_nan,
-  opa_00, opb_00, opa_inf, opb_inf
-  );
-   input    clk;
-   input    rst;
-   input [31:0]   opa, opb;
-   output   inf, ind, qnan, snan, opa_nan, opb_nan;
-   output   opa_00, opb_00;
-   output   opa_inf, opb_inf;
+(
+   input    clk,
+   input    rst,
+   input    [31:0] opa, opb,
+   output   inf, ind, qnan, snan, opa_nan, opb_nan,
+   output   opa_00, opb_00,
+   output   opa_inf, opb_inf
+);
 
    ////////////////////////////////////////////////////////////////////////
    //
@@ -89,7 +90,7 @@ module mor1kx_fpu_intfloat_conv_except
      qnan_r_a <= 0;
      snan_r_a <= 0;
      qnan_r_b <= 0;
-     snan_r_b <= 0; 
+     snan_r_b <= 0;
      ind  <= 0;
      inf  <= 0;
      qnan <= 0;

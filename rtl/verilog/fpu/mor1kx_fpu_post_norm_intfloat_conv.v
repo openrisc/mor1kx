@@ -8,6 +8,10 @@
 //// Modified by Julius Baxter, July, 2010                       ////
 ////             julius.baxter@orsoc.se                          ////
 ////                                                             ////
+//// Update for mor1kx, bug fixing and further development       ////
+////             Andrey Bacherov, 2014,                          ////
+////             avbacherov@opencores.org                        ////
+////                                                             ////
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
 //// Copyright (C) 2000 Rudolf Usselmann                         ////
@@ -38,25 +42,21 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_fpu_post_norm_intfloat_conv
-  (
-    clk, rst, fpu_op, opas, sign, rmode, fract_in,
-    exp_in, opa_nan, opa_inf, out,
-    ine, inv, overflow, underflow, f2i_out_sign
-    );
-   input    clk;
-   input    rst;
-   input [2:0]    fpu_op;
-   input    opas;
-   input    sign;
-   input [1:0]    rmode;
-   input [47:0]   fract_in;
-   input [7:0]    exp_in;
-   input    opa_nan, opa_inf;
-
-   output [30:0]  out;
-   output   ine, inv;
-   output   overflow, underflow;
-   output   f2i_out_sign;
+(
+   input         clk,
+   input         rst,
+   input [2:0]   fpu_op,
+   input         opas,
+   input         sign,
+   input [1:0]   rmode,
+   input [47:0]  fract_in,
+   input [7:0]   exp_in,
+   input         opa_nan, opa_inf,
+   output [30:0] out,
+   output        ine, inv,
+   output        overflow, underflow,
+   output        f2i_out_sign
+);
 
    ////////////////////////////////////////////////////////////////////////
    //
@@ -194,9 +194,9 @@ module mor1kx_fpu_post_norm_intfloat_conv
 
    assign fract_out_7fffff = &fract_out;
    assign fract_out_00     = !(|fract_out);
-   
+
    always @(posedge clk `OR_ASYNC_RST)
-   if (rst) 
+   if (rst)
      fract_in_00  <= 0;
    else
      fract_in_00  <= !(|fract_in);
@@ -211,8 +211,8 @@ module mor1kx_fpu_post_norm_intfloat_conv
 
    // ---------------------------------------------------------------------
    // Fraction Normalization
-   
-   // For F2I conversion we can move point right on 30-bits maximum 
+
+   // For F2I conversion we can move point right on 30-bits maximum
    // 23-bits of mantissa + 7 bits of exp, while other 2 bits are:
    //  1) implicit "1" in normalized values
    //  2) "sign" placed into its position outside of the function
@@ -232,23 +232,23 @@ module mor1kx_fpu_post_norm_intfloat_conv
           (opa_inf & opas);
 
    // Zero or largest -int cases
-   assign f2i_zero = 
+   assign f2i_zero =
      f2i_min |                               // largest possible -int (all zeros except sign)
-     (fract_in_00 & exp_in_00) |             // +/- 0.0 cases     
+     (fract_in_00 & exp_in_00) |             // +/- 0.0 cases
      (rm_to_infm & !opas & f2i_exp_lt_min) | // to INF- & 0<f<1.0
      (rm_to_zero & f2i_exp_lt_min) |         // to zero & |f|<1.0
      (rm_to_infp & opas & f2i_exp_lt_min) |  // to INF+ & (-1.0)<f<0
      (rm_nearest & f2i_exp_lt_min);          // to nearest & |f|<0.5: see selection for lt<min earlear
-      
+
 
    // Maximum :
    // a) disabled when the -0.0 case comes up
    // b) +/- NaN or +inf - result will be maximum int
    // c) too big exp and positive sign - result will be maximum int.
    // d) rounding negative down and less than minimum expon. for int = -1
-   assign f2i_max = 
+   assign f2i_max =
       !(fract_in_00 & exp_in_00) &            // disable +/- 0.0 cases
-      ( 
+      (
         (opa_nan | (opa_inf & !opas)) |       // Either +/- NaN, or +inf
         (!opas & f2i_exp_gt_max & !exp_in_ff) // too big positive => maximum int
       );
@@ -256,7 +256,7 @@ module mor1kx_fpu_post_norm_intfloat_conv
    // Claculate various shifting options
    assign f2i_shft  = exp_in-8'h7d; // in-125
 
-   assign conv_shft  = op_f2i ? 
+   assign conv_shft  = op_f2i ?
       (f2i_shft & {8{!(|f2i_shft[7:6])}} ) : {2'h0, fi_ldz};
 
    assign fract_in_shftl = (op_f2i & f2i_zero) ?
@@ -293,9 +293,9 @@ module mor1kx_fpu_post_norm_intfloat_conv
    // ii) It's zero and not -inf
    // iii) We've rounded to 0 (both fract and exp out are 0 and not forced)
    // Force to 1 (negative) when have negative sign with too big exponent
-   assign f2i_out_sign = 
-      f2i_min ? 1 : // too big negative 
-      (opa_nan | (f2i_zero & !f2i_max) | (!(|out) & !f2i_zero)) ? 0 : 
+   assign f2i_out_sign =
+      f2i_min ? 1 : // too big negative
+      (opa_nan | (f2i_zero & !f2i_max) | (!(|out) & !f2i_zero)) ? 0 :
       opas;
 
    assign exp_i2f   = fract_in_00 ? (opas ? 8'h9e : 0) : (8'h9e-{2'd0,fi_ldz});
@@ -306,7 +306,7 @@ module mor1kx_fpu_post_norm_intfloat_conv
 
    //assign exp_out = conv_exp;
    always @(posedge clk `OR_ASYNC_RST)
-   if (rst) 
+   if (rst)
      exp_out <= 8'd0;
    else
      exp_out <= conv_exp;
@@ -353,10 +353,10 @@ module mor1kx_fpu_post_norm_intfloat_conv
 
    assign round2_fasu = ((r | s) & !r_sign) & (!exp_out[7] |
                  (exp_out[7] & round2a));
-      
+
       // select fract-out+1 if: to INF+ & ((R|S) | denormalized_positive)
-   assign round2_f2i = 
-     rm_to_infp & (r | s | (!opas & exp_in_00 & (|fract_in[22:0])));  
+   assign round2_f2i =
+     rm_to_infp & (r | s | (!opas & exp_in_00 & (|fract_in[22:0])));
 
    assign round2 = op_f2i ? round2_f2i : round2_fasu;
 
@@ -391,7 +391,7 @@ module mor1kx_fpu_post_norm_intfloat_conv
    // Final Output Mux
    // Fix Output for denormalized and special numbers
 
-   assign fract_out_final = 
+   assign fract_out_final =
       (exp_out_final_ff & !rm_to_zero & !op_f2i) ? 23'h0 : // ovf0 ? 23'h0 :
       (f2i_max & op_f2i) ? 23'h7fffff :
       fract_out_rnd;
@@ -414,7 +414,7 @@ module mor1kx_fpu_post_norm_intfloat_conv
 
    wire exp_in_lt_half = (exp_in<8'h80);
 
-   wire f2i_ine = 
+   wire f2i_ine =
         !inv & // report either invalid or inexant
         (
           (r | s) |

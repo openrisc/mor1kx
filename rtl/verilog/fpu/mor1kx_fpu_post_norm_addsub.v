@@ -16,69 +16,61 @@
 ////        Jidan Al-eryani, jidan@gmx.net                        ////
 ////      - Conv. to Verilog and inclusion in OR1200 -            ////
 ////        Julius Baxter, julius@opencores.org                   ////
+////      - Update for mor1kx,                                    ////
+////        bug fixing and further development -                  ////
+////        Andrey Bacherov, avbacherov@opencores.org             ////
 ////                                                              ////
 //////////////////////////////////////////////////////////////////////
-//
-//  Copyright (C) 2006, 2010
-//
-//  This source file may be used and distributed without
-//  restriction provided that this copyright statement is not
-//  removed from the file and that any derivative work contains
-//  the original copyright notice and the associated disclaimer.
-//
-//    THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY
-//  EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
-//  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-//  FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL THE AUTHOR
-//  OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-//  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-//  (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-//  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-//  BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-//  LIABILITY, WHETHER IN  CONTRACT, STRICT LIABILITY, OR TORT
-//  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-//  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-//  POSSIBILITY OF SUCH DAMAGE.
-//
+//                                                                  //
+//  Copyright (C) 2006, 2010, 2014                                  //
+//                                                                  //
+//  This source file may be used and distributed without            //
+//  restriction provided that this copyright statement is not       //
+//  removed from the file and that any derivative work contains     //
+//  the original copyright notice and the associated disclaimer.    //
+//                                                                  //
+//    THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY           //
+//  EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED       //
+//  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS       //
+//  FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL THE AUTHOR          //
+//  OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,             //
+//  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES        //
+//  (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE       //
+//  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR            //
+//  BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF      //
+//  LIABILITY, WHETHER IN  CONTRACT, STRICT LIABILITY, OR TORT      //
+//  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT      //
+//  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE             //
+//  POSSIBILITY OF SUCH DAMAGE.                                     //
+//////////////////////////////////////////////////////////////////////
 
 `include "mor1kx-defines.v"
 
 module mor1kx_fpu_post_norm_addsub
-  (
-   clk,
-   rst,
-   opa_i,
-   opb_i,
-   fract_28_i,
-   exp_i,
-   sign_i,
-   fpu_op_i,
-   rmode_i,
-   output_o,
-   ine_o
-   );
-
-   parameter FP_WIDTH = 32;
-   parameter MUL_SERIAL = 0; // 0 for parallel multiplier, 1 for serial
-   parameter MUL_COUNT = 11; //11 for parallel multiplier, 34 for serial
-   parameter FRAC_WIDTH = 23;
-   parameter EXP_WIDTH = 8;
-   parameter ZERO_VECTOR = 31'd0;
-   parameter INF = 31'b1111111100000000000000000000000;
-   parameter QNAN = 31'b1111111110000000000000000000000;
-   parameter SNAN = 31'b1111111100000000000000000000001;
-
-   input     clk;
-   input     rst;
-   input [FP_WIDTH-1:0] opa_i;
-   input [FP_WIDTH-1:0] opb_i;
-   input [FRAC_WIDTH+4:0] fract_28_i;
-   input [EXP_WIDTH-1:0]  exp_i;
-   input      sign_i;
-   input      fpu_op_i;
-   input [1:0]      rmode_i;
-   output reg [FP_WIDTH-1:0]    output_o;
-   output reg     ine_o;
+#(
+   parameter FP_WIDTH = 32,
+   parameter MUL_SERIAL = 0, // 0 for parallel multiplier, 1 for serial
+   parameter MUL_COUNT = 11, //11 for parallel multiplier, 34 for serial
+   parameter FRAC_WIDTH = 23,
+   parameter EXP_WIDTH = 8,
+   parameter ZERO_VECTOR = 31'd0,
+   parameter INF = 31'b1111111100000000000000000000000,
+   parameter QNAN = 31'b1111111110000000000000000000000,
+   parameter SNAN = 31'b1111111100000000000000000000001
+)
+(
+   input                       clk,
+   input                       rst,
+   input      [FP_WIDTH-1:0]   opa_i,
+   input      [FP_WIDTH-1:0]   opb_i,
+   input      [FRAC_WIDTH+4:0] fract_28_i,
+   input      [EXP_WIDTH-1:0]  exp_i,
+   input                       sign_i,
+   input                       fpu_op_i,
+   input       [1:0]           rmode_i,
+   output reg  [FP_WIDTH-1:0]  output_o,
+   output reg                  ine_o
+);
 
    wire [FP_WIDTH-1:0]    s_opa_i;
    wire [FP_WIDTH-1:0]    s_opb_i;
@@ -210,7 +202,7 @@ module mor1kx_fpu_post_norm_addsub
    // Shifting the fraction and rounding
 
   always @(posedge clk `OR_ASYNC_RST)
-  if (rst) 
+  if (rst)
     s_fracto28_1 <= 0;
   else begin
      if (|s_shr1)

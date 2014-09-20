@@ -10,7 +10,9 @@
 //// Modified by Julius Baxter, July, 2010                       ////
 ////             julius.baxter@orsoc.se                          ////
 ////                                                             ////
-//// TODO: Fix bug where 1.0f in round up goes to integer 2      ////
+//// Update for mor1kx, bug fixing and further development       ////
+////             Andrey Bacherov, 2014,                          ////
+////             avbacherov@opencores.org                        ////
 ////                                                             ////
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
@@ -66,33 +68,28 @@
 
 
 module mor1kx_fpu_intfloat_conv
-  (
-    clk, rst, rmode, fpu_op, opa,
-    clr_ready_flag_i,
-    start_i,
-    out, ready_o,
-    snan, ine, inv, overflow, underflow, zero
-    );
-   input    clk;
-   input    rst;
-   input [1:0]    rmode;
-   input [2:0]    fpu_op;
-   input [31:0]   opa;
-   input       clr_ready_flag_i;
-   input       start_i;
-   output [31:0]  out;
-   output      ready_o;
-   output   snan;
-   output   ine;
-   output     inv;
-   output     overflow;
-   output     underflow;
-   output   zero;
-
-
+#(
    parameter  INF  = 31'h7f800000,
-      QNAN = 31'h7fc00001,
-      SNAN = 31'h7f800001;
+              QNAN = 31'h7fc00001,
+              SNAN = 31'h7f800001
+)
+(
+   input         clk,
+   input         rst,
+   input [1:0]   rmode,
+   input [2:0]   fpu_op,
+   input [31:0]  opa,
+   input         clr_ready_flag_i,
+   input         start_i,
+   output [31:0] out,
+   output        ready_o,
+   output        snan,
+   output        ine,
+   output        inv,
+   output        overflow,
+   output        underflow,
+   output        zero
+);
 
    ////////////////////////////////////////////////////////////////////////
    //
@@ -153,7 +150,7 @@ module mor1kx_fpu_intfloat_conv
    always @(posedge clk `OR_ASYNC_RST) begin
      if (rst) begin
        fpu_conv_shr <= 7'd0;
-       s_state <= t_state_waiting;     
+       s_state <= t_state_waiting;
      end
      else if(start_i) begin
        fpu_conv_shr <= 7'd1;
@@ -230,7 +227,7 @@ module mor1kx_fpu_intfloat_conv
      opa_sign_r <= opa_r[31];
      sign_fasu_r <=  opa_sign_r; //sign_fasu;
    end
- 
+
 
    ////////////////////////////////////////////////////////////////////////
    //
@@ -248,7 +245,7 @@ module mor1kx_fpu_intfloat_conv
 
    // Exponent must be once cycle delayed
    always @(posedge clk `OR_ASYNC_RST)
-   if (rst) 
+   if (rst)
      exp_r <= 0;
    else begin
      case(fpu_op_r2)
@@ -258,13 +255,13 @@ module mor1kx_fpu_intfloat_conv
    end
 
    always @(posedge clk `OR_ASYNC_RST)
-   if (rst) 
+   if (rst)
      opa_r1 <=  0;
    else
      opa_r1 <=  opa_r[30:0];
 
    always @(posedge clk `OR_ASYNC_RST)
-   if (rst) 
+   if (rst)
      fract_i2f <= 0;
    else
      fract_i2f <=  (fpu_op_r2==5) ?
@@ -275,13 +272,13 @@ module mor1kx_fpu_intfloat_conv
    assign fract_denorm = fract_i2f;
 
    always @(posedge clk `OR_ASYNC_RST)
-   if (rst) 
+   if (rst)
      opas_r1 <=  0;
    else
      opas_r1 <=  opa_r[31];
 
    always @(posedge clk `OR_ASYNC_RST)
-   if (rst) 
+   if (rst)
      opas_r2 <=  0;
    else
      opas_r2 <=  opas_r1;
@@ -290,7 +287,7 @@ module mor1kx_fpu_intfloat_conv
 
 
    always @(posedge clk `OR_ASYNC_RST)
-   if (rst) 
+   if (rst)
      sign <=  0;
    else
      sign <=  (rmode_r2==2'h3) ? !sign_d : sign_d;
@@ -382,7 +379,7 @@ module mor1kx_fpu_intfloat_conv
    else
      zero <=  (fpu_op_r3==3'b101) ? (out_d_00 & !(snan_d | qnan_d)) :
        output_zero_fasu ;
-   
+
    assign inv = inv_d & !f2i_special_case_no_inv;
 
 endmodule // mor1kx_fpu_intfloat_conv
