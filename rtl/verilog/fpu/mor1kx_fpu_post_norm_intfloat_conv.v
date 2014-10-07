@@ -63,11 +63,10 @@ module mor1kx_fpu_post_norm_intfloat_conv
    // Local Wires and registers
    //
 
-   /*wire*/ reg [22:0]    fract_out;
-   /*wire*/reg [24:0]     fract_trunc;
-   /*wire*/reg [7:0]    exp_out;
-   wire [30:0]    out;
-   wire     exp_out1_co, overflow, underflow;
+   reg [22:0]    fract_out;
+   reg [24:0]     fract_trunc;
+   reg [7:0]    exp_out;
+   wire     exp_out1_co;
    wire [22:0]    fract_out_final;
    reg [22:0]     fract_out_rnd;
    wire [8:0]     exp_next_mi;

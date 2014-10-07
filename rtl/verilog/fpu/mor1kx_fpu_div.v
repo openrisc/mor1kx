@@ -72,12 +72,8 @@ module mor1kx_fpu_div
    output                       sign_o,
    output                       div_zero_o
 );
-
-
-
-
-   parameter t_state_waiting = 1'b0,
-         t_state_busy = 1'b1;
+   localparam t_state_waiting = 1'b0,
+              t_state_busy = 1'b1;
 
    reg [FRAC_WIDTH+3:0]   s_qutnt_o;
    reg [FRAC_WIDTH+3:0]   s_rmndr_o;

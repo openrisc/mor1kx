@@ -81,31 +81,28 @@ module mor1kx_fpu_intfloat_conv
    input [31:0]  opa,
    input         clr_ready_flag_i,
    input         start_i,
-   output [31:0] out,
+   output reg [31:0] out,
    output        ready_o,
-   output        snan,
-   output        ine,
+   output reg    snan,
+   output reg    ine,
    output        inv,
    output        overflow,
    output        underflow,
-   output        zero
+   output reg    zero
 );
 
    ////////////////////////////////////////////////////////////////////////
    //
    // Local Wires
    //
-   reg      zero;
    reg [31:0]     opa_r;  // Input operand registers
-   reg [31:0]     out;    // Output register
    reg      div_by_zero;  // Divide by zero output register
    wire [7:0]     exp_fasu; // Exponent output from EQU block
    reg [7:0]    exp_r;    // Exponent output (registerd)
    wire     co;   // carry output
    wire [30:0]    out_d;    // Intermediate final result output
    wire     overflow_d, underflow_d;// Overflow/Underflow
-   reg      inf, snan, qnan;// Output Registers for INF, S/QNAN
-   reg      ine;    // Output Registers for INE
+   reg      inf, qnan;// Output Registers for INF, S/QNAN
    reg [1:0]    rmode_r1, rmode_r2,// Pipeline registers for round mode
       rmode_r3;
    reg [2:0]    fpu_op_r1, fpu_op_r2,// Pipeline registers for fp
@@ -143,8 +140,8 @@ module mor1kx_fpu_intfloat_conv
    // we don't reset ready flag till next fpu instruction
    // but it is blocked by combination of 'is_op_fpu' and 'decode_valid_o'
    // on upper level
-   parameter t_state_waiting = 0,
-            t_state_busy    = 1;
+   localparam t_state_waiting = 0,
+              t_state_busy    = 1;
    reg     s_state;
    reg [6:0] fpu_conv_shr;
    always @(posedge clk `OR_ASYNC_RST) begin

@@ -71,8 +71,8 @@ module mor1kx_fpu_mul
    output reg                    ready_o
 );
 
-   parameter t_state_waiting = 1'b0,
-             t_state_busy = 1'b1;
+   localparam t_state_waiting = 1'b0,
+              t_state_busy = 1'b1;
 
    reg [47:0]          s_fract_o;
    reg [23:0]          s_fracta_i;

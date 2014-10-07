@@ -97,8 +97,8 @@ module mor1kx_fpu_arith
    output reg                snan_o
 );
 
-   parameter  t_state_waiting = 0,
-              t_state_busy    = 1;
+   localparam  t_state_waiting = 0,
+               t_state_busy    = 1;
    reg        s_state;
    reg                       serial_start;
    reg [5:0]         s_count; // Max value of 64

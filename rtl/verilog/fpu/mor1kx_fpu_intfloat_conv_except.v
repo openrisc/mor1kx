@@ -46,9 +46,9 @@ module mor1kx_fpu_intfloat_conv_except
    input    clk,
    input    rst,
    input    [31:0] opa, opb,
-   output   inf, ind, qnan, snan, opa_nan, opb_nan,
-   output   opa_00, opb_00,
-   output   opa_inf, opb_inf
+   output reg inf, ind, qnan, snan, opa_nan, opb_nan,
+   output reg opa_00, opb_00,
+   output reg opa_inf, opb_inf
 );
 
    ////////////////////////////////////////////////////////////////////////
@@ -60,11 +60,8 @@ module mor1kx_fpu_intfloat_conv_except
    wire [22:0]    fracta, fractb;   // alias to opX fraction
    reg      expa_ff, infa_f_r, qnan_r_a, snan_r_a;
    reg      expb_ff, infb_f_r, qnan_r_b, snan_r_b;
-   reg      inf, ind, qnan, snan; // Output registers
-   reg      opa_nan, opb_nan;
-   reg      expa_00, expb_00, fracta_00, fractb_00;
-   reg      opa_00, opb_00;
-   reg      opa_inf, opb_inf;
+   reg      expa_00, expb_00;
+   reg      fracta_00, fractb_00;
 
    ////////////////////////////////////////////////////////////////////////
    //
