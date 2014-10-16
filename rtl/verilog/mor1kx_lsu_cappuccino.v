@@ -570,7 +570,7 @@ endgenerate
      else if (store_buffer_write | pipeline_flush_i)
        store_buffer_write_pending <= 0;
      else if (ctrl_op_lsu_store_i & padv_ctrl_i & !dbus_stall &
-	      (store_buffer_full | dc_refill | dc_refill_r))
+	      (store_buffer_full | dc_refill | dc_refill_r | dc_snoop_hit))
        store_buffer_write_pending <= 1;
 
    assign store_buffer_write = (ctrl_op_lsu_store_i &
