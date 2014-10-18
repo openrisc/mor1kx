@@ -4,7 +4,7 @@
 ////                                                              ////
 ////  This file is part of the mor1kx project                     ////
 ////  (an implementation of OpenRISC 1K architecture)             ////
-////  https://github.com/openrisc/mor1kx
+////  https://github.com/openrisc/mor1kx                          ////
 ////                                                              ////
 ////  Description                                                 ////
 ////  Wrapper for floating point unit.                            ////
@@ -100,8 +100,6 @@ assign fpu_valid = !decode_valid_i &
                     fpu_op_is_comp);
                           
 wire   fpu_cmp_valid = !decode_valid_i; // for fpu flag set/clear logic
-
-assign fpcsr_set_o = fpu_valid;
 
 // Prepare flags fo FPCSR
 assign fpcsr_o[`OR1K_FPCSR_OVF] = (overflow & fpu_op_is_arith);
