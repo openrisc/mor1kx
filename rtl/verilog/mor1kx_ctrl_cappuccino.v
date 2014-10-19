@@ -221,6 +221,8 @@ module mor1kx_ctrl_cappuccino
     input 			      spr_gpr_ack_i,
     output [15:0] 		      spr_sr_o,
 
+    output reg 			      ctrl_bubble_o,
+
     input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i,
     input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i
     );
@@ -281,8 +283,6 @@ module mor1kx_ctrl_cappuccino
    wire 			     except_pic;
 
    wire 			     except_range;
-
-   reg 				     ctrl_bubble;
 
    wire [15:0] 			     spr_addr;
 
@@ -350,7 +350,7 @@ module mor1kx_ctrl_cappuccino
 			       except_dtlb_miss_i | except_dpagefault_i);
 
    assign exception = exception_pending &
-		      (padv_ctrl & !ctrl_bubble | ctrl_stage_exceptions);
+		      (padv_ctrl & !ctrl_bubble_o | ctrl_stage_exceptions);
 
    assign exception_re = exception & !exception_r & !exception_taken;
 
@@ -733,9 +733,9 @@ module mor1kx_ctrl_cappuccino
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
-       ctrl_bubble <= 0;
+       ctrl_bubble_o <= 0;
      else if (padv_execute_o)
-       ctrl_bubble <= execute_bubble_i;
+       ctrl_bubble_o <= execute_bubble_i;
 
    // Exception PC
    always @(posedge clk)

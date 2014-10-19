@@ -26,20 +26,23 @@ module mor1kx_store_buffer
     input [OPTION_OPERAND_WIDTH-1:0] 	adr_i,
     input [OPTION_OPERAND_WIDTH-1:0] 	dat_i,
     input [OPTION_OPERAND_WIDTH/8-1:0] 	bsel_i,
+    input 				atomic_i,
     input 				write_i,
 
     output [OPTION_OPERAND_WIDTH-1:0] 	pc_o,
     output [OPTION_OPERAND_WIDTH-1:0] 	adr_o,
     output [OPTION_OPERAND_WIDTH-1:0] 	dat_o,
     output [OPTION_OPERAND_WIDTH/8-1:0] bsel_o,
+    output 				atomic_o,
     input 				read_i,
 
     output 				full_o,
     output 				empty_o
     );
 
-   // The fifo stores address + data + byte sel + pc
-   localparam FIFO_DATA_WIDTH = OPTION_OPERAND_WIDTH*3 + OPTION_OPERAND_WIDTH/8;
+   // The fifo stores address + data + byte sel + pc + atomic
+   localparam FIFO_DATA_WIDTH = OPTION_OPERAND_WIDTH*3 +
+				OPTION_OPERAND_WIDTH/8 + 1;
 
    wire [FIFO_DATA_WIDTH-1:0] 		fifo_dout;
    wire [FIFO_DATA_WIDTH-1:0] 		fifo_din;
@@ -47,8 +50,8 @@ module mor1kx_store_buffer
    reg [DEPTH_WIDTH:0]                  write_pointer;
    reg [DEPTH_WIDTH:0]                  read_pointer;
 
-   assign fifo_din = {adr_i, dat_i, bsel_i, pc_i};
-   assign {adr_o, dat_o, bsel_o, pc_o} = fifo_dout;
+   assign fifo_din = {adr_i, dat_i, bsel_i, pc_i, atomic_i};
+   assign {adr_o, dat_o, bsel_o, pc_o, atomic_o} = fifo_dout;
 
    assign full_o = (write_pointer[DEPTH_WIDTH] != read_pointer[DEPTH_WIDTH]) &&
                    (write_pointer[DEPTH_WIDTH-1:0] == read_pointer[DEPTH_WIDTH-1:0]);

@@ -78,7 +78,9 @@ module mor1kx_cpu_espresso
 
     parameter OPTION_SHIFTER		= "BARREL",
 
-    parameter FEATURE_MULTICORE         = "NONE"
+    parameter FEATURE_MULTICORE = "NONE",
+
+    parameter FEATURE_TRACEPORT_EXEC = "NONE"
     )
    (
     input 			      clk,
@@ -285,6 +287,7 @@ module mor1kx_cpu_espresso
 
    /* mor1kx_decode AUTO_TEMPLATE (
     .decode_insn_i			(insn_fetch_to_decode),
+    .decode_op_lsu_atomic_o             (),
     ); */
    mor1kx_decode
      #(

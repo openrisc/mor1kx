@@ -565,6 +565,8 @@ module mor1kx_decode_execute_cappuccino
 			     (ctrl_to_decode_interlock |
 			      execute_rf_wb_o &
 			      (decode_rfb_adr_i == execute_rfd_adr_o)) |
+			     // atomic store
+			     execute_op_lsu_store_o & execute_op_lsu_atomic_o |
 			     // rfe
 			     decode_op_rfe_i
 			     ) & padv_i;

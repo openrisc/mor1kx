@@ -26,6 +26,7 @@ module mor1kx_lsu_cappuccino
     parameter OPTION_DCACHE_SET_WIDTH = 9,
     parameter OPTION_DCACHE_WAYS = 2,
     parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
+    parameter OPTION_DCACHE_SNOOP = "NONE",
     parameter FEATURE_DMMU = "NONE",
     parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
     parameter OPTION_DMMU_SET_WIDTH = 6,
@@ -97,12 +98,15 @@ module mor1kx_lsu_cappuccino
     output reg			      dbus_req_o,
     output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
     output reg [3:0] 		      dbus_bsel_o,
-    output reg 			      dbus_we_o,
+    output 			      dbus_we_o,
     output 			      dbus_burst_o,
     input 			      dbus_err_i,
     input 			      dbus_ack_i,
     input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
-    input 			      pipeline_flush_i
+    input 			      pipeline_flush_i,
+
+    input [31:0] 		      snoop_adr_i,
+    input 			      snoop_en_i
     );
 
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat_aligned;  // comb.
@@ -124,6 +128,7 @@ module mor1kx_lsu_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_dat;
    reg [OPTION_OPERAND_WIDTH-1:0]    dbus_adr;
    wire [OPTION_OPERAND_WIDTH-1:0]   next_dbus_adr;
+   reg 				     dbus_we;
    reg [3:0] 			     dbus_bsel;
    wire 			     dbus_access;
    wire 			     dbus_stall;
@@ -181,7 +186,10 @@ module mor1kx_lsu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0]   store_buffer_wadr;
    wire [OPTION_OPERAND_WIDTH-1:0]   store_buffer_dat;
    wire [OPTION_OPERAND_WIDTH/8-1:0] store_buffer_bsel;
+   wire 			     store_buffer_atomic;
    reg 				     store_buffer_write_pending;
+
+   reg 				     dbus_atomic;
 
    reg 				     last_write;
    reg 				     write_done;
@@ -190,7 +198,13 @@ module mor1kx_lsu_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0]    atomic_addr;
    reg 				     atomic_reserve;
    wire				     swa_success;
-   wire				     swa_fail;
+
+   wire 			     snoop_valid;
+   wire 			     dc_snoop_hit;
+
+   // We have to mask out our snooped bus accesses
+   assign snoop_valid = snoop_en_i &
+			!((snoop_adr_i == dbus_adr_o) & dbus_ack_i);
 
    assign ctrl_op_lsu = ctrl_op_lsu_load_i | ctrl_op_lsu_store_i;
 
@@ -205,7 +219,7 @@ module mor1kx_lsu_cappuccino
    assign align_err_short = ctrl_lsu_adr_i[0];
 
 
-   assign lsu_valid_o = (lsu_ack | access_done) & !tlb_reload_busy;
+   assign lsu_valid_o = (lsu_ack | access_done) & !tlb_reload_busy & !dc_snoop_hit;
 
    assign lsu_except_dbus_o = except_dbus | store_buffer_err_o;
 
@@ -348,7 +362,8 @@ module mor1kx_lsu_cappuccino
 			     write_done;
 
    assign lsu_ack = (ctrl_op_lsu_store_i | state == WRITE) ?
-		    (store_buffer_ack | swa_fail & padv_ctrl_i) :
+		    (store_buffer_ack & !ctrl_op_lsu_atomic_i |
+		     write_done & ctrl_op_lsu_atomic_i) :
 		    (dbus_access ? dbus_ack : dc_ack);
 
    assign lsu_ldat = dbus_access ? dbus_dat : dc_ldat;
@@ -357,6 +372,13 @@ module mor1kx_lsu_cappuccino
    assign dbus_dat_o = dbus_dat;
 
    assign dbus_burst_o = (state == DC_REFILL) & !dc_refill_done;
+
+   //
+   // Slightly subtle, but if there is an atomic store coming out from the
+   // store buffer, and the link has been broken while it was waiting there,
+   // the bus access is still performed as a (discarded) read.
+   //
+   assign dbus_we_o = dbus_we & (!dbus_atomic | atomic_reserve);
 
    assign next_dbus_adr = (OPTION_DCACHE_BLOCK_WIDTH == 5) ?
 			  {dbus_adr[31:5], dbus_adr[4:0] + 5'd4} : // 32 byte
@@ -376,9 +398,10 @@ module mor1kx_lsu_cappuccino
       case (state)
 	IDLE: begin
 	   dbus_req_o <= 0;
-	   dbus_we_o <= 0;
+	   dbus_we <= 0;
 	   dbus_adr <= 0;
 	   dbus_bsel_o <= 4'hf;
+	   dbus_atomic <= 0;
 	   last_write <= 0;
 	   if (store_buffer_write | !store_buffer_empty) begin
 	      state <= WRITE;
@@ -423,7 +446,8 @@ module mor1kx_lsu_cappuccino
 	      end
 	   end
 
-	   if (dbus_err_i) begin
+	   // TODO: only abort on snoop-hits to refill address
+	   if (dbus_err_i | dc_snoop_hit) begin
 	      dbus_req_o <= 0;
 	      state <= IDLE;
 	   end
@@ -440,12 +464,13 @@ module mor1kx_lsu_cappuccino
 
 	WRITE: begin
 	   dbus_req_o <= 1;
-	   dbus_we_o <= 1;
+	   dbus_we <= 1;
 
-	   if (!dbus_req_o | dbus_ack_i) begin
+	   if (!dbus_req_o | dbus_ack_i & !last_write) begin
 	      dbus_bsel_o <= store_buffer_bsel;
 	      dbus_adr <= store_buffer_radr;
 	      dbus_dat <= store_buffer_dat;
+	      dbus_atomic <= store_buffer_atomic;
 	      last_write <= store_buffer_empty;
 	   end
 
@@ -454,7 +479,7 @@ module mor1kx_lsu_cappuccino
 
 	   if (last_write & dbus_ack_i | dbus_err_i) begin
 	      dbus_req_o <= 0;
-	      dbus_we_o <= 0;
+	      dbus_we <= 0;
 	      if (!store_buffer_write) begin
 		 state <= IDLE;
 		 write_done <= 1;
@@ -492,32 +517,47 @@ module mor1kx_lsu_cappuccino
 generate
 if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
    // Atomic operations logic
+   reg atomic_flag_set;
+   reg atomic_flag_clear;
+
    always @(posedge clk)
      if (rst | pipeline_flush_i)
        atomic_reserve <= 0;
-     else if ((ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i & padv_ctrl_i) ||
-	      store_buffer_write & (store_buffer_wadr == atomic_addr))
+     else if (ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i & write_done ||
+	      !ctrl_op_lsu_atomic_i & store_buffer_write &
+	      (store_buffer_wadr == atomic_addr) ||
+	      (snoop_valid & (snoop_adr_i == atomic_addr)))
        atomic_reserve <= 0;
      else if (ctrl_op_lsu_load_i & ctrl_op_lsu_atomic_i & padv_ctrl_i)
-       atomic_reserve <= 1;
+       atomic_reserve <= !(snoop_valid & (snoop_adr_i == dc_adr_match));
 
    always @(posedge clk)
      if (ctrl_op_lsu_load_i & ctrl_op_lsu_atomic_i & padv_ctrl_i)
        atomic_addr <= dc_adr_match;
 
    assign swa_success = ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i &
-			atomic_reserve & (store_buffer_wadr == atomic_addr);
-   assign swa_fail = ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i &
-		     (!atomic_reserve | (store_buffer_wadr != atomic_addr));
+			atomic_reserve & (dbus_adr == atomic_addr);
 
-   assign atomic_flag_set_o = swa_success & padv_ctrl_i;
-   assign atomic_flag_clear_o = swa_fail & padv_ctrl_i;
+   always @(posedge clk)
+     if (padv_ctrl_i)
+       atomic_flag_set <= 0;
+     else if (write_done)
+       atomic_flag_set <= swa_success & lsu_valid_o;
+
+   always @(posedge clk)
+     if (padv_ctrl_i)
+       atomic_flag_clear <= 0;
+     else if (write_done)
+       atomic_flag_clear <= !swa_success & lsu_valid_o &
+			    ctrl_op_lsu_atomic_i & ctrl_op_lsu_store_i;
+
+   assign atomic_flag_set_o = atomic_flag_set;
+   assign atomic_flag_clear_o = atomic_flag_clear;
 
 end else begin
    assign atomic_flag_set_o = 0;
    assign atomic_flag_clear_o = 0;
    assign swa_success = 0;
-   assign swa_fail = 0;
    always @(posedge clk) begin
       atomic_addr <= 0;
       atomic_reserve <= 0;
@@ -531,15 +571,16 @@ endgenerate
        store_buffer_write_pending <= 0;
      else if (store_buffer_write | pipeline_flush_i)
        store_buffer_write_pending <= 0;
-     else if (ctrl_op_lsu_store_i & padv_ctrl_i & !swa_fail & !dbus_stall &
-	      (store_buffer_full | dc_refill | dc_refill_r))
+     else if (ctrl_op_lsu_store_i & padv_ctrl_i & !dbus_stall &
+	      (store_buffer_full | dc_refill | dc_refill_r | dc_snoop_hit))
        store_buffer_write_pending <= 1;
 
-   assign store_buffer_write = (ctrl_op_lsu_store_i & !swa_fail &
+   assign store_buffer_write = (ctrl_op_lsu_store_i &
 				(padv_ctrl_i | tlb_reload_done) |
 				store_buffer_write_pending) &
 			       !store_buffer_full & !dc_refill & !dc_refill_r &
-			       !dbus_stall;
+			       !dbus_stall & !dc_snoop_hit;
+
 generate
 if (FEATURE_STORE_BUFFER!="NONE") begin : store_buffer_gen
    assign store_buffer_read = (state == IDLE) & store_buffer_write |
@@ -564,12 +605,14 @@ if (FEATURE_STORE_BUFFER!="NONE") begin : store_buffer_gen
       .adr_i	(store_buffer_wadr),
       .dat_i	(lsu_sdat),
       .bsel_i	(dbus_bsel),
+      .atomic_i	(ctrl_op_lsu_atomic_i),
       .write_i	(store_buffer_write),
 
       .pc_o	(store_buffer_epcr_o),
       .adr_o	(store_buffer_radr),
       .dat_o	(store_buffer_dat),
       .bsel_o	(store_buffer_bsel),
+      .atomic_o	(store_buffer_atomic),
       .read_i	(store_buffer_read),
 
       .full_o	(store_buffer_full),
@@ -594,7 +637,6 @@ end
 endgenerate
    assign store_buffer_wadr = dc_adr_match;
 
-
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        dc_enable_r <= 0;
@@ -610,8 +652,11 @@ endgenerate
    assign dc_adr_match = dmmu_enable_i ?
 			 {dmmu_phys_addr[OPTION_OPERAND_WIDTH-1:2],2'b0} :
 			 {ctrl_lsu_adr_i[OPTION_OPERAND_WIDTH-1:2],2'b0};
-   assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall;
-   assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE);
+
+   assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall &
+		   !(dbus_atomic & dbus_we & !atomic_reserve);
+   assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE) &
+			      !dc_snoop_hit & !snoop_valid;
 
 generate
 if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
@@ -633,7 +678,8 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
    wire dc_rst = rst | dbus_err;
 
    assign dc_bsel = dbus_bsel;
-   assign dc_we = exec_op_lsu_store_i & padv_execute_i |
+   assign dc_we = exec_op_lsu_store_i & !exec_op_lsu_atomic_i & padv_execute_i |
+		  dbus_atomic & dbus_we_o & !write_done |
 		  ctrl_op_lsu_store_i & tlb_reload_busy & !tlb_reload_req;
 
    /* mor1kx_dcache AUTO_TEMPLATE (
@@ -645,6 +691,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_dat_o			(dc_ldat),
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
+            .snoop_hit_o                (dc_snoop_hit),
 	    // Inputs
 	    .clk			(clk),
 	    .rst			(dc_rst),
@@ -660,6 +707,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .wradr_i			(dbus_adr),
 	    .wrdat_i			(dbus_dat_i),
 	    .we_i			(dbus_ack_i),
+            .snoop_valid_i              (snoop_valid),
     );*/
 
    mor1kx_dcache
@@ -668,7 +716,8 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
        .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
        .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
        .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
-       .OPTION_DCACHE_LIMIT_WIDTH(OPTION_DCACHE_LIMIT_WIDTH)
+       .OPTION_DCACHE_LIMIT_WIDTH(OPTION_DCACHE_LIMIT_WIDTH),
+       .OPTION_DCACHE_SNOOP(OPTION_DCACHE_SNOOP)
        )
    mor1kx_dcache
 	   (/*AUTOINST*/
@@ -679,6 +728,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_err_o			(dc_err),		 // Templated
 	    .cpu_ack_o			(dc_ack),		 // Templated
 	    .cpu_dat_o			(dc_ldat),		 // Templated
+	    .snoop_hit_o		(dc_snoop_hit),		 // Templated
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),	 // Templated
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
 	    // Inputs
@@ -696,6 +746,8 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .wradr_i			(dbus_adr),		 // Templated
 	    .wrdat_i			(dbus_dat_i),		 // Templated
 	    .we_i			(dbus_ack_i),		 // Templated
+	    .snoop_adr_i		(snoop_adr_i[31:0]),
+	    .snoop_valid_i		(snoop_valid),		 // Templated
 	    .spr_bus_addr_i		(spr_bus_addr_i[15:0]),
 	    .spr_bus_we_i		(spr_bus_we_i),
 	    .spr_bus_stb_i		(spr_bus_stb_i),
@@ -709,6 +761,7 @@ end else begin
    assign dc_ack = 0;
    assign dc_bsel = 0;
    assign dc_we = 0;
+   assign dc_snoop_hit = 0;
 end
 
 endgenerate

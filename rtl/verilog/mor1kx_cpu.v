@@ -29,6 +29,7 @@ module mor1kx_cpu
     parameter OPTION_DCACHE_SET_WIDTH	= 9,
     parameter OPTION_DCACHE_WAYS	= 2,
     parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
+    parameter OPTION_DCACHE_SNOOP = "NONE",
     parameter FEATURE_DMMU		= "NONE",
     parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
     parameter OPTION_DMMU_SET_WIDTH 	= 6,
@@ -98,7 +99,9 @@ module mor1kx_cpu
     parameter FEATURE_STORE_BUFFER	= "ENABLED",
     parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
 
-    parameter FEATURE_MULTICORE = "NONE"
+    parameter FEATURE_MULTICORE = "NONE",
+
+    parameter FEATURE_TRACEPORT_EXEC = "NONE"
     )
    (
     input 			      clk,
@@ -137,6 +140,13 @@ module mor1kx_cpu
     input 			      du_stall_i,
     output 			      du_stall_o,
 
+    output 			     traceport_exec_valid_o,
+    output [31:0] 		     traceport_exec_pc_o,
+    output [`OR1K_INSN_WIDTH-1:0]     traceport_exec_insn_o,
+    output [OPTION_OPERAND_WIDTH-1:0] traceport_exec_wbdata_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0] traceport_exec_wbreg_o,
+    output 			     traceport_exec_wben_o,
+
     // SPR accesses to external units (cache, mmu, etc.)
     output [15:0] 		      spr_bus_addr_o,
     output 			      spr_bus_we_o,
@@ -159,7 +169,10 @@ module mor1kx_cpu
     // The multicore core identifier
     input [OPTION_OPERAND_WIDTH-1:0]  multicore_coreid_i,
     // The number of cores
-    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i
+    input [OPTION_OPERAND_WIDTH-1:0]  multicore_numcores_i,
+
+    input [31:0] 		     snoop_adr_i,
+    input 			     snoop_en_i
     );
 
    wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_execute_insn/* verilator public */;
@@ -190,6 +203,7 @@ module mor1kx_cpu
 	     .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
 	     .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
 	     .OPTION_DCACHE_LIMIT_WIDTH(OPTION_DCACHE_LIMIT_WIDTH),
+             .OPTION_DCACHE_SNOOP(OPTION_DCACHE_SNOOP),
 	     .FEATURE_DMMU(FEATURE_DMMU),
 	     .FEATURE_DMMU_HW_TLB_RELOAD(FEATURE_DMMU_HW_TLB_RELOAD),
 	     .OPTION_DMMU_SET_WIDTH(OPTION_DMMU_SET_WIDTH),
@@ -209,6 +223,7 @@ module mor1kx_cpu
 	     .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
 	     .FEATURE_MAC(FEATURE_MAC),
 	     .FEATURE_MULTICORE(FEATURE_MULTICORE),
+	     .FEATURE_TRACEPORT_EXEC(FEATURE_TRACEPORT_EXEC),
 	     .FEATURE_SYSCALL(FEATURE_SYSCALL),
 	     .FEATURE_TRAP(FEATURE_TRAP),
 	     .FEATURE_RANGE(FEATURE_RANGE),
@@ -262,6 +277,12 @@ module mor1kx_cpu
 	    .du_dat_o			(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
 	    .du_ack_o			(du_ack_o),
 	    .du_stall_o			(du_stall_o),
+	    .traceport_exec_valid_o	(traceport_exec_valid_o),
+	    .traceport_exec_pc_o	(traceport_exec_pc_o[31:0]),
+	    .traceport_exec_insn_o	(traceport_exec_insn_o[`OR1K_INSN_WIDTH-1:0]),
+	    .traceport_exec_wbdata_o	(traceport_exec_wbdata_o[OPTION_OPERAND_WIDTH-1:0]),
+	    .traceport_exec_wbreg_o	(traceport_exec_wbreg_o[OPTION_RF_ADDR_WIDTH-1:0]),
+	    .traceport_exec_wben_o	(traceport_exec_wben_o),
 	    .spr_bus_addr_o		(spr_bus_addr_o[15:0]),
 	    .spr_bus_we_o		(spr_bus_we_o),
 	    .spr_bus_stb_o		(spr_bus_stb_o),
@@ -291,7 +312,9 @@ module mor1kx_cpu
 	    .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
 	    .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
 	    .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
-	    .multicore_numcores_i	(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
+	    .multicore_numcores_i	(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]),
+	    .snoop_adr_i		(snoop_adr_i[31:0]),
+	    .snoop_en_i			(snoop_en_i));
 
 	 // synthesis translate_off
 `ifndef SYNTHESIS
