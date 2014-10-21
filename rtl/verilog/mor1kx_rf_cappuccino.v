@@ -74,8 +74,7 @@ module mor1kx_rf_cappuccino
     output [OPTION_OPERAND_WIDTH-1:0] execute_rfb_o
     );
 
-   localparam RF_ADDR_WIDTH = OPTION_RF_ADDR_WIDTH *
-			      (OPTION_RF_NUM_SHADOW_GPR+1);
+   localparam RF_ADDR_WIDTH = OPTION_RF_ADDR_WIDTH + OPTION_RF_NUM_SHADOW_GPR;
    localparam RF_WORDS = OPTION_RF_WORDS * (OPTION_RF_NUM_SHADOW_GPR+1);
 
    wire [OPTION_OPERAND_WIDTH-1:0]    rfa_ram_o;
