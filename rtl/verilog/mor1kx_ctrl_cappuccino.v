@@ -1230,8 +1230,8 @@ module mor1kx_ctrl_cappuccino
 	   assign stepped_into_delay_slot = 0;
 	   assign du_dat_o = 0;
 	   assign du_restart_from_stall = 0;
-	   assign spr_access_ack[6] = 1;
-
+           assign spr_access_ack[6] = 1;
+           assign spr_internal_read_dat[6] = 0;
 	   always @(posedge clk)
 	     begin
 		spr_dmr1 <= 0;
