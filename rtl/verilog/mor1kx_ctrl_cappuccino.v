@@ -1285,7 +1285,7 @@ module mor1kx_ctrl_cappuccino
 	   assign du_dat_o = 0;
 	   assign du_restart_from_stall = 0;
            assign spr_access_ack[`OR1K_SPR_DU_BASE] = 1;
-
+           assign spr_internal_read_dat[`OR1K_SPR_DU_BASE] = 0;
 	   always @(posedge clk)
 	     begin
 		spr_dmr1 <= 0;
