@@ -79,9 +79,9 @@ module mor1kx_store_buffer
      (
       .clk			(clk),
       .dout			(fifo_dout),
-      .raddr			(read_pointer),
+      .raddr			(read_pointer[DEPTH_WIDTH-1:0]),
       .re			(read_i),
-      .waddr			(write_pointer),
+      .waddr			(write_pointer[DEPTH_WIDTH-1:0]),
       .we			(write_i),
       .din			(fifo_din)
       );
