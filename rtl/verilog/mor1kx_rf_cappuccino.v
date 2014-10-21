@@ -85,6 +85,9 @@ module mor1kx_rf_cappuccino
    reg [OPTION_OPERAND_WIDTH-1:0]     execute_rfa;
    reg [OPTION_OPERAND_WIDTH-1:0]     execute_rfb;
 
+   wire [RF_ADDR_WIDTH-1:0]           rfa_rdad;
+   wire [RF_ADDR_WIDTH-1:0]           rfb_rdad;
+
    wire 			      rfa_rden;
    wire 			      rfb_rden;
 
@@ -270,6 +273,15 @@ if (FEATURE_DEBUGUNIT!="NONE" || FEATURE_FASTCONTEXTS!="NONE" ||
    assign rf_wren =  wb_rf_wb_i | spr_gpr_we;
    assign rf_wradr = wb_rf_wb_i ? wb_rfd_adr_i : spr_bus_addr_i;
    assign rf_wrdat = wb_rf_wb_i ? result_i : spr_bus_dat_i;
+
+   // Zero-pad unused parts of vector
+   if (OPTION_RF_NUM_SHADOW_GPR > 0) begin
+      assign rfa_rdad[RF_ADDR_WIDTH-1:OPTION_RF_ADDR_WIDTH] =
+             {(RF_ADDR_WIDTH-OPTION_RF_ADDR_WIDTH){1'b0}};
+      assign rfb_rdad[RF_ADDR_WIDTH-1:OPTION_RF_ADDR_WIDTH] =
+             {(RF_ADDR_WIDTH-OPTION_RF_ADDR_WIDTH){1'b0}};
+   end
+
 end else begin
    assign spr_gpr_ack_o = 1;
 
@@ -279,6 +291,8 @@ end else begin
 end
 endgenerate
 
+   assign rfa_rdad[OPTION_RF_ADDR_WIDTH-1:0] = fetch_rfa_adr_i;
+   assign rfb_rdad[OPTION_RF_ADDR_WIDTH-1:0] = fetch_rfb_adr_i;
    assign rfa_rden = fetch_rf_adr_valid_i;
    assign rfb_rden = fetch_rf_adr_valid_i;
 
@@ -292,7 +306,7 @@ endgenerate
      (
       .clk		(clk),
       .dout		(rfa_ram_o),
-      .raddr		(fetch_rfa_adr_i),
+      .raddr		(rfa_rdad),
       .re		(rfa_rden),
       .waddr		(rf_wradr),
       .we		(rf_wren),
@@ -309,7 +323,7 @@ endgenerate
      (
       .clk		(clk),
       .dout		(rfb_ram_o),
-      .raddr		(fetch_rfb_adr_i),
+      .raddr		(rfb_rdad),
       .re		(rfb_rden),
       .waddr		(rf_wradr),
       .we		(rf_wren),
