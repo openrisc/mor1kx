@@ -87,6 +87,8 @@ module mor1kx_cpu
     parameter FEATURE_ATOMIC		= "ENABLED",
 
     parameter FEATURE_FPU               = "NONE", // ENABLED|NONE: actual for cappuccino pipeline only
+    parameter FEATURE_PIPELINED_FPU     = "NONE", // ENABLED|NONE: default is "NONE", makes sence only if FPU enabled
+
     parameter FEATURE_CUST1		= "NONE",
     parameter FEATURE_CUST2		= "NONE",
     parameter FEATURE_CUST3		= "NONE",
@@ -249,6 +251,8 @@ module mor1kx_cpu
 	     .FEATURE_PSYNC(FEATURE_PSYNC),
 	     .FEATURE_CSYNC(FEATURE_CSYNC),
 	     .FEATURE_ATOMIC(FEATURE_ATOMIC),
+	     .FEATURE_FPU(FEATURE_FPU), // cappuccino pipe instance
+	     .FEATURE_PIPELINED_FPU(FEATURE_PIPELINED_FPU), // cappuccino pipe instance
 	     .FEATURE_CUST1(FEATURE_CUST1),
 	     .FEATURE_CUST2(FEATURE_CUST2),
 	     .FEATURE_CUST3(FEATURE_CUST3),
@@ -257,7 +261,6 @@ module mor1kx_cpu
 	     .FEATURE_CUST6(FEATURE_CUST6),
 	     .FEATURE_CUST7(FEATURE_CUST7),
 	     .FEATURE_CUST8(FEATURE_CUST8),
-	     .FEATURE_FPU(FEATURE_FPU), // cappuccino pipe instance
 	     .OPTION_SHIFTER(OPTION_SHIFTER),
 	     .FEATURE_STORE_BUFFER(FEATURE_STORE_BUFFER),
 	     .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH)
@@ -393,6 +396,8 @@ module mor1kx_cpu
 	     .FEATURE_MSYNC(FEATURE_MSYNC),
 	     .FEATURE_PSYNC(FEATURE_PSYNC),
 	     .FEATURE_CSYNC(FEATURE_CSYNC),
+	     .FEATURE_FPU("NONE"), // espresso pipe instance
+	     .FEATURE_PIPELINED_FPU("NONE"), // espresso pipe instance
 	     .FEATURE_CUST1(FEATURE_CUST1),
 	     .FEATURE_CUST2(FEATURE_CUST2),
 	     .FEATURE_CUST3(FEATURE_CUST3),
@@ -401,7 +406,6 @@ module mor1kx_cpu
 	     .FEATURE_CUST6(FEATURE_CUST6),
 	     .FEATURE_CUST7(FEATURE_CUST7),
 	     .FEATURE_CUST8(FEATURE_CUST8),
-        .FEATURE_FPU("NONE"), // espresso pipe instance
 	     .OPTION_SHIFTER(OPTION_SHIFTER)
 	     )
 	   mor1kx_cpu
@@ -524,6 +528,8 @@ module mor1kx_cpu
 	     .FEATURE_MSYNC(FEATURE_MSYNC),
 	     .FEATURE_PSYNC(FEATURE_PSYNC),
 	     .FEATURE_CSYNC(FEATURE_CSYNC),
+	     .FEATURE_FPU("NONE"), // prontoespresso pipe instance
+	     .FEATURE_PIPELINED_FPU("NONE"), // prontoespresso pipe instance
 	     .FEATURE_CUST1(FEATURE_CUST1),
 	     .FEATURE_CUST2(FEATURE_CUST2),
 	     .FEATURE_CUST3(FEATURE_CUST3),
@@ -532,7 +538,6 @@ module mor1kx_cpu
 	     .FEATURE_CUST6(FEATURE_CUST6),
 	     .FEATURE_CUST7(FEATURE_CUST7),
 	     .FEATURE_CUST8(FEATURE_CUST8),
-        .FEATURE_FPU("NONE"), // prontoespresso pipe instance
 	     .OPTION_SHIFTER(OPTION_SHIFTER)
 	     )
 	   mor1kx_cpu

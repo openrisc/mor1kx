@@ -23,8 +23,8 @@ module mor1kx_execute_ctrl_cappuccino
     parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
 				 `OR1K_RESET_VECTOR,8'd0},
     parameter OPTION_RF_ADDR_WIDTH = 5,
-    parameter FEATURE_MULTIPLIER = "THREESTAGE",
-    parameter FEATURE_FPU   = "NONE" // ENABLED|NONE
+    parameter FEATURE_FPU   = "NONE", // ENABLED|NONE
+    parameter FEATURE_MULTIPLIER = "THREESTAGE"
     )
    (
     input 				  clk,

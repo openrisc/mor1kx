@@ -79,9 +79,9 @@ module mor1kx_cpu_cappuccino
 
     parameter FEATURE_ATOMIC = "ENABLED",
 
+    parameter FEATURE_FPU           = "NONE", // ENABLED|NONE: pipeline cappuccino
+    parameter FEATURE_PIPELINED_FPU = "NONE", // ENABLED|NONE: default is "NONE", makes sence only if FPU enabled
 
-
-    parameter FEATURE_FPU   = "NONE", // ENABLED|NONE: pipeline cappuccino
     parameter FEATURE_CUST1 = "NONE",
     parameter FEATURE_CUST2 = "NONE",
     parameter FEATURE_CUST3 = "NONE",
@@ -484,6 +484,7 @@ module mor1kx_cpu_cappuccino
        .FEATURE_PSYNC(FEATURE_PSYNC),
        .FEATURE_CSYNC(FEATURE_CSYNC),
        .FEATURE_ATOMIC(FEATURE_ATOMIC),
+       .FEATURE_FPU(FEATURE_FPU), // pipeline cappuccino: decode instance
        .FEATURE_CUST1(FEATURE_CUST1),
        .FEATURE_CUST2(FEATURE_CUST2),
        .FEATURE_CUST3(FEATURE_CUST3),
@@ -491,8 +492,7 @@ module mor1kx_cpu_cappuccino
        .FEATURE_CUST5(FEATURE_CUST5),
        .FEATURE_CUST6(FEATURE_CUST6),
        .FEATURE_CUST7(FEATURE_CUST7),
-       .FEATURE_CUST8(FEATURE_CUST8),
-       .FEATURE_FPU(FEATURE_FPU) // pipeline cappuccino: decode instance
+       .FEATURE_CUST8(FEATURE_CUST8)
        )
      mor1kx_decode
      (/*AUTOINST*/
@@ -614,8 +614,8 @@ module mor1kx_cpu_cappuccino
        .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
        .FEATURE_SYSCALL(FEATURE_SYSCALL),
        .FEATURE_TRAP(FEATURE_TRAP),
-       .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER),
-       .FEATURE_FPU(FEATURE_FPU) // pipeline cappuccino: decode_execute instance
+       .FEATURE_FPU(FEATURE_FPU), // pipeline cappuccino: decode_execute instance
+       .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER)
        )
      mor1kx_decode_execute_cappuccino
      (/*AUTOINST*/
@@ -825,6 +825,7 @@ module mor1kx_cpu_cappuccino
        .FEATURE_CUST7(FEATURE_CUST7),
        .FEATURE_CUST8(FEATURE_CUST8),
        .FEATURE_FPU(FEATURE_FPU), // pipeline cappuccino: execute_alu instance
+       .FEATURE_PIPELINED_FPU(FEATURE_PIPELINED_FPU), // pipeline cappuccino: execute_alu instance
        .OPTION_SHIFTER(OPTION_SHIFTER),
        .CALCULATE_BRANCH_DEST("FALSE")
        )
@@ -849,6 +850,7 @@ module mor1kx_cpu_cappuccino
       .padv_decode_i			(padv_decode_o),	 // Templated
       .padv_execute_i			(padv_execute_o),	 // Templated
       .padv_ctrl_i			(padv_ctrl_o),		 // Templated
+      .pipeline_flush_i			(pipeline_flush_o), // pipelined fpu
       .opc_alu_i			(execute_opc_alu_o),	 // Templated
       .opc_alu_secondary_i		(execute_opc_alu_secondary_o), // Templated
       .imm16_i				(execute_imm16_o),	 // Templated
@@ -1177,8 +1179,8 @@ module mor1kx_cpu_cappuccino
      #(
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
        .OPTION_RESET_PC(OPTION_RESET_PC),
-       .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER),
-       .FEATURE_FPU(FEATURE_FPU) // pipeline cappuccino: execute_ctrl instance
+       .FEATURE_FPU(FEATURE_FPU), // pipeline cappuccino: execute_ctrl instance
+       .FEATURE_MULTIPLIER(FEATURE_MULTIPLIER)
        )
      mor1kx_execute_ctrl_cappuccino
      (/*AUTOINST*/

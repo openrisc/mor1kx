@@ -47,6 +47,8 @@ module mor1kx_decode
     parameter FEATURE_PSYNC = "NONE",
     parameter FEATURE_CSYNC = "NONE",
 
+    parameter FEATURE_FPU   = "NONE", // ENABLED|NONE
+
     parameter FEATURE_CUST1 = "NONE",
     parameter FEATURE_CUST2 = "NONE",
     parameter FEATURE_CUST3 = "NONE",
@@ -54,9 +56,7 @@ module mor1kx_decode
     parameter FEATURE_CUST5 = "NONE",
     parameter FEATURE_CUST6 = "NONE",
     parameter FEATURE_CUST7 = "NONE",
-    parameter FEATURE_CUST8 = "NONE",
-    
-    parameter FEATURE_FPU   = "NONE" // ENABLED|NONE
+    parameter FEATURE_CUST8 = "NONE"
     )
    (
     input 			      clk,
