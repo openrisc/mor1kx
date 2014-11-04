@@ -67,15 +67,12 @@ module pfpu32_addsub
 
   localparam INF  = 31'b1111111100000000000000000000000;
   localparam QNAN = 31'b1111111110000000000000000000000;
-  localparam EXP_WIDTH = 8;
-  localparam FRAC_WIDTH = 23;
 
     // rounding mode isn't require piplinization
   wire rm_nearest = (rmode_i==2'b00);
   wire rm_to_zero = (rmode_i==2'b01);
   wire rm_to_infp = (rmode_i==2'b10);
   wire rm_to_infm = (rmode_i==2'b11);
-
 
   /*
      Any stage's output is registered.
@@ -94,10 +91,10 @@ module pfpu32_addsub
     // aliases
   wire s1t_signa = opa_i[31];
   wire s1t_signb = opb_i[31];
-  wire [EXP_WIDTH-1 : 0]  s1t_expa = opa_i[30:23];
-  wire [EXP_WIDTH-1 : 0]  s1t_expb = opb_i[30:23];
-  wire [FRAC_WIDTH-1 : 0] s1t_fracta = opa_i[22:0];
-  wire [FRAC_WIDTH-1 : 0] s1t_fractb = opb_i[22:0];
+  wire [7:0]  s1t_expa = opa_i[30:23];
+  wire [7:0]  s1t_expb = opb_i[30:23];
+  wire [22:0] s1t_fracta = opa_i[22:0];
+  wire [22:0] s1t_fractb = opb_i[22:0];
 
     // collect operands related information
   wire s1t_expa_ff = &s1t_expa;
@@ -111,7 +108,6 @@ module pfpu32_addsub
   wire s1t_qnan_a = s1t_expa_ff &  s1t_fracta[22];
   wire s1t_snan_b = s1t_expb_ff & !s1t_fractb[22] & (|s1t_fractb[21:0]);
   wire s1t_qnan_b = s1t_expb_ff &  s1t_fractb[22];
-
     // opa or opb is zero
   wire s1t_opa_0 = !(|opa_i[30:0]);
   wire s1t_opb_0 = !(|opb_i[30:0]);
@@ -174,7 +170,6 @@ module pfpu32_addsub
   reg        s1o_nsh_minus_shr; // perform (non_shifted - right_shifted)
   reg        s1o_signc; // signum of result
   reg [9:0]  s1o_exp10c;
-  reg        s1o_opc_dn; // result is denormalized (estimation on the stage)
   reg [26:0] s1o_fract27_nsh; // not shifted,
   reg [26:0] s1o_fract27_shr; // right shifted
     // rounding support
@@ -199,8 +194,6 @@ module pfpu32_addsub
       s1o_signc <= s1t_sign_nsh;
         // exponent of result (estimation on the stage)
       s1o_exp10c <= s1t_agtb ? s1t_exp10a : s1t_exp10b;
-        // result is denormalized (estimation on the stage)
-      s1o_opc_dn <= s1t_agtb ? s1t_opa_dn : s1t_opb_dn;
         // not shifted operand
       s1o_fract27_nsh <= s1t_fract27_nsh;
         // right shifted operand
@@ -339,19 +332,23 @@ module pfpu32_addsub
   end // posedge clock
 
 
+  /* Stage #3: align */
+
   // left shift amount and corrected exponent
+  wire [4:0] s3t_nlz_m1 = (s2o_nlz - 5'd1);
+  wire [9:0] s3t_exp10c_m1 = s2o_exp10c - 10'd1;
+  wire [9:0] s3t_exp10c_mz = s2o_exp10c - {5'd0,s2o_nlz};
   wire [4:0] s3t_shl;
   wire [9:0] s3t_exp10c;
-  wire [9:0] s3t_exp10c_m1 = (s2o_exp10c - 10'd1);
   assign {s3t_shl,s3t_exp10c} =
       // shift isn't needed or impossible
     (!(|s2o_nlz) | (s2o_exp10c == 10'd1)) ?
-                              {5'd0, s2o_exp10c} :
+                              {5'd0,s2o_exp10c} :
       // normalization is possible
-    (s2o_exp10c >  s2o_nlz) ? {s2o_nlz, (s2o_exp10c - {5'd0,s2o_nlz})} :
+    (s2o_exp10c >  s2o_nlz) ? {s2o_nlz,s3t_exp10c_mz} :
       // denormalized cases
-    (s2o_exp10c == s2o_nlz) ? {(s2o_nlz - 5'd1), 10'd1} :
-                              {s3t_exp10c_m1[4:0], 10'd1};
+    (s2o_exp10c == s2o_nlz) ? {s3t_nlz_m1,10'd1} :
+                              {s3t_exp10c_m1[4:0],10'd1};
 
    // stage #3 outputs
     // input related
@@ -444,8 +441,8 @@ module pfpu32_addsub
       s4t_anan_a ? s3o_signa : s3o_signb;
 
   // check overflow and inexact
-  wire s4t_ovf = (s4t_exp10c >= 10'd255) & !s4t_expin_ff;
-  wire s4t_ine = (s4t_lost | s4t_ovf)    & !s4t_expin_ff;
+  wire s4t_ovf = (s4t_exp10c > 10'd254) & !s4t_expin_ff;
+  wire s4t_ine = (s4t_lost | s4t_ovf)   & !s4t_expin_ff;
 
    // Generate result   
   wire [31:0] s4t_opc;
