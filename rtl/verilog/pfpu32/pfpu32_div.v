@@ -44,6 +44,8 @@
 
 `include "mor1kx-defines.v"
 
+//`define NEW_F32_DIV
+
 module pfpu32_div
 (
    input             clk,
@@ -67,9 +69,14 @@ module pfpu32_div
 
   localparam INF  = 31'b1111111100000000000000000000000;
   localparam QNAN = 31'b1111111110000000000000000000000;
-  localparam EXP_WIDTH = 8;
-  localparam FRAC_WIDTH = 23;
 
+    // rounding mode isn't require piplinization
+  wire rm_nearest = (rmode_i==2'b00);
+  wire rm_to_zero = (rmode_i==2'b01);
+  wire rm_to_infp = (rmode_i==2'b10);
+  wire rm_to_infm = (rmode_i==2'b11);
+
+ 
   /*
      Any stage's output is registered.
      Definitions:
@@ -83,10 +90,10 @@ module pfpu32_div
     // aliases
   wire s1t_signa = opa_i[31];
   wire s1t_signb = opb_i[31];
-  wire [EXP_WIDTH-1:0]  s1t_expa = opa_i[30:23];
-  wire [EXP_WIDTH-1:0]  s1t_expb = opb_i[30:23];
-  wire [FRAC_WIDTH-1:0] s1t_fracta = opa_i[22:0];
-  wire [FRAC_WIDTH-1:0] s1t_fractb = opb_i[22:0];
+  wire [7:0]  s1t_expa = opa_i[30:23];
+  wire [7:0]  s1t_expb = opb_i[30:23];
+  wire [22:0] s1t_fracta = opa_i[22:0];
+  wire [22:0] s1t_fractb = opb_i[22:0];
 
     // collect operands related information
   wire s1t_expa_ff = &s1t_expa;
@@ -100,31 +107,31 @@ module pfpu32_div
   wire s1t_qnan_a = s1t_expa_ff &  s1t_fracta[22];
   wire s1t_snan_b = s1t_expb_ff & !s1t_fractb[22] & (|s1t_fractb[21:0]);
   wire s1t_qnan_b = s1t_expb_ff &  s1t_fractb[22];
-    // opa or opb is denormalized
-  wire s1t_opa_dn = !(|s1t_expa);
-  wire s1t_opb_dn = !(|s1t_expb);
-    // result is zero
+    // opa or opb is zero
   wire s1t_opa_0 = !(|opa_i[30:0]);
   wire s1t_opb_0 = !(|opb_i[30:0]);
+    // opa or opb is denormalized
+  wire s1t_opa_dn = !(|s1t_expa) & !s1t_opa_0;
+  wire s1t_opb_dn = !(|s1t_expb) & !s1t_opb_0;
 
-   // restore hidden "1"
-  wire [FRAC_WIDTH:0] s1t_fracta_24 = {!s1t_opa_dn,s1t_fracta};
-  wire [FRAC_WIDTH:0] s1t_fractb_24 = {!s1t_opb_dn,s1t_fractb};
+    // restored fractionals
+  wire [23:0] s1t_fract24a = {(!s1t_opa_dn & !s1t_opa_0),s1t_fracta};
+  wire [23:0] s1t_fract24b = {(!s1t_opb_dn & !s1t_opb_0),s1t_fractb};
 
   // count leading zeros
   reg [5:0] s1t_dvd_zeros;
-  always @(s1t_fracta_24)
-    casez(s1t_fracta_24) // synopsys full_case parallel_case
-      24'b1???????????????????????: s1t_dvd_zeros = 0;
-      24'b01??????????????????????: s1t_dvd_zeros = 1;
-      24'b001?????????????????????: s1t_dvd_zeros = 2;
-      24'b0001????????????????????: s1t_dvd_zeros = 3;
-      24'b00001???????????????????: s1t_dvd_zeros = 4;
-      24'b000001??????????????????: s1t_dvd_zeros = 5;
-      24'b0000001?????????????????: s1t_dvd_zeros = 6;
-      24'b00000001????????????????: s1t_dvd_zeros = 7;
-      24'b000000001???????????????: s1t_dvd_zeros = 8;
-      24'b0000000001??????????????: s1t_dvd_zeros = 9;
+  always @(s1t_fract24a)
+    casez(s1t_fract24a) // synopsys full_case parallel_case
+      24'b1???????????????????????: s1t_dvd_zeros =  0;
+      24'b01??????????????????????: s1t_dvd_zeros =  1;
+      24'b001?????????????????????: s1t_dvd_zeros =  2;
+      24'b0001????????????????????: s1t_dvd_zeros =  3;
+      24'b00001???????????????????: s1t_dvd_zeros =  4;
+      24'b000001??????????????????: s1t_dvd_zeros =  5;
+      24'b0000001?????????????????: s1t_dvd_zeros =  6;
+      24'b00000001????????????????: s1t_dvd_zeros =  7;
+      24'b000000001???????????????: s1t_dvd_zeros =  8;
+      24'b0000000001??????????????: s1t_dvd_zeros =  9;
       24'b00000000001?????????????: s1t_dvd_zeros = 10;
       24'b000000000001????????????: s1t_dvd_zeros = 11;
       24'b0000000000001???????????: s1t_dvd_zeros = 12;
@@ -139,23 +146,23 @@ module pfpu32_div
       24'b0000000000000000000001??: s1t_dvd_zeros = 21;
       24'b00000000000000000000001?: s1t_dvd_zeros = 22;
       24'b000000000000000000000001: s1t_dvd_zeros = 23;
-      24'b000000000000000000000000: s1t_dvd_zeros = 24;
+      24'b000000000000000000000000: s1t_dvd_zeros =  0; // zero rezult
     endcase
 
   // count leading zeros
   reg [5:0] s1t_div_zeros;
-  always @(s1t_fractb_24)
-    casez(s1t_fractb_24) // synopsys full_case parallel_case
-      24'b1???????????????????????: s1t_div_zeros = 0;
-      24'b01??????????????????????: s1t_div_zeros = 1;
-      24'b001?????????????????????: s1t_div_zeros = 2;
-      24'b0001????????????????????: s1t_div_zeros = 3;
-      24'b00001???????????????????: s1t_div_zeros = 4;
-      24'b000001??????????????????: s1t_div_zeros = 5;
-      24'b0000001?????????????????: s1t_div_zeros = 6;
-      24'b00000001????????????????: s1t_div_zeros = 7;
-      24'b000000001???????????????: s1t_div_zeros = 8;
-      24'b0000000001??????????????: s1t_div_zeros = 9;
+  always @(s1t_fract24b)
+    casez(s1t_fract24b) // synopsys full_case parallel_case
+      24'b1???????????????????????: s1t_div_zeros =  0;
+      24'b01??????????????????????: s1t_div_zeros =  1;
+      24'b001?????????????????????: s1t_div_zeros =  2;
+      24'b0001????????????????????: s1t_div_zeros =  3;
+      24'b00001???????????????????: s1t_div_zeros =  4;
+      24'b000001??????????????????: s1t_div_zeros =  5;
+      24'b0000001?????????????????: s1t_div_zeros =  6;
+      24'b00000001????????????????: s1t_div_zeros =  7;
+      24'b000000001???????????????: s1t_div_zeros =  8;
+      24'b0000000001??????????????: s1t_div_zeros =  9;
       24'b00000000001?????????????: s1t_div_zeros = 10;
       24'b000000000001????????????: s1t_div_zeros = 11;
       24'b0000000000001???????????: s1t_div_zeros = 12;
@@ -170,17 +177,17 @@ module pfpu32_div
       24'b0000000000000000000001??: s1t_div_zeros = 21;
       24'b00000000000000000000001?: s1t_div_zeros = 22;
       24'b000000000000000000000001: s1t_div_zeros = 23;
-      24'b000000000000000000000000: s1t_div_zeros = 24;
+      24'b000000000000000000000000: s1t_div_zeros =  0; // zero result
     endcase
 
   // left-shift the dividend and divisor
-  wire [FRAC_WIDTH:0] s1t_fracta_lshift_intermediate;
-  wire [FRAC_WIDTH:0] s1t_fractb_lshift_intermediate;
-  assign s1t_fracta_lshift_intermediate = s1t_fracta_24 << s1t_dvd_zeros;
-  assign s1t_fractb_lshift_intermediate = s1t_fractb_24 << s1t_div_zeros;
+  wire [23:0] s1t_fracta_lshift_intermediate;
+  wire [23:0] s1t_fractb_lshift_intermediate;
+  assign s1t_fracta_lshift_intermediate = s1t_fract24a << s1t_dvd_zeros;
+  assign s1t_fractb_lshift_intermediate = s1t_fract24b << s1t_div_zeros;
 
-  wire [EXP_WIDTH+1:0] s1t_expa_10 = {2'd0,s1t_expa} + {9'd0,s1t_opa_dn};
-  wire [EXP_WIDTH+1:0] s1t_expb_10 = {2'd0,s1t_expb} + {9'd0,s1t_opb_dn};
+  wire [9:0] s1t_expa_10 = {2'd0,s1t_expa} + {9'd0,s1t_opa_dn};
+  wire [9:0] s1t_expb_10 = {2'd0,s1t_expb} + {9'd0,s1t_opb_dn};
 
   // stage #1 outputs
   //   input related
@@ -189,26 +196,27 @@ module pfpu32_div
   reg s1o_opa_0, s1o_opb_0;
   //   computation related
   reg s1o_sign;
-  reg [EXP_WIDTH+1:0] s1o_exp10;
-  reg [2*(FRAC_WIDTH+2)-1:0] s1o_dvdnd_50;
-  reg [FRAC_WIDTH+3:0]       s1o_dvsor_27;
+  reg [9:0]  s1o_exp10;
+  reg [49:0] s1o_dvdnd_50;
+  reg [26:0] s1o_dvsor_27;
 
   //   registering
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      s1o_infa  <= s1t_infa;
-      s1o_infb  <= s1t_infb;
+      s1o_infa   <= s1t_infa;
+      s1o_infb   <= s1t_infb;
       s1o_snan_a <= s1t_snan_a;
       s1o_qnan_a <= s1t_qnan_a;
       s1o_snan_b <= s1t_snan_b;
       s1o_qnan_b <= s1t_qnan_b;
-      s1o_opa_0 <= s1t_opa_0;
-      s1o_opb_0 <= s1t_opb_0;
+      s1o_opa_0  <= s1t_opa_0;
+      s1o_opb_0  <= s1t_opb_0;
         // computation related
-      s1o_sign <= s1t_signa ^ s1t_signb;
-      s1o_exp10 <= s1t_expa_10 - s1t_expb_10 + 10'b0001111111 -
-                  {4'd0,s1t_dvd_zeros} + {4'd0,s1t_div_zeros};
+      s1o_sign     <= s1t_signa ^ s1t_signb;
+      s1o_exp10    <= (s1t_expa_10 - s1t_expb_10 + 10'd127 -
+                       {4'd0,s1t_dvd_zeros} + {4'd0,s1t_div_zeros})
+                      & {10{!(s1t_opa_0 | s1t_opb_0)}};
       s1o_dvdnd_50 <= {s1t_fracta_lshift_intermediate,26'd0};
       s1o_dvsor_27 <= {3'd0,s1t_fractb_lshift_intermediate};
     end // advance
@@ -236,43 +244,43 @@ module pfpu32_div
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst | flush_i) begin
       s2t_state <= STATE_WAITING;
-      s2t_ready <= 0;
+      s2t_ready <= 1'b0;
     end
     else if (s1o_ready & adv_i) begin
       s2t_state <= STATE_BUSY;
-      s2t_count <= 26;
+      s2t_count <= 5'd26;
     end
     else if ((!(|s2t_count) & s2t_state==STATE_BUSY) & adv_i) begin
       s2t_state <= STATE_WAITING;
-      s2t_ready <= 1;
-      s2t_count <=26;
+      s2t_ready <= 1'b1;
+      s2t_count <= 5'd26;
     end
     else if ((s2t_state==STATE_BUSY) & adv_i)
-      s2t_count <= s2t_count - 1;
+      s2t_count <= s2t_count - 5'd1;
     else if(adv_i) begin
       s2t_state <= STATE_WAITING;
-      s2t_ready <= 0;
+      s2t_ready <= 1'b0;
     end
   end // posedge clock
 
-  reg [FRAC_WIDTH+3:0]   s2t_qutnt;
-  reg [FRAC_WIDTH+3:0]   s2t_rmndr;
-  reg [FRAC_WIDTH+3:0]   s2t_dvd;
+  reg  [26:0] s2t_qutnt;
+  reg  [26:0] s2t_rmndr;
+  reg  [26:0] s2t_dvd;
 
   wire [26:0] v2t_div;
   wire [26:0] v2t_div_minus_s1o_dvsor_27;
 
-  assign v2t_div = (s2t_count==26) ? {3'd0,s1o_dvdnd_50[49:26]} : s2t_dvd;
+  assign v2t_div = (s2t_count==5'd26) ? {3'd0,s1o_dvdnd_50[49:26]} : s2t_dvd;
   assign v2t_div_minus_s1o_dvsor_27 = v2t_div - s1o_dvsor_27;
 
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst | flush_i) begin
-      s2t_qutnt <= 0;
-      s2t_rmndr <= 0;
+      s2t_qutnt <= 1'b0;
+      s2t_rmndr <= 1'b0;
     end
     else if (s1o_ready & adv_i) begin
-      s2t_qutnt <= 0;
-      s2t_rmndr <= 0;
+      s2t_qutnt <= 1'b0;
+      s2t_rmndr <= 1'b0;
     end
     else if ((s2t_state==STATE_BUSY) & adv_i) begin
       if (v2t_div < s1o_dvsor_27) begin
@@ -294,28 +302,26 @@ module pfpu32_div
       s2o_snan_a, s2o_qnan_a, s2o_snan_b, s2o_qnan_b;
   reg s2o_opa_0, s2o_opb_0;
   //   computation related
-  reg s2o_sign;
-  reg [EXP_WIDTH+1:0] s2o_exp10;
-  reg [FRAC_WIDTH+3:0] s2o_qutnt;
-  reg s2o_lost;
+  reg        s2o_sign;
+  reg [9:0]  s2o_exp10;
+  reg [25:0] s2o_qutnt;
 
   //   registering
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      s2o_infa  <= s1o_infa;
-      s2o_infb  <= s1o_infb;
+      s2o_infa   <= s1o_infa;
+      s2o_infb   <= s1o_infb;
       s2o_snan_a <= s1o_snan_a;
       s2o_qnan_a <= s1o_qnan_a;
       s2o_snan_b <= s1o_snan_b;
       s2o_qnan_b <= s1o_qnan_b;
-      s2o_opa_0 <= s1o_opa_0;
-      s2o_opb_0 <= s1o_opb_0;
+      s2o_opa_0  <= s1o_opa_0;
+      s2o_opb_0  <= s1o_opb_0;
         // computation related
-      s2o_sign <= s1o_sign;
+      s2o_sign  <= s1o_sign;
       s2o_exp10 <= s1o_exp10;
-      s2o_qutnt <= s2t_qutnt;
-      s2o_lost <= |s2t_rmndr;
+      s2o_qutnt <= {s2t_qutnt[26:2],((|s2t_qutnt[1:0]) | (|s2t_rmndr))};
     end // (reset or flush) / advance
   end // posedge clock
 
@@ -329,278 +335,199 @@ module pfpu32_div
   end // posedge clock
 
 
-  /*
-    Stages #3, #4, #5 and #6 : post multiplier normalization
-  */
+  /* Stage #3: calc align values */  
 
-  // qutnt_i
-  // 26 25                    3
+  // qutnt
+  // 25 24                    2
   // |  |                     |
-  // h  fffffffffffffffffffffff grs
+  // h  fffffffffffffffffffffff rs
 
-  /* Stage #3 */
-  // figure out the exponent and how far the fraction has to be shifted
-  // right or left
+  wire s3t_opc_0 = s2o_opa_0 | s2o_opb_0; // secially fo here
 
-   wire s3t_qutdn = !s2o_qutnt[26];
+  // rigt shift value
+  // and appropriatelly corrected exponent
+  wire s2o_exp10_0 = !(|s2o_exp10);
+  wire [9:0] s3t_shr_of_neg_exp = 11'h401 - {1'b0,s2o_exp10}; // 1024-v+1
+  //...
+  wire [9:0] s3t_shrx;
+  wire [9:0] s3t_exp10rx;
+  assign {s3t_shrx,s3t_exp10rx} =
+      // zero result case
+    s3t_opc_0    ? {10'd0,10'd0} :
+      // negative exponent sum
+      //  (!) takes carry into account automatically
+    s2o_exp10[9] ? {s3t_shr_of_neg_exp,10'd1} :
+      // zero exponent sum (denorm. result potentially)
+    (!s3t_opc_0 & s2o_exp10_0) ? 
+                    {10'd1,10'd1} :
+      // normal case at last
+                    {10'd0,s2o_exp10};
+  // max. right shift that makes sense is 25bits
+  //  i.e. [25] moves to sticky position: ([0])
+  wire [5:0] s3t_shr = (s3t_shrx > 10'd25) ? 6'd25 : s3t_shrx[5:0];
 
-   wire [9:0] s3t_exp10 = s2o_exp10 - {9'd0,s3t_qutdn};
+  // in fact, as the dividend and divisor was normalized
+  // and the result is non-zero
+  // the '1' is maximum number of leading zeros in the quotient
+  wire s3t_nlz = !s2o_qutnt[25];
+    //...
+  wire [9:0] s3t_exp10_m1 = s2o_exp10 - 10'd1;
+  // left shift flag and corrected exponent
+  wire       s3t_shlx;
+  wire [9:0] s3t_exp10lx;
+  assign {s3t_shlx,s3t_exp10lx} =
+      // shift isn't needed (includes zero result)
+    (!s3t_nlz)           ? {1'b0,s2o_exp10} :
+      // normalization is possible
+    (s2o_exp10 >  10'd1) ? {1'b1,s3t_exp10_m1} :
+      // denormalized cases
+                           {1'b0,10'd1};
 
-   wire [9:0] s3t_shr;
-   wire [9:0] s3t_shl;
+  // align
+  wire [25:0] s3t_fract26 =
+    (|s3t_shr) ? (s2o_qutnt >> s3t_shr) :
+                 (s2o_qutnt << s3t_shlx);
 
-   assign s3t_shr = (s3t_exp10[9] | !(|s3t_exp10)) ?
-       (10'd1 - s3t_exp10) - {9'd0,s3t_qutdn} : 0;
+  // sticky bit computation for right shift
+  // max. right shift that makes sense i 25bits
+  //  i.e. [25] moves to sticky position: ([0])
+  reg s3t_sticky_shr;
+  always @(s3t_shr or s2o_qutnt) begin
+    case(s3t_shr)
+      6'd0   : s3t_sticky_shr =  s2o_qutnt[   0];
+      6'd1   : s3t_sticky_shr = |s2o_qutnt[ 1:0];
+      6'd2   : s3t_sticky_shr = |s2o_qutnt[ 2:0];
+      6'd3   : s3t_sticky_shr = |s2o_qutnt[ 3:0];
+      6'd4   : s3t_sticky_shr = |s2o_qutnt[ 4:0];
+      6'd5   : s3t_sticky_shr = |s2o_qutnt[ 5:0];
+      6'd6   : s3t_sticky_shr = |s2o_qutnt[ 6:0];
+      6'd7   : s3t_sticky_shr = |s2o_qutnt[ 7:0];
+      6'd8   : s3t_sticky_shr = |s2o_qutnt[ 8:0];
+      6'd9   : s3t_sticky_shr = |s2o_qutnt[ 9:0];
+      6'd10  : s3t_sticky_shr = |s2o_qutnt[10:0];
+      6'd11  : s3t_sticky_shr = |s2o_qutnt[11:0];
+      6'd12  : s3t_sticky_shr = |s2o_qutnt[12:0];
+      6'd13  : s3t_sticky_shr = |s2o_qutnt[13:0];
+      6'd14  : s3t_sticky_shr = |s2o_qutnt[14:0];
+      6'd15  : s3t_sticky_shr = |s2o_qutnt[15:0];
+      6'd16  : s3t_sticky_shr = |s2o_qutnt[16:0];
+      6'd17  : s3t_sticky_shr = |s2o_qutnt[17:0];
+      6'd18  : s3t_sticky_shr = |s2o_qutnt[18:0];
+      6'd19  : s3t_sticky_shr = |s2o_qutnt[19:0];
+      6'd20  : s3t_sticky_shr = |s2o_qutnt[20:0];
+      6'd21  : s3t_sticky_shr = |s2o_qutnt[21:0];
+      6'd22  : s3t_sticky_shr = |s2o_qutnt[22:0];
+      6'd23  : s3t_sticky_shr = |s2o_qutnt[23:0];
+      6'd24  : s3t_sticky_shr = |s2o_qutnt[24:0];
+      default: s3t_sticky_shr = |s2o_qutnt[25:0];
+    endcase
+  end // always
 
-   assign s3t_shl = (s3t_exp10[9] | !(|s3t_exp10)) ?
-       0 :
-       s3t_exp10[8] ?
-       0 : {9'd0,s3t_qutdn};
+  wire s3t_sticky = (|s3t_shr) ? s3t_sticky_shr : s3t_fract26[0];
 
-
-  // stage #3 outputs
-  //   input related
-  reg s3o_infa, s3o_infb,
-      s3o_snan_a, s3o_qnan_a, s3o_snan_b, s3o_qnan_b;
-  reg s3o_opa_0, s3o_opb_0;
-  //   computation related
-  reg s3o_sign;
-  reg [8:0] s3o_exp9;
-  reg [FRAC_WIDTH+3:0] s3o_qutnt;
-  reg [5:0] s3o_shr;
-  reg [5:0] s3o_shl;
-  reg s3o_lost;
-
-  //   registering
+   // stage #3 outputs
+    // input related
+  reg  s3o_signa, s3o_signb, s3o_infa, s3o_infb,
+       s3o_snan_a, s3o_qnan_a, s3o_snan_b, s3o_qnan_b;
+  reg  s3o_opa_0, s3o_opb_0;
+      // computation related
+  reg        s3o_signc;
+  reg [9:0]  s3o_exp10c;
+  reg [25:0] s3o_fract26c;
+  
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      s3o_infa  <= s2o_infa;
-      s3o_infb  <= s2o_infb;
+      s3o_infa   <= s2o_infa;
+      s3o_infb   <= s2o_infb;
       s3o_snan_a <= s2o_snan_a;
       s3o_qnan_a <= s2o_qnan_a;
       s3o_snan_b <= s2o_snan_b;
       s3o_qnan_b <= s2o_qnan_b;
-      s3o_opa_0 <= s2o_opa_0;
-      s3o_opb_0 <= s2o_opb_0;
+      s3o_opa_0  <= s2o_opa_0;
+      s3o_opb_0  <= s2o_opb_0;
         // computation related
-      s3o_sign <= s2o_sign;
-      
-      if (s3t_exp10[9] | !(|s3t_exp10))
-        s3o_exp9 <= 9'd1;
-      else
-        s3o_exp9 <= s3t_exp10[8:0];
-
-      s3o_qutnt <= s2o_qutnt;
-
-      s3o_shr <= (s3t_shr > 10'd26) ? 6'd27 : s3t_shr[5:0];
-      s3o_shl <= s3t_shl[5:0];
-
-      s3o_lost <= s2o_lost;
-    end // (reset or flush) / advance
-  end // always @ (posedge clk)
+      s3o_signc    <= s2o_sign;
+      s3o_exp10c   <= (|s3t_shr) ? s3t_exp10rx : s3t_exp10lx;
+      s3o_fract26c <= {s3t_fract26[25:1],s3t_sticky};
+    end // advance
+  end // posedge clock
 
   // ready is special case
   reg s3o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst | flush_i)
-      s3o_ready <= 0;
+      s3o_ready  <= 0;
     else if(adv_i)
       s3o_ready <= s2o_ready;
   end // posedge clock
 
 
-  /* Stage #4 */
-  // Shifting the fraction and rounding
-  reg [5:0] s4t_r_zeros;
-    always @(s3o_qutnt)
-      casez(s3o_qutnt) // synopsys full_case parallel_case
-        27'b??????????????????????????1: s4t_r_zeros = 0;
-        27'b?????????????????????????10: s4t_r_zeros = 1;
-        27'b????????????????????????100: s4t_r_zeros = 2;
-        27'b???????????????????????1000: s4t_r_zeros = 3;
-        27'b??????????????????????10000: s4t_r_zeros = 4;
-        27'b?????????????????????100000: s4t_r_zeros = 5;
-        27'b????????????????????1000000: s4t_r_zeros = 6;
-        27'b???????????????????10000000: s4t_r_zeros = 7;
-        27'b??????????????????100000000: s4t_r_zeros = 8;
-        27'b?????????????????1000000000: s4t_r_zeros = 9;
-        27'b????????????????10000000000: s4t_r_zeros = 10;
-        27'b???????????????100000000000: s4t_r_zeros = 11;
-        27'b??????????????1000000000000: s4t_r_zeros = 12;
-        27'b?????????????10000000000000: s4t_r_zeros = 13;
-        27'b????????????100000000000000: s4t_r_zeros = 14;
-        27'b???????????1000000000000000: s4t_r_zeros = 15;
-        27'b??????????10000000000000000: s4t_r_zeros = 16;
-        27'b?????????100000000000000000: s4t_r_zeros = 17;
-        27'b????????1000000000000000000: s4t_r_zeros = 18;
-        27'b???????10000000000000000000: s4t_r_zeros = 19;
-        27'b??????100000000000000000000: s4t_r_zeros = 20;
-        27'b?????1000000000000000000000: s4t_r_zeros = 21;
-        27'b????10000000000000000000000: s4t_r_zeros = 22;
-        27'b???100000000000000000000000: s4t_r_zeros = 23;
-        27'b??1000000000000000000000000: s4t_r_zeros = 24;
-        27'b?10000000000000000000000000: s4t_r_zeros = 25;
-        27'b100000000000000000000000000: s4t_r_zeros = 26;
-        27'b000000000000000000000000000: s4t_r_zeros = 27;
-      endcase // casex (s3o_qutnt)
+  /* Stage #4: rounding and output */
+  
+  wire s4t_g    = s3o_fract26c[2];
+  wire s4t_r    = s3o_fract26c[1];
+  wire s4t_s    = s3o_fract26c[0];
+  wire s4t_lost = s4t_r | s4t_s;
 
-  reg [26:0] s4t_fract27;
-  always @(s3o_qutnt or s3o_shr or s3o_shl) begin
-    if (|s3o_shr)
-      s4t_fract27 <= s3o_qutnt >> s3o_shr;
-    else
-      s4t_fract27 <= s3o_qutnt << s3o_shl;
-  end // always
+  wire s4t_rnd_up = (rm_nearest & s4t_r & s4t_s) |
+                    (rm_nearest & s4t_g & s4t_r & !s4t_s) |
+                    (rm_to_infp & !s3o_signc & s4t_lost) |
+                    (rm_to_infm &  s3o_signc & s4t_lost);
 
-  // stage #4 outputs
-  //   input related
-  reg s4o_infa, s4o_infb,
-      s4o_snan_a, s4o_qnan_a, s4o_snan_b, s4o_qnan_b;
-  reg s4o_opa_0, s4o_opb_0;
-  //   computation related
-  reg s4o_sign;
-  reg [8:0] s4o_exp9;
-  reg [26:0] s4o_fract27;
-  reg [5:0] s4o_shr;
-  reg [5:0] s4o_r_zeros;
-  reg s4o_lost;
+  wire [24:0] s4t_fract25c = s4t_rnd_up ?
+    ({1'b0,s3o_fract26c[25:2]} + 25'd1) :
+     {1'b0,s3o_fract26c[25:2]};
 
-  //   registering
-  always @(posedge clk) begin
-    if(adv_i) begin
-        // input related
-      s4o_infa  <= s3o_infa;
-      s4o_infb  <= s3o_infb;
-      s4o_snan_a <= s3o_snan_a;
-      s4o_qnan_a <= s3o_qnan_a;
-      s4o_snan_b <= s3o_snan_b;
-      s4o_qnan_b <= s3o_qnan_b;
-      s4o_opa_0 <= s3o_opa_0;
-      s4o_opb_0 <= s3o_opb_0;
-        // computation related
-      s4o_sign <= s3o_sign;
-      s4o_exp9 <= s4t_fract27[26] ? s3o_exp9 : s3o_exp9 - 9'd1;
-      s4o_fract27 <= s4t_fract27;
-      s4o_r_zeros <= s4t_r_zeros;
-      s4o_shr <= s3o_shr;
-      s4o_lost <= s3o_lost; // !!! lost just in reminder !!!
-    end // (reset or flush) / advance
-  end // posedge clock
+  wire s4t_shr = s4t_fract25c[24];
 
-  // ready is special case
-  reg s4o_ready;
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst | flush_i)
-      s4o_ready <= 0;
-    else if(adv_i)
-      s4o_ready <= s3o_ready;
-  end // posedge clock
+  wire [9:0]  s4t_exp10c   = s3o_exp10c + {9'd0,s4t_shr};
+  wire [23:0] s4t_fract24c = s4t_shr ? s4t_fract25c[24:1] :
+                                       s4t_fract25c[23:0];
 
+  wire s4t_fract24c_dn = !s4t_fract24c[23];
+  wire s4t_fract24c_00 = !(|s4t_fract24c);
 
-  /* Stage #5 */
-  // Rounding
-
-  wire s5t_guard  = s4o_fract27[2];
-  wire s5t_round  = s4o_fract27[1];
-  wire s5t_sticky = s4o_fract27[0] | s4o_lost;
-
-  wire s5t_roundup = rmode_i==2'b00 ? // round to nearest even
-          s5t_guard & ((s5t_round | s5t_sticky) | s4o_fract27[3]) :
-          rmode_i==2'b10 ? // round up
-          (s5t_guard | s5t_round | s5t_sticky) & !s4o_sign :
-          rmode_i==2'b11 ? // round down
-          (s5t_guard | s5t_round | s5t_sticky) & s4o_sign :
-          0; // round to zero(truncate = no rounding)
-
-  wire [24:0] s5t_fract25_rnd;
-  assign s5t_fract25_rnd = s5t_roundup ?
-    {1'b0,s4o_fract27[26:3]} + 1 : {1'b0,s4o_fract27[26:3]};
-    
-  wire s5t_shr = s5t_fract25_rnd[24];
-
-  // stage #5 outputs
-  //   input related
-  reg s5o_infa, s5o_infb,
-      s5o_snan_a, s5o_qnan_a, s5o_snan_b, s5o_qnan_b;
-  reg s5o_opa_0, s5o_opb_0;
-  //   computation related
-  reg s5o_sign;
-  reg [8:0] s5o_exp9;
-  reg [22:0] s5o_fract23;
-  reg s5o_lost;
-
-  //   registering
-  always @(posedge clk) begin
-    if(adv_i) begin
-        // input related
-      s5o_infa  <= s4o_infa;
-      s5o_infb  <= s4o_infb;
-      s5o_snan_a <= s4o_snan_a;
-      s5o_qnan_a <= s4o_qnan_a;
-      s5o_snan_b <= s4o_snan_b;
-      s5o_qnan_b <= s4o_qnan_b;
-      s5o_opa_0 <= s4o_opa_0;
-      s5o_opb_0 <= s4o_opb_0;
-        // computation related
-      s5o_sign <= s4o_sign;
-      s5o_exp9 <= s5t_shr ? s4o_exp9 + 9'd1 : s4o_exp9;
-      s5o_fract23 <= s5t_shr ? s5t_fract25_rnd[23:1] : s5t_fract25_rnd[22:0];
-      s5o_lost <= s4o_lost | (|s4o_fract27[2:0]) |
-                  ((s4o_shr+{5'd0,s5t_shr}) > s4o_r_zeros);
-    end // (reset or flush) / advance
-  end // posedge clock
-
-  // ready is special case
-  reg s5o_ready;
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst | flush_i)
-      s5o_ready <= 0;
-    else if(adv_i)
-      s5o_ready <= s4o_ready;
-  end // posedge clock
-
-  /* Stage #6 : form output */
   // input nans
-  wire s6t_anan_a  = s5o_snan_a | s5o_qnan_a;
-  wire s6t_anan_b  = s5o_snan_b | s5o_qnan_b;
-  wire s6t_snan_in = s5o_snan_a | s5o_snan_b;
-  wire s6t_anan_in = s6t_anan_a | s6t_anan_b;  
-
-  // "infs" (actually exp==8'hff)
-  //wire s6t_expa_ff = s6t_anan_a | s5o_infa;
-  //wire s6t_expb_ff = s6t_anan_b | s5o_infb;
+  wire s4t_anan_a  = s3o_snan_a | s3o_qnan_a;
+  wire s4t_anan_b  = s3o_snan_b | s3o_qnan_b;
+  wire s4t_snan_in = s3o_snan_a | s3o_snan_b;
+  wire s4t_anan_in = s4t_anan_a | s4t_anan_b;
 
   //  0/0, inf/inf -> invalid flag, qnan result
-  wire s6t_inv    = (s5o_opa_0 & s5o_opb_0) | 
-                    (s5o_infa & s5o_infb) | 
-                    s6t_snan_in;
-  wire s6t_opc_nan = s6t_anan_in | s6t_inv;
+  wire s4t_inv = (s3o_opa_0 & s3o_opb_0) | 
+                 (s3o_infa & s3o_infb)   | 
+                 s4t_snan_in;
 
-  wire s6t_inf_result = (&s5o_exp9[7:0]) | s5o_exp9[8] | s5o_opb_0;
+  wire s4t_opc_nan  = s4t_anan_in | s4t_inv;
+  wire s4t_nan_sign = s3o_signc;
 
-  wire s6t_ovf = s6t_inf_result & (!s5o_infa) & (!s5o_opb_0);
+  // check overflow and inexact
+  wire s4t_inf = (s4t_exp10c > 10'd254) | s3o_opb_0;
+  wire s4t_ovf = s4t_inf & (!s3o_infa) & (!s3o_opb_0);
+  wire s4t_ine = (s4t_lost | s4t_ovf)  &
+                 (!s3o_opa_0) & (!s3o_opb_0) & (!s3o_infa) & (!s3o_infb);
 
-  wire s6t_ine = !s5o_opa_0 & !s5o_opb_0 & !s5o_infa & !s5o_infb &
-                 (s5o_lost | s6t_ovf);
+   // Generate result   
+  wire [31:0] s4t_opc;
+  assign s4t_opc =
+    s4t_opc_nan ? {s4t_nan_sign,QNAN} :
+    (s3o_infa | s4t_ovf | s4t_inf) ? {s3o_signc,INF} :
+    (s3o_opa_0 | s3o_infb) ?  {s3o_signc,31'd0} :
+    (s4t_fract24c_dn | s4t_fract24c_00) ? {s3o_signc,8'd0,s4t_fract24c[22:0]} :
+    {s3o_signc,s4t_exp10c[7:0],s4t_fract24c[22:0]};
 
-  wire [31:0] s6t_opc =
-    s6t_opc_nan ? {s5o_sign,QNAN} :
-    (s5o_infa | s6t_ovf | s6t_inf_result) ? {s5o_sign,INF} :
-    (s5o_opa_0 | s5o_infb) ? {s5o_sign,31'd0} :
-    {s5o_sign,s5o_exp9[7:0],s5o_fract23};
-
-    // Output register
+   // Output Register
   always @(posedge clk) begin
     if(adv_i) begin
-      opc_o   <= s6t_opc;
-      ine_o   <= s6t_ine;
-      inv_o   <= s6t_inv;
-      ovf_o   <= (&s6t_opc[30:23]) & s6t_ine;
-      inf_o   <= (&s6t_opc[30:23]) & !s6t_opc_nan;
-      unf_o   <= (!(|s6t_opc[30:0])) & s6t_ine;
-      zer_o   <= !(|s6t_opc[30:0]);
-      dbz_o   <= s5o_opb_0 & !s5o_opa_0 & !s6t_inv & !s5o_infa;
+      opc_o  <= s4t_opc;
+      ine_o  <= s4t_ine;
+      inv_o  <= s4t_inv;
+      ovf_o  <= (s3o_infa | s4t_ovf | s4t_inf | s4t_opc_nan) & s4t_ine;
+      inf_o  <= (s3o_infa | s4t_ovf | s4t_inf) & !s4t_opc_nan;
+      unf_o  <= (s3o_opa_0 | s3o_infb | s4t_fract24c_00) & (!s3o_opb_0) & s4t_ine;
+      zer_o  <= (s3o_opa_0 | s3o_infb | s4t_fract24c_00) & (!s3o_opb_0);
+      dbz_o  <= s3o_opb_0 & (!s3o_opa_0) & (!s4t_inv) & (!s3o_infa);
     end
   end // posedge clock
 
@@ -609,7 +536,7 @@ module pfpu32_div
     if (rst | flush_i)
       ready_o <= 0;
     else if(adv_i)
-      ready_o <= s5o_ready;
+      ready_o <= s3o_ready;
   end // posedge clock
 
 endmodule // pfpu32_div

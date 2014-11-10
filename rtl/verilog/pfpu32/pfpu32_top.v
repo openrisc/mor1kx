@@ -44,7 +44,6 @@
 // 0111 = reserved
 // 1xxx = comparison
 
-
 `include "mor1kx-defines.v"
 
 module pfpu32_top
@@ -184,31 +183,52 @@ pfpu32_div u_f32_div
 );
 
 // convertor
-//   inputs & outputs
-wire op_cnv = is_op_fpu & (!a_cmp) &
-              ((op_conv == 3'd4) | (op_conv == 3'd5));
-wire cnv_start = op_cnv & new_fpu_data;
-wire cnv_ine, cnv_inv, cnv_unf, cnv_zero, cnv_snan;
-wire [OPTION_OPERAND_WIDTH-1:0] cnv_result;
-wire cnv_ready;
-//   module istance
-pfpu32_intfloat_conv u_f32_cnv
+//   i2f signals
+wire op_i2f_cnv = is_op_fpu & (!a_cmp) &
+                  (op_conv == 3'd4);
+wire i2f_start = op_i2f_cnv & new_fpu_data;
+wire [OPTION_OPERAND_WIDTH-1:0] i2f_result;
+wire i2f_ine, i2f_zero;
+wire i2f_ready;
+//   i2f module instance
+pfpu32_i2f u_i2f_cnv
 (
   .clk(clk),
   .rst(rst),
   .rmode_i(round_mode_i),
-  .fpu_op_i(op_arith), // 4: i2f, 5: f2i
   .opa_i(rfa_i),
-  .flush_i(flush_i),  // flushe pipe
-  .adv_i(padv_fpu_units),    // advance pipe
-  .start_i(cnv_start),  // start conversion
-  .out_o(cnv_result),
-  .snan_o(cnv_snan),
-  .ine_o(cnv_ine),
-  .inv_o(cnv_inv),
-  .underflow_o(cnv_unf),
-  .zero_o(cnv_zero),
-  .ready_o(cnv_ready)
+  .flush_i(flush_i),      // flush pipe
+  .adv_i(padv_fpu_units), // advance pipe
+  .start_i(i2f_start),    // start conversion
+  .opc_o(i2f_result),
+  .ine_o(i2f_ine),
+  .zer_o(i2f_zero),
+  .ready_o(i2f_ready)
+);
+//   f2i signals
+wire op_f2i_cnv = is_op_fpu & (!a_cmp) &
+                  (op_conv == 3'd5);
+wire f2i_start = op_f2i_cnv & new_fpu_data;
+wire [OPTION_OPERAND_WIDTH-1:0] f2i_result;
+wire f2i_ine, f2i_inv, f2i_unf, f2i_zero, f2i_snan;
+wire f2i_ready;
+//    f2i module instance
+pfpu32_f2i u_f2i_cnv
+(
+  .clk(clk),
+  .rst(rst),
+  .rmode_i(round_mode_i),
+  .opa_i(rfa_i),
+  .flush_i(flush_i),      // flush pipe
+  .adv_i(padv_fpu_units), // advance pipe
+  .start_i(f2i_start),    // start conversion
+  .out_o(f2i_result),
+  .nan_o(f2i_snan),
+  .ine_o(f2i_ine),
+  .inv_o(f2i_inv),
+  .unf_o(f2i_unf),
+  .zer_o(f2i_zero),
+  .ready_o(f2i_ready)
 );
 
 // comparator
@@ -236,42 +256,34 @@ wire [OPTION_OPERAND_WIDTH-1:0] fpu_result;
 assign fpu_result = add_ready ? add_result :
                     mul_ready ? mul_result :
                     div_ready ? div_result :
-                    cnv_ready ? cnv_result :
+                    i2f_ready ? i2f_result :
+                    f2i_ready ? f2i_result :
                     {OPTION_OPERAND_WIDTH{1'b0}};
 
 // Prepare exeptions
-wire exp_result_ff   = &fpu_result[30:23];
-//wire exp_result_00   = !(|fpu_result[30:23]);
-//wire fract_result_00 = !(|fpu_result[22:0]);
-wire qnan_result = exp_result_ff & fpu_result[22];
-wire snan_result = exp_result_ff & !fpu_result[22] & (|fpu_result[21:0]);
-//wire zero_result = exp_result_00 & fract_result_00;
-//wire inf_result  = exp_result_ff & fract_result_00;
+wire exp_result_ff = &fpu_result[30:23];
+wire qnan_result   = exp_result_ff & fpu_result[22];
+wire snan_result   = exp_result_ff & !fpu_result[22] & (|fpu_result[21:0]);
 
 wire arith_ready = add_ready | mul_ready | div_ready;
-
-//wire arith_ine = ((add_ready & add_ine) |
-//                  (mul_ready & mul_ine) | (div_ready & div_ine));
-//wire arith_ovf = exp_result_ff & arith_ine;
-//wire arith_unf = exp_result_00 & fract_result_00 & arith_ine;
-
 
 // Output register
 always @(posedge clk `OR_ASYNC_RST) begin
   if (rst | flush_i) begin
       // overall FPU results
-    fpu_result_o    <= 0;
-    fpu_valid_o     <= 0;
+    fpu_result_o    <= {OPTION_OPERAND_WIDTH{1'b0}};
+    fpu_valid_o     <= 1'b0;
       // comparison specials
-    fpu_cmp_flag_o  <= 0;
-    fpu_cmp_valid_o <= 0;
+    fpu_cmp_flag_o  <= 1'b0;
+    fpu_cmp_valid_o <= 1'b0;
       // exeptions
-    fpcsr_o         <= 0;
+    fpcsr_o         <= {`OR1K_FPCSR_WIDTH{1'b0}};
   end
   else if(padv_fpu_units) begin
       // overall FPU results
     fpu_result_o    <= fpu_result;
-    fpu_valid_o     <= arith_ready | cnv_ready | cmp_ready;
+    fpu_valid_o     <= arith_ready | i2f_ready | 
+                         f2i_ready | cmp_ready;
       // comparison specials
     fpu_cmp_flag_o  <= cmp_result;
     fpu_cmp_valid_o <= cmp_ready;
@@ -282,22 +294,24 @@ always @(posedge clk `OR_ASYNC_RST) begin
     fpcsr_o[`OR1K_FPCSR_UNF] <= (add_ready & add_unf) |
                                 (mul_ready & mul_unf) |
                                 (div_ready & div_unf) |
-                                (cnv_ready & cnv_unf);
+                                (f2i_ready & f2i_unf);
     fpcsr_o[`OR1K_FPCSR_SNF] <= (arith_ready & snan_result)|
-                                (cnv_ready & cnv_snan);
+                                (f2i_ready & f2i_snan);
     fpcsr_o[`OR1K_FPCSR_QNF] <= (arith_ready & qnan_result);
     fpcsr_o[`OR1K_FPCSR_ZF]  <= (add_ready & add_zero) |
                                 (mul_ready & mul_zero) |
                                 (div_ready & div_zero) |
-                                (cnv_ready & cnv_zero);
+                                (i2f_ready & i2f_zero) |
+                                (f2i_ready & f2i_zero);
     fpcsr_o[`OR1K_FPCSR_IXF] <= (add_ready & add_ine) |
                                 (mul_ready & mul_ine) |
                                 (div_ready & div_ine) |
-                                (cnv_ready & cnv_ine);
+                                (i2f_ready & i2f_ine) |
+                                (f2i_ready & f2i_ine);
     fpcsr_o[`OR1K_FPCSR_IVF] <= (add_ready & add_inv) |
                                 (mul_ready & mul_inv) |  
                                 (div_ready & div_inv) |
-                                (cnv_ready & (cnv_inv | cnv_snan)) |
+                                (f2i_ready & (f2i_inv | f2i_snan)) |
                                 (cmp_ready & cmp_inv);
     fpcsr_o[`OR1K_FPCSR_INF] <= (add_ready & add_inf) |
                                 (mul_ready & mul_inf) |
