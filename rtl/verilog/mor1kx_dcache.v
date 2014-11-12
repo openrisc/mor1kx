@@ -240,7 +240,7 @@ module mor1kx_dcache
 	 assign way_din[i] = way_wr_dat;
 
 	 // compare stored tag with incoming tag and check valid bit
-         assign check_way_tag[i] = tag_way_out[i][TAGMEM_WAY_WIDTH-1:0];
+         assign check_way_tag[i] = tag_way_out[i][TAG_WIDTH-1:0];
          assign check_way_match[i] = (check_way_tag[i] == tag_tag);
          assign check_way_valid[i] = tag_way_out[i][TAGMEM_WAY_VALID];
 
@@ -254,7 +254,7 @@ module mor1kx_dcache
 	    // The same for the snoop tag memory
             assign snoop_way_out[i] = snoop_dout[(i+1)*TAGMEM_WAY_WIDTH-1:i*TAGMEM_WAY_WIDTH];
 
-	    assign snoop_check_way_tag[i] = snoop_way_out[i][TAGMEM_WAY_WIDTH-1:0];
+	    assign snoop_check_way_tag[i] = snoop_way_out[i][TAG_WIDTH-1:0];
 	    assign snoop_check_way_match[i] = (snoop_check_way_tag[i] == snoop_tag);
 	    assign snoop_check_way_valid[i] = snoop_way_out[i][TAGMEM_WAY_VALID];
 
