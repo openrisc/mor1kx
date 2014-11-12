@@ -520,8 +520,10 @@ if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
    reg atomic_flag_set;
    reg atomic_flag_clear;
 
-   always @(posedge clk)
-     if (rst | pipeline_flush_i)
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       atomic_reserve <= 0;
+     else if (pipeline_flush_i)
        atomic_reserve <= 0;
      else if (ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i & write_done ||
 	      !ctrl_op_lsu_atomic_i & store_buffer_write &
