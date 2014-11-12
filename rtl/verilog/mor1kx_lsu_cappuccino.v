@@ -448,8 +448,10 @@ module mor1kx_lsu_cappuccino
 generate
 if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
    // Atomic operations logic
-   always @(posedge clk)
-     if (rst | pipeline_flush_i)
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       atomic_reserve <= 0;
+     else if (pipeline_flush_i)
        atomic_reserve <= 0;
      else if ((ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i & padv_ctrl_i) ||
 	      store_buffer_write & (store_buffer_wadr == atomic_addr))
