@@ -48,13 +48,6 @@ module pfpu32_i2f
    output reg        zer_o,
    output reg        ready_o
 );
-
-  // rounding mode isn't require pipelinization
-  wire rm_nearest = (rmode_i==2'b00);
-  wire rm_to_zero = (rmode_i==2'b01);
-  wire rm_to_infp = (rmode_i==2'b10);
-  wire rm_to_infm = (rmode_i==2'b11);
-
   /*
      Any stage's output is registered.
      Definitions:
@@ -170,7 +163,9 @@ module pfpu32_i2f
   // ready is special case
   reg s1o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst | flush_i)
+    if (rst)
+      s1o_ready <= 0;
+    else if(flush_i)
       s1o_ready <= 0;
     else if(adv_i)
       s1o_ready <= start_i;
@@ -210,7 +205,9 @@ module pfpu32_i2f
   // ready is special case
   reg s2o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst | flush_i)
+    if (rst)
+      s2o_ready <= 0;
+    else if(flush_i)
       s2o_ready <= 0;
     else if(adv_i)
       s2o_ready <= s1o_ready;
@@ -218,6 +215,12 @@ module pfpu32_i2f
 
 
   /* Stage #3: rounding and output */
+
+  // rounding mode isn't require pipelinization
+  wire rm_nearest = (rmode_i==2'b00);
+  wire rm_to_zero = (rmode_i==2'b01);
+  wire rm_to_infp = (rmode_i==2'b10);
+  wire rm_to_infm = (rmode_i==2'b11);
 
   wire s3t_g    = s2o_fract26c[2];
   wire s3t_r    = s2o_fract26c[1];
@@ -252,7 +255,9 @@ module pfpu32_i2f
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst | flush_i)
+    if (rst)
+      ready_o <= 0;
+    else if(flush_i)
       ready_o <= 0;
     else if(adv_i)
       ready_o <= s2o_ready;

@@ -66,12 +66,7 @@ module pfpu32_mul
 
   localparam INF  = 31'b1111111100000000000000000000000;
   localparam QNAN = 31'b1111111110000000000000000000000;
-
-    // rounding mode isn't require piplinization
-  wire rm_nearest = (rmode_i==2'b00);
-  wire rm_to_zero = (rmode_i==2'b01);
-  wire rm_to_infp = (rmode_i==2'b10);
-  wire rm_to_infm = (rmode_i==2'b11);
+  localparam SNAN = 31'b1111111101111111111111111111111;
 
   /*
      Any stage's output is registered.
@@ -81,7 +76,7 @@ module pfpu32_mul
   */
 
 
-  /* Stage #1: pre-multiplier normalization */
+  /* Stage #1: pre-multiplier stage */
 
     // aliases
   wire s1t_signa = opa_i[31];
@@ -110,6 +105,17 @@ module pfpu32_mul
   wire s1t_opa_dn = !(|s1t_expa) & !s1t_opa_0;
   wire s1t_opb_dn = !(|s1t_expb) & !s1t_opb_0;
 
+    // detection of some exceptions
+    //   0 * inf -> invalid operation; snan output
+  wire s1t_inv = (s1t_opa_0 & s1t_infb) | (s1t_opb_0 & s1t_infa);
+    //   inf input
+  wire s1t_inf_i = s1t_infa | s1t_infb;
+    //   a nan input -> qnan output
+  wire s1t_snan_i = s1t_snan_a | s1t_snan_b;
+  wire s1t_qnan_i = s1t_qnan_a | s1t_qnan_b;
+    //   sign of output nan
+  wire s1t_anan_i_sign = (s1t_snan_a | s1t_qnan_a) ? s1t_signa :
+                                                     s1t_signb;
 
     // restored exponents
   wire [9:0] s1t_exp10a = {2'd0,s1t_expa} + {9'd0,s1t_opa_dn};
@@ -136,8 +142,8 @@ module pfpu32_mul
    
   // stage #1 outputs
   //   input related
-  reg s1o_infa, s1o_infb,
-      s1o_snan_a, s1o_qnan_a, s1o_snan_b, s1o_qnan_b;
+  reg s1o_inv, s1o_inf_i,
+      s1o_snan_i, s1o_qnan_i, s1o_anan_i_sign;
   //   computation related
   reg        s1o_opc_0;
   reg        s1o_signc;
@@ -151,12 +157,11 @@ module pfpu32_mul
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      s1o_infa   <= s1t_infa;
-      s1o_infb   <= s1t_infb;
-      s1o_snan_a <= s1t_snan_a;
-      s1o_qnan_a <= s1t_qnan_a;
-      s1o_snan_b <= s1t_snan_b;
-      s1o_qnan_b <= s1t_qnan_b;
+      s1o_inv         <= s1t_inv;
+      s1o_inf_i       <= s1t_inf_i;
+      s1o_snan_i      <= s1t_snan_i;
+      s1o_qnan_i      <= s1t_qnan_i;
+      s1o_anan_i_sign <= s1t_anan_i_sign;
         // computation related
       s1o_opc_0  <= s1t_opc_0;
       s1o_signc  <= s1t_signa ^ s1t_signb;
@@ -171,7 +176,9 @@ module pfpu32_mul
   // ready is special case
   reg s1o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst | flush_i)
+    if (rst)
+      s1o_ready <= 0;
+    else if(flush_i)
       s1o_ready <= 0;
     else if(adv_i)
       s1o_ready <= start_i;
@@ -292,9 +299,8 @@ module pfpu32_mul
 
   // stage #2 outputs
   //   input related
-  reg s2o_infa, s2o_infb,
-      s2o_snan_a, s2o_qnan_a, s2o_snan_b, s2o_qnan_b;
-  reg s2o_opc_0;
+  reg s2o_inv, s2o_inf_i,
+      s2o_snan_i, s2o_qnan_i, s2o_anan_i_sign;
   //   computation related
   reg        s2o_signc;
   reg [9:0]  s2o_exp10c;  
@@ -306,13 +312,11 @@ module pfpu32_mul
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      s2o_infa   <= s1o_infa;
-      s2o_infb   <= s1o_infb;
-      s2o_snan_a <= s1o_snan_a;
-      s2o_qnan_a <= s1o_qnan_a;
-      s2o_snan_b <= s1o_snan_b;
-      s2o_qnan_b <= s1o_qnan_b;
-      s2o_opc_0  <= s1o_opc_0;
+      s2o_inv         <= s1o_inv;
+      s2o_inf_i       <= s1o_inf_i;
+      s2o_snan_i      <= s1o_snan_i;
+      s2o_qnan_i      <= s1o_qnan_i;
+      s2o_anan_i_sign <= s1o_anan_i_sign;
         // computation related
         // right shif has got priority
       s2o_signc   <= s1o_signc;
@@ -326,7 +330,9 @@ module pfpu32_mul
   // ready is special case
   reg s2o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst | flush_i)
+    if (rst)
+      s2o_ready <= 0;
+    else if(flush_i)
       s2o_ready <= 0;
     else if(adv_i)
       s2o_ready <= s1o_ready;
@@ -412,9 +418,8 @@ module pfpu32_mul
 
    // stage #3 outputs
     // input related
-  reg  s3o_signa, s3o_signb, s3o_infa, s3o_infb,
-       s3o_snan_a, s3o_qnan_a, s3o_snan_b, s3o_qnan_b;
-  reg  s3o_opc_0;
+  reg s3o_inv, s3o_inf_i,
+      s3o_snan_i, s3o_qnan_i, s3o_anan_i_sign;
       // computation related
   reg        s3o_signc;
   reg [9:0]  s3o_exp10c;
@@ -423,13 +428,11 @@ module pfpu32_mul
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      s3o_infa   <= s2o_infa;
-      s3o_infb   <= s2o_infb;
-      s3o_snan_a <= s2o_snan_a;
-      s3o_qnan_a <= s2o_qnan_a;
-      s3o_snan_b <= s2o_snan_b;
-      s3o_qnan_b <= s2o_qnan_b;
-      s3o_opc_0  <= s2o_opc_0;
+      s3o_inv         <= s2o_inv;
+      s3o_inf_i       <= s2o_inf_i;
+      s3o_snan_i      <= s2o_snan_i;
+      s3o_qnan_i      <= s2o_qnan_i;
+      s3o_anan_i_sign <= s2o_anan_i_sign;
         // computation related
       s3o_signc    <= s2o_signc;
       s3o_exp10c   <= s2o_exp10c;
@@ -440,7 +443,9 @@ module pfpu32_mul
   // ready is special case
   reg s3o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst | flush_i)
+    if (rst)
+      s3o_ready  <= 0;
+    else if(flush_i)
       s3o_ready  <= 0;
     else if(adv_i)
       s3o_ready <= s2o_ready;
@@ -448,7 +453,13 @@ module pfpu32_mul
 
 
   /* Stage #4: rounding and output */
-  
+
+  // rounding mode isn't require pipelinization
+  wire rm_nearest = (rmode_i==2'b00);
+  wire rm_to_zero = (rmode_i==2'b01);
+  wire rm_to_infp = (rmode_i==2'b10);
+  wire rm_to_infm = (rmode_i==2'b11);
+
   wire s4t_g    = s3o_fract26c[2];
   wire s4t_r    = s3o_fract26c[1];
   wire s4t_s    = s3o_fract26c[0];
@@ -469,54 +480,48 @@ module pfpu32_mul
   wire [23:0] s4t_fract24c = s4t_shr ? s4t_fract25c[24:1] :
                                        s4t_fract25c[23:0];
 
+   // potentially denormalized
   wire s4t_fract24c_dn = !s4t_fract24c[23];
+   // potentially zero
   wire s4t_fract24c_00 = !(|s4t_fract24c);
 
-  // input nans
-  wire s4t_anan_a  = s3o_snan_a | s3o_qnan_a;
-  wire s4t_anan_b  = s3o_snan_b | s3o_qnan_b;
-  wire s4t_snan_in = s3o_snan_a | s3o_snan_b;
-  wire s4t_anan_in = s4t_anan_a | s4t_anan_b;
-
-  // "infs" (actually exp==8'hff)
-  wire s4t_expa_ff  = s4t_anan_a | s3o_infa;
-  wire s4t_expb_ff  = s4t_anan_b | s3o_infb;
-  wire s4t_expin_ff = s4t_expa_ff | s4t_expb_ff;
-
-  //  0 * inf -> invalid flag, qnan output
-  wire s4t_inv = (s4t_expin_ff & s3o_opc_0) | s4t_snan_in;
-
-  wire s4t_opc_nan  = s4t_anan_in | s4t_inv;
-  wire s4t_nan_sign = s3o_signc;
-
-  // check overflow and inexact
-  wire s4t_ovf = (s4t_exp10c > 10'd254) & !s4t_expin_ff;
-  wire s4t_ine = (s4t_lost | s4t_ovf)   & !s3o_opc_0;
-
-   // Generate result   
+   // Generate result and flags
+  wire s4t_ine, s4t_ovf, s4t_inf, s4t_unf, s4t_zer;
   wire [31:0] s4t_opc;
-  assign s4t_opc =
-    s4t_opc_nan ? {s4t_nan_sign,QNAN} :
-    (s4t_expin_ff | s4t_ovf) ? {s3o_signc,INF} :
-    (s4t_fract24c_dn | s4t_fract24c_00) ? {s3o_signc,8'd0,s4t_fract24c[22:0]} :
-    {s3o_signc,s4t_exp10c[7:0],s4t_fract24c[22:0]};
+  assign {s4t_opc,s4t_ine,s4t_ovf,s4t_inf,s4t_unf,s4t_zer} =
+    // qnan output
+    (s3o_snan_i | s3o_qnan_i) ? // ine  ovf  inf  unf  zer
+      {{s3o_anan_i_sign,QNAN},    1'b0,1'b0,1'b0,1'b0,1'b0} :
+    // snan output
+    s3o_inv ?         // ine  ovf  inf  unf  zer
+      {{s3o_signc,SNAN},1'b0,1'b0,1'b0,1'b0,1'b0} :
+    // overflow and infinity
+    ((s4t_exp10c > 10'd254) | s3o_inf_i) ? // ine        ovf  inf  unf  zer
+      {{s3o_signc,INF}, (s4t_lost | (!s3o_inf_i)),!s3o_inf_i,1'b1,1'b0,1'b0} :
+    // zero and underflow
+    (s4t_fract24c_dn | s4t_fract24c_00) ?    // ine  ovf  inf               unf               zer
+      {{s3o_signc,8'd0,s4t_fract24c[22:0]},s4t_lost,1'b0,1'b0,(s4t_fract24c_00 & s4t_lost),s4t_fract24c_00} :
+    // normal result                                   ine  ovf  inf  unf  zer
+    {s3o_signc,s4t_exp10c[7:0],s4t_fract24c[22:0],s4t_lost,1'b0,1'b0,1'b0,1'b0};
 
    // Output Register
   always @(posedge clk) begin
     if(adv_i) begin
       opc_o  <= s4t_opc;
       ine_o  <= s4t_ine;
-      inv_o  <= s4t_inv;
-      ovf_o  <= (s4t_expin_ff | s4t_ovf | s4t_opc_nan) & s4t_ine;
-      inf_o  <= (s4t_expin_ff | s4t_ovf) & !s4t_opc_nan;
-      unf_o  <= s4t_fract24c_00 & s4t_ine;
-      zer_o  <= s4t_fract24c_00;  
+      inv_o  <= s3o_inv | s3o_snan_i;
+      ovf_o  <= s4t_ovf;
+      inf_o  <= s4t_inf;
+      unf_o  <= s4t_unf;
+      zer_o  <= s4t_zer;
     end
   end // posedge clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst | flush_i)
+    if (rst)
+      ready_o <= 0;
+    else if(flush_i)
       ready_o <= 0;
     else if(adv_i)
       ready_o <= s3o_ready;

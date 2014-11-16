@@ -84,7 +84,9 @@ wire padv_fpu_units = (padv_execute_i & fpu_valid_o) |
 // start logic
 reg new_data;
 always @(posedge clk `OR_ASYNC_RST) begin
-  if (rst | flush_i)
+  if (rst)
+    new_data <= 0;
+  else if(flush_i)
     new_data <= 0;
   else if(padv_decode_i)
     new_data <= 1;
@@ -269,7 +271,17 @@ wire arith_ready = add_ready | mul_ready | div_ready;
 
 // Output register
 always @(posedge clk `OR_ASYNC_RST) begin
-  if (rst | flush_i) begin
+  if (rst) begin
+      // overall FPU results
+    fpu_result_o    <= {OPTION_OPERAND_WIDTH{1'b0}};
+    fpu_valid_o     <= 1'b0;
+      // comparison specials
+    fpu_cmp_flag_o  <= 1'b0;
+    fpu_cmp_valid_o <= 1'b0;
+      // exeptions
+    fpcsr_o         <= {`OR1K_FPCSR_WIDTH{1'b0}};
+  end
+  else if (flush_i) begin
       // overall FPU results
     fpu_result_o    <= {OPTION_OPERAND_WIDTH{1'b0}};
     fpu_valid_o     <= 1'b0;
