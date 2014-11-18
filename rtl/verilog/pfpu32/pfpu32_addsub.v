@@ -53,8 +53,19 @@ module pfpu32_addsub
    input             start_i,  // start add/sub
    input             is_sub_i, // 1: substruction, 0: addition
    input       [1:0] rmode_i,  // round mode
-   input      [31:0] opa_i,
-   input      [31:0] opb_i,
+   input             signa_i,  // input 'a' related values
+   input       [9:0] exp10a_i,
+   input      [23:0] fract24a_i,
+   input             infa_i,
+   input             zeroa_i,
+   input             signb_i,  // input 'b' related values
+   input       [9:0] exp10b_i,
+   input      [23:0] fract24b_i,
+   input             infb_i,
+   input             zerob_i,
+   input             snan_i,   // 'a'/'b' related
+   input             qnan_i,
+   input             anan_sign_i,
    output reg [31:0] opc_o,
    output reg        ine_o,
    output reg        inv_o,    // inf-inf -> invalid flag & qnan result
@@ -75,90 +86,39 @@ module pfpu32_addsub
        s??o_name - "S"tage number "??", "O"utput
        s??t_name - "S"tage number "??", "T"emporary (internally)
   */
-  
-  /*
-    Stages #1 and #2
-    pre addition / substruction normalization
-  */
 
-  /* Stage #1 */
-
-    // aliases
-  wire s1t_signa = opa_i[31];
-  wire s1t_signb = opb_i[31];
-  wire [7:0]  s1t_expa = opa_i[30:23];
-  wire [7:0]  s1t_expb = opb_i[30:23];
-  wire [22:0] s1t_fracta = opa_i[22:0];
-  wire [22:0] s1t_fractb = opb_i[22:0];
-
-    // collect operands related information
-  wire s1t_expa_ff = &s1t_expa;
-  wire s1t_expb_ff = &s1t_expb;
-  wire s1t_infa  = s1t_expa_ff & !(|s1t_fracta);
-  wire s1t_infb  = s1t_expb_ff & !(|s1t_fractb);
-    // signaling NaN: exponent is 8hff, [22] is zero,
-    //                rest of fract is non-zero
-    // quiet NaN: exponent is 8hff, [22] is 1
-  wire s1t_snan_a = s1t_expa_ff & !s1t_fracta[22] & (|s1t_fracta[21:0]);
-  wire s1t_qnan_a = s1t_expa_ff &  s1t_fracta[22];
-  wire s1t_snan_b = s1t_expb_ff & !s1t_fractb[22] & (|s1t_fractb[21:0]);
-  wire s1t_qnan_b = s1t_expb_ff &  s1t_fractb[22];
-    // opa or opb is zero
-  wire s1t_opa_0 = !(|opa_i[30:0]);
-  wire s1t_opb_0 = !(|opb_i[30:0]);
-    // opa or opb is denormalized
-  wire s1t_opa_dn = !(|s1t_expa) & !s1t_opa_0;
-  wire s1t_opb_dn = !(|s1t_expb) & !s1t_opb_0;
+  /* Stage #1: pre addition / substruction align */
 
     // detection of some exceptions
     //   inf - inf -> invalid operation; snan output
-  wire s1t_inv = s1t_infa & s1t_infb &
-                 (s1t_signa ^ (is_sub_i ^ s1t_signb));
+  wire s1t_inv = infa_i & infb_i &
+                 (signa_i ^ (is_sub_i ^ signb_i));
     //   inf input
-  wire s1t_inf_i = s1t_infa | s1t_infb;
-    //   a nan input -> qnan output
-  wire s1t_snan_i = s1t_snan_a | s1t_snan_b;
-  wire s1t_qnan_i = s1t_qnan_a | s1t_qnan_b;
-    //   sign of output nan
-  wire s1t_anan_i_sign = (s1t_snan_a | s1t_qnan_a) ? s1t_signa :
-                                                     s1t_signb;
-
-
-    // restored exponents
-  wire [9:0] s1t_exp10a = {2'd0,s1t_expa} + {9'd0,s1t_opa_dn};
-  wire [9:0] s1t_exp10b = {2'd0,s1t_expb} + {9'd0,s1t_opb_dn};
-
-    // restored fractionals
-    //  + one leading zero for unsigned comparison and
-    //    possible carry
-  wire [24:0] s1t_fract25a = {1'b0,(!s1t_opa_dn & !s1t_opa_0),s1t_fracta};
-  wire [24:0] s1t_fract25b = {1'b0,(!s1t_opb_dn & !s1t_opb_0),s1t_fractb};
+  wire s1t_inf_i = infa_i | infb_i;
 
     // select larger operand
     //  (substruction always peform (larger-smaller))  
-  wire s1t_agtb = (s1t_exp10a > s1t_exp10b) |
-    ((s1t_exp10a == s1t_exp10b) & (s1t_fract25a > s1t_fract25b));
-
+  wire s1t_agtb = (exp10a_i > exp10b_i) |
+    ((exp10a_i == exp10b_i) & (fract24a_i > fract24b_i));
 
     // signums for calculation
-  wire s1t_calc_signa = s1t_signa & !s1t_opa_0; // non-zero
-  wire s1t_calc_signb = (s1t_signb ^ is_sub_i) & !s1t_opb_0; // non-zero
+  wire s1t_calc_signa = signa_i & (!zeroa_i); // non-zero
+  wire s1t_calc_signb = (signb_i ^ is_sub_i) & (!zerob_i); // non-zero
 
     // not shifted operand and its signum
-    //  + two bits for further rounding and shifts
   wire s1t_sign_nsh;
-  wire [26:0] s1t_fract27_nsh;
-  assign {s1t_sign_nsh,s1t_fract27_nsh} = s1t_agtb ?
-    {s1t_calc_signa,{s1t_fract25a,2'd0}} :
-    {s1t_calc_signb,{s1t_fract25b,2'd0}};
+  wire [23:0] s1t_fract24_nsh;
+  assign {s1t_sign_nsh,s1t_fract24_nsh} = s1t_agtb ?
+    {s1t_calc_signa,fract24a_i} :
+    {s1t_calc_signb,fract24b_i};
 
     // operand and its signum for right shift
     //  + two bits for further rounding and shifts
   wire s1t_sign_fsh;
-  wire [26:0] s1t_fract27_fsh;
-  assign {s1t_sign_fsh,s1t_fract27_fsh} = s1t_agtb ?
-    {s1t_calc_signb,{(s1t_fract25b & {25{!s1t_inf_i}}),2'd0}} :
-    {s1t_calc_signa,{(s1t_fract25a & {25{!s1t_inf_i}}),2'd0}};
+  wire [25:0] s1t_fract26_fsh;
+  assign {s1t_sign_fsh,s1t_fract26_fsh} = s1t_agtb ?
+    {s1t_calc_signb,{(fract24b_i & {24{!s1t_inf_i}}),2'd0}} :
+    {s1t_calc_signa,{(fract24a_i & {24{!s1t_inf_i}}),2'd0}};
 
 
     // shift amount
@@ -166,8 +126,8 @@ module pfpu32_addsub
     //    hidden '1' achieves sticky area)
   wire [9:0] s1t_exp_diff =
     s1t_inf_i ? 10'd255 :
-    s1t_agtb  ? (s1t_exp10a - s1t_exp10b) :
-                (s1t_exp10b - s1t_exp10a);
+    s1t_agtb  ? (exp10a_i - exp10b_i) :
+                (exp10b_i - exp10a_i);
 
   wire [4:0] s1t_shr = (s1t_exp_diff > 10'd26) ?
                        5'd26 : s1t_exp_diff[4:0];
@@ -179,8 +139,8 @@ module pfpu32_addsub
   reg        s1o_nsh_minus_shr; // perform (non_shifted - right_shifted)
   reg        s1o_signc; // signum of result
   reg [9:0]  s1o_exp10c;
-  reg [26:0] s1o_fract27_nsh; // not shifted,
-  reg [26:0] s1o_fract27_shr; // right shifted
+  reg [23:0] s1o_fract24_nsh; // not shifted,
+  reg [25:0] s1o_fract26_shr; // right shifted
     // rounding support
   reg s1o_sticky; 
 
@@ -189,47 +149,47 @@ module pfpu32_addsub
         // input related
       s1o_inv         <= s1t_inv;
       s1o_inf_i       <= s1t_inf_i;
-      s1o_snan_i      <= s1t_snan_i;
-      s1o_qnan_i      <= s1t_qnan_i;
-      s1o_anan_i_sign <= s1t_anan_i_sign;
+      s1o_snan_i      <= snan_i;
+      s1o_qnan_i      <= qnan_i;
+      s1o_anan_i_sign <= anan_sign_i;
         // operation type for non-shifted and shifted parts
       s1o_nsh_minus_shr <= s1t_sign_nsh ^ s1t_sign_fsh; // not equal
         //  signum of result
       s1o_signc <= s1t_sign_nsh;
         // exponent of result (estimation on the stage)
-      s1o_exp10c <= s1t_agtb ? s1t_exp10a : s1t_exp10b;
+      s1o_exp10c <= s1t_agtb ? exp10a_i : exp10b_i;
         // not shifted operand
-      s1o_fract27_nsh <= s1t_fract27_nsh;
+      s1o_fract24_nsh <= s1t_fract24_nsh;
         // right shifted operand
-      s1o_fract27_shr <= s1t_fract27_fsh >> s1t_shr;
+      s1o_fract26_shr <= s1t_fract26_fsh >> s1t_shr;
         // detection of obvious precision lost
         // (take into account the out of adder bits) 
       case(s1t_shr)
         5'd0, 5'd1, 5'd2 : s1o_sticky <= 1'b0; // two added zero bits
-        5'd3 : s1o_sticky <= s1t_fract27_fsh[2];
-        5'd4 : s1o_sticky <= |s1t_fract27_fsh[3:2];
-        5'd5 : s1o_sticky <= |s1t_fract27_fsh[4:2];
-        5'd6 : s1o_sticky <= |s1t_fract27_fsh[5:2];
-        5'd7 : s1o_sticky <= |s1t_fract27_fsh[6:2];
-        5'd8 : s1o_sticky <= |s1t_fract27_fsh[7:2];
-        5'd9 : s1o_sticky <= |s1t_fract27_fsh[8:2];
-        5'd10: s1o_sticky <= |s1t_fract27_fsh[9:2];
-        5'd11: s1o_sticky <= |s1t_fract27_fsh[10:2];
-        5'd12: s1o_sticky <= |s1t_fract27_fsh[11:2];
-        5'd13: s1o_sticky <= |s1t_fract27_fsh[12:2];
-        5'd14: s1o_sticky <= |s1t_fract27_fsh[13:2];
-        5'd15: s1o_sticky <= |s1t_fract27_fsh[14:2];
-        5'd16: s1o_sticky <= |s1t_fract27_fsh[15:2];
-        5'd17: s1o_sticky <= |s1t_fract27_fsh[16:2];
-        5'd18: s1o_sticky <= |s1t_fract27_fsh[17:2];
-        5'd19: s1o_sticky <= |s1t_fract27_fsh[18:2];
-        5'd20: s1o_sticky <= |s1t_fract27_fsh[19:2];
-        5'd21: s1o_sticky <= |s1t_fract27_fsh[20:2];
-        5'd22: s1o_sticky <= |s1t_fract27_fsh[21:2];
-        5'd23: s1o_sticky <= |s1t_fract27_fsh[22:2];
-        5'd24: s1o_sticky <= |s1t_fract27_fsh[23:2];
-        5'd25: s1o_sticky <= |s1t_fract27_fsh[24:2];
-        default: s1o_sticky <= |s1t_fract27_fsh[25:2];
+        5'd3 : s1o_sticky <= s1t_fract26_fsh[2];
+        5'd4 : s1o_sticky <= |s1t_fract26_fsh[3:2];
+        5'd5 : s1o_sticky <= |s1t_fract26_fsh[4:2];
+        5'd6 : s1o_sticky <= |s1t_fract26_fsh[5:2];
+        5'd7 : s1o_sticky <= |s1t_fract26_fsh[6:2];
+        5'd8 : s1o_sticky <= |s1t_fract26_fsh[7:2];
+        5'd9 : s1o_sticky <= |s1t_fract26_fsh[8:2];
+        5'd10: s1o_sticky <= |s1t_fract26_fsh[9:2];
+        5'd11: s1o_sticky <= |s1t_fract26_fsh[10:2];
+        5'd12: s1o_sticky <= |s1t_fract26_fsh[11:2];
+        5'd13: s1o_sticky <= |s1t_fract26_fsh[12:2];
+        5'd14: s1o_sticky <= |s1t_fract26_fsh[13:2];
+        5'd15: s1o_sticky <= |s1t_fract26_fsh[14:2];
+        5'd16: s1o_sticky <= |s1t_fract26_fsh[15:2];
+        5'd17: s1o_sticky <= |s1t_fract26_fsh[16:2];
+        5'd18: s1o_sticky <= |s1t_fract26_fsh[17:2];
+        5'd19: s1o_sticky <= |s1t_fract26_fsh[18:2];
+        5'd20: s1o_sticky <= |s1t_fract26_fsh[19:2];
+        5'd21: s1o_sticky <= |s1t_fract26_fsh[20:2];
+        5'd22: s1o_sticky <= |s1t_fract26_fsh[21:2];
+        5'd23: s1o_sticky <= |s1t_fract26_fsh[22:2];
+        5'd24: s1o_sticky <= |s1t_fract26_fsh[23:2];
+        5'd25: s1o_sticky <= |s1t_fract26_fsh[24:2];
+        default: s1o_sticky <= |s1t_fract26_fsh[25:2];
       endcase
     end // advance
   end // posedge clock
@@ -250,10 +210,10 @@ module pfpu32_addsub
 
     // add/sub of non-shifted and shifted operands
   wire [27:0] s2t_diff28  = 
-           {s1o_fract27_nsh,1'b0} - {s1o_fract27_shr,s1o_sticky};
+           {1'b0,s1o_fract24_nsh,3'd0} - {1'b0,s1o_fract26_shr,s1o_sticky};
   wire [26:0] s2t_fract27 = s1o_nsh_minus_shr ?
                             s2t_diff28[27:1]:
-                            (s1o_fract27_nsh + s1o_fract27_shr);
+                            ({1'b0,s1o_fract24_nsh,2'd0} + {1'b0,s1o_fract26_shr});
 
     // pre-round align (1st step of normalization)
       // one more right shift ?

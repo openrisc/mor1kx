@@ -54,8 +54,19 @@ module pfpu32_div
    input             adv_i,    // advance pipe
    input             start_i,  // start division
    input       [1:0] rmode_i,  // round mode
-   input      [31:0] opa_i,
-   input      [31:0] opb_i,
+   input             signa_i,  // input 'a' related values
+   input       [9:0] exp10a_i,
+   input      [23:0] fract24a_i,
+   input             infa_i,
+   input             zeroa_i,
+   input             signb_i,  // input 'b' related values
+   input       [9:0] exp10b_i,
+   input      [23:0] fract24b_i,
+   input             infb_i,
+   input             zerob_i,
+   input             snan_i,   // 'a'/'b' related
+   input             qnan_i,
+   input             anan_sign_i,
    output reg [31:0] opc_o,
    output reg        ine_o,
    output reg        inv_o,    // 0/0, inf/inf -> invalid flag & qnan result
@@ -81,58 +92,18 @@ module pfpu32_div
 
   /* Stage #1: pre-division normalization */
 
-    // aliases
-  wire s1t_signa = opa_i[31];
-  wire s1t_signb = opb_i[31];
-  wire [7:0]  s1t_expa = opa_i[30:23];
-  wire [7:0]  s1t_expb = opb_i[30:23];
-  wire [22:0] s1t_fracta = opa_i[22:0];
-  wire [22:0] s1t_fractb = opb_i[22:0];
-
-    // collect operands related information
-  wire s1t_expa_ff = &s1t_expa;
-  wire s1t_expb_ff = &s1t_expb;
-  wire s1t_infa  = s1t_expa_ff & !(|s1t_fracta);
-  wire s1t_infb  = s1t_expb_ff & !(|s1t_fractb);
-    // signaling NaN: exponent is 8hff, [22] is zero,
-    //                rest of fract is non-zero
-    // quiet NaN: exponent is 8hff, [22] is 1
-  wire s1t_snan_a = s1t_expa_ff & !s1t_fracta[22] & (|s1t_fracta[21:0]);
-  wire s1t_qnan_a = s1t_expa_ff &  s1t_fracta[22];
-  wire s1t_snan_b = s1t_expb_ff & !s1t_fractb[22] & (|s1t_fractb[21:0]);
-  wire s1t_qnan_b = s1t_expb_ff &  s1t_fractb[22];
-    // opa or opb is zero
-  wire s1t_opa_0 = !(|opa_i[30:0]);
-  wire s1t_opb_0 = !(|opb_i[30:0]);
-    // opa or opb is denormalized
-  wire s1t_opa_dn = !(|s1t_expa) & !s1t_opa_0;
-  wire s1t_opb_dn = !(|s1t_expb) & !s1t_opb_0;
-
     // detection of some exceptions
     //   0/0, inf/inf -> invalid operation; snan output
-  wire s1t_inv = (s1t_opa_0 & s1t_opb_0) | (s1t_infa & s1t_infb);
+  wire s1t_inv = (zeroa_i & zerob_i) | (infa_i & infb_i);
     // division by zero and infinity
-  wire s1t_dbz   = (!s1t_opa_0) & (!s1t_infa) & s1t_opb_0;
-  wire s1t_dbinf = (!s1t_opa_0) & (!s1t_infa) & s1t_infb;
+  wire s1t_dbz   = (!zeroa_i) & (!infa_i) & zerob_i;
+  wire s1t_dbinf = (!zeroa_i) & (!infa_i) & infb_i;
     //   inf input
-  wire s1t_inf_i = s1t_infa;
-    //   a nan input -> qnan output
-  wire s1t_snan_i = s1t_snan_a | s1t_snan_b;
-  wire s1t_qnan_i = s1t_qnan_a | s1t_qnan_b;
-    //   sign of output nan
-  wire s1t_anan_i_sign = (s1t_snan_a | s1t_qnan_a) ? s1t_signa :
-                                                     s1t_signb;
-
-    // restored exponents
-  wire [9:0] s1t_exp10a = {2'd0,s1t_expa} + {9'd0,s1t_opa_dn};
-  wire [9:0] s1t_exp10b = {2'd0,s1t_expb} + {9'd0,s1t_opb_dn};
-    // restored fractionals
-  wire [23:0] s1t_fract24a = {(!s1t_opa_dn & !s1t_opa_0),s1t_fracta};
-  wire [23:0] s1t_fract24b = {(!s1t_opb_dn & !s1t_opb_0),s1t_fractb};
+  wire s1t_inf_i = infa_i;
 
   // force intermediate results to zero
-  wire s1t_fz = s1t_opa_0 | s1t_opb_0 | s1t_infa| s1t_infb;
-  wire [23:0] s1t_fract24a_fz = s1t_fract24a & {24{!s1t_fz}};
+  wire s1t_fz = zeroa_i | zerob_i | infa_i| infb_i;
+  wire [23:0] s1t_fract24a_fz = fract24a_i & {24{!s1t_fz}};
   
   // count leading zeros
   reg [5:0] s1t_dvd_zeros;
@@ -167,8 +138,8 @@ module pfpu32_div
 
   // count leading zeros
   reg [5:0] s1t_div_zeros;
-  always @(s1t_fract24b)
-    casez(s1t_fract24b) // synopsys full_case parallel_case
+  always @(fract24b_i)
+    casez(fract24b_i) // synopsys full_case parallel_case
       24'b1???????????????????????: s1t_div_zeros =  0;
       24'b01??????????????????????: s1t_div_zeros =  1;
       24'b001?????????????????????: s1t_div_zeros =  2;
@@ -200,7 +171,7 @@ module pfpu32_div
   wire [23:0] s1t_fracta_lshift_intermediate;
   wire [23:0] s1t_fractb_lshift_intermediate;
   assign s1t_fracta_lshift_intermediate = s1t_fract24a_fz << s1t_dvd_zeros;
-  assign s1t_fractb_lshift_intermediate = s1t_fract24b << s1t_div_zeros;
+  assign s1t_fractb_lshift_intermediate = fract24b_i << s1t_div_zeros;
 
   // stage #1 outputs
   //   input related
@@ -221,12 +192,12 @@ module pfpu32_div
       s1o_dbz         <= s1t_dbz;
       s1o_dbinf       <= s1t_dbinf;
       s1o_fz          <= s1t_fz;
-      s1o_snan_i      <= s1t_snan_i;
-      s1o_qnan_i      <= s1t_qnan_i;
-      s1o_anan_i_sign <= s1t_anan_i_sign;
+      s1o_snan_i      <= snan_i;
+      s1o_qnan_i      <= qnan_i;
+      s1o_anan_i_sign <= anan_sign_i;
         // computation related
-      s1o_sign     <= s1t_signa ^ s1t_signb;
-      s1o_exp10    <= (s1t_exp10a - s1t_exp10b + 10'd127 -
+      s1o_sign     <= signa_i ^ signb_i;
+      s1o_exp10    <= (exp10a_i - exp10b_i + 10'd127 -
                        {4'd0,s1t_dvd_zeros} + {4'd0,s1t_div_zeros})
                       & {10{!s1t_fz}};
       s1o_dvdnd_50 <= {s1t_fracta_lshift_intermediate,26'd0};

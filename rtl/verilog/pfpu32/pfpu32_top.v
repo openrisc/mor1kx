@@ -97,6 +97,53 @@ end // posedge clock
 wire new_fpu_data = new_data & is_op_fpu;
 
 
+// analysis of input values
+//   split input a
+wire        in_signa  = rfa_i[31];
+wire [7:0]  in_expa   = rfa_i[30:23];
+wire [22:0] in_fracta = rfa_i[22:0];
+//   detect infinity a
+wire in_expa_ff = &in_expa;
+wire in_infa = in_expa_ff & !(|in_fracta);
+//   signaling NaN: exponent is 8hff, [22] is zero,
+//                  rest of fract is non-zero
+//   quiet NaN: exponent is 8hff, [22] is 1
+wire in_snan_a = in_expa_ff & !in_fracta[22] & (|in_fracta[21:0]);
+wire in_qnan_a = in_expa_ff &  in_fracta[22];
+//   denormalized/zero of a
+wire in_opa_dn = !(|in_expa) & !in_opa_0;
+wire in_opa_0  = !(|rfa_i[30:0]);
+
+//   split input b
+wire        in_signb  = rfb_i[31];
+wire [7:0]  in_expb   = rfb_i[30:23];
+wire [22:0] in_fractb = rfb_i[22:0];
+//   detect infinity b
+wire in_expb_ff = &in_expb;
+wire in_infb  = in_expb_ff & !(|in_fractb);
+//   detect NaNs in b
+wire in_snan_b = in_expb_ff & !in_fractb[22] & (|in_fractb[21:0]);
+wire in_qnan_b = in_expb_ff &  in_fractb[22];
+//   denormalized/zero of a
+wire in_opb_dn = !(|in_expb) & !in_opb_0;
+wire in_opb_0 = !(|rfb_i[30:0]);
+
+// detection of some exceptions
+//   a nan input -> qnan output
+wire in_snan = in_snan_a | in_snan_b;
+wire in_qnan = in_qnan_a | in_qnan_b;
+//   sign of output nan
+wire in_anan_sign = (in_snan_a | in_qnan_a) ? in_signa :
+                                              in_signb;
+
+// restored exponents
+wire [9:0] in_exp10a = {2'd0,in_expa} + {9'd0,in_opa_dn};
+wire [9:0] in_exp10b = {2'd0,in_expb} + {9'd0,in_opb_dn};
+// restored fractionals
+wire [23:0] in_fract24a = {(!in_opa_dn & !in_opa_0),in_fracta};
+wire [23:0] in_fract24b = {(!in_opb_dn & !in_opb_0),in_fractb};
+
+
 // addition / substraction
 //   inputs & outputs
 wire the_sub = (op_arith == 3'd1);
@@ -110,21 +157,32 @@ pfpu32_addsub u_f32_addsub
 (
   .clk(clk),
   .rst(rst),
-  .flush_i(flush_i),  // flushe pipe
-  .adv_i(padv_fpu_units),    // advance pipe
-  .start_i(add_start), 
-  .is_sub_i(the_sub), // 1: substruction, 0: addition
-  .rmode_i(round_mode_i),  // round mode
-  .opa_i(rfa_i),
-  .opb_i(rfb_i),
-  .opc_o(add_result),
-  .ine_o(add_ine),
-  .inv_o(add_inv),  // inf-inf -> invalid flag & qnan result
-  .ovf_o(add_ovf),
-  .inf_o(add_inf),
-  .unf_o(add_unf),
-  .zer_o(add_zero),
-  .ready_o(add_ready)
+  .flush_i     (flush_i),        // flushe pipe
+  .adv_i       (padv_fpu_units), // advance pipe
+  .start_i     (add_start), 
+  .is_sub_i    (the_sub),        // 1: substruction, 0: addition
+  .rmode_i     (round_mode_i),   // round mode
+  .signa_i     (in_signa),       // input 'a' related values
+  .exp10a_i    (in_exp10a),
+  .fract24a_i  (in_fract24a),
+  .infa_i      (in_infa),
+  .zeroa_i     (in_opa_0),
+  .signb_i     (in_signb),       // input 'b' related values
+  .exp10b_i    (in_exp10b),
+  .fract24b_i  (in_fract24b),
+  .infb_i      (in_infb),
+  .zerob_i     (in_opb_0),
+  .snan_i      (in_snan),        // 'a'/'b' related
+  .qnan_i      (in_qnan),
+  .anan_sign_i (in_anan_sign),
+  .opc_o       (add_result),
+  .ine_o       (add_ine),
+  .inv_o       (add_inv),
+  .ovf_o       (add_ovf),
+  .inf_o       (add_inf),
+  .unf_o       (add_unf),
+  .zer_o       (add_zero),
+  .ready_o     (add_ready)
 );
 
 // multiplier
@@ -137,22 +195,33 @@ wire mul_ready;
 //   module istance
 pfpu32_mul u_f32_mul
 (
-  .clk(clk),
-  .rst(rst),
-  .flush_i(flush_i),  // flushe pipe
-  .adv_i(padv_fpu_units),    // advance pipe
-  .start_i(mul_start),
-  .rmode_i(round_mode_i),  // round mode
-  .opa_i(rfa_i),
-  .opb_i(rfb_i),
-  .opc_o(mul_result),
-  .ine_o(mul_ine),
-  .inv_o(mul_inv),
-  .ovf_o(mul_ovf),
-  .inf_o(mul_inf),
-  .unf_o(mul_unf),
-  .zer_o(mul_zero),
-  .ready_o(mul_ready)
+  .clk         (clk),
+  .rst         (rst),
+  .flush_i     (flush_i),        // flushe pipe
+  .adv_i       (padv_fpu_units), // advance pipe
+  .start_i     (mul_start),
+  .rmode_i     (round_mode_i),   // round mode
+  .signa_i     (in_signa),       // input 'a' related values
+  .exp10a_i    (in_exp10a),
+  .fract24a_i  (in_fract24a),
+  .infa_i      (in_infa),
+  .zeroa_i     (in_opa_0),
+  .signb_i     (in_signb),       // input 'b' related values
+  .exp10b_i    (in_exp10b),
+  .fract24b_i  (in_fract24b),
+  .infb_i      (in_infb),
+  .zerob_i     (in_opb_0),
+  .snan_i      (in_snan),        // 'a'/'b' related
+  .qnan_i      (in_qnan),
+  .anan_sign_i (in_anan_sign),
+  .opc_o       (mul_result),
+  .ine_o       (mul_ine),
+  .inv_o       (mul_inv),
+  .ovf_o       (mul_ovf),
+  .inf_o       (mul_inf),
+  .unf_o       (mul_unf),
+  .zer_o       (mul_zero),
+  .ready_o     (mul_ready)
 );
 
 // divisor
@@ -165,23 +234,34 @@ wire div_ready;
 //   module istance
 pfpu32_div u_f32_div
 (
-  .clk(clk),
-  .rst(rst),
-  .flush_i(flush_i),  // flushe pipe
-  .adv_i(padv_fpu_units),    // advance pipe
-  .start_i(div_start),
-  .rmode_i(round_mode_i),  // round mode
-  .opa_i(rfa_i),
-  .opb_i(rfb_i),
-  .opc_o(div_result),
-  .ine_o(div_ine),
-  .inv_o(div_inv), // 0/0, inf/inf -> invalid flag & qnan result
-  .ovf_o(div_ovf),
-  .inf_o(div_inf),
-  .unf_o(div_unf),
-  .zer_o(div_zero),
-  .dbz_o(div_dbz),    // division by zero
-  .ready_o(div_ready)
+  .clk         (clk),
+  .rst         (rst),
+  .flush_i     (flush_i),        // flushe pipe
+  .adv_i       (padv_fpu_units), // advance pipe
+  .start_i     (div_start),
+  .rmode_i     (round_mode_i),   // round mode
+  .signa_i     (in_signa),       // input 'a' related values
+  .exp10a_i    (in_exp10a),
+  .fract24a_i  (in_fract24a),
+  .infa_i      (in_infa),
+  .zeroa_i     (in_opa_0),
+  .signb_i     (in_signb),       // input 'b' related values
+  .exp10b_i    (in_exp10b),
+  .fract24b_i  (in_fract24b),
+  .infb_i      (in_infb),
+  .zerob_i     (in_opb_0),
+  .snan_i      (in_snan),        // 'a'/'b' related
+  .qnan_i      (in_qnan),
+  .anan_sign_i (in_anan_sign),
+  .opc_o       (div_result),
+  .ine_o       (div_ine),
+  .inv_o       (div_inv),
+  .ovf_o       (div_ovf),
+  .inf_o       (div_inf),
+  .unf_o       (div_unf),
+  .zer_o       (div_zero),
+  .dbz_o       (div_dbz),
+  .ready_o     (div_ready)
 );
 
 // convertor
@@ -195,17 +275,17 @@ wire i2f_ready;
 //   i2f module instance
 pfpu32_i2f u_i2f_cnv
 (
-  .clk(clk),
-  .rst(rst),
-  .rmode_i(round_mode_i),
-  .opa_i(rfa_i),
-  .flush_i(flush_i),      // flush pipe
-  .adv_i(padv_fpu_units), // advance pipe
-  .start_i(i2f_start),    // start conversion
-  .opc_o(i2f_result),
-  .ine_o(i2f_ine),
-  .zer_o(i2f_zero),
-  .ready_o(i2f_ready)
+  .clk         (clk),
+  .rst         (rst),
+  .flush_i     (flush_i),      // flush pipe
+  .adv_i       (padv_fpu_units), // advance pipe
+  .start_i     (i2f_start),    // start conversion
+  .rmode_i     (round_mode_i),
+  .opa_i       (rfa_i),
+  .opc_o       (i2f_result),
+  .ine_o       (i2f_ine),
+  .zer_o       (i2f_zero),
+  .ready_o     (i2f_ready)
 );
 //   f2i signals
 wire op_f2i_cnv = is_op_fpu & (!a_cmp) &
@@ -217,20 +297,24 @@ wire f2i_ready;
 //    f2i module instance
 pfpu32_f2i u_f2i_cnv
 (
-  .clk(clk),
-  .rst(rst),
-  .rmode_i(round_mode_i),
-  .opa_i(rfa_i),
-  .flush_i(flush_i),      // flush pipe
-  .adv_i(padv_fpu_units), // advance pipe
-  .start_i(f2i_start),    // start conversion
-  .out_o(f2i_result),
-  .nan_o(f2i_snan),
-  .ine_o(f2i_ine),
-  .inv_o(f2i_inv),
-  .unf_o(f2i_unf),
-  .zer_o(f2i_zero),
-  .ready_o(f2i_ready)
+  .clk         (clk),
+  .rst         (rst),
+  .flush_i     (flush_i),        // flush pipe
+  .adv_i       (padv_fpu_units), // advance pipe
+  .start_i     (f2i_start),      // start conversion
+  .rmode_i     (round_mode_i),
+  .signa_i     (in_signa),       // input 'a' related values
+  .exp10a_i    (in_exp10a),
+  .fract24a_i  (in_fract24a),
+  .snan_i      (in_snan),        // 'a'/'b' related
+  .qnan_i      (in_qnan),
+  .out_o       (f2i_result),
+  .nan_o       (f2i_snan),
+  .ine_o       (f2i_ine),
+  .inv_o       (f2i_inv),
+  .unf_o       (f2i_unf),
+  .zer_o       (f2i_zero),
+  .ready_o     (f2i_ready)
 );
 
 // comparator

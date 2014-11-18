@@ -38,11 +38,15 @@ module pfpu32_f2i
 (
    input             clk,
    input             rst,
-   input [1:0]       rmode_i,
-   input [31:0]      opa_i,
    input             flush_i,  // flush pipe
    input             adv_i,    // advance pipe
    input             start_i,  // start conversion
+   input       [1:0] rmode_i,
+   input             signa_i,  // input 'a' related values
+   input       [9:0] exp10a_i,
+   input      [23:0] fract24a_i,
+   input             snan_i,   // 'a'/'b' related
+   input             qnan_i,
    output reg [31:0] out_o,
    output reg        nan_o,
    output reg        ine_o,
@@ -58,45 +62,33 @@ module pfpu32_f2i
        s??t_name - "S"tage number "??", "T"emporary (internally)
   */
 
-  wire [7:0]  s1t_expa   = opa_i[30:23];
-  wire [22:0] s1t_fracta = opa_i[22:0];
-  //   collect operands related information
-  wire s1t_signa   = opa_i[31];
-  wire s1t_expa_ff = &s1t_expa;
-  wire s1t_infa    = s1t_expa_ff & !(|s1t_fracta);
-  wire s1t_qnan_a  = s1t_expa_ff & s1t_fracta[22];
-  wire s1t_snan_a  = s1t_expa_ff & (!s1t_fracta[22] & (|s1t_fracta[21:0]));
-  //   opa is denormalized
-  wire s1t_opa_0 = !(|opa_i[30:0]);
-  wire s1t_opa_dn = !(|s1t_expa) & !s1t_opa_0;
   //   restored exponent and 24-bit mantissa
-  wire [7:0]  s1t_exp8a = s1t_expa + {7'd0,s1t_opa_dn};
-  wire [23:0] s1t_fract24a = {(!s1t_opa_dn & !s1t_opa_0),s1t_fracta};
+  wire [7:0] s1t_exp8a = exp10a_i[7:0];
   
   // prepare for fraction align
   //  precomputed values
   wire [7:0] s1t_shv = s1t_exp8a - 8'd126;
-  wire s1t_fracta_n0 = |s1t_fracta;
+  wire s1t_fracta_n0 = |fract24a_i[22:0];
   // determine useful align values and preliminary overflow/round/sticky flags
   wire [5:0] s1t_shl;
   wire s1t_ovf; // overflow -> maximum positive or nefative limit is guaranteed
   wire s1t_shr_r,s1t_shr_s; // round, sticky for right shift
   assign {s1t_shl,s1t_ovf,s1t_shr_r,s1t_shr_s} =
     // |f| < 0.5 : prserve sticky
-    (s1t_exp8a <  8'd126) ? {6'd0,1'b0,1'b0,|s1t_fract24a} :
+    (s1t_exp8a <  8'd126) ? {6'd0,1'b0,1'b0,|fract24a_i} :
     // 0.5 <= |f| < 1 : preserve round and sticky
-    (s1t_exp8a == 8'd126) ? {6'd0,1'b0,s1t_fract24a[23],s1t_fracta_n0} :
+    (s1t_exp8a == 8'd126) ? {6'd0,1'b0,fract24a_i[23],s1t_fracta_n0} :
     // possible shift left as for positive as for negative values
     (s1t_exp8a <  8'd158) ? {s1t_shv[5:0],1'b0,1'b0,1'b0} :
     // possible shift left specially for negative values
-    ((s1t_exp8a == 8'd158) & s1t_signa) ? {(6'd32 & {6{!s1t_fracta_n0}}),s1t_fracta_n0,1'b0,1'b0} :
+    ((s1t_exp8a == 8'd158) & signa_i) ? {(6'd32 & {6{!s1t_fracta_n0}}),s1t_fracta_n0,1'b0,1'b0} :
     // guaranteed overflow (align is useless)
                                           {6'd0,1'b1,1'b0,1'b0};
 
 
   // stage #1 outputs
   //   input related
-  reg s1o_infa, s1o_qnan_a, s1o_snan_a;
+  reg s1o_qnan_a, s1o_snan_a;
   //   computation related
   reg        s1o_sign;
   reg [23:0] s1o_fract24;
@@ -108,12 +100,11 @@ module pfpu32_f2i
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      s1o_infa    <= s1t_infa;
-      s1o_qnan_a  <= s1t_qnan_a;
-      s1o_snan_a  <= s1t_snan_a;
+      s1o_qnan_a  <= qnan_i;
+      s1o_snan_a  <= snan_i;
         // computation related
-      s1o_sign    <= s1t_signa;
-      s1o_fract24 <= s1t_fract24a;
+      s1o_sign    <= signa_i;
+      s1o_fract24 <= fract24a_i;
       s1o_shl     <= s1t_shl;
       s1o_shr_rs  <= {s1t_shr_r,s1t_shr_s};
       s1o_ovf     <= s1t_ovf;
@@ -144,7 +135,7 @@ module pfpu32_f2i
   //   makes sense for non-zero shift only
   //   (otherwise either right shift round/sticky or overflow)
   reg [1:0] s2t_rs;
-  always @(s1o_shl) begin
+  always @(s1o_shl or s1o_shr_rs or s1o_fract24) begin
     case (s1o_shl)  // synopsys full_case parallel_case
       5'd0 : s2t_rs = s1o_shr_rs; // either right shift round/sticky or overflow
       5'd1 : s2t_rs = {s1o_fract24[22],|s1o_fract24[21:0]};
@@ -176,7 +167,7 @@ module pfpu32_f2i
 
   // stage #2 outputs
   //   input related
-  reg s2o_infa, s2o_qnan_a, s2o_snan_a;
+  reg s2o_qnan_a, s2o_snan_a;
   //   computation related
   reg        s2o_sign;
   reg [31:0] s2o_int32;
@@ -187,9 +178,8 @@ module pfpu32_f2i
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      s2o_infa   <= s1t_infa;
-      s2o_qnan_a <= s1t_qnan_a;
-      s2o_snan_a <= s1t_snan_a;
+      s2o_qnan_a <= s1o_qnan_a;
+      s2o_snan_a <= s1o_snan_a;
         // computation related
       s2o_sign  <= s1o_sign;
       s2o_int32 <= s2t_int32;

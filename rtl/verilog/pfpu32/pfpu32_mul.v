@@ -52,8 +52,19 @@ module pfpu32_mul
    input             adv_i,    // advance pipe
    input             start_i,  // start multiplier
    input       [1:0] rmode_i,  // round mode
-   input      [31:0] opa_i,
-   input      [31:0] opb_i,
+   input             signa_i,  // input 'a' related values
+   input       [9:0] exp10a_i,
+   input      [23:0] fract24a_i,
+   input             infa_i,
+   input             zeroa_i,
+   input             signb_i,  // input 'b' related values
+   input       [9:0] exp10b_i,
+   input      [23:0] fract24b_i,
+   input             infb_i,
+   input             zerob_i,
+   input             snan_i,   // 'a'/'b' related
+   input             qnan_i,
+   input             anan_sign_i,
    output reg [31:0] opc_o,
    output reg        ine_o,
    output reg        inv_o,    // 0 * inf -> invalid and qnan
@@ -78,66 +89,26 @@ module pfpu32_mul
 
   /* Stage #1: pre-multiplier stage */
 
-    // aliases
-  wire s1t_signa = opa_i[31];
-  wire s1t_signb = opb_i[31];
-  wire [7:0]  s1t_expa = opa_i[30:23];
-  wire [7:0]  s1t_expb = opb_i[30:23];
-  wire [22:0] s1t_fracta = opa_i[22:0];
-  wire [22:0] s1t_fractb = opb_i[22:0];
-
-    // collect operands related information
-  wire s1t_expa_ff = &s1t_expa;
-  wire s1t_expb_ff = &s1t_expb;
-  wire s1t_infa  = s1t_expa_ff & !(|s1t_fracta);
-  wire s1t_infb  = s1t_expb_ff & !(|s1t_fractb);
-    // signaling NaN: exponent is 8hff, [22] is zero,
-    //                rest of fract is non-zero
-    // quiet NaN: exponent is 8hff, [22] is 1
-  wire s1t_snan_a = s1t_expa_ff & !s1t_fracta[22] & (|s1t_fracta[21:0]);
-  wire s1t_qnan_a = s1t_expa_ff &  s1t_fracta[22];
-  wire s1t_snan_b = s1t_expb_ff & !s1t_fractb[22] & (|s1t_fractb[21:0]);
-  wire s1t_qnan_b = s1t_expb_ff &  s1t_fractb[22];
-    // opa or opb is zero
-  wire s1t_opa_0 = !(|opa_i[30:0]);
-  wire s1t_opb_0 = !(|opb_i[30:0]);
-    // opa or opb is denormalized
-  wire s1t_opa_dn = !(|s1t_expa) & !s1t_opa_0;
-  wire s1t_opb_dn = !(|s1t_expb) & !s1t_opb_0;
-
     // detection of some exceptions
     //   0 * inf -> invalid operation; snan output
-  wire s1t_inv = (s1t_opa_0 & s1t_infb) | (s1t_opb_0 & s1t_infa);
+  wire s1t_inv = (zeroa_i & infb_i) | (zerob_i & infa_i);
     //   inf input
-  wire s1t_inf_i = s1t_infa | s1t_infb;
-    //   a nan input -> qnan output
-  wire s1t_snan_i = s1t_snan_a | s1t_snan_b;
-  wire s1t_qnan_i = s1t_qnan_a | s1t_qnan_b;
-    //   sign of output nan
-  wire s1t_anan_i_sign = (s1t_snan_a | s1t_qnan_a) ? s1t_signa :
-                                                     s1t_signb;
-
-    // restored exponents
-  wire [9:0] s1t_exp10a = {2'd0,s1t_expa} + {9'd0,s1t_opa_dn};
-  wire [9:0] s1t_exp10b = {2'd0,s1t_expb} + {9'd0,s1t_opb_dn};
-    // restored fractionals
-  wire [23:0] s1t_fract24a = {(!s1t_opa_dn & !s1t_opa_0),s1t_fracta};
-  wire [23:0] s1t_fract24b = {(!s1t_opb_dn & !s1t_opb_0),s1t_fractb};
+  wire s1t_inf_i = infa_i | infb_i;
 
     // result is zero
-  wire s1t_opc_0 = s1t_opa_0 | s1t_opb_0;
+  wire s1t_opc_0 = zeroa_i | zerob_i;
   
     // computation related exponent
-  wire [9:0] s1t_exp10c = (s1t_exp10a + s1t_exp10b - 10'd127)
+  wire [9:0] s1t_exp10c = (exp10a_i + exp10b_i - 10'd127)
                            & {10{!s1t_opc_0}};
   
     // computation related fractionals
     //  insert leading zeros to signal unsigned values
     //  for potential usage DSP blocks of a FPGA
-  wire [12:0] s1t_fract13_al = {1'b0, s1t_fract24a[11: 0]};
-  wire [12:0] s1t_fract13_ah = {1'b0, s1t_fract24a[23:12]};
-  wire [12:0] s1t_fract13_bl = {1'b0, s1t_fract24b[11: 0]};
-  wire [12:0] s1t_fract13_bh = {1'b0, s1t_fract24b[23:12]};
+  wire [12:0] s1t_fract13_al = {1'b0, fract24a_i[11: 0]};
+  wire [12:0] s1t_fract13_ah = {1'b0, fract24a_i[23:12]};
+  wire [12:0] s1t_fract13_bl = {1'b0, fract24b_i[11: 0]};
+  wire [12:0] s1t_fract13_bh = {1'b0, fract24b_i[23:12]};
   
    
   // stage #1 outputs
@@ -159,12 +130,12 @@ module pfpu32_mul
         // input related
       s1o_inv         <= s1t_inv;
       s1o_inf_i       <= s1t_inf_i;
-      s1o_snan_i      <= s1t_snan_i;
-      s1o_qnan_i      <= s1t_qnan_i;
-      s1o_anan_i_sign <= s1t_anan_i_sign;
+      s1o_snan_i      <= snan_i;
+      s1o_qnan_i      <= qnan_i;
+      s1o_anan_i_sign <= anan_sign_i;
         // computation related
       s1o_opc_0  <= s1t_opc_0;
-      s1o_signc  <= s1t_signa ^ s1t_signb;
+      s1o_signc  <= signa_i ^ signb_i;
       s1o_exp10c <= s1t_exp10c;
       s1o_fract26_albl <= s1t_fract13_al * s1t_fract13_bl;
       s1o_fract26_albh <= s1t_fract13_al * s1t_fract13_bh;

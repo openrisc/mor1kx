@@ -38,11 +38,11 @@ module pfpu32_i2f
 (
    input             clk,
    input             rst,
-   input [1:0]       rmode_i,
-   input [31:0]      opa_i,
    input             flush_i,  // flush pipe
    input             adv_i,    // advance pipe
    input             start_i,  // start conversion
+   input       [1:0] rmode_i,
+   input      [31:0] opa_i,
    output reg [31:0] opc_o,
    output reg        ine_o,
    output reg        zer_o,
