@@ -308,15 +308,17 @@ module pfpu32_addsub
     (s2o_exp10c == s2o_nlz) ? {s3t_nlz_m1,10'd1} :
                               {s3t_exp10c_m1[4:0],10'd1};
 
+  wire [25:0] s3t_fract26c = s2o_fract26c << s3t_shl;
+
    // stage #3 outputs
     // input related
   reg s3o_inv, s3o_inf_i,
       s3o_snan_i, s3o_qnan_i, s3o_anan_i_sign;
       // computation related
-  reg s3o_signc;
-  reg [9:0]  s3o_exp10c;
-  reg [25:0] s3o_fract26c;
-  reg s3o_sticky;
+  reg        s3o_signc;
+  reg  [9:0] s3o_exp10c;
+  reg [23:0] s3o_fract24c;
+  reg  [1:0] s3o_rs;
   
   always @(posedge clk) begin
     if(adv_i) begin
@@ -329,8 +331,8 @@ module pfpu32_addsub
         // computation related
       s3o_signc    <= s2o_signc;
       s3o_exp10c   <= s3t_exp10c;
-      s3o_fract26c <= s2o_fract26c << s3t_shl;
-      s3o_sticky   <= s2o_sticky;
+      s3o_fract24c <= s3t_fract26c[25:2];
+      s3o_rs       <= {s3t_fract26c[1], s3t_fract26c[0] | s2o_sticky};
     end // advance
   end // posedge clock
 
@@ -354,9 +356,9 @@ module pfpu32_addsub
   wire rm_to_infp = (rmode_i==2'b10);
   wire rm_to_infm = (rmode_i==2'b11);
 
-  wire s4t_g    = s3o_fract26c[2];
-  wire s4t_r    = s3o_fract26c[1];
-  wire s4t_s    = s3o_fract26c[0] | s3o_sticky;
+  wire s4t_g    = s3o_fract24c[0];
+  wire s4t_r    = s3o_rs[1];
+  wire s4t_s    = s3o_rs[0];
   wire s4t_lost = s4t_r | s4t_s;
 
   wire s4t_rnd_up = (rm_nearest & s4t_r & s4t_s) |
@@ -364,9 +366,7 @@ module pfpu32_addsub
                     (rm_to_infp & !s3o_signc & s4t_lost) |
                     (rm_to_infm &  s3o_signc & s4t_lost);
 
-  wire [24:0] s4t_fract25c = s4t_rnd_up ?
-    ({1'b0,s3o_fract26c[25:2]} + 25'd1) :
-     {1'b0,s3o_fract26c[25:2]};
+  wire [24:0] s4t_fract25c = {1'b0,s3o_fract24c} + {24'd0,s4t_rnd_up};
 
   wire s4t_shr = s4t_fract25c[24];
 

@@ -189,16 +189,18 @@ module pfpu32_i2f
   // stage #2 outputs
   //   computation related
   reg        s2o_signc;
-  reg [25:0] s2o_fract26c;
-  reg [9:0]  s2o_exp10c;
+  reg  [9:0] s2o_exp10c;
+  reg [23:0] s2o_fract24c;
+  reg  [1:0] s2o_rs;
 
   //   registering
   always @(posedge clk) begin
     if(adv_i) begin
         // computation related
       s2o_signc    <= s1o_sign;
-      s2o_fract26c <= {s2t_fract24,s1o_rs};
       s2o_exp10c   <= {2'd0,s2t_exp8};
+      s2o_fract24c <= s2t_fract24;
+      s2o_rs       <= s1o_rs;
     end // advance
   end // posedge clock
 
@@ -222,9 +224,9 @@ module pfpu32_i2f
   wire rm_to_infp = (rmode_i==2'b10);
   wire rm_to_infm = (rmode_i==2'b11);
 
-  wire s3t_g    = s2o_fract26c[2];
-  wire s3t_r    = s2o_fract26c[1];
-  wire s3t_s    = s2o_fract26c[0];
+  wire s3t_g    = s2o_fract24c[0];
+  wire s3t_r    = s2o_rs[1];
+  wire s3t_s    = s2o_rs[0];
   wire s3t_lost = s3t_r | s3t_s;
 
   wire s3t_rnd_up = (rm_nearest & s3t_r & s3t_s) |
@@ -232,9 +234,7 @@ module pfpu32_i2f
                     (rm_to_infp & !s2o_signc & s3t_lost) |
                     (rm_to_infm &  s2o_signc & s3t_lost);
 
-  wire [24:0] s3t_fract25c = s3t_rnd_up ?
-    ({1'b0,s2o_fract26c[25:2]} + 25'd1) :
-     {1'b0,s2o_fract26c[25:2]};
+  wire [24:0] s3t_fract25c = {1'b0,s2o_fract24c} + {24'd0,s3t_rnd_up};
 
   wire s3t_shr = s3t_fract25c[24];
 
