@@ -60,11 +60,11 @@ module pfpu32_top
   input [`OR1K_FPCSR_RM_SIZE-1:0]  round_mode_i,
   input [OPTION_OPERAND_WIDTH-1:0] rfa_i,
   input [OPTION_OPERAND_WIDTH-1:0] rfb_i,
-  output reg [OPTION_OPERAND_WIDTH-1:0] fpu_result_o,
-  output reg fpu_valid_o,
-  output reg fpu_cmp_flag_o,
-  output reg fpu_cmp_valid_o,
-  output reg [`OR1K_FPCSR_WIDTH-1:0] fpcsr_o
+  output [OPTION_OPERAND_WIDTH-1:0] fpu_result_o,
+  output fpu_valid_o,
+  output fpu_cmp_flag_o,
+  output fpu_cmp_valid_o,
+  output [`OR1K_FPCSR_WIDTH-1:0] fpcsr_o
 );
 
 //localparam SNAN = 31'b1111111101111111111111111111111;
@@ -149,9 +149,16 @@ wire [23:0] in_fract24b = {(!in_opb_dn & !in_opb_0),in_fractb};
 wire the_sub = (op_arith == 3'd1);
 wire op_add = is_op_fpu & (!a_cmp) & ((op_arith == 3'd0) | the_sub);
 wire add_start = op_add & new_fpu_data;
-wire add_ine, add_inv, add_ovf, add_inf, add_unf, add_zero;
-wire [OPTION_OPERAND_WIDTH-1:0] add_result;
-wire add_ready;
+wire        add_rdy_o;       // add/sub is ready
+wire        add_sign_o;      // add/sub signum
+wire  [9:0] add_exp10_o;     // add/sub exponent
+wire [23:0] add_fract24_o;   // add/sub fractional
+wire  [1:0] add_rs_o;        // add/sub round & sticky bits
+wire        add_inv_o;       // add/sub invalid operation flag
+wire        add_inf_o;       // add/sub infinity output reg
+wire        add_snan_o;      // add/sub signaling NaN output reg
+wire        add_qnan_o;      // add/sub quiet NaN output reg
+wire        add_anan_sign_o; // add/sub signum for output nan
 //   module istance
 pfpu32_addsub u_f32_addsub
 (
@@ -161,7 +168,6 @@ pfpu32_addsub u_f32_addsub
   .adv_i       (padv_fpu_units), // advance pipe
   .start_i     (add_start), 
   .is_sub_i    (the_sub),        // 1: substruction, 0: addition
-  .rmode_i     (round_mode_i),   // round mode
   .signa_i     (in_signa),       // input 'a' related values
   .exp10a_i    (in_exp10a),
   .fract24a_i  (in_fract24a),
@@ -175,23 +181,32 @@ pfpu32_addsub u_f32_addsub
   .snan_i      (in_snan),        // 'a'/'b' related
   .qnan_i      (in_qnan),
   .anan_sign_i (in_anan_sign),
-  .opc_o       (add_result),
-  .ine_o       (add_ine),
-  .inv_o       (add_inv),
-  .ovf_o       (add_ovf),
-  .inf_o       (add_inf),
-  .unf_o       (add_unf),
-  .zer_o       (add_zero),
-  .ready_o     (add_ready)
+  .add_rdy_o       (add_rdy_o),       // add/sub is ready
+  .add_sign_o      (add_sign_o),      // add/sub signum
+  .add_exp10_o     (add_exp10_o),     // add/sub exponent
+  .add_fract24_o   (add_fract24_o),   // add/sub fractional
+  .add_rs_o        (add_rs_o),        // add/sub round & sticky bits
+  .add_inv_o       (add_inv_o),       // add/sub invalid operation flag
+  .add_inf_o       (add_inf_o),       // add/sub infinity output reg
+  .add_snan_o      (add_snan_o),      // add/sub signaling NaN output reg
+  .add_qnan_o      (add_qnan_o),      // add/sub quiet NaN output reg
+  .add_anan_sign_o (add_anan_sign_o)  // add/sub signum for output nan
 );
 
 // multiplier
 //   inputs & outputs
 wire op_mul = is_op_fpu & (!a_cmp) & (op_arith == 3'd2);
 wire mul_start = op_mul & new_fpu_data;
-wire mul_ine, mul_inv, mul_ovf, mul_inf, mul_unf, mul_zero;
-wire [OPTION_OPERAND_WIDTH-1:0] mul_result;
-wire mul_ready;
+wire        mul_rdy_o;       // mul is ready
+wire        mul_sign_o;      // mul signum
+wire  [9:0] mul_exp10_o;     // mul exponent
+wire [23:0] mul_fract24_o;   // mul fractional
+wire  [1:0] mul_rs_o;        // mul round & sticky bits
+wire        mul_inv_o;       // mul invalid operation flag
+wire        mul_inf_o;       // mul infinity output reg
+wire        mul_snan_o;      // mul signaling NaN output reg
+wire        mul_qnan_o;      // mul quiet NaN output reg
+wire        mul_anan_sign_o; // mul signum for output nan
 //   module istance
 pfpu32_mul u_f32_mul
 (
@@ -200,7 +215,6 @@ pfpu32_mul u_f32_mul
   .flush_i     (flush_i),        // flushe pipe
   .adv_i       (padv_fpu_units), // advance pipe
   .start_i     (mul_start),
-  .rmode_i     (round_mode_i),   // round mode
   .signa_i     (in_signa),       // input 'a' related values
   .exp10a_i    (in_exp10a),
   .fract24a_i  (in_fract24a),
@@ -214,23 +228,34 @@ pfpu32_mul u_f32_mul
   .snan_i      (in_snan),        // 'a'/'b' related
   .qnan_i      (in_qnan),
   .anan_sign_i (in_anan_sign),
-  .opc_o       (mul_result),
-  .ine_o       (mul_ine),
-  .inv_o       (mul_inv),
-  .ovf_o       (mul_ovf),
-  .inf_o       (mul_inf),
-  .unf_o       (mul_unf),
-  .zer_o       (mul_zero),
-  .ready_o     (mul_ready)
+  .mul_rdy_o       (mul_rdy_o),       // mul is ready
+  .mul_sign_o      (mul_sign_o),      // mul signum
+  .mul_exp10_o     (mul_exp10_o),     // mul exponent
+  .mul_fract24_o   (mul_fract24_o),   // mul fractional
+  .mul_rs_o        (mul_rs_o),        // mul round & sticky bits
+  .mul_inv_o       (mul_inv_o),       // mul invalid operation flag
+  .mul_inf_o       (mul_inf_o),       // mul infinity output reg
+  .mul_snan_o      (mul_snan_o),      // mul signaling NaN output reg
+  .mul_qnan_o      (mul_qnan_o),      // mul quiet NaN output reg
+  .mul_anan_sign_o (mul_anan_sign_o)  // mul signum for output nan
 );
 
 // divisor
 //   inputs & outputs
 wire op_div = is_op_fpu & (!a_cmp) & (op_arith == 3'd3);
 wire div_start = op_div & new_fpu_data;
-wire div_ine, div_inv, div_ovf, div_inf, div_unf, div_zero, div_dbz;
-wire [OPTION_OPERAND_WIDTH-1:0] div_result;
-wire div_ready;
+wire        div_rdy_o;       // div is ready
+wire        div_sign_o;      // div signum
+wire  [9:0] div_exp10_o;     // div exponent
+wire [23:0] div_fract24_o;   // div fractional
+wire  [1:0] div_rs_o;        // div round & sticky bits
+wire        div_inv_o;       // div invalid operation flag
+wire        div_inf_o;       // div infinity output reg
+wire        div_snan_o;      // div signaling NaN output reg
+wire        div_qnan_o;      // div quiet NaN output reg
+wire        div_anan_sign_o; // div signum for output nan
+wire        div_dbz_o;       // div division by zero flag
+wire        div_dbinf_o;     // div division by infinity
 //   module istance
 pfpu32_div u_f32_div
 (
@@ -239,7 +264,6 @@ pfpu32_div u_f32_div
   .flush_i     (flush_i),        // flushe pipe
   .adv_i       (padv_fpu_units), // advance pipe
   .start_i     (div_start),
-  .rmode_i     (round_mode_i),   // round mode
   .signa_i     (in_signa),       // input 'a' related values
   .exp10a_i    (in_exp10a),
   .fract24a_i  (in_fract24a),
@@ -253,15 +277,18 @@ pfpu32_div u_f32_div
   .snan_i      (in_snan),        // 'a'/'b' related
   .qnan_i      (in_qnan),
   .anan_sign_i (in_anan_sign),
-  .opc_o       (div_result),
-  .ine_o       (div_ine),
-  .inv_o       (div_inv),
-  .ovf_o       (div_ovf),
-  .inf_o       (div_inf),
-  .unf_o       (div_unf),
-  .zer_o       (div_zero),
-  .dbz_o       (div_dbz),
-  .ready_o     (div_ready)
+  .div_rdy_o       (div_rdy_o),       // div is ready
+  .div_sign_o      (div_sign_o),      // div signum
+  .div_exp10_o     (div_exp10_o),     // div exponent
+  .div_fract24_o   (div_fract24_o),   // div fractional
+  .div_rs_o        (div_rs_o),        // div round & sticky bits
+  .div_inv_o       (div_inv_o),       // div invalid operation flag
+  .div_inf_o       (div_inf_o),       // div infinity output reg
+  .div_snan_o      (div_snan_o),      // div signaling NaN output reg
+  .div_qnan_o      (div_qnan_o),      // div quiet NaN output reg
+  .div_anan_sign_o (div_anan_sign_o), // div signum for output nan
+  .div_dbz_o       (div_dbz_o),       // div division by zero flag
+  .div_dbinf_o     (div_dbinf_o)      // div division by infinity
 );
 
 // convertor
@@ -269,9 +296,11 @@ pfpu32_div u_f32_div
 wire op_i2f_cnv = is_op_fpu & (!a_cmp) &
                   (op_conv == 3'd4);
 wire i2f_start = op_i2f_cnv & new_fpu_data;
-wire [OPTION_OPERAND_WIDTH-1:0] i2f_result;
-wire i2f_ine, i2f_zero;
-wire i2f_ready;
+wire        i2f_rdy_o;       // i2f is ready
+wire        i2f_sign_o;      // i2f signum
+wire  [9:0] i2f_exp10_o;     // i2f exponent
+wire [23:0] i2f_fract24_o;   // i2f fractional
+wire  [1:0] i2f_rs_o;        // i2f round & sticky bits
 //   i2f module instance
 pfpu32_i2f u_i2f_cnv
 (
@@ -280,20 +309,23 @@ pfpu32_i2f u_i2f_cnv
   .flush_i     (flush_i),      // flush pipe
   .adv_i       (padv_fpu_units), // advance pipe
   .start_i     (i2f_start),    // start conversion
-  .rmode_i     (round_mode_i),
   .opa_i       (rfa_i),
-  .opc_o       (i2f_result),
-  .ine_o       (i2f_ine),
-  .zer_o       (i2f_zero),
-  .ready_o     (i2f_ready)
+  .i2f_rdy_o(i2f_rdy_o),       // i2f is ready
+  .i2f_sign_o(i2f_sign_o),      // i2f signum
+  .i2f_exp10_o(i2f_exp10_o),     // i2f exponent
+  .i2f_fract24_o(i2f_fract24_o),   // i2f fractional
+  .i2f_rs_o(i2f_rs_o)         // i2f round & sticky bits
 );
 //   f2i signals
 wire op_f2i_cnv = is_op_fpu & (!a_cmp) &
                   (op_conv == 3'd5);
 wire f2i_start = op_f2i_cnv & new_fpu_data;
-wire [OPTION_OPERAND_WIDTH-1:0] f2i_result;
-wire f2i_ine, f2i_inv, f2i_unf, f2i_zero, f2i_snan;
-wire f2i_ready;
+wire        f2i_rdy_o;       // f2i is ready
+wire        f2i_sign_o;      // f2i signum
+wire [31:0] f2i_int32_o;     // f2i i32 modulo
+wire  [1:0] f2i_rs_o;        // f2i round & sticky bits
+wire        f2i_ovf_o;       // f2i overflow flag
+wire        f2i_snan_o;      // f2i signaling NaN output reg
 //    f2i module instance
 pfpu32_f2i u_f2i_cnv
 (
@@ -302,19 +334,17 @@ pfpu32_f2i u_f2i_cnv
   .flush_i     (flush_i),        // flush pipe
   .adv_i       (padv_fpu_units), // advance pipe
   .start_i     (f2i_start),      // start conversion
-  .rmode_i     (round_mode_i),
   .signa_i     (in_signa),       // input 'a' related values
   .exp10a_i    (in_exp10a),
   .fract24a_i  (in_fract24a),
   .snan_i      (in_snan),        // 'a'/'b' related
   .qnan_i      (in_qnan),
-  .out_o       (f2i_result),
-  .nan_o       (f2i_snan),
-  .ine_o       (f2i_ine),
-  .inv_o       (f2i_inv),
-  .unf_o       (f2i_unf),
-  .zer_o       (f2i_zero),
-  .ready_o     (f2i_ready)
+  .f2i_rdy_o   (f2i_rdy_o),       // f2i is ready
+  .f2i_sign_o  (f2i_sign_o),      // f2i signum
+  .f2i_int32_o (f2i_int32_o),     // f2i i32 modulo
+  .f2i_rs_o    (f2i_rs_o),        // f2i round & sticky bits
+  .f2i_ovf_o   (f2i_ovf_o),       // f2i overflow flag
+  .f2i_snan_o  (f2i_snan_o)       // f2i signaling NaN output reg
 );
 
 // comparator
@@ -337,84 +367,74 @@ pfpu32_fcmp u_f32_cmp
 );
 
 
-// arithmetic units outputs mux
-wire [OPTION_OPERAND_WIDTH-1:0] fpu_result;
-assign fpu_result = add_ready ? add_result :
-                    mul_ready ? mul_result :
-                    div_ready ? div_result :
-                    i2f_ready ? i2f_result :
-                    f2i_ready ? f2i_result :
-                    {OPTION_OPERAND_WIDTH{1'b0}};
-
-// Prepare exeptions
-wire exp_result_ff = &fpu_result[30:23];
-wire qnan_result   = exp_result_ff & fpu_result[22];
-wire snan_result   = exp_result_ff & !fpu_result[22] & (|fpu_result[21:0]);
-
-wire arith_ready = add_ready | mul_ready | div_ready;
-
-// Output register
-always @(posedge clk `OR_ASYNC_RST) begin
-  if (rst) begin
-      // overall FPU results
-    fpu_result_o    <= {OPTION_OPERAND_WIDTH{1'b0}};
-    fpu_valid_o     <= 1'b0;
-      // comparison specials
-    fpu_cmp_flag_o  <= 1'b0;
-    fpu_cmp_valid_o <= 1'b0;
-      // exeptions
-    fpcsr_o         <= {`OR1K_FPCSR_WIDTH{1'b0}};
-  end
-  else if (flush_i) begin
-      // overall FPU results
-    fpu_result_o    <= {OPTION_OPERAND_WIDTH{1'b0}};
-    fpu_valid_o     <= 1'b0;
-      // comparison specials
-    fpu_cmp_flag_o  <= 1'b0;
-    fpu_cmp_valid_o <= 1'b0;
-      // exeptions
-    fpcsr_o         <= {`OR1K_FPCSR_WIDTH{1'b0}};
-  end
-  else if(padv_fpu_units) begin
-      // overall FPU results
-    fpu_result_o    <= fpu_result;
-    fpu_valid_o     <= arith_ready | i2f_ready | 
-                         f2i_ready | cmp_ready;
-      // comparison specials
-    fpu_cmp_flag_o  <= cmp_result;
-    fpu_cmp_valid_o <= cmp_ready;
-      // exeptions
-    fpcsr_o[`OR1K_FPCSR_OVF] <= (add_ready & add_ovf) |
-                                (mul_ready & mul_ovf) |
-                                (div_ready & div_ovf);
-    fpcsr_o[`OR1K_FPCSR_UNF] <= (add_ready & add_unf) |
-                                (mul_ready & mul_unf) |
-                                (div_ready & div_unf) |
-                                (f2i_ready & f2i_unf);
-    fpcsr_o[`OR1K_FPCSR_SNF] <= (arith_ready & snan_result)|
-                                (f2i_ready & f2i_snan);
-    fpcsr_o[`OR1K_FPCSR_QNF] <= (arith_ready & qnan_result);
-    fpcsr_o[`OR1K_FPCSR_ZF]  <= (add_ready & add_zero) |
-                                (mul_ready & mul_zero) |
-                                (div_ready & div_zero) |
-                                (i2f_ready & i2f_zero) |
-                                (f2i_ready & f2i_zero);
-    fpcsr_o[`OR1K_FPCSR_IXF] <= (add_ready & add_ine) |
-                                (mul_ready & mul_ine) |
-                                (div_ready & div_ine) |
-                                (i2f_ready & i2f_ine) |
-                                (f2i_ready & f2i_ine);
-    fpcsr_o[`OR1K_FPCSR_IVF] <= (add_ready & add_inv) |
-                                (mul_ready & mul_inv) |  
-                                (div_ready & div_inv) |
-                                (f2i_ready & (f2i_inv | f2i_snan)) |
-                                (cmp_ready & cmp_inv);
-    fpcsr_o[`OR1K_FPCSR_INF] <= (add_ready & add_inf) |
-                                (mul_ready & mul_inf) |
-                                (div_ready & div_inf) |
-                                (cmp_ready & cmp_inf);
-    fpcsr_o[`OR1K_FPCSR_DZF] <= (div_ready & div_dbz);
-  end
-end // posedge clock
+// multiplexing and rounding
+pfpu32_rnd u_f32_rnd
+(
+  // clocks, resets and other controls
+  .clk             (clk),
+  .rst             (rst),
+  .flush_i         (flush_i),         // flush pipe
+  .adv_i           (padv_fpu_units),  // advance pipe
+  .rmode_i         (round_mode_i),    // rounding mode
+  // from add/sub
+  .add_rdy_i       (add_rdy_o),       // add/sub is ready
+  .add_sign_i      (add_sign_o),      // add/sub signum
+  .add_exp10_i     (add_exp10_o),     // add/sub exponent
+  .add_fract24_i   (add_fract24_o),   // add/sub fractional
+  .add_rs_i        (add_rs_o),        // add/sub round & sticky bits
+  .add_inv_i       (add_inv_o),       // add/sub invalid operation flag
+  .add_inf_i       (add_inf_o),       // add/sub infinity
+  .add_snan_i      (add_snan_o),      // add/sub signaling NaN
+  .add_qnan_i      (add_qnan_o),      // add/sub quiet NaN
+  .add_anan_sign_i (add_anan_sign_o), // add/sub signum for output nan
+  // . from mul
+  .mul_rdy_i       (mul_rdy_o),       // mul is ready
+  .mul_sign_i      (mul_sign_o),      // mul signum
+  .mul_exp10_i     (mul_exp10_o),     // mul exponent
+  .mul_fract24_i   (mul_fract24_o),   // mul fractional
+  .mul_rs_i        (mul_rs_o),        // mul round & sticky bits
+  .mul_inv_i       (mul_inv_o),       // mul invalid operation flag
+  .mul_inf_i       (mul_inf_o),       // mul infinity 
+  .mul_snan_i      (mul_snan_o),      // mul signaling NaN
+  .mul_qnan_i      (mul_qnan_o),      // mul quiet NaN
+  .mul_anan_sign_i (mul_anan_sign_o), // mul signum for output nan
+  // . from div
+  .div_rdy_i       (div_rdy_o),       // div is ready
+  .div_sign_i      (div_sign_o),      // div signum
+  .div_exp10_i     (div_exp10_o),     // div exponent
+  .div_fract24_i   (div_fract24_o),   // div fractional
+  .div_rs_i        (div_rs_o),        // div round & sticky bits
+  .div_inv_i       (div_inv_o),       // div invalid operation flag
+  .div_inf_i       (div_inf_o),       // div infinity 
+  .div_snan_i      (div_snan_o),      // div signaling NaN
+  .div_qnan_i      (div_qnan_o),      // div quiet NaN 
+  .div_anan_sign_i (div_anan_sign_o), // div signum for output nan
+  .div_dbz_i       (div_dbz_o),       // div division by zero flag
+  .div_dbinf_i     (div_dbinf_o),     // div division by infinity
+  // . from i2f
+  .i2f_rdy_i       (i2f_rdy_o),       // i2f is ready
+  .i2f_sign_i      (i2f_sign_o),      // i2f signum
+  .i2f_exp10_i     (i2f_exp10_o),     // i2f exponent
+  .i2f_fract24_i   (i2f_fract24_o),   // i2f fractional
+  .i2f_rs_i        (i2f_rs_o),        // i2f round & sticky bits
+  // . from f2i
+  .f2i_rdy_i       (f2i_rdy_o),       // f2i is ready
+  .f2i_sign_i      (f2i_sign_o),      // f2i signum
+  .f2i_int32_i     (f2i_int32_o),     // f2i i32 modulo
+  .f2i_rs_i        (f2i_rs_o),        // f2i round & sticky bits
+  .f2i_ovf_i       (f2i_ovf_o),       // f2i overflow flag
+  .f2i_snan_i      (f2i_snan_o),      // f2i signaling NaN
+   // . from cmp
+  .cmp_rdy_i       (cmp_ready),       // cmp is ready
+  .cmp_res_i       (cmp_result),      // cmp result
+  .cmp_inv_i       (cmp_inv),         // cmp invalid flag
+  .cmp_inf_i       (cmp_inf),         // cmp infinity flag
+  // outputs
+  .fpu_result_o    (fpu_result_o),
+  .fpu_valid_o     (fpu_valid_o),
+  .fpu_cmp_flag_o  (fpu_cmp_flag_o),
+  .fpu_cmp_valid_o (fpu_cmp_valid_o),
+  .fpcsr_o         (fpcsr_o)
+);
 
 endmodule // pfpu32_top

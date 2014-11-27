@@ -41,13 +41,14 @@ module pfpu32_i2f
    input             flush_i,  // flush pipe
    input             adv_i,    // advance pipe
    input             start_i,  // start conversion
-   input       [1:0] rmode_i,
    input      [31:0] opa_i,
-   output reg [31:0] opc_o,
-   output reg        ine_o,
-   output reg        zer_o,
-   output reg        ready_o
+   output reg        i2f_rdy_o,       // i2f is ready
+   output reg        i2f_sign_o,      // i2f signum
+   output reg  [9:0] i2f_exp10_o,     // i2f exponent
+   output reg [23:0] i2f_fract24_o,   // i2f fractional
+   output reg  [1:0] i2f_rs_o         // i2f round & sticky bits
 );
+
   /*
      Any stage's output is registered.
      Definitions:
@@ -186,81 +187,25 @@ module pfpu32_i2f
                         (8'd0);              // input is zero
 
 
-  // stage #2 outputs
-  //   computation related
-  reg        s2o_signc;
-  reg  [9:0] s2o_exp10c;
-  reg [23:0] s2o_fract24c;
-  reg  [1:0] s2o_rs;
-
-  //   registering
+  // registering output
   always @(posedge clk) begin
     if(adv_i) begin
         // computation related
-      s2o_signc    <= s1o_sign;
-      s2o_exp10c   <= {2'd0,s2t_exp8};
-      s2o_fract24c <= s2t_fract24;
-      s2o_rs       <= s1o_rs;
+      i2f_sign_o    <= s1o_sign;
+      i2f_exp10_o   <= {2'd0,s2t_exp8};
+      i2f_fract24_o <= s2t_fract24;
+      i2f_rs_o      <= s1o_rs;
     end // advance
   end // posedge clock
 
   // ready is special case
-  reg s2o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
-      s2o_ready <= 0;
+      i2f_rdy_o <= 0;
     else if(flush_i)
-      s2o_ready <= 0;
+      i2f_rdy_o <= 0;
     else if(adv_i)
-      s2o_ready <= s1o_ready;
-  end // posedge clock
-
-
-  /* Stage #3: rounding and output */
-
-  // rounding mode isn't require pipelinization
-  wire rm_nearest = (rmode_i==2'b00);
-  wire rm_to_zero = (rmode_i==2'b01);
-  wire rm_to_infp = (rmode_i==2'b10);
-  wire rm_to_infm = (rmode_i==2'b11);
-
-  wire s3t_g    = s2o_fract24c[0];
-  wire s3t_r    = s2o_rs[1];
-  wire s3t_s    = s2o_rs[0];
-  wire s3t_lost = s3t_r | s3t_s;
-
-  wire s3t_rnd_up = (rm_nearest & s3t_r & s3t_s) |
-                    (rm_nearest & s3t_g & s3t_r & !s3t_s) |
-                    (rm_to_infp & !s2o_signc & s3t_lost) |
-                    (rm_to_infm &  s2o_signc & s3t_lost);
-
-  wire [24:0] s3t_fract25c = {1'b0,s2o_fract24c} + {24'd0,s3t_rnd_up};
-
-  wire s3t_shr = s3t_fract25c[24];
-
-  wire [9:0]  s3t_exp10c   = s2o_exp10c + {9'd0,s3t_shr};
-  wire [23:0] s3t_fract24c = s3t_shr ? s3t_fract25c[24:1] :
-                                       s3t_fract25c[23:0];
-
-  wire s3t_fract24c_00 = !(|s3t_fract24c);
-
-   // Output Register
-  always @(posedge clk) begin
-    if(adv_i) begin
-      opc_o  <= {s2o_signc,s3t_exp10c[7:0],s3t_fract24c[22:0]};
-      ine_o  <= s3t_lost;
-      zer_o  <= s3t_fract24c_00;
-    end
-  end // posedge clock
-
-  // ready is special case
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      ready_o <= 0;
-    else if(flush_i)
-      ready_o <= 0;
-    else if(adv_i)
-      ready_o <= s2o_ready;
+      i2f_rdy_o <= s1o_ready;
   end // posedge clock
 
 endmodule // pfpu32_i2f

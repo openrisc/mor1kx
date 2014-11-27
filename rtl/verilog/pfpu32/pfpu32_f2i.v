@@ -41,20 +41,19 @@ module pfpu32_f2i
    input             flush_i,  // flush pipe
    input             adv_i,    // advance pipe
    input             start_i,  // start conversion
-   input       [1:0] rmode_i,
    input             signa_i,  // input 'a' related values
    input       [9:0] exp10a_i,
    input      [23:0] fract24a_i,
    input             snan_i,   // 'a'/'b' related
    input             qnan_i,
-   output reg [31:0] out_o,
-   output reg        nan_o,
-   output reg        ine_o,
-   output reg        inv_o,
-   output reg        unf_o,
-   output reg        zer_o,
-   output reg        ready_o
+   output reg        f2i_rdy_o,       // f2i is ready
+   output reg        f2i_sign_o,      // f2i signum
+   output reg [31:0] f2i_int32_o,     // f2i i32 modulo
+   output reg  [1:0] f2i_rs_o,        // f2i round & sticky bits
+   output reg        f2i_ovf_o,       // f2i overflow flag
+   output reg        f2i_snan_o       // f2i signaling NaN output reg
 );
+
   /*
      Any stage's output is registered.
      Definitions:
@@ -88,7 +87,7 @@ module pfpu32_f2i
 
   // stage #1 outputs
   //   input related
-  reg s1o_qnan_a, s1o_snan_a;
+  reg        s1o_snan_a;
   //   computation related
   reg        s1o_sign;
   reg [23:0] s1o_fract24;
@@ -100,10 +99,9 @@ module pfpu32_f2i
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      s1o_qnan_a  <= qnan_i;
       s1o_snan_a  <= snan_i;
         // computation related
-      s1o_sign    <= signa_i;
+      s1o_sign    <= signa_i & (!(qnan_i | snan_i)); // if 'a' is a NaN than ouput is max. positive
       s1o_fract24 <= fract24a_i;
       s1o_shl     <= s1t_shl;
       s1o_shr_rs  <= {s1t_shr_r,s1t_shr_s};
@@ -165,98 +163,28 @@ module pfpu32_f2i
     endcase
   end // always
 
-  // stage #2 outputs
-  //   input related
-  reg s2o_qnan_a, s2o_snan_a;
-  //   computation related
-  reg        s2o_sign;
-  reg [31:0] s2o_int32;
-  reg [1:0]  s2o_rs;
-  reg        s2o_ovf;
 
-  //   registering
+  // registering output
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      s2o_qnan_a <= s1o_qnan_a;
-      s2o_snan_a <= s1o_snan_a;
+      f2i_snan_o <= s1o_snan_a;
         // computation related
-      s2o_sign  <= s1o_sign;
-      s2o_int32 <= s2t_int32;
-      s2o_rs    <= s2t_rs;
-      s2o_ovf   <= s1o_ovf;
+      f2i_sign_o  <= s1o_sign;
+      f2i_int32_o <= s2t_int32;
+      f2i_rs_o    <= s2t_rs;
+      f2i_ovf_o   <= s1o_ovf;
     end // advance
   end // posedge clock
 
   // ready is special case
-  reg s2o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
-      s2o_ready <= 0;
+      f2i_rdy_o <= 0;
     else if(flush_i)
-      s2o_ready <= 0;
+      f2i_rdy_o <= 0;
     else if(adv_i)
-      s2o_ready <= s1o_ready;
+      f2i_rdy_o <= s1o_ready;
   end // posedge clock
-
-
-  /* Stage #3: rounding and output */
-
-  // rounding mode isn't require pipelinization
-  wire rm_nearest = (rmode_i==2'b00);
-  wire rm_to_zero = (rmode_i==2'b01);
-  wire rm_to_infp = (rmode_i==2'b10);
-  wire rm_to_infm = (rmode_i==2'b11);
-
-  wire s3t_g    = s2o_int32[0];
-  wire s3t_r    = s2o_rs[1];
-  wire s3t_s    = s2o_rs[0];
-  wire s3t_lost = s3t_r | s3t_s;
-
-  wire s3t_rnd_up = (rm_nearest & s3t_r & s3t_s) |
-                    (rm_nearest & s3t_g & s3t_r & !s3t_s) |
-                    (rm_to_infp & !s2o_sign & s3t_lost) |
-                    (rm_to_infm &  s2o_sign & s3t_lost);
-
-  wire [31:0] s3t_int32_rnd = s3t_rnd_up ?
-    (s2o_int32 + 32'd1) : s2o_int32;
-
-  wire s3t_carry_rnd = s3t_int32_rnd[31];
-
-  wire s3t_ovf = (!s2o_sign & s3t_carry_rnd) | s2o_ovf;
-
-  wire [31:0] s3t_int32 = (s3t_int32_rnd ^ {32{s2o_sign}}) + {31'd0,s2o_sign};
-
-  wire s3t_int32_00 = !s3t_ovf & (!(|s3t_int32));
-
-   // Generate result   
-  wire [31:0] s3t_opc;
-  assign s3t_opc =
-    (s3t_ovf & (!s2o_sign)) ? 32'h7fffffff :
-    (s3t_ovf &   s2o_sign ) ? 32'h80000000 :
-                              s3t_int32;
-
-   // Output Register
-  always @(posedge clk) begin
-    if(adv_i) begin
-      out_o <= s3t_opc;
-      nan_o <= s2o_snan_a;  // Only signal sNaN
-      ine_o <= s3t_lost;
-      inv_o <= s3t_ovf;
-      unf_o <= s3t_int32_00 & s3t_lost;
-      zer_o <= s3t_int32_00;
-    end
-  end // posedge clock
-
-  // ready is special case
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      ready_o <= 0;
-    else if(flush_i)
-      ready_o <= 0;
-    else if(adv_i)
-      ready_o <= s2o_ready;
-  end // posedge clock
-
 
 endmodule // pfpu32_f2i
