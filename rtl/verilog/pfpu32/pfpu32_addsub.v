@@ -50,18 +50,17 @@ module pfpu32_addsub
    input             rst,
    input             flush_i,  // flushe pipe
    input             adv_i,    // advance pipe
+   input  [1:0]      rmode_i,  // rounding mode
    input             start_i,  // start add/sub
    input             is_sub_i, // 1: substruction, 0: addition
    input             signa_i,  // input 'a' related values
    input       [9:0] exp10a_i,
    input      [23:0] fract24a_i,
    input             infa_i,
-   input             zeroa_i,
    input             signb_i,  // input 'b' related values
    input       [9:0] exp10b_i,
    input      [23:0] fract24b_i,
    input             infb_i,
-   input             zerob_i,
    input             snan_i,   // 'a'/'b' related
    input             qnan_i,
    input             anan_sign_i,
@@ -76,6 +75,9 @@ module pfpu32_addsub
    output reg        add_qnan_o,      // add/sub quiet NaN output reg
    output reg        add_anan_sign_o  // add/sub signum for output nan
 );
+
+  // rounding mode isn't require pipelinization
+  wire rm_to_infm = (rmode_i==2'b11);
 
   /*
      Any stage's output is registered.
@@ -99,8 +101,8 @@ module pfpu32_addsub
     ((exp10a_i == exp10b_i) & (fract24a_i > fract24b_i));
 
     // signums for calculation
-  wire s1t_calc_signa = signa_i & (!zeroa_i); // non-zero
-  wire s1t_calc_signb = (signb_i ^ is_sub_i) & (!zerob_i); // non-zero
+  wire s1t_calc_signa = signa_i;
+  wire s1t_calc_signb = (signb_i ^ is_sub_i);
 
     // not shifted operand and its signum
   wire s1t_sign_nsh;
@@ -134,7 +136,7 @@ module pfpu32_addsub
   reg s1o_inv, s1o_inf_i,
       s1o_snan_i, s1o_qnan_i, s1o_anan_i_sign;
   reg        s1o_nsh_minus_shr; // perform (non_shifted - right_shifted)
-  reg        s1o_signc; // signum of result
+  reg        s1o_sign_nsh; // signum of non_shifted
   reg [9:0]  s1o_exp10c;
   reg [23:0] s1o_fract24_nsh; // not shifted,
   reg [25:0] s1o_fract26_shr; // right shifted
@@ -151,8 +153,8 @@ module pfpu32_addsub
       s1o_anan_i_sign <= anan_sign_i;
         // operation type for non-shifted and shifted parts
       s1o_nsh_minus_shr <= s1t_sign_nsh ^ s1t_sign_fsh; // not equal
-        //  signum of result
-      s1o_signc <= s1t_sign_nsh;
+        //  signum of non_shifted
+      s1o_sign_nsh <= s1t_sign_nsh;
         // exponent of result (estimation on the stage)
       s1o_exp10c <= s1t_agtb ? exp10a_i : exp10b_i;
         // not shifted operand
@@ -220,8 +222,9 @@ module pfpu32_addsub
     // input related
   reg s2o_inv, s2o_inf_i,
       s2o_snan_i, s2o_qnan_i, s2o_anan_i_sign;
-    // computation related
-  reg        s2o_signc;
+  reg s2o_calc_op_sub;
+     // computation related
+  reg        s2o_sign_nsh;
   reg [9:0]  s2o_exp10c;
   reg [25:0] s2o_fract26c;
   reg        s2o_sticky;
@@ -235,8 +238,9 @@ module pfpu32_addsub
       s2o_snan_i      <= s1o_snan_i;
       s2o_qnan_i      <= s1o_qnan_i;
       s2o_anan_i_sign <= s1o_anan_i_sign;
-        // computation related
-      s2o_signc    <= s1o_signc;
+      s2o_calc_op_sub <= s1o_nsh_minus_shr;
+         // computation related
+      s2o_sign_nsh <= s1o_sign_nsh;
       s2o_exp10c   <= s2t_shr ? (s1o_exp10c + 10'd1) : s1o_exp10c;
       s2o_fract26c <= s2t_shr ? s2t_fract27[26:1] : s2t_fract27[25:0];
       s2o_sticky   <= (s2t_shr & s2t_fract27[0]) | s1o_sticky;
@@ -307,6 +311,7 @@ module pfpu32_addsub
 
   wire [25:0] s3t_fract26c = s2o_fract26c << s3t_shl;
 
+  wire s3t_zero = (!s2o_sticky) & (!(|s3t_fract26c));  
 
   // registering output
   always @(posedge clk) begin
@@ -318,7 +323,8 @@ module pfpu32_addsub
       add_qnan_o      <= s2o_qnan_i;
       add_anan_sign_o <= s2o_anan_i_sign;
         // computation related
-      add_sign_o    <= s2o_signc;
+      add_sign_o    <= (s3t_zero & s2o_calc_op_sub) ? rm_to_infm :
+                                                      s2o_sign_nsh;
       add_exp10_o   <= s3t_exp10c;
       add_fract24_o <= s3t_fract26c[25:2];
       add_rs_o      <= {s3t_fract26c[1], s3t_fract26c[0] | s2o_sticky};

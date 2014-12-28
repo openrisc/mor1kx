@@ -166,18 +166,17 @@ pfpu32_addsub u_f32_addsub
   .rst(rst),
   .flush_i     (flush_i),        // flushe pipe
   .adv_i       (padv_fpu_units), // advance pipe
+  .rmode_i     (round_mode_i),   // rounding mode
   .start_i     (add_start), 
   .is_sub_i    (the_sub),        // 1: substruction, 0: addition
   .signa_i     (in_signa),       // input 'a' related values
   .exp10a_i    (in_exp10a),
   .fract24a_i  (in_fract24a),
   .infa_i      (in_infa),
-  .zeroa_i     (in_opa_0),
   .signb_i     (in_signb),       // input 'b' related values
   .exp10b_i    (in_exp10b),
   .fract24b_i  (in_fract24b),
   .infb_i      (in_infb),
-  .zerob_i     (in_opb_0),
   .snan_i      (in_snan),        // 'a'/'b' related
   .qnan_i      (in_qnan),
   .anan_sign_i (in_anan_sign),
