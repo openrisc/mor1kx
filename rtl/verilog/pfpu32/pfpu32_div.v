@@ -44,8 +44,6 @@
 
 `include "mor1kx-defines.v"
 
-//`define NEW_F32_DIV
-
 module pfpu32_div
 (
    input             clk,
@@ -71,6 +69,7 @@ module pfpu32_div
    output reg  [9:0] div_exp10_o,     // div exponent
    output reg [23:0] div_fract24_o,   // div fractional
    output reg  [1:0] div_rs_o,        // div round & sticky bits
+   output reg        div_sign_rmnd_o, // signum or reminder for IEEE compliant rounding
    output reg        div_inv_o,       // div invalid operation flag
    output reg        div_inf_o,       // div infinity output reg
    output reg        div_snan_o,      // div signaling NaN output reg
@@ -171,6 +170,25 @@ module pfpu32_div
   assign s1t_fracta_lshift_intermediate = s1t_fract24a_fz << s1t_dvd_zeros;
   assign s1t_fractb_lshift_intermediate = fract24b_i << s1t_div_zeros;
 
+  // Goldshmidt iterations control
+  reg [13:0] itr_state; // iteration state indicator
+  // iteration characteristic points:
+  //   condition for enabling iterations
+  wire itr_en = |itr_state;
+  //   condition for end of iterations
+  wire itr_last = itr_state[13];
+  // iteration control state machine
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      itr_state <= 14'd0;
+    else if(flush_i)
+      itr_state <= 14'd0;
+    else if(start_i & (!itr_en))
+      itr_state <= 14'd1;
+    else 
+      itr_state <= {itr_state[12:0],1'b0};
+  end // posedge clock
+
   // stage #1 outputs
   //   input related
   reg s1o_inv, s1o_inf_i, s1o_dbz, s1o_dbinf, s1o_fz,
@@ -178,17 +196,11 @@ module pfpu32_div
   //   computation related
   reg s1o_sign;
   reg [9:0]  s1o_exp10;
- `ifdef NEW_F32_DIV
   reg [23:0] s1o_fract24a;
   reg [23:0] s1o_fract24b;
- `else
-  reg [49:0] s1o_dvdnd_50;
-  reg [26:0] s1o_dvsor_27;
- `endif
-
   //   registering
   always @(posedge clk) begin
-    if(adv_i) begin
+    if(adv_i & (!itr_en)) begin
         // input related
       s1o_inv         <= s1t_inv;
       s1o_inf_i       <= s1t_inf_i;
@@ -203,206 +215,32 @@ module pfpu32_div
       s1o_exp10    <= (exp10a_i - exp10b_i + 10'd127 -
                        {4'd0,s1t_dvd_zeros} + {4'd0,s1t_div_zeros})
                       & {10{!s1t_fz}};
-     `ifdef NEW_F32_DIV
       s1o_fract24a <= s1t_fracta_lshift_intermediate;
       s1o_fract24b <= s1t_fractb_lshift_intermediate;
-     `else
-      s1o_dvdnd_50 <= {s1t_fracta_lshift_intermediate,26'd0};
-      s1o_dvsor_27 <= {3'd0,s1t_fractb_lshift_intermediate};
-     `endif
     end // advance
   end // posedge clock
 
-  // ready is special case
-  reg s1o_ready;
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      s1o_ready <= 0;
-    else if(flush_i)
-      s1o_ready <= 0;
-    else if(adv_i)
-      s1o_ready <= start_i;
-  end // posedge clock
-
- `ifdef NEW_F32_DIV
 
   /* Stage #2: division iterations */
   
-  // iteration control
-  reg [13:0] itr_state; // iteration state indicator
-  // special case for (fracta == fractb)
-  //wire itr_AeqB = (s1o_fract24a == s1o_fract24b);
-  // iteration characteristic points:
-  //   condition for enabling iterations
-  wire itr_en = |itr_state;
-  //   condition for end of iterations
-  wire itr_last = itr_state[13];
-  // iteration control state machine
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      itr_state <= 14'd0;
-    else if(flush_i)
-      itr_state <= 14'd0;
-    else if(s1o_ready & (!itr_en))
-      itr_state <= //itr_AeqB ? {3'd0,1'b1,10'd0} : // force state 10
-                              14'd1;              // state 0
-    else 
-      itr_state <= {itr_state[12:0],1'b0};
-  end // posedge clock
-
+  
   // initial estimation of reciprocal
-  //reg  [6:0] s2t_recip7b; // 7-bit in x 7-bit out LUT
-  reg  [9:0] s2t_recip10b; // 7-bit in x 10-bit out LUT
-  always @(s1o_fract24b[22:16])
-    case(s1o_fract24b[22:16]) // synopsys full_case parallel_case
-      7'd0 : s2t_recip10b = 10'd1016;
-      7'd1 : s2t_recip10b = 10'd1000;
-      7'd2 : s2t_recip10b = 10'd985;
-      7'd3 : s2t_recip10b = 10'd969;
-      7'd4 : s2t_recip10b = 10'd954;
-      7'd5 : s2t_recip10b = 10'd940;
-      7'd6 : s2t_recip10b = 10'd925;
-      7'd7 : s2t_recip10b = 10'd911;
-      7'd8 : s2t_recip10b = 10'd896;
-      7'd9 : s2t_recip10b = 10'd883;
-      7'd10 : s2t_recip10b = 10'd869;
-      7'd11 : s2t_recip10b = 10'd855;
-      7'd12 : s2t_recip10b = 10'd842;
-      7'd13 : s2t_recip10b = 10'd829;
-      7'd14 : s2t_recip10b = 10'd816;
-      7'd15 : s2t_recip10b = 10'd803;
-      7'd16 : s2t_recip10b = 10'd790;
-      7'd17 : s2t_recip10b = 10'd778;
-      7'd18 : s2t_recip10b = 10'd765;
-      7'd19 : s2t_recip10b = 10'd753;
-      7'd20 : s2t_recip10b = 10'd741;
-      7'd21 : s2t_recip10b = 10'd729;
-      7'd22 : s2t_recip10b = 10'd718;
-      7'd23 : s2t_recip10b = 10'd706;
-      7'd24 : s2t_recip10b = 10'd695;
-      7'd25 : s2t_recip10b = 10'd684;
-      7'd26 : s2t_recip10b = 10'd673;
-      7'd27 : s2t_recip10b = 10'd662;
-      7'd28 : s2t_recip10b = 10'd651;
-      7'd29 : s2t_recip10b = 10'd640;
-      7'd30 : s2t_recip10b = 10'd630;
-      7'd31 : s2t_recip10b = 10'd620;
-      7'd32 : s2t_recip10b = 10'd609;
-      7'd33 : s2t_recip10b = 10'd599;
-      7'd34 : s2t_recip10b = 10'd589;
-      7'd35 : s2t_recip10b = 10'd579;
-      7'd36 : s2t_recip10b = 10'd570;
-      7'd37 : s2t_recip10b = 10'd560;
-      7'd38 : s2t_recip10b = 10'd550;
-      7'd39 : s2t_recip10b = 10'd541;
-      7'd40 : s2t_recip10b = 10'd532;
-      7'd41 : s2t_recip10b = 10'd523;
-      7'd42 : s2t_recip10b = 10'd514;
-      7'd43 : s2t_recip10b = 10'd505;
-      7'd44 : s2t_recip10b = 10'd496;
-      7'd45 : s2t_recip10b = 10'd487;
-      7'd46 : s2t_recip10b = 10'd478;
-      7'd47 : s2t_recip10b = 10'd470;
-      7'd48 : s2t_recip10b = 10'd461;
-      7'd49 : s2t_recip10b = 10'd453;
-      7'd50 : s2t_recip10b = 10'd445;
-      7'd51 : s2t_recip10b = 10'd436;
-      7'd52 : s2t_recip10b = 10'd428;
-      7'd53 : s2t_recip10b = 10'd420;
-      7'd54 : s2t_recip10b = 10'd412;
-      7'd55 : s2t_recip10b = 10'd405;
-      7'd56 : s2t_recip10b = 10'd397;
-      7'd57 : s2t_recip10b = 10'd389;
-      7'd58 : s2t_recip10b = 10'd382;
-      7'd59 : s2t_recip10b = 10'd374;
-      7'd60 : s2t_recip10b = 10'd367;
-      7'd61 : s2t_recip10b = 10'd359;
-      7'd62 : s2t_recip10b = 10'd352;
-      7'd63 : s2t_recip10b = 10'd345;
-      7'd64 : s2t_recip10b = 10'd338;
-      7'd65 : s2t_recip10b = 10'd331;
-      7'd66 : s2t_recip10b = 10'd324;
-      7'd67 : s2t_recip10b = 10'd317;
-      7'd68 : s2t_recip10b = 10'd310;
-      7'd69 : s2t_recip10b = 10'd303;
-      7'd70 : s2t_recip10b = 10'd297;
-      7'd71 : s2t_recip10b = 10'd290;
-      7'd72 : s2t_recip10b = 10'd283;
-      7'd73 : s2t_recip10b = 10'd277;
-      7'd74 : s2t_recip10b = 10'd271;
-      7'd75 : s2t_recip10b = 10'd264;
-      7'd76 : s2t_recip10b = 10'd258;
-      7'd77 : s2t_recip10b = 10'd252;
-      7'd78 : s2t_recip10b = 10'd245;
-      7'd79 : s2t_recip10b = 10'd239;
-      7'd80 : s2t_recip10b = 10'd233;
-      7'd81 : s2t_recip10b = 10'd227;
-      7'd82 : s2t_recip10b = 10'd221;
-      7'd83 : s2t_recip10b = 10'd215;
-      7'd84 : s2t_recip10b = 10'd210;
-      7'd85 : s2t_recip10b = 10'd204;
-      7'd86 : s2t_recip10b = 10'd198;
-      7'd87 : s2t_recip10b = 10'd192;
-      7'd88 : s2t_recip10b = 10'd187;
-      7'd89 : s2t_recip10b = 10'd181;
-      7'd90 : s2t_recip10b = 10'd176;
-      7'd91 : s2t_recip10b = 10'd170;
-      7'd92 : s2t_recip10b = 10'd165;
-      7'd93 : s2t_recip10b = 10'd159;
-      7'd94 : s2t_recip10b = 10'd154;
-      7'd95 : s2t_recip10b = 10'd149;
-      7'd96 : s2t_recip10b = 10'd144;
-      7'd97 : s2t_recip10b = 10'd139;
-      7'd98 : s2t_recip10b = 10'd133;
-      7'd99 : s2t_recip10b = 10'd128;
-      7'd100 : s2t_recip10b = 10'd123;
-      7'd101 : s2t_recip10b = 10'd118;
-      7'd102 : s2t_recip10b = 10'd113;
-      7'd103 : s2t_recip10b = 10'd108;
-      7'd104 : s2t_recip10b = 10'd104;
-      7'd105 : s2t_recip10b = 10'd99;
-      7'd106 : s2t_recip10b = 10'd94;
-      7'd107 : s2t_recip10b = 10'd89;
-      7'd108 : s2t_recip10b = 10'd84;
-      7'd109 : s2t_recip10b = 10'd80;
-      7'd110 : s2t_recip10b = 10'd75;
-      7'd111 : s2t_recip10b = 10'd71;
-      7'd112 : s2t_recip10b = 10'd66;
-      7'd113 : s2t_recip10b = 10'd61;
-      7'd114 : s2t_recip10b = 10'd57;
-      7'd115 : s2t_recip10b = 10'd53;
-      7'd116 : s2t_recip10b = 10'd48;
-      7'd117 : s2t_recip10b = 10'd44;
-      7'd118 : s2t_recip10b = 10'd39;
-      7'd119 : s2t_recip10b = 10'd35;
-      7'd120 : s2t_recip10b = 10'd31;
-      7'd121 : s2t_recip10b = 10'd27;
-      7'd122 : s2t_recip10b = 10'd22;
-      7'd123 : s2t_recip10b = 10'd18;
-      7'd124 : s2t_recip10b = 10'd14;
-      7'd125 : s2t_recip10b = 10'd10;
-      7'd126 : s2t_recip10b = 10'd6;
-      7'd127 : s2t_recip10b = 10'd2;
-    endcase // 7-bit LUT for initial approximation of reciprocal
-
+  wire [8:0] s2t_recip9b;
+  reciprocal_lut u_rlut
+  (
+    .b_i(s1o_fract24b[22:16]),
+    .r_o(s2t_recip9b)
+  );
+  // support case: b==1
+  wire b_eq_1 = s1o_fract24b[23] & (!(|s1o_fract24b[22:0]));
   // reciprocal with restored leading 01
-  //wire [8:0] s2t_recip9b =
-   // special case: the exacly '1' is converted to the exacly '1'
-   //(s1o_fract24b[23] & (!(|s1o_fract24b[22:0]))) ? 9'b100000000 :
-   // restore leading '01'
-   //                                                {2'b01,s2t_recip7b};
-  wire [11:0] s2t_recip12b =
-   // special case: the exacly '1' is converted to the exacly '1'
-   (s1o_fract24b[23] & (!(|s1o_fract24b[22:0]))) ? 12'h800 :
-   // restore leading '01'
-                                                   {2'b01,s2t_recip10b};
-
+  wire [10:0] s2t_recip11b = b_eq_1 ?  11'b10000000000 :
+                                      {2'b01,s2t_recip9b};
 
   // the subsequent two stages multiplier operates with 32-bit inputs
   // 25-bits: fractionals (quotient is in range 0.5 to 1)
   //  1-bit : rounding bit
   //  6-bits: guard (due to truncations of intermediate results)
-
 
   // intermediate results:
   //   updated divisor (D) is rounded up while all other intermediate values
@@ -410,45 +248,46 @@ module pfpu32_div
   //     Guy Even, Peter-M.Seidel, Warren E.Ferguson
   //     "A parametric error analysis of Goldschmidt’s division algorithm"
   wire itr_rndD = itr_state[3] | itr_state[6];
-  //   round quotient up to provide convergence to reminder free result
-  wire itr_rndN = itr_state[10];
+  wire itr_rndDvsr;
+  //   align resulting quotient to support subsequent IEEE-compliant rounding
+  wire itr_rndQ = itr_state[10];
+  wire itr_rndQ1xx, itr_rndQ01x;
   //   N (dividend) or D (divisor)
-  wire [33:0] itr_NorD34;
+  wire [32:0] itr_qtnt33;
   //   'F' (2-D) or 'Reminder'
-  wire [32:0] itr_ForR33;
+  wire [32:0] itr_rmnd33;
 
 
-  // control for multiplier's input 'a'
-  wire itr_uinA = itr_state[0] | itr_state[1] |
-                  itr_state[3] | itr_state[4] |
-                  itr_state[6] | itr_state[7] |
-                  itr_state[10];
-  // multiplexer for multiplier's input 'a'
+  // control for multiplier's input 'A'
+  //   the register also contains quotient to output
+  wire itr_uinA = itr_state[0] | itr_state[3] | itr_state[6] | itr_state[10];
+  // multiplexer for multiplier's input 'A'
   wire [31:0] s2t_mul32a =
-    (itr_state[0] | itr_state[10]) ? {s1o_fract24b,8'd0} :
-     itr_state[1]                  ? {s1o_fract24a,8'd0} :
-                                     itr_NorD34[32:1];
-  // register of multiplier's input 'a'
+     itr_state[0]                 ? {s2t_recip11b,21'd0}    :
+    (itr_state[10] & itr_rndQ1xx) ? {itr_qtnt33[31:7],7'd0} : // truncate by 2^(-n-1)
+    (itr_state[10] & itr_rndQ01x) ? {itr_qtnt33[31:6],6'd0} : // truncate by 2^(-n-1)
+                                     itr_rmnd33[31:0];
+  // register of multiplier's input 'A'
   reg [31:0] s2r_fract32a;
+  // registering
   always @(posedge clk) begin
     if(itr_uinA)
       s2r_fract32a <= s2t_mul32a;
   end // posedge clock
 
 
-  // control for multiplier's input 'b'
-  //   the register also contains quotient to output
-  wire itr_uinB = itr_state[0] | itr_state[3] | itr_state[6] | itr_state[10];
-  // multiplexer for multiplier's input 'b'
+  // control for multiplier's input 'B'
+  wire itr_uinB = itr_state[0] | itr_state[1] |
+                  itr_state[3] | itr_state[4] |
+                  itr_state[6] | itr_state[7] |
+                  itr_state[10];
+  // multiplexer for multiplier's input 'B'
   wire [31:0] s2t_mul32b =
-     //itr_AeqB      ? 32'h80000000            : // force quotient to "1"
-     //itr_state[0]  ? {s2t_recip9b,23'd0}     :
-     itr_state[0]  ? {s2t_recip12b,20'd0}     :
-     itr_state[10] ? {itr_NorD34[32:8],7'd0} : // compute reminder
-                     itr_ForR33[31:0];
-  // register of multiplier's input 'b'
+    (itr_state[0] | itr_state[10]) ? {s1o_fract24b,8'd0} :
+     itr_state[1]                  ? {s1o_fract24a,8'd0} :
+                                      itr_qtnt33[31:0];
+  // register of multiplier's input 'B'
   reg [31:0] s2r_fract32b;
-  // registering
   always @(posedge clk) begin
     if(itr_uinB)
       s2r_fract32b <= s2t_mul32b;
@@ -500,96 +339,41 @@ module pfpu32_div
 
   /* Intermediate results of Goldshmidt's iterations */
 
-  // compute 2's complement or reminder (for sticky bit detection)
-  // pay attantion that point position is located just after bit [30]
-  wire [31:0] itr_AorT32 =
-    itr_last ? {1'b0,s1o_fract24a,7'd0} :  // for reminder
-               (32'h80000000);             // for two's complement
+  // take into account the truncated part multiplier's output
+  wire itr_rs_fract64 = |m2o_fract64[30:0];
                                     
-  // intermediate N (dividend) or D (divisor)
-  // binary point position is located just after bit [31]
-  //assign itr_NorD33 = m2o_fract64[63:31] + 
-  //                    {27'd0,itr_rndN,4'd0,          // round up for reminder free case support
-  //                    (itr_rndD & m2o_fract64[31])}; // round up stops effictive computations if precision is achived
-  assign itr_NorD34 = m2o_fract64[63:30] + 
-                      {33'd0,(itr_rndN | itr_rndD) & m2o_fract64[30]}; 
+  // Feedback from multiplier's output with various rounding tecqs.
+  //   +2^(-n-2) in case of rounding 1.xxx qutient
+  assign itr_rndQ1xx = itr_rndQ &   m2o_fract64[62];
+  //   +2^(-n-2) in case of rounding 0.1xx qutient
+  assign itr_rndQ01x = itr_rndQ & (!m2o_fract64[62]);
+  //   directed rounding of intermediate divisor 'D'
+  assign itr_rndDvsr = itr_rndD &   itr_rs_fract64;
+  //   rounding mask:
+  wire [32:0] itr_rndM33 = 
+    {26'd0,itr_rndQ1xx,itr_rndQ01x,4'd0,itr_rndDvsr}; // bits [6],[5] ... [0]
+  //   rounding
+  assign itr_qtnt33 = m2o_fract64[63:31] + itr_rndM33; 
 
-  // 'F' or 'Reminder' (on the last stage NorD = B * Q)
-  assign itr_ForR33 = {itr_AorT32,1'b0} - itr_NorD34[33:1];
- `else
 
-  /* Stage #2: division */
+  // compute 2's complement or reminder (for sticky bit detection)
+  // binary point position is located just after bit [30]
+  wire [32:0] itr_AorT33 =
+    itr_last ? {1'b0,s1o_fract24a,8'd0} : // for reminder
+               {32'h80000000,1'b0};       // for two's complement
 
-  localparam STATE_WAITING = 1'b0,
-             STATE_BUSY    = 1'b1;
-
-  reg       s2t_ready;
-  reg       s2t_state;
-  reg [4:0] s2t_count;
-
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst) begin
-      s2t_state <= STATE_WAITING;
-      s2t_ready <= 1'b0;
-    end
-    else if(flush_i) begin
-      s2t_state <= STATE_WAITING;
-      s2t_ready <= 1'b0;
-    end
-    else if (s1o_ready & adv_i) begin
-      s2t_state <= STATE_BUSY;
-      s2t_count <= 5'd26;
-    end
-    else if ((!(|s2t_count) & s2t_state==STATE_BUSY) & adv_i) begin
-      s2t_state <= STATE_WAITING;
-      s2t_ready <= 1'b1;
-      s2t_count <= 5'd26;
-    end
-    else if ((s2t_state==STATE_BUSY) & adv_i)
-      s2t_count <= s2t_count - 5'd1;
-    else if(adv_i) begin
-      s2t_state <= STATE_WAITING;
-      s2t_ready <= 1'b0;
-    end
-  end // posedge clock
-
-  reg  [26:0] s2t_qutnt;
-  reg  [26:0] s2t_rmndr;
-  reg  [26:0] s2t_dvd;
-
-  wire [26:0] v2t_div;
-  wire [26:0] v2t_div_minus_s1o_dvsor_27;
-
-  assign v2t_div = (s2t_count==5'd26) ? {3'd0,s1o_dvdnd_50[49:26]} : s2t_dvd;
-  assign v2t_div_minus_s1o_dvsor_27 = v2t_div - s1o_dvsor_27;
-
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if(rst) begin
-      s2t_qutnt <= 1'b0;
-      s2t_rmndr <= 1'b0;
-    end
-    else if (flush_i) begin
-      s2t_qutnt <= 1'b0;
-      s2t_rmndr <= 1'b0;
-    end
-    else if (s1o_ready & adv_i) begin
-      s2t_qutnt <= 1'b0;
-      s2t_rmndr <= 1'b0;
-    end
-    else if ((s2t_state==STATE_BUSY) & adv_i) begin
-      if (v2t_div < s1o_dvsor_27) begin
-        s2t_qutnt[s2t_count] <= 1'b0;
-        s2t_dvd <= {v2t_div[25:0],1'b0};
-      end
-      else begin
-        s2t_qutnt[s2t_count] <= 1'b1;
-        s2t_dvd <= {v2t_div_minus_s1o_dvsor_27[25:0],1'b0};
-      end
-
-      s2t_rmndr <= v2t_div;
-    end // if (s2t_state==STATE_BUSY)
-  end // posedge
- `endif
+  // 'Reminder' / Two's complement
+  assign itr_rmnd33 = itr_AorT33 - itr_qtnt33;
+  wire   itr_sticky = |itr_rmnd33;
+  
+  // Additionally store 26-bit of non-rounded reminder.
+  // It is used for rounding in cases of denormalized result.
+  // Stiky bit is forced to be zero
+  reg [26:0] s2o_raw_qtnt;
+  always @(posedge clk) begin
+    if(itr_rndQ)
+      s2o_raw_qtnt <= {m2o_fract64[62:37],1'b0};
+  end
 
   // stage #2 outputs
   //   input related
@@ -599,14 +383,11 @@ module pfpu32_div
   reg        s2o_sign;
   reg [9:0]  s2o_exp10;
   reg [26:0] s2o_qutnt;
+  reg        s2o_sign_rmnd;
 
   //   registering
   always @(posedge clk) begin
-   `ifdef NEW_F32_DIV
     if(itr_last)
-   `else
-    if(adv_i)
-   `endif
     begin
         // input related
       s2o_inv         <= s1o_inv;
@@ -620,13 +401,9 @@ module pfpu32_div
         // computation related
       s2o_sign  <= s1o_sign;
       s2o_exp10 <= s1o_exp10;
-     `ifdef NEW_F32_DIV
-      s2o_qutnt <= {s2r_fract32b[31:7],(|itr_ForR33)}
-                   & {26{!s1o_fz}};
-     `else
-      s2o_qutnt <= {s2t_qutnt[26:1],(s2t_qutnt[0] | (|s2t_rmndr))}
+      s2o_qutnt <= {s2r_fract32a[31:6],(itr_sticky | itr_rs_fract64)}
                    & {27{!s1o_fz}};
-     `endif
+      s2o_sign_rmnd <= itr_rmnd33[32] | ((~itr_sticky) & itr_rs_fract64);
     end // (reset or flush) / advance
   end // posedge clock
 
@@ -637,17 +414,13 @@ module pfpu32_div
       s2o_ready <= 0;
     else if(flush_i)
       s2o_ready <= 0;
-   `ifdef NEW_F32_DIV
     else if(adv_i | itr_last)
       s2o_ready <= itr_last;
-   `else
-    else if(adv_i)
-      s2o_ready <= s2t_ready;
-   `endif
   end // posedge clock
 
 
   /* Stage #3: calc align values */  
+
 
   // qutnt
   // 26 25                    2
@@ -676,11 +449,12 @@ module pfpu32_div
   // max. right shift that makes sense is 26bits
   //  i.e. [26] moves to sticky position: ([0])
   wire [5:0] s3t_shr = (s3t_shrx > 10'd26) ? 6'd26 : s3t_shrx[5:0];
+  wire s3t_is_shr = |s3t_shr;
 
   // in fact, as the dividend and divisor was normalized
   // and the result is non-zero
   // the '1' is maximum number of leading zeros in the quotient
-  wire s3t_nlz = !s2o_qutnt[26];
+  wire s3t_nlz = ~s2o_qutnt[26];
     //...
   wire [9:0] s3t_exp10_m1 = s2o_exp10 - 10'd1;
   // left shift flag and corrected exponent
@@ -694,48 +468,60 @@ module pfpu32_div
       // denormalized cases
                            {1'b0,10'd1};
 
+  // flags that rounded quotient is exact quotient
+  wire s3t_qtnt_exact = ~s2o_qutnt[0];
+  // check if result is denormalized
+  wire s3t_is_shl = |s3t_shlx;
+  wire s3t_denorm = s3t_is_shr | 
+                    ((~s3t_is_shr) & (~s3t_is_shl) & s3t_nlz);
+  // Select quotient for subsequent align and rounding  
+  // Denormalized and non-exact results are based on raw-quotient
+  wire [26:0] s3t_shqtnt =
+    ( (~s3t_denorm) | s3t_qtnt_exact | 
+      ((~s3t_qtnt_exact) & (~s2o_sign_rmnd)) ) ?
+      s2o_qutnt : {s2o_raw_qtnt[26:1],1'b1};
+
   // align
   wire [26:0] s3t_fract27 =
-    (|s3t_shr) ? (s2o_qutnt >> s3t_shr) :
-                 (s2o_qutnt << s3t_shlx);
-
+    (s3t_is_shr) ? (s3t_shqtnt >> s3t_shr) :
+                   (s3t_shqtnt << s3t_shlx);
+                   
   // sticky bit computation for right shift
-  // max. right shift that makes sense i 26bits
+  // max. right shift that makes sense is 26bits
   //  i.e. [26] moves to sticky position: ([0])
   reg s3t_sticky_shr;
-  always @(s3t_shr or s2o_qutnt) begin
+  always @(s3t_shr or s3t_shqtnt) begin
     case(s3t_shr)
-      6'd0   : s3t_sticky_shr = |s2o_qutnt[ 1:0];
-      6'd1   : s3t_sticky_shr = |s2o_qutnt[ 2:0];
-      6'd2   : s3t_sticky_shr = |s2o_qutnt[ 3:0];
-      6'd3   : s3t_sticky_shr = |s2o_qutnt[ 4:0];
-      6'd4   : s3t_sticky_shr = |s2o_qutnt[ 5:0];
-      6'd5   : s3t_sticky_shr = |s2o_qutnt[ 6:0];
-      6'd6   : s3t_sticky_shr = |s2o_qutnt[ 7:0];
-      6'd7   : s3t_sticky_shr = |s2o_qutnt[ 8:0];
-      6'd8   : s3t_sticky_shr = |s2o_qutnt[ 9:0];
-      6'd9   : s3t_sticky_shr = |s2o_qutnt[10:0];
-      6'd10  : s3t_sticky_shr = |s2o_qutnt[11:0];
-      6'd11  : s3t_sticky_shr = |s2o_qutnt[12:0];
-      6'd12  : s3t_sticky_shr = |s2o_qutnt[13:0];
-      6'd13  : s3t_sticky_shr = |s2o_qutnt[14:0];
-      6'd14  : s3t_sticky_shr = |s2o_qutnt[15:0];
-      6'd15  : s3t_sticky_shr = |s2o_qutnt[16:0];
-      6'd16  : s3t_sticky_shr = |s2o_qutnt[17:0];
-      6'd17  : s3t_sticky_shr = |s2o_qutnt[18:0];
-      6'd18  : s3t_sticky_shr = |s2o_qutnt[19:0];
-      6'd19  : s3t_sticky_shr = |s2o_qutnt[20:0];
-      6'd20  : s3t_sticky_shr = |s2o_qutnt[21:0];
-      6'd21  : s3t_sticky_shr = |s2o_qutnt[22:0];
-      6'd22  : s3t_sticky_shr = |s2o_qutnt[23:0];
-      6'd23  : s3t_sticky_shr = |s2o_qutnt[24:0];
-      6'd24  : s3t_sticky_shr = |s2o_qutnt[25:0];
-      default: s3t_sticky_shr = |s2o_qutnt[26:0];
+      6'd0   : s3t_sticky_shr = |s3t_shqtnt[ 1:0];
+      6'd1   : s3t_sticky_shr = |s3t_shqtnt[ 2:0];
+      6'd2   : s3t_sticky_shr = |s3t_shqtnt[ 3:0];
+      6'd3   : s3t_sticky_shr = |s3t_shqtnt[ 4:0];
+      6'd4   : s3t_sticky_shr = |s3t_shqtnt[ 5:0];
+      6'd5   : s3t_sticky_shr = |s3t_shqtnt[ 6:0];
+      6'd6   : s3t_sticky_shr = |s3t_shqtnt[ 7:0];
+      6'd7   : s3t_sticky_shr = |s3t_shqtnt[ 8:0];
+      6'd8   : s3t_sticky_shr = |s3t_shqtnt[ 9:0];
+      6'd9   : s3t_sticky_shr = |s3t_shqtnt[10:0];
+      6'd10  : s3t_sticky_shr = |s3t_shqtnt[11:0];
+      6'd11  : s3t_sticky_shr = |s3t_shqtnt[12:0];
+      6'd12  : s3t_sticky_shr = |s3t_shqtnt[13:0];
+      6'd13  : s3t_sticky_shr = |s3t_shqtnt[14:0];
+      6'd14  : s3t_sticky_shr = |s3t_shqtnt[15:0];
+      6'd15  : s3t_sticky_shr = |s3t_shqtnt[16:0];
+      6'd16  : s3t_sticky_shr = |s3t_shqtnt[17:0];
+      6'd17  : s3t_sticky_shr = |s3t_shqtnt[18:0];
+      6'd18  : s3t_sticky_shr = |s3t_shqtnt[19:0];
+      6'd19  : s3t_sticky_shr = |s3t_shqtnt[20:0];
+      6'd20  : s3t_sticky_shr = |s3t_shqtnt[21:0];
+      6'd21  : s3t_sticky_shr = |s3t_shqtnt[22:0];
+      6'd22  : s3t_sticky_shr = |s3t_shqtnt[23:0];
+      6'd23  : s3t_sticky_shr = |s3t_shqtnt[24:0];
+      6'd24  : s3t_sticky_shr = |s3t_shqtnt[25:0];
+      default: s3t_sticky_shr = |s3t_shqtnt[26:0];
     endcase
   end // always
 
-  wire s3t_sticky = (|s3t_shr) ? s3t_sticky_shr : (|s3t_fract27[1:0]);
-
+  wire s3t_sticky = (s3t_is_shr) ? s3t_sticky_shr : (|s3t_fract27[1:0]);
 
   // registering output
   always @(posedge clk) begin
@@ -750,9 +536,10 @@ module pfpu32_div
       div_anan_sign_o <= s2o_anan_i_sign;
         // computation related
       div_sign_o    <= s2o_sign;
-      div_exp10_o   <= (|s3t_shr) ? s3t_exp10rx : s3t_exp10lx;
+      div_exp10_o   <= (s3t_is_shr) ? s3t_exp10rx : s3t_exp10lx;
       div_fract24_o <= s3t_fract27[26:3];
       div_rs_o      <= {s3t_fract27[2],s3t_sticky};
+      div_sign_rmnd_o <= s2o_sign_rmnd;
     end // advance
   end // posedge clock
 
@@ -767,3 +554,144 @@ module pfpu32_div
   end // posedge clock
 
 endmodule // pfpu32_div
+
+
+// initial reciprocal approximation
+module reciprocal_lut 
+(
+  input      [6:0] b_i,
+  output reg [8:0] r_o
+);
+  always @(b_i) begin
+    case(b_i) // synopsys full_case parallel_case
+      7'd0   : r_o = 9'd508;
+      7'd1   : r_o = 9'd500;
+      7'd2   : r_o = 9'd492;
+      7'd3   : r_o = 9'd485;
+      7'd4   : r_o = 9'd477;
+      7'd5   : r_o = 9'd470;
+      7'd6   : r_o = 9'd463;
+      7'd7   : r_o = 9'd455;
+      7'd8   : r_o = 9'd448;
+      7'd9   : r_o = 9'd441;
+      7'd10  : r_o = 9'd434;
+      7'd11  : r_o = 9'd428;
+      7'd12  : r_o = 9'd421;
+      7'd13  : r_o = 9'd414;
+      7'd14  : r_o = 9'd408;
+      7'd15  : r_o = 9'd401;
+      7'd16  : r_o = 9'd395;
+      7'd17  : r_o = 9'd389;
+      7'd18  : r_o = 9'd383;
+      7'd19  : r_o = 9'd377;
+      7'd20  : r_o = 9'd371;
+      7'd21  : r_o = 9'd365;
+      7'd22  : r_o = 9'd359;
+      7'd23  : r_o = 9'd353;
+      7'd24  : r_o = 9'd347;
+      7'd25  : r_o = 9'd342;
+      7'd26  : r_o = 9'd336;
+      7'd27  : r_o = 9'd331;
+      7'd28  : r_o = 9'd326;
+      7'd29  : r_o = 9'd320;
+      7'd30  : r_o = 9'd315;
+      7'd31  : r_o = 9'd310;
+      7'd32  : r_o = 9'd305;
+      7'd33  : r_o = 9'd300;
+      7'd34  : r_o = 9'd295;
+      7'd35  : r_o = 9'd290;
+      7'd36  : r_o = 9'd285;
+      7'd37  : r_o = 9'd280;
+      7'd38  : r_o = 9'd275;
+      7'd39  : r_o = 9'd271;
+      7'd40  : r_o = 9'd266;
+      7'd41  : r_o = 9'd261;
+      7'd42  : r_o = 9'd257;
+      7'd43  : r_o = 9'd252;
+      7'd44  : r_o = 9'd248;
+      7'd45  : r_o = 9'd243;
+      7'd46  : r_o = 9'd239;
+      7'd47  : r_o = 9'd235;
+      7'd48  : r_o = 9'd231;
+      7'd49  : r_o = 9'd226;
+      7'd50  : r_o = 9'd222;
+      7'd51  : r_o = 9'd218;
+      7'd52  : r_o = 9'd214;
+      7'd53  : r_o = 9'd210;
+      7'd54  : r_o = 9'd206;
+      7'd55  : r_o = 9'd202;
+      7'd56  : r_o = 9'd198;
+      7'd57  : r_o = 9'd195;
+      7'd58  : r_o = 9'd191;
+      7'd59  : r_o = 9'd187;
+      7'd60  : r_o = 9'd183;
+      7'd61  : r_o = 9'd180;
+      7'd62  : r_o = 9'd176;
+      7'd63  : r_o = 9'd172;
+      7'd64  : r_o = 9'd169;
+      7'd65  : r_o = 9'd165;
+      7'd66  : r_o = 9'd162;
+      7'd67  : r_o = 9'd158;
+      7'd68  : r_o = 9'd155;
+      7'd69  : r_o = 9'd152;
+      7'd70  : r_o = 9'd148;
+      7'd71  : r_o = 9'd145;
+      7'd72  : r_o = 9'd142;
+      7'd73  : r_o = 9'd138;
+      7'd74  : r_o = 9'd135;
+      7'd75  : r_o = 9'd132;
+      7'd76  : r_o = 9'd129;
+      7'd77  : r_o = 9'd126;
+      7'd78  : r_o = 9'd123;
+      7'd79  : r_o = 9'd120;
+      7'd80  : r_o = 9'd117;
+      7'd81  : r_o = 9'd114;
+      7'd82  : r_o = 9'd111;
+      7'd83  : r_o = 9'd108;
+      7'd84  : r_o = 9'd105;
+      7'd85  : r_o = 9'd102;
+      7'd86  : r_o = 9'd99;
+      7'd87  : r_o = 9'd96;
+      7'd88  : r_o = 9'd93;
+      7'd89  : r_o = 9'd91;
+      7'd90  : r_o = 9'd88;
+      7'd91  : r_o = 9'd85;
+      7'd92  : r_o = 9'd82;
+      7'd93  : r_o = 9'd80;
+      7'd94  : r_o = 9'd77;
+      7'd95  : r_o = 9'd74;
+      7'd96  : r_o = 9'd72;
+      7'd97  : r_o = 9'd69;
+      7'd98  : r_o = 9'd67;
+      7'd99  : r_o = 9'd64;
+      7'd100 : r_o = 9'd62;
+      7'd101 : r_o = 9'd59;
+      7'd102 : r_o = 9'd57;
+      7'd103 : r_o = 9'd54;
+      7'd104 : r_o = 9'd52;
+      7'd105 : r_o = 9'd49;
+      7'd106 : r_o = 9'd47;
+      7'd107 : r_o = 9'd45;
+      7'd108 : r_o = 9'd42;
+      7'd109 : r_o = 9'd40;
+      7'd110 : r_o = 9'd38;
+      7'd111 : r_o = 9'd35;
+      7'd112 : r_o = 9'd33;
+      7'd113 : r_o = 9'd31;
+      7'd114 : r_o = 9'd29;
+      7'd115 : r_o = 9'd26;
+      7'd116 : r_o = 9'd24;
+      7'd117 : r_o = 9'd22;
+      7'd118 : r_o = 9'd20;
+      7'd119 : r_o = 9'd18;
+      7'd120 : r_o = 9'd15;
+      7'd121 : r_o = 9'd13;
+      7'd122 : r_o = 9'd11;
+      7'd123 : r_o = 9'd9;
+      7'd124 : r_o = 9'd7;
+      7'd125 : r_o = 9'd5;
+      7'd126 : r_o = 9'd3;
+      default: r_o = 9'd1;
+    endcase // LUT for initial approximation of reciprocal
+  end // always
+endmodule 

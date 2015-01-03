@@ -67,7 +67,19 @@ module pfpu32_top
   output [`OR1K_FPCSR_WIDTH-1:0] fpcsr_o
 );
 
-//localparam SNAN = 31'b1111111101111111111111111111111;
+// some local wires for output (redudant?)
+wire [OPTION_OPERAND_WIDTH-1:0] fpu_result_w;
+wire                            fpu_valid_w;
+wire                            fpu_cmp_flag_w;
+wire                            fpu_cmp_valid_w;
+wire   [`OR1K_FPCSR_WIDTH-1:0]  fpcsr_w;
+// ... connect outputs
+assign fpu_result_o    = fpu_result_w;
+assign fpu_valid_o     = fpu_valid_w;
+assign fpu_cmp_flag_o  = fpu_cmp_flag_w;
+assign fpu_cmp_valid_o = fpu_cmp_valid_w;
+assign fpcsr_o         = fpcsr_w;
+
 
 // MSB (set by decode stage) indicates FPU instruction
 // Get rid of top bit - is FPU op valid bit
@@ -78,8 +90,7 @@ wire [2:0] op_conv  = op_fpu_i[2:0]; // alias
 wire a_cmp = op_fpu_i[3]; // alias for compare bit of fpu's opcode
 
 // advance FPU units
-wire padv_fpu_units = (padv_execute_i & fpu_valid_o) |
-                      !fpu_valid_o;
+wire padv_fpu_units = padv_execute_i | (!fpu_valid_w); // (padv_execute_i & fpu_valid_o) | (!fpu_valid_o);
 
 // start logic
 reg new_data;
@@ -248,6 +259,7 @@ wire        div_sign_o;      // div signum
 wire  [9:0] div_exp10_o;     // div exponent
 wire [23:0] div_fract24_o;   // div fractional
 wire  [1:0] div_rs_o;        // div round & sticky bits
+wire        div_sign_rmnd_o; // signum or reminder for IEEE compliant rounding
 wire        div_inv_o;       // div invalid operation flag
 wire        div_inf_o;       // div infinity output reg
 wire        div_snan_o;      // div signaling NaN output reg
@@ -281,6 +293,7 @@ pfpu32_div u_f32_div
   .div_exp10_o     (div_exp10_o),     // div exponent
   .div_fract24_o   (div_fract24_o),   // div fractional
   .div_rs_o        (div_rs_o),        // div round & sticky bits
+  .div_sign_rmnd_o (div_sign_rmnd_o), // signum or reminder for IEEE compliant rounding
   .div_inv_o       (div_inv_o),       // div invalid operation flag
   .div_inf_o       (div_inf_o),       // div infinity output reg
   .div_snan_o      (div_snan_o),      // div signaling NaN output reg
@@ -403,6 +416,7 @@ pfpu32_rnd u_f32_rnd
   .div_exp10_i     (div_exp10_o),     // div exponent
   .div_fract24_i   (div_fract24_o),   // div fractional
   .div_rs_i        (div_rs_o),        // div round & sticky bits
+  .div_sign_rmnd_i (div_sign_rmnd_o), // signum or reminder for IEEE compliant rounding
   .div_inv_i       (div_inv_o),       // div invalid operation flag
   .div_inf_i       (div_inf_o),       // div infinity 
   .div_snan_i      (div_snan_o),      // div signaling NaN
@@ -429,11 +443,11 @@ pfpu32_rnd u_f32_rnd
   .cmp_inv_i       (cmp_inv),         // cmp invalid flag
   .cmp_inf_i       (cmp_inf),         // cmp infinity flag
   // outputs
-  .fpu_result_o    (fpu_result_o),
-  .fpu_valid_o     (fpu_valid_o),
-  .fpu_cmp_flag_o  (fpu_cmp_flag_o),
-  .fpu_cmp_valid_o (fpu_cmp_valid_o),
-  .fpcsr_o         (fpcsr_o)
+  .fpu_result_o    (fpu_result_w),
+  .fpu_valid_o     (fpu_valid_w),
+  .fpu_cmp_flag_o  (fpu_cmp_flag_w),
+  .fpu_cmp_valid_o (fpu_cmp_valid_w),
+  .fpcsr_o         (fpcsr_w)
 );
 
 endmodule // pfpu32_top

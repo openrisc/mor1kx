@@ -70,6 +70,7 @@ module pfpu32_rnd
   input  [9:0] div_exp10_i,     // div exponent
   input [23:0] div_fract24_i,   // div fractional
   input  [1:0] div_rs_i,        // div round & sticky bits
+  input        div_sign_rmnd_i, // signum or reminder for IEEE compliant rounding
   input        div_inv_i,       // div invalid operation flag
   input        div_inf_i,       // div infinity input
   input        div_snan_i,      // div signaling NaN input
@@ -150,6 +151,29 @@ module pfpu32_rnd
                     (rm_to_infp & !s1t_sign & s1t_lost) |
                     (rm_to_infm &  s1t_sign & s1t_lost);
 
+  // IEEE compliance rounding for qutient
+  wire s1t_div_rnd_up =
+    (rm_nearest & s1t_r & s1t_s & (!div_sign_rmnd_i)) |
+    ( ((rm_to_infp & (!div_sign_i)) | (rm_to_infm & div_sign_i)) &
+      ((s1t_r & s1t_s) | ((!s1t_r) & s1t_s & (!div_sign_rmnd_i))) );
+  wire s1t_div_rnd_dn = (!s1t_r) & s1t_s & div_sign_rmnd_i &
+    ( (rm_to_infp &   div_sign_i)  | 
+      (rm_to_infm & (!div_sign_i)) | 
+       rm_to_zero );
+
+  // set resulting direction of rounding
+  //  a) normalized quotient is rounded by quotient related rules
+  //  b) de-normalized quotient is rounded by common rules
+  wire s1t_rnd_n_qtnt = div_rdy_i & div_fract24_i[23]; // normalized quotient
+  wire s1t_set_rnd_up = s1t_rnd_n_qtnt ? s1t_div_rnd_up : s1t_rnd_up;
+  wire s1t_set_rnd_dn = s1t_rnd_n_qtnt ? s1t_div_rnd_dn : 1'b0;
+
+  // define value for rounding adder
+  wire [31:0] s1t_rnd_v32 = 
+    s1t_set_rnd_up ? 32'd1        : // +1
+    s1t_set_rnd_dn ? 32'hFFFFFFFF : // -1
+                     32'd0;         // no rounding
+
   // 1rst stage output
   reg        s1o_rdy;
   reg        s1o_sign;
@@ -167,7 +191,7 @@ module pfpu32_rnd
     if(adv_i) begin
       s1o_sign    <= s1t_sign;
       s1o_exp10   <= s1t_exp10;
-      s1o_fract32 <= s1t_fract32 + {31'd0,s1t_rnd_up};
+      s1o_fract32 <= s1t_fract32 + s1t_rnd_v32;
       s1o_lost    <= s1t_lost;
       s1o_dbz     <= div_dbz_i & div_rdy_i;
       s1o_dbinf   <= div_dbinf_i & div_rdy_i;
@@ -241,8 +265,8 @@ module pfpu32_rnd
     // zero and underflow
     (s2t_f32_fract24_dn | s2t_f32_fract24_00) ?// ine  ovf  inf               unf                             zer
       {{s1o_sign,8'd0,s2t_f32_fract24[22:0]},s1o_lost,1'b0,1'b0,((s2t_f32_fract24_00 & s1o_lost) | s1o_dbinf),s2t_f32_fract24_00} :
-    // normal result                                        ine  ovf  inf  unf  zer
-    {s1o_sign,s2t_f32_exp10[7:0],s2t_f32_fract24[22:0],s1o_lost,1'b0,1'b0,1'b0,1'b0};
+    // normal result                                          ine  ovf  inf  unf  zer
+    {{s1o_sign,s2t_f32_exp10[7:0],s2t_f32_fract24[22:0]},s1o_lost,1'b0,1'b0,1'b0,1'b0};
 
 
   // Output Register
