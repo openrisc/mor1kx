@@ -230,11 +230,13 @@ pfpu32_mul u_f32_mul
   .fract24a_i  (in_fract24a),
   .infa_i      (in_infa),
   .zeroa_i     (in_opa_0),
+  .dna_i       (in_opa_dn),    // 'a' is denormalized
   .signb_i     (in_signb),       // input 'b' related values
   .exp10b_i    (in_exp10b),
   .fract24b_i  (in_fract24b),
   .infb_i      (in_infb),
   .zerob_i     (in_opb_0),
+  .dnb_i       (in_opb_dn),    // 'a' is denormalized
   .snan_i      (in_snan),        // 'a'/'b' related
   .qnan_i      (in_qnan),
   .anan_sign_i (in_anan_sign),

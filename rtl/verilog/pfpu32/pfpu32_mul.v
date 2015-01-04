@@ -56,11 +56,13 @@ module pfpu32_mul
    input      [23:0] fract24a_i,
    input             infa_i,
    input             zeroa_i,
+   input             dna_i,    // 'a' is denormalized
    input             signb_i,  // input 'b' related values
    input       [9:0] exp10b_i,
    input      [23:0] fract24b_i,
    input             infb_i,
    input             zerob_i,
+   input             dnb_i,    // 'b' is denormalized
    input             snan_i,   // 'a'/'b' related
    input             qnan_i,
    input             anan_sign_i,
@@ -86,6 +88,7 @@ module pfpu32_mul
 
   /* Stage #1: pre-multiplier stage */
 
+
     // detection of some exceptions
     //   0 * inf -> invalid operation; snan output
   wire s1t_inv = (zeroa_i & infb_i) | (zerob_i & infa_i);
@@ -94,20 +97,103 @@ module pfpu32_mul
 
     // result is zero
   wire s1t_opc_0 = zeroa_i | zerob_i;
-  
-    // computation related exponent
-  wire [9:0] s1t_exp10c = (exp10a_i + exp10b_i - 10'd127)
-                           & {10{!s1t_opc_0}};
-  
-    // computation related fractionals
-    //  insert leading zeros to signal unsigned values
-    //  for potential usage DSP blocks of a FPGA
-  wire [12:0] s1t_fract13_al = {1'b0, fract24a_i[11: 0]};
-  wire [12:0] s1t_fract13_ah = {1'b0, fract24a_i[23:12]};
-  wire [12:0] s1t_fract13_bl = {1'b0, fract24b_i[11: 0]};
-  wire [12:0] s1t_fract13_bh = {1'b0, fract24b_i[23:12]};
-  
-   
+
+    // input is normalized
+  wire s1t_ab_norm = ~(dna_i | dnb_i);
+
+  // count leading zeros
+  reg [4:0] s1t_nlza;
+  always @(fract24a_i)
+    casez(fract24a_i) // synopsys full_case parallel_case
+      24'b1???????????????????????: s1t_nlza =  0;
+      24'b01??????????????????????: s1t_nlza =  1;
+      24'b001?????????????????????: s1t_nlza =  2;
+      24'b0001????????????????????: s1t_nlza =  3;
+      24'b00001???????????????????: s1t_nlza =  4;
+      24'b000001??????????????????: s1t_nlza =  5;
+      24'b0000001?????????????????: s1t_nlza =  6;
+      24'b00000001????????????????: s1t_nlza =  7;
+      24'b000000001???????????????: s1t_nlza =  8;
+      24'b0000000001??????????????: s1t_nlza =  9;
+      24'b00000000001?????????????: s1t_nlza = 10;
+      24'b000000000001????????????: s1t_nlza = 11;
+      24'b0000000000001???????????: s1t_nlza = 12;
+      24'b00000000000001??????????: s1t_nlza = 13;
+      24'b000000000000001?????????: s1t_nlza = 14;
+      24'b0000000000000001????????: s1t_nlza = 15;
+      24'b00000000000000001???????: s1t_nlza = 16;
+      24'b000000000000000001??????: s1t_nlza = 17;
+      24'b0000000000000000001?????: s1t_nlza = 18;
+      24'b00000000000000000001????: s1t_nlza = 19;
+      24'b000000000000000000001???: s1t_nlza = 20;
+      24'b0000000000000000000001??: s1t_nlza = 21;
+      24'b00000000000000000000001?: s1t_nlza = 22;
+      24'b000000000000000000000001: s1t_nlza = 23;
+      24'b000000000000000000000000: s1t_nlza =  0; // zero rezult
+    endcase
+
+  // count leading zeros
+  reg [4:0] s1t_nlzb;
+  always @(fract24b_i)
+    casez(fract24b_i) // synopsys full_case parallel_case
+      24'b1???????????????????????: s1t_nlzb =  0;
+      24'b01??????????????????????: s1t_nlzb =  1;
+      24'b001?????????????????????: s1t_nlzb =  2;
+      24'b0001????????????????????: s1t_nlzb =  3;
+      24'b00001???????????????????: s1t_nlzb =  4;
+      24'b000001??????????????????: s1t_nlzb =  5;
+      24'b0000001?????????????????: s1t_nlzb =  6;
+      24'b00000001????????????????: s1t_nlzb =  7;
+      24'b000000001???????????????: s1t_nlzb =  8;
+      24'b0000000001??????????????: s1t_nlzb =  9;
+      24'b00000000001?????????????: s1t_nlzb = 10;
+      24'b000000000001????????????: s1t_nlzb = 11;
+      24'b0000000000001???????????: s1t_nlzb = 12;
+      24'b00000000000001??????????: s1t_nlzb = 13;
+      24'b000000000000001?????????: s1t_nlzb = 14;
+      24'b0000000000000001????????: s1t_nlzb = 15;
+      24'b00000000000000001???????: s1t_nlzb = 16;
+      24'b000000000000000001??????: s1t_nlzb = 17;
+      24'b0000000000000000001?????: s1t_nlzb = 18;
+      24'b00000000000000000001????: s1t_nlzb = 19;
+      24'b000000000000000000001???: s1t_nlzb = 20;
+      24'b0000000000000000000001??: s1t_nlzb = 21;
+      24'b00000000000000000000001?: s1t_nlzb = 22;
+      24'b000000000000000000000001: s1t_nlzb = 23;
+      24'b000000000000000000000000: s1t_nlzb =  0; // zero result
+    endcase
+
+
+  // side back shifters to normalize inputs
+  reg [23:0] s11o_fract24a;
+  reg  [4:0] s11o_shla;
+  reg [23:0] s11o_fract24b;
+  reg  [4:0] s11o_shlb;
+  // registering
+  always @(posedge clk) begin
+    s11o_fract24a <= fract24a_i;
+    s11o_shla     <= s1t_nlza;
+    s11o_fract24b <= fract24b_i;
+    s11o_shlb     <= s1t_nlzb;
+  end
+
+  // route ready through side back
+  reg s11o_ready;
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      s11o_ready <= 0;
+    else if(flush_i)
+      s11o_ready <= 0;
+    else if(adv_i)
+      s11o_ready <= start_i & (~s1t_ab_norm);
+  end // posedge clock
+
+
+  // left-shift the dividend and divisor
+  wire [23:0] s12t_fract24a_sh = s11o_fract24a << s11o_shla;
+  wire [23:0] s12t_fract24b_sh = s11o_fract24b << s11o_shlb;
+
+
   // stage #1 outputs
   //   input related
   reg s1o_inv, s1o_inf_i,
@@ -116,11 +202,8 @@ module pfpu32_mul
   reg        s1o_opc_0;
   reg        s1o_signc;
   reg [9:0]  s1o_exp10c;
-  reg [25:0] s1o_fract26_albl;
-  reg [25:0] s1o_fract26_albh;
-  reg [25:0] s1o_fract26_ahbl;
-  reg [25:0] s1o_fract26_ahbh;
- 
+  reg [31:0] s1o_fract32a;
+  reg [31:0] s1o_fract32b;
   //   registering
   always @(posedge clk) begin
     if(adv_i) begin
@@ -131,13 +214,13 @@ module pfpu32_mul
       s1o_qnan_i      <= qnan_i;
       s1o_anan_i_sign <= anan_sign_i;
         // computation related
-      s1o_opc_0  <= s1t_opc_0;
-      s1o_signc  <= signa_i ^ signb_i;
-      s1o_exp10c <= s1t_exp10c;
-      s1o_fract26_albl <= s1t_fract13_al * s1t_fract13_bl;
-      s1o_fract26_albh <= s1t_fract13_al * s1t_fract13_bh;
-      s1o_fract26_ahbl <= s1t_fract13_ah * s1t_fract13_bl;
-      s1o_fract26_ahbh <= s1t_fract13_ah * s1t_fract13_bh;
+      s1o_opc_0    <= s1t_opc_0;
+      s1o_signc    <= signa_i ^ signb_i;
+      s1o_exp10c   <= {10{!s1t_opc_0}} &
+                      ( s1t_ab_norm ? (exp10a_i + exp10b_i - 10'd127) :
+                                      (exp10a_i + exp10b_i - {5'd0,s11o_shla} - {5'd0,s11o_shlb} - 10'd127) );
+      s1o_fract32a <= {(s1t_ab_norm ? fract24a_i : s12t_fract24a_sh), 8'd0};
+      s1o_fract32b <= {(s1t_ab_norm ? fract24b_i : s12t_fract24b_sh), 8'd0};
     end // advance pipe
   end // posedge clock
 
@@ -149,133 +232,44 @@ module pfpu32_mul
     else if(flush_i)
       s1o_ready <= 0;
     else if(adv_i)
-      s1o_ready <= start_i;
+      s1o_ready <= s11o_ready | (start_i & s1t_ab_norm);
   end // posedge clock
 
 
-  /* Stage #2: multiplier end */
+  /* Stage #2: 1st part of multiplier */
 
-  wire  [47:0] s2t_fract48;
-  assign s2t_fract48 = {s1o_fract26_ahbh[23:0],  24'd0} +
-                       {10'd0, s1o_fract26_ahbl, 12'd0} +
-                       {10'd0, s1o_fract26_albh, 12'd0} +
-                       {24'd0,  s1o_fract26_albl[23:0]};
 
-   wire [9:0] s2t_carry10 = {9'd0,s2t_fract48[47]};
+  // computation related fractionals
+  //  insert leading zeros to signal unsigned values
+  //  for potential usage DSP blocks of a FPGA
+  wire [16:0] m1t_fract17_al = {1'b0, s1o_fract32a[15: 0]};
+  wire [16:0] m1t_fract17_ah = {1'b0, s1o_fract32a[31:16]};
+  wire [16:0] m1t_fract17_bl = {1'b0, s1o_fract32b[15: 0]};
+  wire [16:0] m1t_fract17_bh = {1'b0, s1o_fract32b[31:16]};
 
-  // rigt shift value
-  // and appropriatelly corrected exponent
-  wire s1o_exp10c_0 = !(|s1o_exp10c);
-  wire [9:0] s2t_shr_of_neg_exp = 11'h401 - {1'b0,s1o_exp10c}; // 1024-v+1
-  wire [9:0] s2t_exp10_p_carry = s1o_exp10c + s2t_carry10;
-  //...
-  wire [9:0] s2t_shrx;
-  wire [9:0] s2t_exp10rx;
-  assign {s2t_shrx,s2t_exp10rx} =
-      // zero result case
-    s1o_opc_0     ? {10'd0,10'd0} :
-      // negative exponent sum
-      //  (!) takes carry into account automatically
-    s1o_exp10c[9] ? {s2t_shr_of_neg_exp,10'd1} :
-      // zero exponent sum (denorm. result potentially)
-      //  (!) takes carry into account automatically
-    (!s1o_opc_0 & s1o_exp10c_0) ? 
-                    {10'd1,10'd1} :
-      // normal case at last
-                    {s2t_carry10,s2t_exp10_p_carry};
-  // max. right shift that makes sense i 26bits
-  //  i.e. [47] moves to sticky position: ([21])
-  // we use 6bits representation for shift value
-  // to be aligned with shift left one
-  wire [5:0] s2t_shr = (s2t_shrx > 10'd26) ? 6'd26 : s2t_shrx[5:0];
-
-  // number of leading zeros 
-  reg [5:0] s2t_nlz6;
-  always @(s2t_fract48) begin
-    casez(s2t_fract48)  // synopsys full_case parallel_case
-      48'b1???????????????????????????????????????????????: s2t_nlz6 =   0; // shift right case
-      48'b01??????????????????????????????????????????????: s2t_nlz6 =   0; // "1" is in place
-      48'b001?????????????????????????????????????????????: s2t_nlz6 =   1;
-      48'b0001????????????????????????????????????????????: s2t_nlz6 =   2;
-      48'b00001???????????????????????????????????????????: s2t_nlz6 =   3;
-      48'b000001??????????????????????????????????????????: s2t_nlz6 =   4;
-      48'b0000001?????????????????????????????????????????: s2t_nlz6 =   5;
-      48'b00000001????????????????????????????????????????: s2t_nlz6 =   6;
-      48'b000000001???????????????????????????????????????: s2t_nlz6 =   7;
-      48'b0000000001??????????????????????????????????????: s2t_nlz6 =   8;
-      48'b00000000001?????????????????????????????????????: s2t_nlz6 =   9;
-      48'b000000000001????????????????????????????????????: s2t_nlz6 =  10;
-      48'b0000000000001???????????????????????????????????: s2t_nlz6 =  11;
-      48'b00000000000001??????????????????????????????????: s2t_nlz6 =  12;
-      48'b000000000000001?????????????????????????????????: s2t_nlz6 =  13;
-      48'b0000000000000001????????????????????????????????: s2t_nlz6 =  14;
-      48'b00000000000000001???????????????????????????????: s2t_nlz6 =  15;
-      48'b000000000000000001??????????????????????????????: s2t_nlz6 =  16;
-      48'b0000000000000000001?????????????????????????????: s2t_nlz6 =  17;
-      48'b00000000000000000001????????????????????????????: s2t_nlz6 =  18;
-      48'b000000000000000000001???????????????????????????: s2t_nlz6 =  19;
-      48'b0000000000000000000001??????????????????????????: s2t_nlz6 =  20;
-      48'b00000000000000000000001?????????????????????????: s2t_nlz6 =  21;
-      48'b000000000000000000000001????????????????????????: s2t_nlz6 =  22;
-      48'b0000000000000000000000001???????????????????????: s2t_nlz6 =  23;
-      48'b00000000000000000000000001??????????????????????: s2t_nlz6 =  24;
-      48'b000000000000000000000000001?????????????????????: s2t_nlz6 =  25;
-      48'b0000000000000000000000000001????????????????????: s2t_nlz6 =  26;
-      48'b00000000000000000000000000001???????????????????: s2t_nlz6 =  27;
-      48'b000000000000000000000000000001??????????????????: s2t_nlz6 =  28;
-      48'b0000000000000000000000000000001?????????????????: s2t_nlz6 =  29;
-      48'b00000000000000000000000000000001????????????????: s2t_nlz6 =  30;
-      48'b000000000000000000000000000000001???????????????: s2t_nlz6 =  31;
-      48'b0000000000000000000000000000000001??????????????: s2t_nlz6 =  32;
-      48'b00000000000000000000000000000000001?????????????: s2t_nlz6 =  33;
-      48'b000000000000000000000000000000000001????????????: s2t_nlz6 =  34;
-      48'b0000000000000000000000000000000000001???????????: s2t_nlz6 =  35;
-      48'b00000000000000000000000000000000000001??????????: s2t_nlz6 =  36;
-      48'b000000000000000000000000000000000000001?????????: s2t_nlz6 =  37;
-      48'b0000000000000000000000000000000000000001????????: s2t_nlz6 =  38;
-      48'b00000000000000000000000000000000000000001???????: s2t_nlz6 =  39;
-      48'b000000000000000000000000000000000000000001??????: s2t_nlz6 =  40;
-      48'b0000000000000000000000000000000000000000001?????: s2t_nlz6 =  41;
-      48'b00000000000000000000000000000000000000000001????: s2t_nlz6 =  42;
-      48'b000000000000000000000000000000000000000000001???: s2t_nlz6 =  43;
-      48'b0000000000000000000000000000000000000000000001??: s2t_nlz6 =  44;
-      48'b00000000000000000000000000000000000000000000001?: s2t_nlz6 =  45;
-      48'b000000000000000000000000000000000000000000000001: s2t_nlz6 =  46;
-      48'b000000000000000000000000000000000000000000000000: s2t_nlz6 =   0; // zero result
-    endcase
-  end // always
-  //...
-  wire [5:0] s2t_nlz6_m1 = s2t_nlz6 - 6'd1;
-  wire [9:0] s2t_exp10c_mz = s1o_exp10c - {4'd0,s2t_nlz6};
-  wire [9:0] s2t_exp10c_m1 = s1o_exp10c - 10'd1;
-  // left shift amount and corrected exponent
-  // if (nlz != 0) it means that (carry == 0)
-  // so we can use exponent latched in previous state register
-  wire [9:0] s2t_shlx;
-  wire [9:0] s2t_exp10lx;
-  assign {s2t_shlx,s2t_exp10lx} =
-      // shift isn't needed (includes zero result)
-    (!(|s2t_nlz6))           ? {10'd0,s1o_exp10c} :
-      // normalization is possible
-    (s1o_exp10c >  s2t_nlz6) ? {{4'd0,s2t_nlz6},s2t_exp10c_mz} :
-      // denormalized cases
-    (s1o_exp10c == s2t_nlz6) ? {{4'd0,s2t_nlz6_m1},10'd1} :
-                               {s2t_exp10c_m1,10'd1};
-  // actual size of shift value is 6 bits
-  wire [5:0] s2t_shl = s2t_shlx[5:0];
-
+  // partial products: m1o==s2o
+  reg [33:0] m1o_fract34_albl;
+  reg [33:0] m1o_fract34_albh;
+  reg [33:0] m1o_fract34_ahbl;
+  reg [33:0] m1o_fract34_ahbh;
+  //   registering
+  always @(posedge clk) begin
+    if(adv_i) begin
+      m1o_fract34_albl <= m1t_fract17_al * m1t_fract17_bl;
+      m1o_fract34_albh <= m1t_fract17_al * m1t_fract17_bh;
+      m1o_fract34_ahbl <= m1t_fract17_ah * m1t_fract17_bl;
+      m1o_fract34_ahbh <= m1t_fract17_ah * m1t_fract17_bh;
+    end // advance pipe
+  end // posedge clock
 
   // stage #2 outputs
   //   input related
   reg s2o_inv, s2o_inf_i,
       s2o_snan_i, s2o_qnan_i, s2o_anan_i_sign;
   //   computation related
+  reg        s2o_opc_0;
   reg        s2o_signc;
-  reg [9:0]  s2o_exp10c;  
-  reg [47:0] s2o_fract48;
-  reg [5:0]  s2o_shr;
-  reg [5:0]  s2o_shl;
-
+  reg [9:0]  s2o_exp10c;
   //   registering
   always @(posedge clk) begin
     if(adv_i) begin
@@ -286,13 +280,10 @@ module pfpu32_mul
       s2o_qnan_i      <= s1o_qnan_i;
       s2o_anan_i_sign <= s1o_anan_i_sign;
         // computation related
-        // right shif has got priority
-      s2o_signc   <= s1o_signc;
-      s2o_exp10c  <= (|s2t_shr) ? s2t_exp10rx : s2t_exp10lx;
-      s2o_fract48 <= s2t_fract48;
-      s2o_shr     <= s2t_shr;
-      s2o_shl     <= s2t_shl;
-    end // advance
+      s2o_opc_0  <= s1o_opc_0;
+      s2o_signc  <= s1o_signc;
+      s2o_exp10c <= s1o_exp10c;
+    end // advance pipe
   end // posedge clock
 
   // ready is special case
@@ -307,96 +298,150 @@ module pfpu32_mul
   end // posedge clock
 
 
-  /* Stage #3: align */
+  /* Stage #3: 2nd part of multiplier */
 
-  // shift fractional
-  wire [47:0] s3t_fract48_sh;
-  assign s3t_fract48_sh =
-    (|s2o_shr) ? s2o_fract48 >> s2o_shr :
-                 s2o_fract48 << s2o_shl;
 
-  // sticky bit computation for right shift
-  // max. right shift that makes sense i 26bits
-  //  i.e. [47] moves to sticky position: ([21])
-  reg s3t_sticky_shr;
-  always @(s2o_shr or s2o_fract48) begin
-    case(s2o_shr)
-      6'd0   : s3t_sticky_shr = |s2o_fract48[21:0];
-      6'd1   : s3t_sticky_shr = |s2o_fract48[22:0];
-      6'd2   : s3t_sticky_shr = |s2o_fract48[23:0];
-      6'd3   : s3t_sticky_shr = |s2o_fract48[24:0];
-      6'd4   : s3t_sticky_shr = |s2o_fract48[25:0];
-      6'd5   : s3t_sticky_shr = |s2o_fract48[26:0];
-      6'd6   : s3t_sticky_shr = |s2o_fract48[27:0];
-      6'd7   : s3t_sticky_shr = |s2o_fract48[28:0];
-      6'd8   : s3t_sticky_shr = |s2o_fract48[29:0];
-      6'd9   : s3t_sticky_shr = |s2o_fract48[30:0];
-      6'd10  : s3t_sticky_shr = |s2o_fract48[31:0];
-      6'd11  : s3t_sticky_shr = |s2o_fract48[32:0];
-      6'd12  : s3t_sticky_shr = |s2o_fract48[33:0];
-      6'd13  : s3t_sticky_shr = |s2o_fract48[34:0];
-      6'd14  : s3t_sticky_shr = |s2o_fract48[35:0];
-      6'd15  : s3t_sticky_shr = |s2o_fract48[36:0];
-      6'd16  : s3t_sticky_shr = |s2o_fract48[37:0];
-      6'd17  : s3t_sticky_shr = |s2o_fract48[38:0];
-      6'd18  : s3t_sticky_shr = |s2o_fract48[39:0];
-      6'd19  : s3t_sticky_shr = |s2o_fract48[40:0];
-      6'd20  : s3t_sticky_shr = |s2o_fract48[41:0];
-      6'd21  : s3t_sticky_shr = |s2o_fract48[42:0];
-      6'd22  : s3t_sticky_shr = |s2o_fract48[43:0];
-      6'd23  : s3t_sticky_shr = |s2o_fract48[44:0];
-      6'd24  : s3t_sticky_shr = |s2o_fract48[45:0];
-      6'd25  : s3t_sticky_shr = |s2o_fract48[46:0];
-      default: s3t_sticky_shr = |s2o_fract48[47:0];
+  wire [63:0] m2t_fract64;
+  assign m2t_fract64 = {m1o_fract34_ahbh[31:0],  32'd0} +
+                       {14'd0, m1o_fract34_ahbl, 16'd0} +
+                       {14'd0, m1o_fract34_albh, 16'd0} +
+                       {32'd0,  m1o_fract34_albl[31:0]};
+
+  // significant part of product: m2o==s3o
+  reg [27:0] m2o_fract28;
+  //   registering
+  always @(posedge clk) begin
+    if(adv_i) begin
+      m2o_fract28 <= {m2t_fract64[63:37],|m2t_fract64[36:0]};
+    end // advance pipe
+  end // posedge clock
+
+  // left shift impossible as input operands are normalised: [1,2)
+
+  // rigt shift value
+  // and appropriatelly corrected exponent
+  wire s2o_exp10c_0 = !(|s2o_exp10c);
+  wire [9:0] s3t_shr_of_neg_exp = 11'h401 - {1'b0,s2o_exp10c}; // 1024-v+1
+  //...
+  wire [9:0] s3t_shrx;
+  wire [9:0] s3t_exp10rx;
+  assign {s3t_shrx,s3t_exp10rx} =
+      // zero result case
+    s2o_opc_0     ? {10'd0,10'd0} :
+      // negative exponent sum
+      //  (!) takes 1x.xx case into account automatically
+    s2o_exp10c[9] ? {s3t_shr_of_neg_exp,10'd1} :
+      // zero exponent sum (denorm. result potentially)
+      //  (!) takes 1x.xx case into account automatically
+    (!s2o_opc_0 & s2o_exp10c_0) ? 
+                    {10'd1,10'd1} :
+      // normal case at last
+      //  (!) 1x.xx case is processed in next stage
+                    {10'd0,s2o_exp10c};
+  // max. right shift that makes sense is 27bits
+  //  i.e. [27] moves to sticky position: [0]
+  wire [4:0] s3t_shr = (s3t_shrx > 10'd27) ? 5'd27 : s3t_shrx[4:0];
+
+  // stage #3 outputs
+  //   input related
+  reg s3o_inv, s3o_inf_i,
+      s3o_snan_i, s3o_qnan_i, s3o_anan_i_sign;
+  //   computation related
+  reg        s3o_signc;
+  reg [4:0]  s3o_shr;
+  reg [9:0]  s3o_exp10;
+  reg [9:0]  s3o_exp10p1; // +1 for align of possible 1x.xx fractional
+  //   registering
+  always @(posedge clk) begin
+    if(adv_i) begin
+        // input related
+      s3o_inv         <= s2o_inv;
+      s3o_inf_i       <= s2o_inf_i;
+      s3o_snan_i      <= s2o_snan_i;
+      s3o_qnan_i      <= s2o_qnan_i;
+      s3o_anan_i_sign <= s2o_anan_i_sign;
+        // computation related
+      s3o_signc   <= s2o_signc;
+      s3o_shr     <= s3t_shr;
+      s3o_exp10   <= s3t_exp10rx;
+      s3o_exp10p1 <= s2o_exp10c + 10'd1; // +1 for possible normalization of 2.xx fractional
+    end // advance pipe
+  end // posedge clock
+
+  // ready is special case
+  reg s3o_ready;
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      s3o_ready <= 0;
+    else if(flush_i)
+      s3o_ready <= 0;
+    else if(adv_i)
+      s3o_ready <= s2o_ready;
+  end // posedge clock
+
+
+  /* Stage #4: right align and output */
+
+
+  // final calculation of right shift value and intermediate exponent
+  wire [4:0] s4t_shr;
+  wire [9:0] s4t_exp10;
+  assign {s4t_shr,s4t_exp10} =
+    (|s3o_shr)      ? {s3o_shr,s3o_exp10} : // denormalized cases
+    m2o_fract28[27] ? {5'd1,s3o_exp10p1}  : // 1x.xx case
+                      {5'd0,s3o_exp10};     // regular
+
+  // align
+  wire [27:0] s4t_fract28sh = m2o_fract28 >> s4t_shr;
+
+  // update sticky  bit
+  reg s4r_sticky;
+  always @(m2o_fract28 or s4t_shr) begin
+    case (s4t_shr)
+      5'd0   : s4r_sticky = |m2o_fract28[ 1:0];
+      5'd1   : s4r_sticky = |m2o_fract28[ 2:0];
+      5'd2   : s4r_sticky = |m2o_fract28[ 3:0];
+      5'd3   : s4r_sticky = |m2o_fract28[ 4:0];
+      5'd4   : s4r_sticky = |m2o_fract28[ 5:0];
+      5'd5   : s4r_sticky = |m2o_fract28[ 6:0];
+      5'd6   : s4r_sticky = |m2o_fract28[ 7:0];
+      5'd7   : s4r_sticky = |m2o_fract28[ 8:0];
+      5'd8   : s4r_sticky = |m2o_fract28[ 9:0];
+      5'd9   : s4r_sticky = |m2o_fract28[10:0];
+      5'd10  : s4r_sticky = |m2o_fract28[11:0];
+      5'd11  : s4r_sticky = |m2o_fract28[12:0];
+      5'd12  : s4r_sticky = |m2o_fract28[13:0];
+      5'd13  : s4r_sticky = |m2o_fract28[14:0];
+      5'd14  : s4r_sticky = |m2o_fract28[15:0];
+      5'd15  : s4r_sticky = |m2o_fract28[16:0];
+      5'd16  : s4r_sticky = |m2o_fract28[17:0];
+      5'd17  : s4r_sticky = |m2o_fract28[18:0];
+      5'd18  : s4r_sticky = |m2o_fract28[19:0];
+      5'd19  : s4r_sticky = |m2o_fract28[20:0];
+      5'd20  : s4r_sticky = |m2o_fract28[21:0];
+      5'd21  : s4r_sticky = |m2o_fract28[22:0];
+      5'd22  : s4r_sticky = |m2o_fract28[23:0];
+      5'd23  : s4r_sticky = |m2o_fract28[24:0];
+      5'd24  : s4r_sticky = |m2o_fract28[25:0];
+      5'd25  : s4r_sticky = |m2o_fract28[26:0];
+      default: s4r_sticky = |m2o_fract28[27:0];
     endcase
   end // always
-
-  // sticky bit computation for left shift
-  reg s3t_sticky_shl;
-  always @(s2o_shl or s2o_fract48) begin
-    case(s2o_shl)
-      6'd0   : s3t_sticky_shl = |s2o_fract48[21:0];
-      6'd1   : s3t_sticky_shl = |s2o_fract48[20:0];
-      6'd2   : s3t_sticky_shl = |s2o_fract48[19:0];
-      6'd3   : s3t_sticky_shl = |s2o_fract48[18:0];
-      6'd4   : s3t_sticky_shl = |s2o_fract48[17:0];
-      6'd5   : s3t_sticky_shl = |s2o_fract48[16:0];
-      6'd6   : s3t_sticky_shl = |s2o_fract48[15:0];
-      6'd7   : s3t_sticky_shl = |s2o_fract48[14:0];
-      6'd8   : s3t_sticky_shl = |s2o_fract48[13:0];
-      6'd9   : s3t_sticky_shl = |s2o_fract48[12:0];
-      6'd10  : s3t_sticky_shl = |s2o_fract48[11:0];
-      6'd11  : s3t_sticky_shl = |s2o_fract48[10:0];
-      6'd12  : s3t_sticky_shl = |s2o_fract48[ 9:0];
-      6'd13  : s3t_sticky_shl = |s2o_fract48[ 8:0];
-      6'd14  : s3t_sticky_shl = |s2o_fract48[ 7:0];
-      6'd15  : s3t_sticky_shl = |s2o_fract48[ 6:0];
-      6'd16  : s3t_sticky_shl = |s2o_fract48[ 5:0];
-      6'd17  : s3t_sticky_shl = |s2o_fract48[ 4:0];
-      6'd18  : s3t_sticky_shl = |s2o_fract48[ 3:0];
-      6'd19  : s3t_sticky_shl = |s2o_fract48[ 2:0];
-      6'd20  : s3t_sticky_shl = |s2o_fract48[ 1:0];
-      6'd21  : s3t_sticky_shl =  s2o_fract48[   0];
-      default: s3t_sticky_shl = 0;
-    endcase
-  end // always
-
-  wire s3t_sticky = (|s2o_shr) ? s3t_sticky_shr : s3t_sticky_shl;
 
   // registering output
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      mul_inv_o       <= s2o_inv;
-      mul_inf_o       <= s2o_inf_i;
-      mul_snan_o      <= s2o_snan_i;
-      mul_qnan_o      <= s2o_qnan_i;
-      mul_anan_sign_o <= s2o_anan_i_sign;
+      mul_inv_o       <= s3o_inv;
+      mul_inf_o       <= s3o_inf_i;
+      mul_snan_o      <= s3o_snan_i;
+      mul_qnan_o      <= s3o_qnan_i;
+      mul_anan_sign_o <= s3o_anan_i_sign;
         // computation related
-      mul_sign_o    <= s2o_signc;
-      mul_exp10_o   <= s2o_exp10c;
-      mul_fract24_o <= s3t_fract48_sh[46:23];
-      mul_rs_o      <= {s3t_fract48_sh[22],s3t_sticky};
+      mul_sign_o    <= s3o_signc;
+      mul_exp10_o   <= s4t_exp10;
+      mul_fract24_o <= s4t_fract28sh[26:3];
+      mul_rs_o      <= {s4t_fract28sh[2],s4r_sticky};
     end // advance
   end // posedge clock
 
@@ -407,7 +452,7 @@ module pfpu32_mul
     else if(flush_i)
       mul_rdy_o <= 0;
     else if(adv_i)
-      mul_rdy_o <= s2o_ready;
+      mul_rdy_o <= s3o_ready;
   end // posedge clock
 
 endmodule // pfpu32_mul
