@@ -158,7 +158,7 @@ wire [23:0] in_fract24b = {(!in_opb_dn & !in_opb_0),in_fractb};
 // addition / substraction
 //   inputs & outputs
 wire the_sub = (op_arith == 3'd1);
-wire op_add = is_op_fpu & (!a_cmp) & ((op_arith == 3'd0) | the_sub);
+wire op_add = is_op_fpu & (~a_cmp) & ((op_arith == 3'd0) | the_sub);
 wire add_start = op_add & new_fpu_data;
 wire        add_rdy_o;       // add/sub is ready
 wire        add_sign_o;      // add/sub signum
@@ -203,10 +203,12 @@ pfpu32_addsub u_f32_addsub
   .add_anan_sign_o (add_anan_sign_o)  // add/sub signum for output nan
 );
 
-// multiplier
+// MUL/DIV combined pipeline
 //   inputs & outputs
-wire op_mul = is_op_fpu & (!a_cmp) & (op_arith == 3'd2);
-wire mul_start = op_mul & new_fpu_data;
+wire op_mul = is_op_fpu & (~a_cmp) & (op_arith == 3'd2);
+wire op_div = is_op_fpu & (~a_cmp) & (op_arith == 3'd3);
+wire mul_start = (op_mul | op_div) & new_fpu_data;
+// MUL/DIV common outputs
 wire        mul_rdy_o;       // mul is ready
 wire        mul_sign_o;      // mul signum
 wire  [9:0] mul_exp10_o;     // mul exponent
@@ -217,97 +219,59 @@ wire        mul_inf_o;       // mul infinity output reg
 wire        mul_snan_o;      // mul signaling NaN output reg
 wire        mul_qnan_o;      // mul quiet NaN output reg
 wire        mul_anan_sign_o; // mul signum for output nan
+// DIV additional outputs
+wire        div_op_o;        // operation is division
+wire        div_sign_rmnd_o; // signum or reminder for IEEE compliant rounding
+wire        div_dbz_o;       // division by zero flag
+wire        div_dbinf_o;     // division by infinity flag
 //   module istance
-pfpu32_mul u_f32_mul
+pfpu32_muldiv u_f32_muldiv
 (
   .clk         (clk),
   .rst         (rst),
   .flush_i     (flush_i),        // flushe pipe
   .adv_i       (padv_fpu_units), // advance pipe
   .start_i     (mul_start),
-  .signa_i     (in_signa),       // input 'a' related values
+  .is_div_i    (op_div),
+  // input 'a' related values
+  .signa_i     (in_signa),
   .exp10a_i    (in_exp10a),
   .fract24a_i  (in_fract24a),
   .infa_i      (in_infa),
   .zeroa_i     (in_opa_0),
   .dna_i       (in_opa_dn),    // 'a' is denormalized
-  .signb_i     (in_signb),       // input 'b' related values
+  // input 'b' related values
+  .signb_i     (in_signb),
   .exp10b_i    (in_exp10b),
   .fract24b_i  (in_fract24b),
   .infb_i      (in_infb),
   .zerob_i     (in_opb_0),
   .dnb_i       (in_opb_dn),    // 'a' is denormalized
-  .snan_i      (in_snan),        // 'a'/'b' related
+  // 'a'/'b' related
+  .snan_i      (in_snan),        
   .qnan_i      (in_qnan),
   .anan_sign_i (in_anan_sign),
-  .mul_rdy_o       (mul_rdy_o),       // mul is ready
-  .mul_sign_o      (mul_sign_o),      // mul signum
-  .mul_exp10_o     (mul_exp10_o),     // mul exponent
-  .mul_fract24_o   (mul_fract24_o),   // mul fractional
-  .mul_rs_o        (mul_rs_o),        // mul round & sticky bits
-  .mul_inv_o       (mul_inv_o),       // mul invalid operation flag
-  .mul_inf_o       (mul_inf_o),       // mul infinity output reg
-  .mul_snan_o      (mul_snan_o),      // mul signaling NaN output reg
-  .mul_qnan_o      (mul_qnan_o),      // mul quiet NaN output reg
-  .mul_anan_sign_o (mul_anan_sign_o)  // mul signum for output nan
-);
-
-// divisor
-//   inputs & outputs
-wire op_div = is_op_fpu & (!a_cmp) & (op_arith == 3'd3);
-wire div_start = op_div & new_fpu_data;
-wire        div_rdy_o;       // div is ready
-wire        div_sign_o;      // div signum
-wire  [9:0] div_exp10_o;     // div exponent
-wire [23:0] div_fract24_o;   // div fractional
-wire  [1:0] div_rs_o;        // div round & sticky bits
-wire        div_sign_rmnd_o; // signum or reminder for IEEE compliant rounding
-wire        div_inv_o;       // div invalid operation flag
-wire        div_inf_o;       // div infinity output reg
-wire        div_snan_o;      // div signaling NaN output reg
-wire        div_qnan_o;      // div quiet NaN output reg
-wire        div_anan_sign_o; // div signum for output nan
-wire        div_dbz_o;       // div division by zero flag
-wire        div_dbinf_o;     // div division by infinity
-//   module istance
-pfpu32_div u_f32_div
-(
-  .clk         (clk),
-  .rst         (rst),
-  .flush_i     (flush_i),        // flushe pipe
-  .adv_i       (padv_fpu_units), // advance pipe
-  .start_i     (div_start),
-  .signa_i     (in_signa),       // input 'a' related values
-  .exp10a_i    (in_exp10a),
-  .fract24a_i  (in_fract24a),
-  .infa_i      (in_infa),
-  .zeroa_i     (in_opa_0),
-  .signb_i     (in_signb),       // input 'b' related values
-  .exp10b_i    (in_exp10b),
-  .fract24b_i  (in_fract24b),
-  .infb_i      (in_infb),
-  .zerob_i     (in_opb_0),
-  .snan_i      (in_snan),        // 'a'/'b' related
-  .qnan_i      (in_qnan),
-  .anan_sign_i (in_anan_sign),
-  .div_rdy_o       (div_rdy_o),       // div is ready
-  .div_sign_o      (div_sign_o),      // div signum
-  .div_exp10_o     (div_exp10_o),     // div exponent
-  .div_fract24_o   (div_fract24_o),   // div fractional
-  .div_rs_o        (div_rs_o),        // div round & sticky bits
-  .div_sign_rmnd_o (div_sign_rmnd_o), // signum or reminder for IEEE compliant rounding
-  .div_inv_o       (div_inv_o),       // div invalid operation flag
-  .div_inf_o       (div_inf_o),       // div infinity output reg
-  .div_snan_o      (div_snan_o),      // div signaling NaN output reg
-  .div_qnan_o      (div_qnan_o),      // div quiet NaN output reg
-  .div_anan_sign_o (div_anan_sign_o), // div signum for output nan
-  .div_dbz_o       (div_dbz_o),       // div division by zero flag
-  .div_dbinf_o     (div_dbinf_o)      // div division by infinity
+  // MUL/DIV common outputs
+  .muldiv_rdy_o       (mul_rdy_o),       // mul is ready
+  .muldiv_sign_o      (mul_sign_o),      // mul signum
+  .muldiv_exp10_o     (mul_exp10_o),     // mul exponent
+  .muldiv_fract24_o   (mul_fract24_o),   // mul fractional
+  .muldiv_rs_o        (mul_rs_o),        // mul round & sticky bits
+  .muldiv_inv_o       (mul_inv_o),       // mul invalid operation flag
+  .muldiv_inf_o       (mul_inf_o),       // mul infinity output reg
+  .muldiv_snan_o      (mul_snan_o),      // mul signaling NaN output reg
+  .muldiv_qnan_o      (mul_qnan_o),      // mul quiet NaN output reg
+  .muldiv_anan_sign_o (mul_anan_sign_o), // mul signum for output nan
+  // DIV additional outputs
+  .div_op_o(div_op_o),                  // operation is division
+  .div_sign_rmnd_o(div_sign_rmnd_o),    // signum of reminder for IEEE compliant rounding
+  .div_dbz_o(div_dbz_o),                // division by zero flag
+  .div_dbinf_o(div_dbinf_o)             // division by infinity flag
 );
 
 // convertor
 //   i2f signals
-wire op_i2f_cnv = is_op_fpu & (!a_cmp) &
+wire op_i2f_cnv = is_op_fpu & (~a_cmp) &
                   (op_conv == 3'd4);
 wire i2f_start = op_i2f_cnv & new_fpu_data;
 wire        i2f_rdy_o;       // i2f is ready
@@ -331,7 +295,7 @@ pfpu32_i2f u_i2f_cnv
   .i2f_rs_o(i2f_rs_o)         // i2f round & sticky bits
 );
 //   f2i signals
-wire op_f2i_cnv = is_op_fpu & (!a_cmp) &
+wire op_f2i_cnv = is_op_fpu & (~a_cmp) &
                   (op_conv == 3'd5);
 wire f2i_start = op_f2i_cnv & new_fpu_data;
 wire        f2i_rdy_o;       // f2i is ready
@@ -401,7 +365,7 @@ pfpu32_rnd u_f32_rnd
   .add_snan_i      (add_snan_o),      // add/sub signaling NaN
   .add_qnan_i      (add_qnan_o),      // add/sub quiet NaN
   .add_anan_sign_i (add_anan_sign_o), // add/sub signum for output nan
-  // . from mul
+  // from mul
   .mul_rdy_i       (mul_rdy_o),       // mul is ready
   .mul_sign_i      (mul_sign_o),      // mul signum
   .mul_exp10_i     (mul_exp10_o),     // mul exponent
@@ -412,34 +376,24 @@ pfpu32_rnd u_f32_rnd
   .mul_snan_i      (mul_snan_o),      // mul signaling NaN
   .mul_qnan_i      (mul_qnan_o),      // mul quiet NaN
   .mul_anan_sign_i (mul_anan_sign_o), // mul signum for output nan
-  // . from div
-  .div_rdy_i       (div_rdy_o),       // div is ready
-  .div_sign_i      (div_sign_o),      // div signum
-  .div_exp10_i     (div_exp10_o),     // div exponent
-  .div_fract24_i   (div_fract24_o),   // div fractional
-  .div_rs_i        (div_rs_o),        // div round & sticky bits
-  .div_sign_rmnd_i (div_sign_rmnd_o), // signum or reminder for IEEE compliant rounding
-  .div_inv_i       (div_inv_o),       // div invalid operation flag
-  .div_inf_i       (div_inf_o),       // div infinity 
-  .div_snan_i      (div_snan_o),      // div signaling NaN
-  .div_qnan_i      (div_qnan_o),      // div quiet NaN 
-  .div_anan_sign_i (div_anan_sign_o), // div signum for output nan
-  .div_dbz_i       (div_dbz_o),       // div division by zero flag
-  .div_dbinf_i     (div_dbinf_o),     // div division by infinity
-  // . from i2f
+  .div_op_i        (div_op_o),         // MUL/DIV output is division
+  .div_sign_rmnd_i (div_sign_rmnd_o),  // signum or reminder for IEEE compliant rounding
+  .div_dbz_i       (div_dbz_o),        // division by zero flag
+  .div_dbinf_i     (div_dbinf_o),      // division by infinity flag
+  // from i2f
   .i2f_rdy_i       (i2f_rdy_o),       // i2f is ready
   .i2f_sign_i      (i2f_sign_o),      // i2f signum
   .i2f_exp10_i     (i2f_exp10_o),     // i2f exponent
   .i2f_fract24_i   (i2f_fract24_o),   // i2f fractional
   .i2f_rs_i        (i2f_rs_o),        // i2f round & sticky bits
-  // . from f2i
+  // from f2i
   .f2i_rdy_i       (f2i_rdy_o),       // f2i is ready
   .f2i_sign_i      (f2i_sign_o),      // f2i signum
   .f2i_int32_i     (f2i_int32_o),     // f2i i32 modulo
   .f2i_rs_i        (f2i_rs_o),        // f2i round & sticky bits
   .f2i_ovf_i       (f2i_ovf_o),       // f2i overflow flag
   .f2i_snan_i      (f2i_snan_o),      // f2i signaling NaN
-   // . from cmp
+   // from cmp
   .cmp_rdy_i       (cmp_ready),       // cmp is ready
   .cmp_res_i       (cmp_result),      // cmp result
   .cmp_inv_i       (cmp_inv),         // cmp invalid flag

@@ -1,35 +1,38 @@
 /////////////////////////////////////////////////////////////////////
-////                                                             ////
-////  pfpu32_rnd                                                 ////
-////  32-bit common rounding module for FPU                      ////
-////                                                             ////
-////  Author: Andrey Bacherov                                    ////
-////          avbacherov@opencores.org                           ////
-////                                                             ////
+//                                                                 //
+//    pfpu32_rnd                                                   //
+//    32-bit common rounding module for FPU                        //
+//                                                                 //
+//    This file is part of the mor1kx project                      //
+//    https://github.com/openrisc/mor1kx                           //
+//                                                                 //
+//    Author: Andrey Bacherov                                      //
+//            avbacherov@opencores.org                             //
+//                                                                 //
 /////////////////////////////////////////////////////////////////////
-////                                                             ////
-//// Copyright (C) 2014 Andrey Bacherov                          ////
-////                    avbacherov@opencores.org                 ////
-////                                                             ////
-//// This source file may be used and distributed without        ////
-//// restriction provided that this copyright statement is not   ////
-//// removed from the file and that any derivative work contains ////
-//// the original copyright notice and the associated disclaimer.////
-////                                                             ////
-////     THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY     ////
-//// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED   ////
-//// TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS   ////
-//// FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL THE AUTHOR      ////
-//// OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,         ////
-//// INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES    ////
-//// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE   ////
-//// GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR        ////
-//// BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF  ////
-//// LIABILITY, WHETHER IN  CONTRACT, STRICT LIABILITY, OR TORT  ////
-//// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT  ////
-//// OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE         ////
-//// POSSIBILITY OF SUCH DAMAGE.                                 ////
-////                                                             ////
+//                                                                 //
+//   Copyright (C) 2014 Andrey Bacherov                            //
+//                      avbacherov@opencores.org                   //
+//                                                                 //
+//   This source file may be used and distributed without          //
+//   restriction provided that this copyright statement is not     //
+//   removed from the file and that any derivative work contains   //
+//   the original copyright notice and the associated disclaimer.  //
+//                                                                 //
+//       THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY       //
+//   EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     //
+//   TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS     //
+//   FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL THE AUTHOR        //
+//   OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,           //
+//   INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES      //
+//   (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE     //
+//   GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR          //
+//   BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF    //
+//   LIABILITY, WHETHER IN  CONTRACT, STRICT LIABILITY, OR TORT    //
+//   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    //
+//   OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE           //
+//   POSSIBILITY OF SUCH DAMAGE.                                   //
+//                                                                 //
 /////////////////////////////////////////////////////////////////////
 
 `include "mor1kx-defines.v"
@@ -65,19 +68,10 @@ module pfpu32_rnd
   input        mul_qnan_i,      // mul quiet NaN input
   input        mul_anan_sign_i, // mul signum for output nan
   // input from div
-  input        div_rdy_i,       // div is ready
-  input        div_sign_i,      // div signum
-  input  [9:0] div_exp10_i,     // div exponent
-  input [23:0] div_fract24_i,   // div fractional
-  input  [1:0] div_rs_i,        // div round & sticky bits
+  input        div_op_i,        // MUL/DIV output is division
   input        div_sign_rmnd_i, // signum or reminder for IEEE compliant rounding
-  input        div_inv_i,       // div invalid operation flag
-  input        div_inf_i,       // div infinity input
-  input        div_snan_i,      // div signaling NaN input
-  input        div_qnan_i,      // div quiet NaN input
-  input        div_anan_sign_i, // div signum for output nan
-  input        div_dbz_i,       // div division by zero flag
-  input        div_dbinf_i,     // div division by infinity
+  input        div_dbz_i,       // division by zero flag
+  input        div_dbinf_i,     // division by infinity flag
   // input from i2f
   input        i2f_rdy_i,       // i2f is ready
   input        i2f_sign_i,      // i2f signum
@@ -108,6 +102,11 @@ module pfpu32_rnd
   localparam QNAN = 31'b1111111110000000000000000000000;
   localparam SNAN = 31'b1111111101111111111111111111111;
 
+  // Aliases to reflect combined MUL/DIV configuration
+  wire        div_rdy_i     = mul_rdy_i & div_op_i;
+  wire        div_sign_i    = mul_sign_i;
+  wire [23:0] div_fract24_i = mul_fract24_i;
+
   // rounding mode isn't require pipelinization
   wire rm_nearest = (rmode_i==2'b00);
   wire rm_to_zero = (rmode_i==2'b01);
@@ -128,17 +127,20 @@ module pfpu32_rnd
   wire [31:0] s1t_fract32;
   wire  [1:0] s1t_rs;
   wire        s1t_inv;
-  wire        s1t_inf;  
+  wire        s1t_inf;
   wire        s1t_snan;
   wire        s1t_qnan;
   wire        s1t_anan_sign;
 
   assign {s1t_sign,s1t_exp10,s1t_fract32,s1t_rs,s1t_inv,s1t_inf,s1t_snan,s1t_qnan,s1t_anan_sign} =
+    // from ADD/SUB
     add_rdy_i ? {add_sign_i,add_exp10_i,{8'd0,add_fract24_i},add_rs_i,add_inv_i,add_inf_i,add_snan_i,add_qnan_i,add_anan_sign_i} :
+    // from MUL/DIV
     mul_rdy_i ? {mul_sign_i,mul_exp10_i,{8'd0,mul_fract24_i},mul_rs_i,mul_inv_i,mul_inf_i,mul_snan_i,mul_qnan_i,mul_anan_sign_i} :
-    div_rdy_i ? {div_sign_i,div_exp10_i,{8'd0,div_fract24_i},div_rs_i,div_inv_i,div_inf_i,div_snan_i,div_qnan_i,div_anan_sign_i} :
+    // from convertors
     i2f_rdy_i ? {i2f_sign_i,i2f_exp10_i,{8'd0,i2f_fract24_i},i2f_rs_i,1'b0,1'b0,1'b0,1'b0,1'b0} :
     f2i_rdy_i ? {f2i_sign_i,10'd0,f2i_int32_i,f2i_rs_i,1'b0,1'b0,f2i_snan_i,1'b0,f2i_sign_i} :
+    // default is zero
                 {1'b0,10'd0,32'd0,2'd0,1'b0,1'b0,1'b0,1'b0,1'b0};
 
   wire s1t_g    = s1t_fract32[0];
@@ -157,8 +159,8 @@ module pfpu32_rnd
     ( ((rm_to_infp & (!div_sign_i)) | (rm_to_infm & div_sign_i)) &
       ((s1t_r & s1t_s) | ((!s1t_r) & s1t_s & (!div_sign_rmnd_i))) );
   wire s1t_div_rnd_dn = (!s1t_r) & s1t_s & div_sign_rmnd_i &
-    ( (rm_to_infp &   div_sign_i)  | 
-      (rm_to_infm & (!div_sign_i)) | 
+    ( (rm_to_infp &   div_sign_i)  |
+      (rm_to_infm & (!div_sign_i)) |
        rm_to_zero );
 
   // set resulting direction of rounding
@@ -169,7 +171,7 @@ module pfpu32_rnd
   wire s1t_set_rnd_dn = s1t_rnd_n_qtnt ? s1t_div_rnd_dn : 1'b0;
 
   // define value for rounding adder
-  wire [31:0] s1t_rnd_v32 = 
+  wire [31:0] s1t_rnd_v32 =
     s1t_set_rnd_up ? 32'd1        : // +1
     s1t_set_rnd_dn ? 32'hFFFFFFFF : // -1
                      32'd0;         // no rounding
@@ -181,7 +183,7 @@ module pfpu32_rnd
   reg [31:0] s1o_fract32;
   reg        s1o_lost;
   reg        s1o_inv;
-  reg        s1o_inf;  
+  reg        s1o_inf;
   reg        s1o_snan_i;
   reg        s1o_qnan_i;
   reg        s1o_anan_sign_i;
@@ -199,7 +201,7 @@ module pfpu32_rnd
       s1o_f2i     <= f2i_rdy_i;
       //...
       s1o_inv     <= s1t_inv;
-      s1o_inf     <= s1t_inf;      
+      s1o_inf     <= s1t_inf;
       s1o_snan_i  <= s1t_snan;
       s1o_qnan_i  <= s1t_qnan;
       s1o_anan_sign_i <= s1t_anan_sign;
