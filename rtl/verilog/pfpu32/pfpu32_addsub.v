@@ -53,17 +53,22 @@ module pfpu32_addsub
    input  [1:0]      rmode_i,  // rounding mode
    input             start_i,  // start add/sub
    input             is_sub_i, // 1: substruction, 0: addition
-   input             signa_i,  // input 'a' related values
+   // input 'a' related values
+   input             signa_i,
    input       [9:0] exp10a_i,
    input      [23:0] fract24a_i,
    input             infa_i,
-   input             signb_i,  // input 'b' related values
+   // input 'b' related values
+   input             signb_i,
    input       [9:0] exp10b_i,
    input      [23:0] fract24b_i,
    input             infb_i,
-   input             snan_i,   // 'a'/'b' related
+   // 'a'/'b' related
+   input             snan_i,
    input             qnan_i,
    input             anan_sign_i,
+   input             addsub_agtb_i,
+   // outputs
    output reg        add_rdy_o,       // add/sub is ready
    output reg        add_sign_o,      // add/sub signum
    output reg  [9:0] add_exp10_o,     // add/sub exponent
@@ -97,8 +102,7 @@ module pfpu32_addsub
 
     // select larger operand
     //  (substruction always peform (larger-smaller))  
-  wire s1t_agtb = (exp10a_i > exp10b_i) |
-    ((exp10a_i == exp10b_i) & (fract24a_i > fract24b_i));
+  wire s1t_agtb = addsub_agtb_i;
 
     // signums for calculation
   wire s1t_calc_signa = signa_i;

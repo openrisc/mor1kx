@@ -115,15 +115,15 @@ wire [7:0]  in_expa   = rfa_i[30:23];
 wire [22:0] in_fracta = rfa_i[22:0];
 //   detect infinity a
 wire in_expa_ff = &in_expa;
-wire in_infa = in_expa_ff & !(|in_fracta);
+wire in_infa    = in_expa_ff & (~(|in_fracta));
 //   signaling NaN: exponent is 8hff, [22] is zero,
 //                  rest of fract is non-zero
 //   quiet NaN: exponent is 8hff, [22] is 1
-wire in_snan_a = in_expa_ff & !in_fracta[22] & (|in_fracta[21:0]);
-wire in_qnan_a = in_expa_ff &  in_fracta[22];
+wire in_snan_a = in_expa_ff & (~in_fracta[22]) & (|in_fracta[21:0]);
+wire in_qnan_a = in_expa_ff &   in_fracta[22];
 //   denormalized/zero of a
-wire in_opa_dn = !(|in_expa) & !in_opa_0;
-wire in_opa_0  = !(|rfa_i[30:0]);
+wire in_opa_0  = ~(|rfa_i[30:0]);
+wire in_opa_dn = (~(|in_expa)) & (~in_opa_0);
 
 //   split input b
 wire        in_signb  = rfb_i[31];
@@ -131,13 +131,13 @@ wire [7:0]  in_expb   = rfb_i[30:23];
 wire [22:0] in_fractb = rfb_i[22:0];
 //   detect infinity b
 wire in_expb_ff = &in_expb;
-wire in_infb  = in_expb_ff & !(|in_fractb);
+wire in_infb    = in_expb_ff & (~(|in_fractb));
 //   detect NaNs in b
-wire in_snan_b = in_expb_ff & !in_fractb[22] & (|in_fractb[21:0]);
-wire in_qnan_b = in_expb_ff &  in_fractb[22];
+wire in_snan_b = in_expb_ff & (~in_fractb[22]) & (|in_fractb[21:0]);
+wire in_qnan_b = in_expb_ff &   in_fractb[22];
 //   denormalized/zero of a
-wire in_opb_dn = !(|in_expb) & !in_opb_0;
-wire in_opb_0 = !(|rfb_i[30:0]);
+wire in_opb_0  = ~(|rfb_i[30:0]);
+wire in_opb_dn = (~(|in_expb)) & (~in_opb_0);
 
 // detection of some exceptions
 //   a nan input -> qnan output
@@ -153,6 +153,44 @@ wire [9:0] in_exp10b = {2'd0,in_expb} + {9'd0,in_opb_dn};
 // restored fractionals
 wire [23:0] in_fract24a = {(!in_opa_dn & !in_opa_0),in_fracta};
 wire [23:0] in_fract24b = {(!in_opb_dn & !in_opb_0),in_fractb};
+
+
+// comparator
+//   inputs & outputs
+wire op_cmp = is_op_fpu & a_cmp &
+              new_fpu_data;
+wire addsub_agtb_o;
+wire cmp_result, cmp_ready,
+     cmp_inv, cmp_inf;
+//   module istance
+pfpu32_fcmp u_f32_cmp
+(
+  .fpu_op_is_comp_i(op_cmp),
+  .cmp_type_i(op_fpu),
+  // operand 'a' related inputs
+  .signa_i(in_signa),
+  .exp10a_i(in_exp10a),
+  .fract24a_i(in_fract24a),
+  .snana_i(in_snan_a),
+  .qnana_i(in_qnan_a),
+  .infa_i(in_infa),
+  .zeroa_i(in_opa_0),
+  // operand 'b' related inputs
+  .signb_i(in_signb),
+  .exp10b_i(in_exp10b),
+  .fract24b_i(in_fract24b),
+  .snanb_i(in_snan_b),
+  .qnanb_i(in_qnan_b),
+  .infb_i(in_infb),
+  .zerob_i(in_opb_0),
+  // support addsub
+  .addsub_agtb_o(addsub_agtb_o),
+  // outputs
+  .cmp_flag_o(cmp_result),
+  .inv_o(cmp_inv),
+  .inf_o(cmp_inf),
+  .ready_o(cmp_ready)
+);
 
 
 // addition / substraction
@@ -173,24 +211,29 @@ wire        add_anan_sign_o; // add/sub signum for output nan
 //   module istance
 pfpu32_addsub u_f32_addsub
 (
-  .clk(clk),
-  .rst(rst),
-  .flush_i     (flush_i),        // flushe pipe
-  .adv_i       (padv_fpu_units), // advance pipe
-  .rmode_i     (round_mode_i),   // rounding mode
-  .start_i     (add_start), 
-  .is_sub_i    (the_sub),        // 1: substruction, 0: addition
-  .signa_i     (in_signa),       // input 'a' related values
-  .exp10a_i    (in_exp10a),
-  .fract24a_i  (in_fract24a),
-  .infa_i      (in_infa),
-  .signb_i     (in_signb),       // input 'b' related values
-  .exp10b_i    (in_exp10b),
-  .fract24b_i  (in_fract24b),
-  .infb_i      (in_infb),
-  .snan_i      (in_snan),        // 'a'/'b' related
-  .qnan_i      (in_qnan),
-  .anan_sign_i (in_anan_sign),
+  .clk           (clk),
+  .rst           (rst),
+  .flush_i       (flush_i),        // flushe pipe
+  .adv_i         (padv_fpu_units), // advance pipe
+  .rmode_i       (round_mode_i),   // rounding mode
+  .start_i       (add_start), 
+  .is_sub_i      (the_sub),        // 1: substruction, 0: addition
+  // input 'a' related values
+  .signa_i       (in_signa),
+  .exp10a_i      (in_exp10a),
+  .fract24a_i    (in_fract24a),
+  .infa_i        (in_infa),
+  // input 'b' related values
+  .signb_i       (in_signb),
+  .exp10b_i      (in_exp10b),
+  .fract24b_i    (in_fract24b),
+  .infb_i        (in_infb),
+  // 'a'/'b' related
+  .snan_i        (in_snan),
+  .qnan_i        (in_qnan),
+  .anan_sign_i   (in_anan_sign),
+  .addsub_agtb_i (addsub_agtb_o),
+  // outputs
   .add_rdy_o       (add_rdy_o),       // add/sub is ready
   .add_sign_o      (add_sign_o),      // add/sub signum
   .add_exp10_o     (add_exp10_o),     // add/sub exponent
@@ -323,25 +366,6 @@ pfpu32_f2i u_f2i_cnv
   .f2i_rs_o    (f2i_rs_o),        // f2i round & sticky bits
   .f2i_ovf_o   (f2i_ovf_o),       // f2i overflow flag
   .f2i_snan_o  (f2i_snan_o)       // f2i signaling NaN output reg
-);
-
-// comparator
-//   inputs & outputs
-wire op_cmp = is_op_fpu & a_cmp &
-              new_fpu_data;
-wire cmp_result, cmp_ready,
-     cmp_inv, cmp_inf;
-//   module istance
-pfpu32_fcmp u_f32_cmp
-(
-  .fpu_op_is_comp_i(op_cmp),
-  .cmp_type_i(op_fpu),
-  .opa_i(rfa_i),
-  .opb_i(rfb_i),
-  .cmp_flag_o(cmp_result),
-  .inv_o(cmp_inv),
-  .inf_o(cmp_inf),
-  .ready_o(cmp_ready)
 );
 
 

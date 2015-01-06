@@ -47,51 +47,41 @@ module pfpu32_fcmp
 (
   input fpu_op_is_comp_i,
   input [`OR1K_FPUOP_WIDTH-1:0] cmp_type_i,
-  input [31:0] opa_i, opb_i,
+  // operand 'a' related inputs
+  input        signa_i,
+  input  [9:0] exp10a_i,
+  input [23:0] fract24a_i,
+  input        snana_i,
+  input        qnana_i,
+  input        infa_i,
+  input        zeroa_i,
+  // operand 'b' related inputs
+  input        signb_i,
+  input  [9:0] exp10b_i,
+  input [23:0] fract24b_i,
+  input        snanb_i,
+  input        qnanb_i,
+  input        infb_i,
+  input        zerob_i,
+  // support addsub
+  output addsub_agtb_o,
+  // outputs
   output cmp_flag_o, inv_o, inf_o, ready_o
 );
 
 ////////////////////////////////////////////////////////////////////////
 //
-// Aliases
-//
-wire signa = opa_i[31];
-wire signb = opb_i[31];
-wire [7:0] expa = opa_i[30:23];
-wire [7:0] expb = opb_i[30:23];
-wire [22:0] fracta = opa_i[22:0];
-wire [22:0] fractb = opb_i[22:0];
-
-
-////////////////////////////////////////////////////////////////////////
-//
 // Exception Logic
 //
-wire expa_ff = &expa;
-wire expb_ff = &expb;
 
-wire fracta_00 = !(|fracta);
-wire fractb_00 = !(|fractb);
-
-wire qnan_a =  fracta[22];
-wire snan_a = !fracta[22] & |fracta[21:0];
-wire qnan_b =  fractb[22];
-wire snan_b = !fractb[22] & |fractb[21:0];
-
-wire opa_inf = (expa_ff & fracta_00);
-wire opb_inf = (expb_ff & fractb_00);
-wire inf  = opa_inf | opb_inf;
-
-wire qnan = (expa_ff & qnan_a) | (expb_ff & qnan_b);
-wire snan = (expa_ff & snan_a) | (expb_ff & snan_b);
+wire qnan = qnana_i | qnanb_i;
+wire snan = snana_i | snanb_i;
 wire anan = qnan | snan;
 
-wire opa_zero = !(|expa) & fracta_00;
-wire opb_zero = !(|expb) & fractb_00;
 
 // Comparison invalid when sNaN in on an equal comparison,
 // or any NaN for any other comparison.
-wire inv_cmp = (snan & (cmp_type_i == `OR1K_FPCOP_SFEQ)) | 
+wire inv_cmp = (snan & (cmp_type_i == `OR1K_FPCOP_SFEQ)) |
                (anan & (cmp_type_i != `OR1K_FPCOP_SFEQ));
 
 
@@ -99,23 +89,23 @@ wire inv_cmp = (snan & (cmp_type_i == `OR1K_FPCOP_SFEQ)) |
 //
 // Comparison Logic
 //
-wire exp_eq = expa == expb;
-wire exp_gt = expa  > expb;
-wire exp_lt = expa  < expb;
+wire exp_gt = exp10a_i  > exp10b_i;
+wire exp_eq = exp10a_i == exp10b_i;
+wire exp_lt = (~exp_gt) & (~exp_eq); // exp10a_i  < exp10b_i;
 
-wire fract_eq = fracta == fractb;
-wire fract_gt = fracta  > fractb;
-wire fract_lt = fracta  < fractb;
+wire fract_gt = fract24a_i  > fract24b_i;
+wire fract_eq = fract24a_i == fract24b_i;
+wire fract_lt = (~fract_gt) & (~fract_eq); // fract24a_i  < fract24b_i;
 
-wire all_zero = opa_zero & opb_zero;
+wire all_zero = zeroa_i & zerob_i;
 
 reg altb, blta, aeqb;
 
-always @( qnan or snan or opa_inf or opb_inf or signa or signb or
+always @( qnan or snan or infa_i or infb_i or signa_i or signb_i or
           exp_eq or exp_gt or exp_lt or
           fract_eq or fract_gt or fract_lt or all_zero)
 
-  casez( {qnan, snan, opa_inf, opb_inf, signa, signb,
+  casez( {qnan, snan, infa_i, infb_i, signa_i, signb_i,
           exp_eq, exp_gt, exp_lt,
           fract_eq, fract_gt, fract_lt, all_zero})
     13'b1?_??_??_???_???_?: {blta, altb, aeqb} = 3'b000; // qnan
@@ -177,9 +167,12 @@ always @(altb or blta or aeqb or cmp_type_i)
 
 ////////////////////////////////////////////////////////////////////////
 // output (latching is perfommed on FPU top level)
+
+assign addsub_agtb_o = exp_gt | (exp_eq & fract_gt);
+
 assign cmp_flag_o = cmp_flag;
 assign inv_o      = inv_cmp;
-assign inf_o      = inf;
-assign ready_o = fpu_op_is_comp_i;
+assign inf_o      = infa_i | infb_i;
+assign ready_o    = fpu_op_is_comp_i;
 
 endmodule // pfpu32_fcmp
