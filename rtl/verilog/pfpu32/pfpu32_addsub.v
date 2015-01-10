@@ -44,6 +44,8 @@
 
 `include "mor1kx-defines.v"
 
+//`define NEW_F32_ADD
+
 module pfpu32_addsub
 (
    input             clk,
@@ -68,22 +70,23 @@ module pfpu32_addsub
    input             qnan_i,
    input             anan_sign_i,
    input             addsub_agtb_i,
+   input             addsub_aeqb_i,
    // outputs
-   output reg        add_rdy_o,       // add/sub is ready
-   output reg        add_sign_o,      // add/sub signum
-   output reg  [9:0] add_exp10_o,     // add/sub exponent
-   output reg [23:0] add_fract24_o,   // add/sub fractional
-   output reg  [1:0] add_rs_o,        // add/sub round & sticky bits
-   output reg        add_inv_o,       // add/sub invalid operation flag
-   output reg        add_inf_o,       // add/sub infinity output reg
-   output reg        add_snan_o,      // add/sub signaling NaN output reg
-   output reg        add_qnan_o,      // add/sub quiet NaN output reg
-   output reg        add_anan_sign_o  // add/sub signum for output nan
+   output reg        add_rdy_o,       // ready
+   output reg        add_sign_o,      // signum
+   output reg        add_sub_0_o,     // flag that actual substruction is performed and result is zero
+   output reg        add_shr_o,       // do right shift in align stage
+   output reg  [9:0] add_exp10shr_o,  // exponent for right shift align
+   output reg  [4:0] add_shl_o,       // do left shift in align stage
+   output reg  [9:0] add_exp10shl_o,  // exponent for left shift align
+   output reg  [9:0] add_exp10sh0_o,  // exponent for no shift in align
+   output reg [27:0] add_fract28_o,   // fractional with appended {r,s} bits
+   output reg        add_inv_o,       // invalid operation flag
+   output reg        add_inf_o,       // infinity output reg
+   output reg        add_snan_o,      // signaling NaN output reg
+   output reg        add_qnan_o,      // quiet NaN output reg
+   output reg        add_anan_sign_o  // signum for output nan
 );
-
-  // rounding mode isn't require pipelinization
-  wire rm_to_infm = (rmode_i==2'b11);
-
   /*
      Any stage's output is registered.
      Definitions:
@@ -101,7 +104,7 @@ module pfpu32_addsub
   wire s1t_inf_i = infa_i | infb_i;
 
     // select larger operand
-    //  (substruction always peform (larger-smaller))  
+    //  (substruction always peform (larger-smaller))
   wire s1t_agtb = addsub_agtb_i;
 
     // signums for calculation
@@ -120,8 +123,11 @@ module pfpu32_addsub
   wire s1t_sign_fsh;
   wire [25:0] s1t_fract26_fsh;
   assign {s1t_sign_fsh,s1t_fract26_fsh} = s1t_agtb ?
-    {s1t_calc_signb,{(fract24b_i & {24{!s1t_inf_i}}),2'd0}} :
-    {s1t_calc_signa,{(fract24a_i & {24{!s1t_inf_i}}),2'd0}};
+    {s1t_calc_signb,{(fract24b_i & {24{~s1t_inf_i}}),2'd0}} :
+    {s1t_calc_signa,{(fract24a_i & {24{~s1t_inf_i}}),2'd0}};
+
+    // signum of operation
+  wire s1t_op_sub = s1t_sign_nsh ^ s1t_sign_fsh;
 
 
     // shift amount
@@ -139,13 +145,14 @@ module pfpu32_addsub
   // stage #1 outputs
   reg s1o_inv, s1o_inf_i,
       s1o_snan_i, s1o_qnan_i, s1o_anan_i_sign;
-  reg        s1o_nsh_minus_shr; // perform (non_shifted - right_shifted)
-  reg        s1o_sign_nsh; // signum of non_shifted
+  reg        s1o_op_sub;      // perform (non_shifted - right_shifted)
+  reg        s1o_sign_nsh;    // signum of non_shifted
   reg [9:0]  s1o_exp10c;
   reg [23:0] s1o_fract24_nsh; // not shifted,
   reg [25:0] s1o_fract26_shr; // right shifted
+  reg        s1o_sub_0;
     // rounding support
-  reg s1o_sticky; 
+  reg s1o_sticky;
 
   always @(posedge clk) begin
     if(adv_i) begin
@@ -156,7 +163,7 @@ module pfpu32_addsub
       s1o_qnan_i      <= qnan_i;
       s1o_anan_i_sign <= anan_sign_i;
         // operation type for non-shifted and shifted parts
-      s1o_nsh_minus_shr <= s1t_sign_nsh ^ s1t_sign_fsh; // not equal
+      s1o_op_sub <= s1t_op_sub;
         //  signum of non_shifted
       s1o_sign_nsh <= s1t_sign_nsh;
         // exponent of result (estimation on the stage)
@@ -165,8 +172,10 @@ module pfpu32_addsub
       s1o_fract24_nsh <= s1t_fract24_nsh;
         // right shifted operand
       s1o_fract26_shr <= s1t_fract26_fsh >> s1t_shr;
+        // actual operation is substruction and the result is zero
+      s1o_sub_0  <= addsub_aeqb_i & s1t_op_sub;
         // detection of obvious precision lost
-        // (take into account the out of adder bits) 
+        // (take into account the out of adder bits)
       case(s1t_shr)
         5'd0, 5'd1, 5'd2 : s1o_sticky <= 1'b0; // two added zero bits
         5'd3 : s1o_sticky <= s1t_fract26_fsh[2];
@@ -212,9 +221,9 @@ module pfpu32_addsub
   /* Stage #2 */
 
     // add/sub of non-shifted and shifted operands
-  wire [27:0] s2t_diff28  = 
+  wire [27:0] s2t_diff28  =
            {1'b0,s1o_fract24_nsh,3'd0} - {1'b0,s1o_fract26_shr,s1o_sticky};
-  wire [26:0] s2t_fract27 = s1o_nsh_minus_shr ?
+  wire [26:0] s2t_fract27 = s1o_op_sub ?
                             s2t_diff28[27:1]:
                             ({1'b0,s1o_fract24_nsh,2'd0} + {1'b0,s1o_fract26_shr});
 
@@ -222,116 +231,77 @@ module pfpu32_addsub
       // one more right shift ?
   wire s2t_shr = s2t_fract27[26];
 
-  // stage #2 outputs
-    // input related
-  reg s2o_inv, s2o_inf_i,
-      s2o_snan_i, s2o_qnan_i, s2o_anan_i_sign;
-  reg s2o_calc_op_sub;
-     // computation related
-  reg        s2o_sign_nsh;
-  reg [9:0]  s2o_exp10c;
-  reg [25:0] s2o_fract26c;
-  reg        s2o_sticky;
-  reg [4:0]  s2o_nlz;
-
-  always @(posedge clk) begin
-    if(adv_i) begin
-        // input related
-      s2o_inv         <= s1o_inv;
-      s2o_inf_i       <= s1o_inf_i;
-      s2o_snan_i      <= s1o_snan_i;
-      s2o_qnan_i      <= s1o_qnan_i;
-      s2o_anan_i_sign <= s1o_anan_i_sign;
-      s2o_calc_op_sub <= s1o_nsh_minus_shr;
-         // computation related
-      s2o_sign_nsh <= s1o_sign_nsh;
-      s2o_exp10c   <= s2t_shr ? (s1o_exp10c + 10'd1) : s1o_exp10c;
-      s2o_fract26c <= s2t_shr ? s2t_fract27[26:1] : s2t_fract27[25:0];
-      s2o_sticky   <= (s2t_shr & s2t_fract27[0]) | s1o_sticky;
-        // for possible left shift
-        // [26] bit is right shift flag
-      casez(s2t_fract27)
-        27'b1??????????????????????????: s2o_nlz <=  0; // [26] bit: shift right
-        27'b01?????????????????????????: s2o_nlz <=  0; // 1 is in place
-        27'b001????????????????????????: s2o_nlz <=  1;
-        27'b0001???????????????????????: s2o_nlz <=  2;
-        27'b00001??????????????????????: s2o_nlz <=  3;
-        27'b000001?????????????????????: s2o_nlz <=  4;
-        27'b0000001????????????????????: s2o_nlz <=  5;
-        27'b00000001???????????????????: s2o_nlz <=  6;
-        27'b000000001??????????????????: s2o_nlz <=  7;
-        27'b0000000001?????????????????: s2o_nlz <=  8;
-        27'b00000000001????????????????: s2o_nlz <=  9;
-        27'b000000000001???????????????: s2o_nlz <= 10;
-        27'b0000000000001??????????????: s2o_nlz <= 11;
-        27'b00000000000001?????????????: s2o_nlz <= 12;
-        27'b000000000000001????????????: s2o_nlz <= 13;
-        27'b0000000000000001???????????: s2o_nlz <= 14;
-        27'b00000000000000001??????????: s2o_nlz <= 15;
-        27'b000000000000000001?????????: s2o_nlz <= 16;
-        27'b0000000000000000001????????: s2o_nlz <= 17;
-        27'b00000000000000000001???????: s2o_nlz <= 18;
-        27'b000000000000000000001??????: s2o_nlz <= 19;
-        27'b0000000000000000000001?????: s2o_nlz <= 20;
-        27'b00000000000000000000001????: s2o_nlz <= 21;
-        27'b000000000000000000000001???: s2o_nlz <= 22;
-        27'b0000000000000000000000001??: s2o_nlz <= 23;
-        27'b00000000000000000000000001?: s2o_nlz <= 24;
-        27'b000000000000000000000000001: s2o_nlz <= 25;
-        27'b000000000000000000000000000: s2o_nlz <=  0; // zero result
-      endcase
-    end // advance
-  end // posedge clock
-
-  // ready is special case
-  reg s2o_ready;
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      s2o_ready  <= 0;
-    else if(flush_i)
-      s2o_ready  <= 0;
-    else if(adv_i)
-      s2o_ready <= s1o_ready;
-  end // posedge clock
-
-
-  /* Stage #3: align */
+   // for possible left shift
+   // [26] bit is right shift flag
+   reg [4:0] s2t_nlz;
+   always @(s2t_fract27) begin
+     casez(s2t_fract27)
+       27'b1??????????????????????????: s2t_nlz <=  0; // [26] bit: shift right
+       27'b01?????????????????????????: s2t_nlz <=  0; // 1 is in place
+       27'b001????????????????????????: s2t_nlz <=  1;
+       27'b0001???????????????????????: s2t_nlz <=  2;
+       27'b00001??????????????????????: s2t_nlz <=  3;
+       27'b000001?????????????????????: s2t_nlz <=  4;
+       27'b0000001????????????????????: s2t_nlz <=  5;
+       27'b00000001???????????????????: s2t_nlz <=  6;
+       27'b000000001??????????????????: s2t_nlz <=  7;
+       27'b0000000001?????????????????: s2t_nlz <=  8;
+       27'b00000000001????????????????: s2t_nlz <=  9;
+       27'b000000000001???????????????: s2t_nlz <= 10;
+       27'b0000000000001??????????????: s2t_nlz <= 11;
+       27'b00000000000001?????????????: s2t_nlz <= 12;
+       27'b000000000000001????????????: s2t_nlz <= 13;
+       27'b0000000000000001???????????: s2t_nlz <= 14;
+       27'b00000000000000001??????????: s2t_nlz <= 15;
+       27'b000000000000000001?????????: s2t_nlz <= 16;
+       27'b0000000000000000001????????: s2t_nlz <= 17;
+       27'b00000000000000000001???????: s2t_nlz <= 18;
+       27'b000000000000000000001??????: s2t_nlz <= 19;
+       27'b0000000000000000000001?????: s2t_nlz <= 20;
+       27'b00000000000000000000001????: s2t_nlz <= 21;
+       27'b000000000000000000000001???: s2t_nlz <= 22;
+       27'b0000000000000000000000001??: s2t_nlz <= 23;
+       27'b00000000000000000000000001?: s2t_nlz <= 24;
+       27'b000000000000000000000000001: s2t_nlz <= 25;
+       27'b000000000000000000000000000: s2t_nlz <=  0; // zero result
+     endcase
+  end // always
 
   // left shift amount and corrected exponent
-  wire [4:0] s3t_nlz_m1 = (s2o_nlz - 5'd1);
-  wire [9:0] s3t_exp10c_m1 = s2o_exp10c - 10'd1;
-  wire [9:0] s3t_exp10c_mz = s2o_exp10c - {5'd0,s2o_nlz};
-  wire [4:0] s3t_shl;
-  wire [9:0] s3t_exp10c;
-  assign {s3t_shl,s3t_exp10c} =
+  wire [4:0] s2t_nlz_m1    = (s2t_nlz - 5'd1);
+  wire [9:0] s2t_exp10c_m1 = s1o_exp10c - 10'd1;
+  wire [9:0] s2t_exp10c_mz = s1o_exp10c - {5'd0,s2t_nlz};
+  wire [4:0] s2t_shl;
+  wire [9:0] s2t_exp10shl;
+  assign {s2t_shl,s2t_exp10shl} =
       // shift isn't needed or impossible
-    (!(|s2o_nlz) | (s2o_exp10c == 10'd1)) ?
-                              {5'd0,s2o_exp10c} :
+    (~(|s2t_nlz) | (s1o_exp10c == 10'd1)) ?
+                              {5'd0,s1o_exp10c} :
       // normalization is possible
-    (s2o_exp10c >  s2o_nlz) ? {s2o_nlz,s3t_exp10c_mz} :
+    (s1o_exp10c >  s2t_nlz) ? {s2t_nlz,s2t_exp10c_mz} :
       // denormalized cases
-    (s2o_exp10c == s2o_nlz) ? {s3t_nlz_m1,10'd1} :
-                              {s3t_exp10c_m1[4:0],10'd1};
+    (s1o_exp10c == s2t_nlz) ? {s2t_nlz_m1,10'd1} :
+                              {s2t_exp10c_m1[4:0],10'd1};
 
-  wire [25:0] s3t_fract26c = s2o_fract26c << s3t_shl;
-
-  wire s3t_zero = (!s2o_sticky) & (!(|s3t_fract26c));  
 
   // registering output
   always @(posedge clk) begin
     if(adv_i) begin
         // input related
-      add_inv_o       <= s2o_inv;
-      add_inf_o       <= s2o_inf_i;
-      add_snan_o      <= s2o_snan_i;
-      add_qnan_o      <= s2o_qnan_i;
-      add_anan_sign_o <= s2o_anan_i_sign;
+      add_inv_o       <= s1o_inv;
+      add_inf_o       <= s1o_inf_i;
+      add_snan_o      <= s1o_snan_i;
+      add_qnan_o      <= s1o_qnan_i;
+      add_anan_sign_o <= s1o_anan_i_sign;
         // computation related
-      add_sign_o    <= (s3t_zero & s2o_calc_op_sub) ? rm_to_infm :
-                                                      s2o_sign_nsh;
-      add_exp10_o   <= s3t_exp10c;
-      add_fract24_o <= s3t_fract26c[25:2];
-      add_rs_o      <= {s3t_fract26c[1], s3t_fract26c[0] | s2o_sticky};
+      add_sign_o      <= s1o_sign_nsh;
+      add_sub_0_o     <= s1o_sub_0;
+      add_shr_o       <= s2t_shr;
+      add_exp10shr_o  <= s1o_exp10c + 10'd1;
+      add_shl_o       <= s2t_shl;
+      add_exp10shl_o  <= s2t_exp10shl;
+      add_exp10sh0_o  <= s1o_exp10c;
+      add_fract28_o   <= {s2t_fract27,s1o_sticky};
     end // advance
   end // posedge clock
 
@@ -342,7 +312,7 @@ module pfpu32_addsub
     else if(flush_i)
       add_rdy_o <= 0;
     else if(adv_i)
-      add_rdy_o <= s2o_ready;
+      add_rdy_o <= s1o_ready;
   end // posedge clock
 
 endmodule // pfpu32_addsub

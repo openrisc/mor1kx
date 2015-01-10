@@ -67,9 +67,12 @@ module pfpu32_muldiv
    // MUL/DIV common outputs
    output reg        muldiv_rdy_o,       // ready
    output reg        muldiv_sign_o,      // signum
-   output reg  [9:0] muldiv_exp10_o,     // exponent
-   output reg [23:0] muldiv_fract24_o,   // fractional
-   output reg  [1:0] muldiv_rs_o,        // round & sticky bits
+   output reg  [4:0] muldiv_shr_o,       // do right shift in align stage
+   output reg  [9:0] muldiv_exp10shr_o,  // exponent for right shift align
+   output reg        muldiv_shl_o,       // do left shift in align stage
+   output reg  [9:0] muldiv_exp10shl_o,  // exponent for left shift align
+   output reg  [9:0] muldiv_exp10sh0_o,  // exponent for no shift in align
+   output reg [27:0] muldiv_fract28_o,   // fractional with appended {r,s} bits
    output reg        muldiv_inv_o,       // invalid operation flag
    output reg        muldiv_inf_o,       // infinity output reg
    output reg        muldiv_snan_o,      // signaling NaN output reg
@@ -454,7 +457,7 @@ module pfpu32_muldiv
   // max. right shift that makes sense is 27bits
   //  i.e. [27] moves to sticky position: [0]
   wire [4:0] s3t_shr = (s3t_shrx > 10'd27) ? 5'd27 : s3t_shrx[4:0];
-  wire s3t_is_shr = |s3t_shr;
+  wire s3t_is_shrx = |s3t_shrx;
 
 
   // 2nd stage of multiplier
@@ -464,6 +467,7 @@ module pfpu32_muldiv
                        {14'd0, s2o_fract34_albh, 16'd0} +
                        {32'd0,  s2o_fract34_albl[31:0]};
 
+  wire s3t_mul_carry = s3t_fract64[63]; // makes sense for MUL only
 
   /* Intermediate results of Goldshmidt's iterations */
 
@@ -549,8 +553,8 @@ module pfpu32_muldiv
                             {1'b0,10'd1};
 
   // check if quotient is denormalized
-  wire s3t_denorm = s3t_is_shr |
-                    ((~s3t_is_shr) & (~s3t_shlx) & s3t_nlz);
+  wire s3t_denorm = s3t_is_shrx |
+                    ((~s3t_is_shrx) & (~s3t_shlx) & s3t_nlz);
   // Select quotient for subsequent align and rounding
   // The rounded (_res_) quotient is used:
   //   - for normalized result
@@ -562,145 +566,41 @@ module pfpu32_muldiv
                                                  s2o_raw_qtnt26;
 
 
-  // stage #3 outputs
-  //   input related
-  reg s3o_inv, s3o_inf_i,
-      s3o_snan_i, s3o_qnan_i, s3o_anan_i_sign;
-  //   computation related
-  reg        s3o_signc;
-  reg [4:0]  s3o_shr;
-  reg [9:0]  s3o_exp10;
-  reg [9:0]  s3o_exp10p1; // +1 for align of possible 1x.xx fractional
-  reg        s3o_shl;
-  reg [9:0]  s3o_exp10l;
-  reg [27:0] s3o_fract28; // {product/quotient, sticky bit}
-  // DIV additional outputs
-  reg        s3o_div_op;
-  reg        s3o_sign_rmnd;
-  reg        s3o_dbz;
-  reg        s3o_dbinf;
-  //   registering
+  // output
   always @(posedge clk) begin
     if(adv_i | itr_last) begin
         // input related
-      s3o_inv         <= s2o_inv;
-      s3o_inf_i       <= s2o_inf_i;
-      s3o_snan_i      <= s2o_snan_i;
-      s3o_qnan_i      <= s2o_qnan_i;
-      s3o_anan_i_sign <= s2o_anan_i_sign;
+      muldiv_inv_o       <= s2o_inv;
+      muldiv_inf_o       <= s2o_inf_i;
+      muldiv_snan_o      <= s2o_snan_i;
+      muldiv_qnan_o      <= s2o_qnan_i;
+      muldiv_anan_sign_o <= s2o_anan_i_sign;
         // computation related
-      s3o_signc   <= s2o_signc;
-      s3o_shr     <= s3t_shr;
-      s3o_exp10   <= s3t_exp10rx;
-      s3o_exp10p1 <= s2o_exp10c + 10'd1; // +1 for possible normalization of 2.xx fractional
-      s3o_shl     <= s3t_shlx & (~s3t_is_shr) & itr_last; // shift right has got priority, makes sense for division only
-      s3o_exp10l  <= s3t_exp10lx;
-      s3o_fract28 <= itr_last ?
-                      {1'b0,s3t_qtnt26,~itr_qtnt_exact} :      // quotient
-                      {s3t_fract64[63:37],|s3t_fract64[36:0]}; // product
+      muldiv_sign_o     <= s2o_signc;
+      muldiv_shr_o      <= s3t_is_shrx ? s3t_shr : {4'd0,s3t_mul_carry};
+      muldiv_exp10shr_o <= s3t_is_shrx ? s3t_exp10rx : (s2o_exp10c + {9'd0,s3t_mul_carry});
+      muldiv_shl_o      <= s3t_shlx & itr_last; // makes sense for DIV only
+      muldiv_exp10shl_o <= s3t_exp10lx;
+      muldiv_exp10sh0_o <= s2o_exp10c;
+      muldiv_fract28_o  <= itr_last ?
+                           {1'b0,s3t_qtnt26,~itr_qtnt_exact} :      // quotient
+                           {s3t_fract64[63:37],|s3t_fract64[36:0]}; // product
         // DIV additional outputs
-      s3o_div_op    <= itr_last;
-      s3o_sign_rmnd <= itr_sign_rmnd;
-      s3o_dbz       <= s1o_dbz;
-      s3o_dbinf     <= s1o_dbinf;
+      div_op_o        <= itr_last;
+      div_sign_rmnd_o <= itr_sign_rmnd;
+      div_dbz_o       <= s1o_dbz;
+      div_dbinf_o     <= s1o_dbinf;
     end // advance pipe
   end // posedge clock
 
   // ready is special case
-  reg s3o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
-      s3o_ready <= 0;
+      muldiv_rdy_o <= 0;
     else if(flush_i)
-      s3o_ready <= 0;
+      muldiv_rdy_o <= 0;
     else if(adv_i | itr_last)
-      s3o_ready <= s2o_ready | itr_last;
-  end // posedge clock
-
-
-  /* Stage #4: right align and output */
-
-
-  // final calculation of right shift value and intermediate exponent
-  wire [4:0] s4t_shr;
-  wire [9:0] s4t_exp10;
-  assign {s4t_shr,s4t_exp10} =
-    (|s3o_shr)      ? {s3o_shr,s3o_exp10} : // denormalized cases
-    s3o_fract28[27] ? {5'd1,s3o_exp10p1}  : // 1x.xx case
-    s3o_shl         ? {5'd0,s3o_exp10l }  : // for left shift
-                      {5'd0,s3o_exp10};     // regular
-
-  // align
-  wire [27:0] s4t_fract28sh =
-    (|s4t_shr) ? (s3o_fract28 >> s4t_shr) :
-                 (s3o_fract28 << s3o_shl);
-
-  // update sticky  bit
-  reg s4r_sticky;
-  always @(s3o_fract28 or s4t_shr) begin
-    case (s4t_shr)
-      5'd0   : s4r_sticky = |s3o_fract28[ 1:0];
-      5'd1   : s4r_sticky = |s3o_fract28[ 2:0];
-      5'd2   : s4r_sticky = |s3o_fract28[ 3:0];
-      5'd3   : s4r_sticky = |s3o_fract28[ 4:0];
-      5'd4   : s4r_sticky = |s3o_fract28[ 5:0];
-      5'd5   : s4r_sticky = |s3o_fract28[ 6:0];
-      5'd6   : s4r_sticky = |s3o_fract28[ 7:0];
-      5'd7   : s4r_sticky = |s3o_fract28[ 8:0];
-      5'd8   : s4r_sticky = |s3o_fract28[ 9:0];
-      5'd9   : s4r_sticky = |s3o_fract28[10:0];
-      5'd10  : s4r_sticky = |s3o_fract28[11:0];
-      5'd11  : s4r_sticky = |s3o_fract28[12:0];
-      5'd12  : s4r_sticky = |s3o_fract28[13:0];
-      5'd13  : s4r_sticky = |s3o_fract28[14:0];
-      5'd14  : s4r_sticky = |s3o_fract28[15:0];
-      5'd15  : s4r_sticky = |s3o_fract28[16:0];
-      5'd16  : s4r_sticky = |s3o_fract28[17:0];
-      5'd17  : s4r_sticky = |s3o_fract28[18:0];
-      5'd18  : s4r_sticky = |s3o_fract28[19:0];
-      5'd19  : s4r_sticky = |s3o_fract28[20:0];
-      5'd20  : s4r_sticky = |s3o_fract28[21:0];
-      5'd21  : s4r_sticky = |s3o_fract28[22:0];
-      5'd22  : s4r_sticky = |s3o_fract28[23:0];
-      5'd23  : s4r_sticky = |s3o_fract28[24:0];
-      5'd24  : s4r_sticky = |s3o_fract28[25:0];
-      5'd25  : s4r_sticky = |s3o_fract28[26:0];
-      default: s4r_sticky = |s3o_fract28[27:0];
-    endcase
-  end // always
-
-  wire s4t_sticky = (|s4t_shr) ? s4r_sticky : (|s4t_fract28sh[1:0]);
-
-  // registering output
-  always @(posedge clk) begin
-    if(adv_i) begin
-        // input related
-      muldiv_inv_o       <= s3o_inv;
-      muldiv_inf_o       <= s3o_inf_i;
-      muldiv_snan_o      <= s3o_snan_i;
-      muldiv_qnan_o      <= s3o_qnan_i;
-      muldiv_anan_sign_o <= s3o_anan_i_sign;
-        // computation related
-      muldiv_sign_o    <= s3o_signc;
-      muldiv_exp10_o   <= s4t_exp10;
-      muldiv_fract24_o <= s4t_fract28sh[26:3];
-      muldiv_rs_o      <= {s4t_fract28sh[2],s4t_sticky};
-        // DIV additional outputs
-      div_op_o        <= s3o_div_op;
-      div_sign_rmnd_o <= s3o_sign_rmnd;
-      div_dbz_o       <= s3o_dbz;
-      div_dbinf_o     <= s3o_dbinf;
-    end // advance
-  end // posedge clock
-
-  // ready is special case
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      muldiv_rdy_o <= 0;
-    else if(flush_i)
-      muldiv_rdy_o <= 0;
-    else if(adv_i)
-      muldiv_rdy_o <= s3o_ready;
+      muldiv_rdy_o <= s2o_ready | itr_last;
   end // posedge clock
 
 endmodule // pfpu32_muldiv

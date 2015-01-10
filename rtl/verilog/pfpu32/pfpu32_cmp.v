@@ -65,6 +65,7 @@ module pfpu32_fcmp
   input        zerob_i,
   // support addsub
   output addsub_agtb_o,
+  output addsub_aeqb_o,
   // outputs
   output cmp_flag_o, inv_o, inf_o, ready_o
 );
@@ -169,6 +170,7 @@ always @(altb or blta or aeqb or cmp_type_i)
 // output (latching is perfommed on FPU top level)
 
 assign addsub_agtb_o = exp_gt | (exp_eq & fract_gt);
+assign addsub_aeqb_o = exp_eq & fract_eq;
 
 assign cmp_flag_o = cmp_flag;
 assign inv_o      = inv_cmp;
