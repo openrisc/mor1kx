@@ -461,41 +461,43 @@ module pfpu32_muldiv
 
 
   // 2nd stage of multiplier
-  wire [63:0] s3t_fract64;
-  assign s3t_fract64 = {s2o_fract34_ahbh[31:0],  32'd0} +
-                       {14'd0, s2o_fract34_ahbl, 16'd0} +
-                       {14'd0, s2o_fract34_albh, 16'd0} +
-                       {32'd0,  s2o_fract34_albl[31:0]};
+  wire [47:0] s3t_fract48;
+  assign s3t_fract48 = {s2o_fract34_ahbh[31:0],  16'd0} +
+                       {14'd0, s2o_fract34_ahbl} +
+                       {14'd0, s2o_fract34_albh} +
+                       {32'd0,  s2o_fract34_albl[31:16]};
 
-  wire s3t_mul_carry = s3t_fract64[63]; // makes sense for MUL only
+  wire s3t_mul_carry = s3t_fract48[47]; // makes sense for MUL only
 
   /* Intermediate results of Goldshmidt's iterations */
 
   // full product
-  reg [63:0] itr_fract64; // TODO: OPTIMIZATION?
+  reg [32:0] itr_mul33o; // output
+  reg        itr_mul33s; // sticky
   //   registering
   always @(posedge clk `OR_ASYNC_RST) begin
-    if(rst)
-      itr_fract64 <= 64'd0;
-    else if(itr_en)
-      itr_fract64 <= s3t_fract64;
+    if(rst) begin
+      itr_mul33o <= 33'd0;
+      itr_mul33s <=  1'b0;
+    end
+    else if(itr_en) begin
+      itr_mul33o <= s3t_fract48[47:15];
+      itr_mul33s <= (|s3t_fract48[14:0]) | (|s2o_fract34_albl[15:0]);
+    end
   end // posedge clock
-
-  // take into account the truncated part multiplier's output
-  wire itr_rs_fract64 = |itr_fract64[30:0];
 
   // Feedback from multiplier's output with various rounding tecqs.
   //   +2^(-n-2) in case of rounding 1.xxx qutient
-  assign itr_rndQ1xx = itr_rndQ &   itr_fract64[62];
+  assign itr_rndQ1xx = itr_rndQ &   itr_mul33o[31];
   //   +2^(-n-2) in case of rounding 0.1xx qutient
-  assign itr_rndQ01x = itr_rndQ & (~itr_fract64[62]);
+  assign itr_rndQ01x = itr_rndQ & (~itr_mul33o[31]);
   //   directed rounding of intermediate divisor 'D'
-  assign itr_rndDvsr = itr_rndD &   itr_rs_fract64;
+  assign itr_rndDvsr = itr_rndD &   itr_mul33s;
   //   rounding mask:
   wire [32:0] itr_rndM33 =
     {26'd0,itr_rndQ1xx,itr_rndQ01x,4'd0,itr_rndDvsr}; // bits [6],[5] ... [0]
   //   rounding
-  assign itr_qtnt33 = itr_fract64[63:31] + itr_rndM33;
+  assign itr_qtnt33 = itr_mul33o + itr_rndM33;
 
 
   // compute 2's complement or reminder (for sticky bit detection)
@@ -511,10 +513,9 @@ module pfpu32_muldiv
   //  - truncated reminder isn't zero
   wire itr_rmnd33_n0  = |itr_rmnd33;
   //  - rounded quotient is exact
-  wire itr_qtnt_exact = ~(itr_rmnd33_n0 | itr_rs_fract64);
+  wire itr_qtnt_exact = ~(itr_rmnd33_n0 | itr_mul33s);
   //  - signum of final reminder
-  wire itr_sign_rmnd  = itr_rmnd33[32] | ((~itr_rmnd33_n0) & itr_rs_fract64);
-
+  wire itr_sign_rmnd  = itr_rmnd33[32] | ((~itr_rmnd33_n0) & itr_mul33s);
 
 
   // Additionally store 26-bit of non-rounded (_raw_) and rounded (_res_) quotients.
@@ -529,7 +530,7 @@ module pfpu32_muldiv
       s2o_res_qtnt26 <= 26'd0;
     end
     else if(itr_rndQ) begin
-      s2o_raw_qtnt26 <= itr_fract64[62:37];
+      s2o_raw_qtnt26 <= itr_mul33o[31:6];
       s2o_res_qtnt26 <= itr_mul32a[31:6];
     end
   end
@@ -584,7 +585,7 @@ module pfpu32_muldiv
       muldiv_exp10sh0_o <= s2o_exp10c;
       muldiv_fract28_o  <= itr_last ?
                            {1'b0,s3t_qtnt26,~itr_qtnt_exact} :      // quotient
-                           {s3t_fract64[63:37],|s3t_fract64[36:0]}; // product
+                           {s3t_fract48[47:21],|s3t_fract48[20:0]}; // product
         // DIV additional outputs
       div_op_o        <= itr_last;
       div_sign_rmnd_o <= itr_sign_rmnd;
