@@ -85,8 +85,7 @@ module mor1kx
     parameter FEATURE_CUST7		= "NONE",
     parameter FEATURE_CUST8		= "NONE",
 
-    parameter FEATURE_FPU               = "NONE", // ENABLED|NONE: actual for cappuccino pipeline only
-    parameter FEATURE_PIPELINED_FPU     = "NONE", // ENABLED|NONE: default is "NONE", makes sence only if FPU enabled
+    parameter FEATURE_FPU     = "NONE", // ENABLED|NONE: actual for cappuccino pipeline only
     
     parameter OPTION_SHIFTER		= "BARREL",
 
@@ -503,7 +502,6 @@ module mor1kx
 	     .FEATURE_FFL1(FEATURE_FFL1),
 	     .FEATURE_ATOMIC(FEATURE_ATOMIC),
 	     .FEATURE_FPU(FEATURE_FPU), // mor1kx_cpu instance
-	     .FEATURE_PIPELINED_FPU(FEATURE_PIPELINED_FPU), // mor1kx_cpu instance
 	     .FEATURE_CUST1(FEATURE_CUST1),
 	     .FEATURE_CUST2(FEATURE_CUST2),
 	     .FEATURE_CUST3(FEATURE_CUST3),

@@ -42,9 +42,7 @@ module mor1kx_execute_alu
     parameter FEATURE_CUST7 = "NONE",
     parameter FEATURE_CUST8 = "NONE",
 
-    parameter FEATURE_FPU           = "NONE", // ENABLED|NONE
-    parameter FEATURE_PIPELINED_FPU = "NONE", // ENABLED|NONE: default is "NONE", makes sence only if FPU enabled
-
+    parameter FEATURE_FPU    = "NONE", // ENABLED|NONE
     parameter OPTION_SHIFTER = "BARREL",
 
     // Pipeline specific internal parameters
@@ -505,59 +503,34 @@ endgenerate
   wire fpu_cmp_valid;
   generate
     /* verilator lint_off WIDTH */
-    if (FEATURE_FPU=="ENABLED") begin : fpu_enabled_in_execute_alu
+    if (FEATURE_FPU=="ENABLED") begin
     /* verilator lint_on WIDTH */
-      /* verilator lint_off WIDTH */
-      if (FEATURE_PIPELINED_FPU=="ENABLED") begin : pfpu_enabled_in_execute_alu
-      /* verilator lint_on WIDTH */
-         /* pipelined fpu */
-          // some glue logic
-        assign is_op_fpu = op_fpu_i[`OR1K_FPUOP_WIDTH-1];
-        assign fpu_op_is_comp = is_op_fpu & op_fpu_i[3];
-          // instance
-        pfpu32_top u_pfpu32
-        (
-          .clk(clk),
-          .rst(rst),
-          .flush_i(pipeline_flush_i),
-          .padv_decode_i(padv_decode_i),
-          .padv_execute_i(padv_execute_i),
-          .op_fpu_i(op_fpu_i),
-          .round_mode_i(fpu_round_mode_i),
-          .rfa_i(rfa_i),
-          .rfb_i(rfb_i),
-          .fpu_result_o(fpu_result),
-          .fpu_valid_o(fpu_valid),
-          .fpu_cmp_flag_o(fpu_cmp_flag),
-          .fpu_cmp_valid_o(fpu_cmp_valid),
-          .fpcsr_o(fpcsr_o)
-        );
-      end
-      else begin // non-pipelined
-        /* non pipelined fpu */
-        mor1kx_fpu_top u_fpu32
-        (
-          .clk(clk),
-          .rst(rst),
-          .decode_valid_i(decode_valid_i),
-          .op_fpu_i(op_fpu_i),
-          .fpu_round_mode_i(fpu_round_mode_i),
-          .rfa_i(rfa_i),
-          .rfb_i(rfb_i),
-          .is_op_fpu_o(is_op_fpu),
-          .fpu_valid_o(fpu_valid),
-          .fpu_result_o(fpu_result),
-          .fpcsr_o(fpcsr_o),
-          .fpu_cmp_flag_o(fpu_cmp_flag),
-          .fpu_op_is_comp_o(fpu_op_is_comp),
-         .fpu_cmp_valid_o(fpu_cmp_valid)
-        );
-      end // pipelined/ not pipelined fpu 
-         /* for any kind of fpu*/
+      // some glue logic
+      assign is_op_fpu = op_fpu_i[`OR1K_FPUOP_WIDTH-1];
+      assign fpu_op_is_comp = is_op_fpu & op_fpu_i[3];
+      // instance
+      pfpu32_top u_pfpu32
+      (
+        .clk(clk),
+        .rst(rst),
+        .flush_i(pipeline_flush_i),
+        .padv_decode_i(padv_decode_i),
+        .padv_execute_i(padv_execute_i),
+        .op_fpu_i(op_fpu_i),
+        .round_mode_i(fpu_round_mode_i),
+        .rfa_i(rfa_i),
+        .rfb_i(rfb_i),
+        .fpu_result_o(fpu_result),
+        .fpu_valid_o(fpu_valid),
+        .fpu_cmp_flag_o(fpu_cmp_flag),
+        .fpu_cmp_valid_o(fpu_cmp_valid),
+        .fpcsr_o(fpcsr_o)
+      );
+      // flag to update FPCSR
       assign fpcsr_set_o = fpu_valid;
      end
      /* verilator lint_off WIDTH */
-     else if (FEATURE_FPU=="NONE") begin : fpu_none_in_execute_alu
+     else if (FEATURE_FPU=="NONE") begin
      /* verilator lint_on WIDTH */
        assign is_op_fpu  = 0;
        assign fpu_valid  = 1; // no block for alu
@@ -569,8 +542,9 @@ endgenerate
        //always @(posedge clk) fpu_cmp_flag <= 0;
        assign fpu_cmp_flag = 0;
      end
-     else begin : fpu_undef_in_execute_alu
-         // Incorrect configuration option
+     else 
+     begin
+       // Incorrect configuration option
        initial begin
          $display("%m: Error - chosen FPU implementation (%s) not available",
                      FEATURE_FPU);
