@@ -252,6 +252,10 @@ endgenerate
    assign spr_bus_dat_o = spr_bus_ack & !spr_bus_ack_r ? spr_bus_dat :
 			  spr_bus_dat_r;
 
+   localparam TLB_IDLE		 	= 2'd0;
+   localparam TLB_GET_PTE_POINTER	= 2'd1;
+   localparam TLB_GET_PTE		= 2'd2;
+   localparam TLB_READ			= 2'd3;
 
 generate /* verilator lint_off WIDTH */
 if (FEATURE_IMMU_HW_TLB_RELOAD == "ENABLED") begin
@@ -275,10 +279,6 @@ if (FEATURE_IMMU_HW_TLB_RELOAD == "ENABLED") begin
    // 1 | x | 1 =  1  |  1
 
 
-   localparam TLB_IDLE		 	= 2'd0;
-   localparam TLB_GET_PTE_POINTER	= 2'd1;
-   localparam TLB_GET_PTE		= 2'd2;
-   localparam TLB_READ			= 2'd3;
 
    reg [1:0] tlb_reload_state = TLB_IDLE;
    wire      do_reload;
