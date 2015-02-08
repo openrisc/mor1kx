@@ -245,6 +245,10 @@ endgenerate
 			  dtlb_trans_spr_cs_r ? dtlb_trans_dout[spr_way_idx_r] :
 			  dmmucr_spr_cs_r ? dmmucr : 0;
 
+   localparam TLB_IDLE		 	= 2'd0;
+   localparam TLB_GET_PTE_POINTER	= 2'd1;
+   localparam TLB_GET_PTE		= 2'd2;
+   localparam TLB_READ			= 2'd3;
 
 generate /* verilator lint_off WIDTH */
 if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
@@ -267,10 +271,6 @@ if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
    // x | 1 | 1  =  1  |  1  |  1  |  1
 
 
-   localparam TLB_IDLE		 	= 2'd0;
-   localparam TLB_GET_PTE_POINTER	= 2'd1;
-   localparam TLB_GET_PTE		= 2'd2;
-   localparam TLB_READ			= 2'd3;
 
    reg [1:0] tlb_reload_state = TLB_IDLE;
    wire      do_reload;
