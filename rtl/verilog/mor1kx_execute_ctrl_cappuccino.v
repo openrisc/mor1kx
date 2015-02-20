@@ -54,10 +54,14 @@ module mor1kx_execute_ctrl_cappuccino
     input [1:0] 			  lsu_length_i,
     input 				  lsu_zext_i,
 
+    input                                 op_msync_i,
+
     input 				  op_mfspr_i,
     input 				  op_mtspr_i,
     input 				  alu_valid_i,
     input 				  lsu_valid_i,
+
+    input 				  msync_stall_i,
 
     input 				  op_jr_i,
     input 				  op_jal_i,
@@ -112,6 +116,8 @@ module mor1kx_execute_ctrl_cappuccino
     output reg [1:0] 			  ctrl_lsu_length_o,
     output reg 				  ctrl_lsu_zext_o,
 
+    output reg                            ctrl_op_msync_o,
+
     output reg 				  ctrl_op_mfspr_o,
     output reg 				  ctrl_op_mtspr_o,
 
@@ -139,6 +145,7 @@ module mor1kx_execute_ctrl_cappuccino
    // LSU or MTSPR/MFSPR can stall from ctrl stage
    assign ctrl_stall = (ctrl_op_lsu_load_o | ctrl_op_lsu_store_o) &
 		       !lsu_valid_i |
+                       ctrl_op_msync_o & msync_stall_i |
 		       ctrl_op_mfspr_o & !ctrl_mfspr_ack_i |
 		       ctrl_op_mtspr_o & !ctrl_mtspr_ack_i;
    assign ctrl_valid_o = !ctrl_stall;
@@ -269,6 +276,14 @@ endgenerate
        ctrl_op_rfe_o <= op_rfe_i;
      else if (pipeline_flush_i)
        ctrl_op_rfe_o <= 0;
+
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       ctrl_op_msync_o <= 0;
+     else if (padv_i)
+       ctrl_op_msync_o <= op_msync_i;
+     else if (pipeline_flush_i)
+       ctrl_op_msync_o <= 0;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin

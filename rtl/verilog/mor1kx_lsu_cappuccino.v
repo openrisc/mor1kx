@@ -56,6 +56,7 @@ module mor1kx_lsu_cappuccino
     input 			      ctrl_op_lsu_load_i,
     input 			      ctrl_op_lsu_store_i,
     input 			      ctrl_op_lsu_atomic_i,
+    input                             ctrl_op_msync_i,
     input [1:0] 		      ctrl_lsu_length_i,
     input 			      ctrl_lsu_zext_i,
 
@@ -78,6 +79,9 @@ module mor1kx_lsu_cappuccino
     // Atomic operation flag set/clear logic
     output 			      atomic_flag_set_o,
     output 			      atomic_flag_clear_o,
+
+    // stall signal for msync logic
+    output                            msync_stall_o,
 
     // SPR interface
     input [15:0] 		      spr_bus_addr_i,
@@ -241,6 +245,8 @@ module mor1kx_lsu_cappuccino
 
    assign lsu_except_dpagefault_o = except_dpagefault & !pipeline_flush_i;
 
+   // Stall until the store buffer is empty
+   assign msync_stall_o = ctrl_op_msync_i & (state == WRITE);
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)

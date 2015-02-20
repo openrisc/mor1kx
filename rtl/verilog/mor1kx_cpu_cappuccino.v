@@ -73,7 +73,7 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_EXT = "NONE",
     parameter FEATURE_CMOV = "NONE",
     parameter FEATURE_FFL1 = "NONE",
-    parameter FEATURE_MSYNC = "NONE",
+    parameter FEATURE_MSYNC = "ENABLED",
     parameter FEATURE_PSYNC = "NONE",
     parameter FEATURE_CSYNC = "NONE",
 
@@ -171,194 +171,198 @@ module mor1kx_cpu_cappuccino
    // Beginning of automatic wires (for undeclared instantiated-module outputs)
    wire [OPTION_OPERAND_WIDTH-1:0] adder_result_o;// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire [OPTION_OPERAND_WIDTH-1:0] alu_result_o;// From mor1kx_execute_alu of mor1kx_execute_alu.v
-   wire			alu_valid_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
-   wire			atomic_flag_clear_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire			atomic_flag_set_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire			branch_mispredict_o;	// From mor1kx_branch_prediction of mor1kx_branch_prediction.v
-   wire			carry_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
-   wire			carry_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire                 alu_valid_o;            // From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire                 atomic_flag_clear_o;    // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire                 atomic_flag_set_o;      // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire                 branch_mispredict_o;    // From mor1kx_branch_prediction of mor1kx_branch_prediction.v
+   wire                 carry_clear_o;          // From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire                 carry_set_o;            // From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_alu_result_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc_o;// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			ctrl_branch_exception_o;// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			ctrl_bubble_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			ctrl_carry_clear_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_carry_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			ctrl_carry_set_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire [OPTION_OPERAND_WIDTH-1:0] ctrl_epcr_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			ctrl_except_align_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_except_dbus_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_except_dpagefault_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_except_dtlb_miss_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_except_ibus_align_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_except_ibus_err_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_except_illegal_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_except_ipagefault_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_except_itlb_miss_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_except_syscall_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_except_trap_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_flag_clear_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_flag_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			ctrl_flag_set_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_branch_exception_o;// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 ctrl_bubble_o;          // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 ctrl_carry_clear_o;     // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_carry_o;           // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 ctrl_carry_set_o;       // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire [OPTION_OPERAND_WIDTH-1:0] ctrl_epcr_o; // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 ctrl_except_align_o;    // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_except_dbus_o;     // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_except_dpagefault_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_except_dtlb_miss_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_except_ibus_align_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_except_ibus_err_o; // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_except_illegal_o;  // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_except_ipagefault_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_except_itlb_miss_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_except_syscall_o;  // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_except_trap_o;     // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_flag_clear_o;      // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_flag_o;            // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 ctrl_flag_set_o;        // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] ctrl_lsu_adr_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire [1:0]		ctrl_lsu_length_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_lsu_zext_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_mfspr_ack_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			ctrl_mtspr_ack_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			ctrl_op_lsu_atomic_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_op_lsu_load_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_op_lsu_store_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_op_mfspr_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_op_mtspr_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_op_mul_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_op_rfe_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_overflow_clear_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_overflow_set_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_rf_wb_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire [OPTION_OPERAND_WIDTH-1:0] ctrl_rfb_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire [1:0]           ctrl_lsu_length_o;      // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_lsu_zext_o;        // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_mfspr_ack_o;       // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 ctrl_mtspr_ack_o;       // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 ctrl_op_lsu_atomic_o;   // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_op_lsu_load_o;     // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_op_lsu_store_o;    // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_op_mfspr_o;        // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_op_msync_o;        // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_op_mtspr_o;        // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_op_mul_o;          // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_op_rfe_o;          // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_overflow_clear_o;  // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_overflow_set_o;    // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 ctrl_rf_wb_o;           // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire [OPTION_OPERAND_WIDTH-1:0] ctrl_rfb_o;  // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] ctrl_rfd_adr_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			ctrl_valid_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			decode_adder_do_carry_o;// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_adder_do_sub_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_branch_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 ctrl_valid_o;           // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 decode_adder_do_carry_o;// From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_adder_do_sub_o;  // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_branch_o;        // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] decode_branch_target_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			decode_bubble_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			decode_except_ibus_err_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
-   wire			decode_except_illegal_o;// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_except_ipagefault_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
-   wire			decode_except_itlb_miss_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
-   wire			decode_except_syscall_o;// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_except_trap_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire [`OR1K_IMM_WIDTH-1:0] decode_imm16_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_bubble_o;        // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 decode_except_ibus_err_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire                 decode_except_illegal_o;// From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_except_ipagefault_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire                 decode_except_itlb_miss_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire                 decode_except_syscall_o;// From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_except_trap_o;   // From mor1kx_decode of mor1kx_decode.v
+   wire [`OR1K_IMM_WIDTH-1:0] decode_imm16_o;   // From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] decode_immediate_o;// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_immediate_sel_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire [9:0]		decode_immjbr_upper_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire [1:0]		decode_lsu_length_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_lsu_zext_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_add_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_alu_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_bf_o;		// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_bnf_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_branch_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_brcond_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_div_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_div_signed_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_div_unsigned_o;// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_ffl1_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_jal_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_jbr_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_jr_o;		// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_lsu_atomic_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_lsu_load_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_lsu_store_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_mfspr_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_movhi_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_mtspr_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_mul_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_mul_signed_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_mul_unsigned_o;// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_rfe_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_setflag_o;	// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_shift_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_immediate_sel_o; // From mor1kx_decode of mor1kx_decode.v
+   wire [9:0]           decode_immjbr_upper_o;  // From mor1kx_decode of mor1kx_decode.v
+   wire [1:0]           decode_lsu_length_o;    // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_lsu_zext_o;      // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_add_o;        // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_alu_o;        // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_bf_o;         // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_bnf_o;        // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_branch_o;     // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_brcond_o;     // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_div_o;        // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_div_signed_o; // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_div_unsigned_o;// From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_ffl1_o;       // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_jal_o;        // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_jbr_o;        // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_jr_o;         // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_lsu_atomic_o; // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_lsu_load_o;   // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_lsu_store_o;  // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_mfspr_o;      // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_movhi_o;      // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_msync_o;      // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_mtspr_o;      // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_mul_o;        // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_mul_signed_o; // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_mul_unsigned_o;// From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_rfe_o;        // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_setflag_o;    // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_shift_o;      // From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_ALU_OPC_WIDTH-1:0] decode_opc_alu_o;// From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_ALU_OPC_WIDTH-1:0] decode_opc_alu_secondary_o;// From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_OPCODE_WIDTH-1:0] decode_opc_insn_o;// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_rf_wb_o;		// From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_rf_wb_o;         // From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfa_adr_o;// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] decode_rfa_o;// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfb_adr_o;// From mor1kx_decode of mor1kx_decode.v
    wire [OPTION_OPERAND_WIDTH-1:0] decode_rfb_o;// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] decode_rfd_adr_o;// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_valid_o;		// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			doing_rfe_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			du_restart_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 decode_valid_o;         // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 doing_rfe_o;            // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 du_restart_o;           // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_o;// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			execute_adder_do_carry_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_adder_do_sub_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_bubble_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_except_ibus_align_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_except_ibus_err_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_except_illegal_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_except_ipagefault_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_except_itlb_miss_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_except_syscall_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_except_trap_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire [`OR1K_IMM_WIDTH-1:0] execute_imm16_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_adder_do_carry_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_adder_do_sub_o; // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_bubble_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_except_ibus_align_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_except_ibus_err_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_except_illegal_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_except_ipagefault_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_except_itlb_miss_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_except_syscall_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_except_trap_o;  // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire [`OR1K_IMM_WIDTH-1:0] execute_imm16_o;  // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] execute_immediate_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_immediate_sel_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire [9:0]		execute_immjbr_upper_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_immediate_sel_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire [9:0]           execute_immjbr_upper_o; // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] execute_jal_result_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire [1:0]		execute_lsu_length_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_lsu_zext_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire [1:0]           execute_lsu_length_o;   // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_lsu_zext_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] execute_mispredict_target_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_add_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_alu_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_branch_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_brcond_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_div_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_div_signed_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_div_unsigned_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_ffl1_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_jal_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_jbr_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_jr_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_lsu_atomic_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_lsu_load_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_lsu_store_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_mfspr_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_movhi_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_mtspr_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_mul_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_mul_signed_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_mul_unsigned_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_rfe_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_setflag_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_op_shift_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_add_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_alu_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_branch_o;    // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_brcond_o;    // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_div_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_div_signed_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_div_unsigned_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_ffl1_o;      // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_jal_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_jbr_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_jr_o;        // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_lsu_atomic_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_lsu_load_o;  // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_lsu_store_o; // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_mfspr_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_movhi_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_msync_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_mtspr_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_mul_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_mul_signed_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_mul_unsigned_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_rfe_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_setflag_o;   // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_shift_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [`OR1K_ALU_OPC_WIDTH-1:0] execute_opc_alu_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [`OR1K_ALU_OPC_WIDTH-1:0] execute_opc_alu_secondary_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [`OR1K_OPCODE_WIDTH-1:0] execute_opc_insn_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_predicted_flag_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_rf_wb_o;	// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_predicted_flag_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_rf_wb_o;        // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] execute_rfa_o;// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] execute_rfb_o;// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] execute_rfd_adr_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
-   wire			execute_valid_o;	// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
-   wire			fetch_exception_taken_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
-   wire			fetch_rf_adr_valid_o;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire                 execute_valid_o;        // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 fetch_exception_taken_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire                 fetch_rf_adr_valid_o;   // From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa_adr_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_o;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
-   wire			fetch_valid_o;		// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
-   wire			flag_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
-   wire			flag_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
-   wire			lsu_except_align_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire			lsu_except_dbus_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire			lsu_except_dpagefault_o;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire			lsu_except_dtlb_miss_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire                 fetch_valid_o;          // From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire                 flag_clear_o;           // From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire                 flag_set_o;             // From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire                 lsu_except_align_o;     // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire                 lsu_except_dbus_o;      // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire                 lsu_except_dpagefault_o;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire                 lsu_except_dtlb_miss_o; // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] lsu_result_o;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire			lsu_valid_o;		// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 lsu_valid_o;            // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o; // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 msync_stall_o;          // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] mul_result_o;// From mor1kx_execute_alu of mor1kx_execute_alu.v
-   wire			overflow_clear_o;	// From mor1kx_execute_alu of mor1kx_execute_alu.v
-   wire			overflow_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
-   wire			padv_ctrl_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			padv_decode_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			padv_execute_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			padv_fetch_o;		// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			pipeline_flush_o;	// From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
-   wire			predicted_flag_o;	// From mor1kx_branch_prediction of mor1kx_branch_prediction.v
-   wire [OPTION_OPERAND_WIDTH-1:0] rf_result_o;	// From mor1kx_wb_mux_cappuccino of mor1kx_wb_mux_cappuccino.v
-   wire			spr_bus_ack_dc_i;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire			spr_bus_ack_dmmu_i;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire			spr_bus_ack_ic_i;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
-   wire			spr_bus_ack_immu_i;	// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire                 overflow_clear_o;       // From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire                 overflow_set_o;         // From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire                 padv_ctrl_o;            // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 padv_decode_o;          // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 padv_execute_o;         // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 padv_fetch_o;           // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 pipeline_flush_o;       // From mor1kx_ctrl_cappuccino of mor1kx_ctrl_cappuccino.v
+   wire                 predicted_flag_o;       // From mor1kx_branch_prediction of mor1kx_branch_prediction.v
+   wire [OPTION_OPERAND_WIDTH-1:0] rf_result_o; // From mor1kx_wb_mux_cappuccino of mor1kx_wb_mux_cappuccino.v
+   wire                 spr_bus_ack_dc_i;       // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire                 spr_bus_ack_dmmu_i;     // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire                 spr_bus_ack_ic_i;       // From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire                 spr_bus_ack_immu_i;     // From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_dc_i;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_dmmu_i;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_ic_i;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_immu_i;// From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
-   wire			spr_gpr_ack_o;		// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
+   wire                 spr_gpr_ack_o;          // From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] spr_gpr_dat_o;// From mor1kx_rf_cappuccino of mor1kx_rf_cappuccino.v
    wire [OPTION_OPERAND_WIDTH-1:0] store_buffer_epcr_o;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire			store_buffer_err_o;	// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
-   wire			wb_rf_wb_o;		// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
+   wire                 store_buffer_err_o;     // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
+   wire                 wb_rf_wb_o;             // From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    wire [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd_adr_o;// From mor1kx_execute_ctrl_cappuccino of mor1kx_execute_ctrl_cappuccino.v
    // End of automatics
 
@@ -407,49 +411,49 @@ module mor1kx_cpu_cappuccino
      mor1kx_fetch_cappuccino
      (/*AUTOINST*/
       // Outputs
-      .spr_bus_dat_ic_o			(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .spr_bus_ack_ic_o			(spr_bus_ack_ic_i),	 // Templated
-      .spr_bus_dat_immu_o		(spr_bus_dat_immu_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .spr_bus_ack_immu_o		(spr_bus_ack_immu_i),	 // Templated
-      .ibus_req_o			(ibus_req_o),
-      .ibus_adr_o			(ibus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
-      .ibus_burst_o			(ibus_burst_o),
-      .pc_decode_o			(pc_fetch_to_decode),	 // Templated
-      .decode_insn_o			(insn_fetch_to_decode),	 // Templated
-      .fetch_valid_o			(fetch_valid_o),
-      .fetch_rfa_adr_o			(fetch_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .fetch_rfb_adr_o			(fetch_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .fetch_rf_adr_valid_o		(fetch_rf_adr_valid_o),
-      .decode_except_ibus_err_o		(decode_except_ibus_err_o),
-      .decode_except_itlb_miss_o	(decode_except_itlb_miss_o),
-      .decode_except_ipagefault_o	(decode_except_ipagefault_o),
-      .fetch_exception_taken_o		(fetch_exception_taken_o),
+      .spr_bus_dat_ic_o                 (spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .spr_bus_ack_ic_o                 (spr_bus_ack_ic_i),      // Templated
+      .spr_bus_dat_immu_o               (spr_bus_dat_immu_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .spr_bus_ack_immu_o               (spr_bus_ack_immu_i),    // Templated
+      .ibus_req_o                       (ibus_req_o),
+      .ibus_adr_o                       (ibus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
+      .ibus_burst_o                     (ibus_burst_o),
+      .pc_decode_o                      (pc_fetch_to_decode),    // Templated
+      .decode_insn_o                    (insn_fetch_to_decode),  // Templated
+      .fetch_valid_o                    (fetch_valid_o),
+      .fetch_rfa_adr_o                  (fetch_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .fetch_rfb_adr_o                  (fetch_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .fetch_rf_adr_valid_o             (fetch_rf_adr_valid_o),
+      .decode_except_ibus_err_o         (decode_except_ibus_err_o),
+      .decode_except_itlb_miss_o        (decode_except_itlb_miss_o),
+      .decode_except_ipagefault_o       (decode_except_ipagefault_o),
+      .fetch_exception_taken_o          (fetch_exception_taken_o),
       // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .spr_bus_addr_i			(spr_bus_addr_o[15:0]),	 // Templated
-      .spr_bus_we_i			(spr_bus_we_o),		 // Templated
-      .spr_bus_stb_i			(spr_bus_stb_o),	 // Templated
-      .spr_bus_dat_i			(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .ic_enable			(spr_sr_o[`OR1K_SPR_SR_ICE]), // Templated
-      .immu_enable_i			(spr_sr_o[`OR1K_SPR_SR_IME]), // Templated
-      .supervisor_mode_i		(spr_sr_o[`OR1K_SPR_SR_SM]), // Templated
-      .ibus_err_i			(ibus_err_i),
-      .ibus_ack_i			(ibus_ack_i),
-      .ibus_dat_i			(ibus_dat_i[`OR1K_INSN_WIDTH-1:0]),
-      .padv_i				(padv_fetch_o),		 // Templated
-      .padv_ctrl_i			(padv_ctrl_o),		 // Templated
-      .decode_branch_i			(decode_branch_o),	 // Templated
-      .decode_branch_target_i		(decode_branch_target_o), // Templated
-      .ctrl_branch_exception_i		(ctrl_branch_exception_o), // Templated
-      .ctrl_branch_except_pc_i		(ctrl_branch_except_pc_o), // Templated
-      .du_restart_i			(du_restart_o),		 // Templated
-      .du_restart_pc_i			(du_restart_pc_o),	 // Templated
-      .decode_op_brcond_i		(decode_op_brcond_o),	 // Templated
-      .branch_mispredict_i		(branch_mispredict_o),	 // Templated
-      .execute_mispredict_target_i	(execute_mispredict_target_o), // Templated
-      .pipeline_flush_i			(pipeline_flush_o),	 // Templated
-      .doing_rfe_i			(doing_rfe_o));		 // Templated
+      .clk                              (clk),
+      .rst                              (rst),
+      .spr_bus_addr_i                   (spr_bus_addr_o[15:0]),  // Templated
+      .spr_bus_we_i                     (spr_bus_we_o),          // Templated
+      .spr_bus_stb_i                    (spr_bus_stb_o),         // Templated
+      .spr_bus_dat_i                    (spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .ic_enable                        (spr_sr_o[`OR1K_SPR_SR_ICE]), // Templated
+      .immu_enable_i                    (spr_sr_o[`OR1K_SPR_SR_IME]), // Templated
+      .supervisor_mode_i                (spr_sr_o[`OR1K_SPR_SR_SM]), // Templated
+      .ibus_err_i                       (ibus_err_i),
+      .ibus_ack_i                       (ibus_ack_i),
+      .ibus_dat_i                       (ibus_dat_i[`OR1K_INSN_WIDTH-1:0]),
+      .padv_i                           (padv_fetch_o),          // Templated
+      .padv_ctrl_i                      (padv_ctrl_o),           // Templated
+      .decode_branch_i                  (decode_branch_o),       // Templated
+      .decode_branch_target_i           (decode_branch_target_o), // Templated
+      .ctrl_branch_exception_i          (ctrl_branch_exception_o), // Templated
+      .ctrl_branch_except_pc_i          (ctrl_branch_except_pc_o), // Templated
+      .du_restart_i                     (du_restart_o),          // Templated
+      .du_restart_pc_i                  (du_restart_pc_o),       // Templated
+      .decode_op_brcond_i               (decode_op_brcond_o),    // Templated
+      .branch_mispredict_i              (branch_mispredict_o),   // Templated
+      .execute_mispredict_target_i      (execute_mispredict_target_o), // Templated
+      .pipeline_flush_i                 (pipeline_flush_o),      // Templated
+      .doing_rfe_i                      (doing_rfe_o));           // Templated
 
    /* mor1kx_decode AUTO_TEMPLATE (
     .decode_insn_i			(insn_fetch_to_decode),
@@ -487,53 +491,54 @@ module mor1kx_cpu_cappuccino
      mor1kx_decode
      (/*AUTOINST*/
       // Outputs
-      .decode_opc_alu_o			(decode_opc_alu_o[`OR1K_ALU_OPC_WIDTH-1:0]),
-      .decode_opc_alu_secondary_o	(decode_opc_alu_secondary_o[`OR1K_ALU_OPC_WIDTH-1:0]),
-      .decode_imm16_o			(decode_imm16_o[`OR1K_IMM_WIDTH-1:0]),
-      .decode_immediate_o		(decode_immediate_o[OPTION_OPERAND_WIDTH-1:0]),
-      .decode_immediate_sel_o		(decode_immediate_sel_o),
-      .decode_immjbr_upper_o		(decode_immjbr_upper_o[9:0]),
-      .decode_rfd_adr_o			(decode_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .decode_rfa_adr_o			(decode_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .decode_rfb_adr_o			(decode_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .decode_rf_wb_o			(decode_rf_wb_o),
-      .decode_op_jbr_o			(decode_op_jbr_o),
-      .decode_op_jr_o			(decode_op_jr_o),
-      .decode_op_jal_o			(decode_op_jal_o),
-      .decode_op_bf_o			(decode_op_bf_o),
-      .decode_op_bnf_o			(decode_op_bnf_o),
-      .decode_op_brcond_o		(decode_op_brcond_o),
-      .decode_op_branch_o		(decode_op_branch_o),
-      .decode_op_alu_o			(decode_op_alu_o),
-      .decode_op_lsu_load_o		(decode_op_lsu_load_o),
-      .decode_op_lsu_store_o		(decode_op_lsu_store_o),
-      .decode_op_lsu_atomic_o		(decode_op_lsu_atomic_o),
-      .decode_lsu_length_o		(decode_lsu_length_o[1:0]),
-      .decode_lsu_zext_o		(decode_lsu_zext_o),
-      .decode_op_mfspr_o		(decode_op_mfspr_o),
-      .decode_op_mtspr_o		(decode_op_mtspr_o),
-      .decode_op_rfe_o			(decode_op_rfe_o),
-      .decode_op_setflag_o		(decode_op_setflag_o),
-      .decode_op_add_o			(decode_op_add_o),
-      .decode_op_mul_o			(decode_op_mul_o),
-      .decode_op_mul_signed_o		(decode_op_mul_signed_o),
-      .decode_op_mul_unsigned_o		(decode_op_mul_unsigned_o),
-      .decode_op_div_o			(decode_op_div_o),
-      .decode_op_div_signed_o		(decode_op_div_signed_o),
-      .decode_op_div_unsigned_o		(decode_op_div_unsigned_o),
-      .decode_op_shift_o		(decode_op_shift_o),
-      .decode_op_ffl1_o			(decode_op_ffl1_o),
-      .decode_op_movhi_o		(decode_op_movhi_o),
-      .decode_adder_do_sub_o		(decode_adder_do_sub_o),
-      .decode_adder_do_carry_o		(decode_adder_do_carry_o),
-      .decode_except_illegal_o		(decode_except_illegal_o),
-      .decode_except_syscall_o		(decode_except_syscall_o),
-      .decode_except_trap_o		(decode_except_trap_o),
-      .decode_opc_insn_o		(decode_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]),
+      .decode_opc_alu_o                 (decode_opc_alu_o[`OR1K_ALU_OPC_WIDTH-1:0]),
+      .decode_opc_alu_secondary_o       (decode_opc_alu_secondary_o[`OR1K_ALU_OPC_WIDTH-1:0]),
+      .decode_imm16_o                   (decode_imm16_o[`OR1K_IMM_WIDTH-1:0]),
+      .decode_immediate_o               (decode_immediate_o[OPTION_OPERAND_WIDTH-1:0]),
+      .decode_immediate_sel_o           (decode_immediate_sel_o),
+      .decode_immjbr_upper_o            (decode_immjbr_upper_o[9:0]),
+      .decode_rfd_adr_o                 (decode_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .decode_rfa_adr_o                 (decode_rfa_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .decode_rfb_adr_o                 (decode_rfb_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .decode_rf_wb_o                   (decode_rf_wb_o),
+      .decode_op_jbr_o                  (decode_op_jbr_o),
+      .decode_op_jr_o                   (decode_op_jr_o),
+      .decode_op_jal_o                  (decode_op_jal_o),
+      .decode_op_bf_o                   (decode_op_bf_o),
+      .decode_op_bnf_o                  (decode_op_bnf_o),
+      .decode_op_brcond_o               (decode_op_brcond_o),
+      .decode_op_branch_o               (decode_op_branch_o),
+      .decode_op_alu_o                  (decode_op_alu_o),
+      .decode_op_lsu_load_o             (decode_op_lsu_load_o),
+      .decode_op_lsu_store_o            (decode_op_lsu_store_o),
+      .decode_op_lsu_atomic_o           (decode_op_lsu_atomic_o),
+      .decode_lsu_length_o              (decode_lsu_length_o[1:0]),
+      .decode_lsu_zext_o                (decode_lsu_zext_o),
+      .decode_op_mfspr_o                (decode_op_mfspr_o),
+      .decode_op_mtspr_o                (decode_op_mtspr_o),
+      .decode_op_rfe_o                  (decode_op_rfe_o),
+      .decode_op_setflag_o              (decode_op_setflag_o),
+      .decode_op_add_o                  (decode_op_add_o),
+      .decode_op_mul_o                  (decode_op_mul_o),
+      .decode_op_mul_signed_o           (decode_op_mul_signed_o),
+      .decode_op_mul_unsigned_o         (decode_op_mul_unsigned_o),
+      .decode_op_div_o                  (decode_op_div_o),
+      .decode_op_div_signed_o           (decode_op_div_signed_o),
+      .decode_op_div_unsigned_o         (decode_op_div_unsigned_o),
+      .decode_op_shift_o                (decode_op_shift_o),
+      .decode_op_ffl1_o                 (decode_op_ffl1_o),
+      .decode_op_movhi_o                (decode_op_movhi_o),
+      .decode_op_msync_o                (decode_op_msync_o),
+      .decode_adder_do_sub_o            (decode_adder_do_sub_o),
+      .decode_adder_do_carry_o          (decode_adder_do_carry_o),
+      .decode_except_illegal_o          (decode_except_illegal_o),
+      .decode_except_syscall_o          (decode_except_syscall_o),
+      .decode_except_trap_o             (decode_except_trap_o),
+      .decode_opc_insn_o                (decode_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]),
       // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .decode_insn_i			(insn_fetch_to_decode));	 // Templated
+      .clk                              (clk),
+      .rst                              (rst),
+      .decode_insn_i                    (insn_fetch_to_decode));  // Templated
 
    /* mor1kx_decode_execute_cappuccino AUTO_TEMPLATE (
       .padv_i				(padv_decode_o),
@@ -587,6 +592,7 @@ module mor1kx_cpu_cappuccino
       .decode_op_shift_i		(decode_op_shift_o),
       .decode_op_ffl1_i			(decode_op_ffl1_o),
       .decode_op_movhi_i		(decode_op_movhi_o),
+      .decode_op_msync_i                (decode_op_msync_o),
       .decode_opc_insn_i		(decode_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]),
       .decode_except_ibus_err_i		(decode_except_ibus_err_o),
       .decode_except_itlb_miss_i	(decode_except_itlb_miss_o),
@@ -607,117 +613,119 @@ module mor1kx_cpu_cappuccino
      mor1kx_decode_execute_cappuccino
      (/*AUTOINST*/
       // Outputs
-      .execute_predicted_flag_o		(execute_predicted_flag_o),
-      .execute_mispredict_target_o	(execute_mispredict_target_o[OPTION_OPERAND_WIDTH-1:0]),
-      .execute_opc_alu_o		(execute_opc_alu_o[`OR1K_ALU_OPC_WIDTH-1:0]),
-      .execute_opc_alu_secondary_o	(execute_opc_alu_secondary_o[`OR1K_ALU_OPC_WIDTH-1:0]),
-      .execute_imm16_o			(execute_imm16_o[`OR1K_IMM_WIDTH-1:0]),
-      .execute_immediate_o		(execute_immediate_o[OPTION_OPERAND_WIDTH-1:0]),
-      .execute_immediate_sel_o		(execute_immediate_sel_o),
-      .execute_adder_do_sub_o		(execute_adder_do_sub_o),
-      .execute_adder_do_carry_o		(execute_adder_do_carry_o),
-      .execute_immjbr_upper_o		(execute_immjbr_upper_o[9:0]),
-      .execute_rfd_adr_o		(execute_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .execute_rf_wb_o			(execute_rf_wb_o),
-      .execute_op_alu_o			(execute_op_alu_o),
-      .execute_op_setflag_o		(execute_op_setflag_o),
-      .execute_op_jbr_o			(execute_op_jbr_o),
-      .execute_op_jr_o			(execute_op_jr_o),
-      .execute_op_jal_o			(execute_op_jal_o),
-      .execute_op_brcond_o		(execute_op_brcond_o),
-      .execute_op_branch_o		(execute_op_branch_o),
-      .execute_op_lsu_load_o		(execute_op_lsu_load_o),
-      .execute_op_lsu_store_o		(execute_op_lsu_store_o),
-      .execute_op_lsu_atomic_o		(execute_op_lsu_atomic_o),
-      .execute_lsu_length_o		(execute_lsu_length_o[1:0]),
-      .execute_lsu_zext_o		(execute_lsu_zext_o),
-      .execute_op_mfspr_o		(execute_op_mfspr_o),
-      .execute_op_mtspr_o		(execute_op_mtspr_o),
-      .execute_op_rfe_o			(execute_op_rfe_o),
-      .execute_op_add_o			(execute_op_add_o),
-      .execute_op_mul_o			(execute_op_mul_o),
-      .execute_op_mul_signed_o		(execute_op_mul_signed_o),
-      .execute_op_mul_unsigned_o	(execute_op_mul_unsigned_o),
-      .execute_op_div_o			(execute_op_div_o),
-      .execute_op_div_signed_o		(execute_op_div_signed_o),
-      .execute_op_div_unsigned_o	(execute_op_div_unsigned_o),
-      .execute_op_shift_o		(execute_op_shift_o),
-      .execute_op_ffl1_o		(execute_op_ffl1_o),
-      .execute_op_movhi_o		(execute_op_movhi_o),
-      .execute_jal_result_o		(execute_jal_result_o[OPTION_OPERAND_WIDTH-1:0]),
-      .execute_opc_insn_o		(execute_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]),
-      .decode_branch_o			(decode_branch_o),
-      .decode_branch_target_o		(decode_branch_target_o[OPTION_OPERAND_WIDTH-1:0]),
-      .execute_except_ibus_err_o	(execute_except_ibus_err_o),
-      .execute_except_itlb_miss_o	(execute_except_itlb_miss_o),
-      .execute_except_ipagefault_o	(execute_except_ipagefault_o),
-      .execute_except_illegal_o		(execute_except_illegal_o),
-      .execute_except_ibus_align_o	(execute_except_ibus_align_o),
-      .execute_except_syscall_o		(execute_except_syscall_o),
-      .execute_except_trap_o		(execute_except_trap_o),
-      .pc_execute_o			(pc_decode_to_execute),	 // Templated
-      .decode_valid_o			(decode_valid_o),
-      .decode_bubble_o			(decode_bubble_o),
-      .execute_bubble_o			(execute_bubble_o),
+      .execute_predicted_flag_o         (execute_predicted_flag_o),
+      .execute_mispredict_target_o      (execute_mispredict_target_o[OPTION_OPERAND_WIDTH-1:0]),
+      .execute_opc_alu_o                (execute_opc_alu_o[`OR1K_ALU_OPC_WIDTH-1:0]),
+      .execute_opc_alu_secondary_o      (execute_opc_alu_secondary_o[`OR1K_ALU_OPC_WIDTH-1:0]),
+      .execute_imm16_o                  (execute_imm16_o[`OR1K_IMM_WIDTH-1:0]),
+      .execute_immediate_o              (execute_immediate_o[OPTION_OPERAND_WIDTH-1:0]),
+      .execute_immediate_sel_o          (execute_immediate_sel_o),
+      .execute_adder_do_sub_o           (execute_adder_do_sub_o),
+      .execute_adder_do_carry_o         (execute_adder_do_carry_o),
+      .execute_immjbr_upper_o           (execute_immjbr_upper_o[9:0]),
+      .execute_rfd_adr_o                (execute_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .execute_rf_wb_o                  (execute_rf_wb_o),
+      .execute_op_alu_o                 (execute_op_alu_o),
+      .execute_op_setflag_o             (execute_op_setflag_o),
+      .execute_op_jbr_o                 (execute_op_jbr_o),
+      .execute_op_jr_o                  (execute_op_jr_o),
+      .execute_op_jal_o                 (execute_op_jal_o),
+      .execute_op_brcond_o              (execute_op_brcond_o),
+      .execute_op_branch_o              (execute_op_branch_o),
+      .execute_op_lsu_load_o            (execute_op_lsu_load_o),
+      .execute_op_lsu_store_o           (execute_op_lsu_store_o),
+      .execute_op_lsu_atomic_o          (execute_op_lsu_atomic_o),
+      .execute_lsu_length_o             (execute_lsu_length_o[1:0]),
+      .execute_lsu_zext_o               (execute_lsu_zext_o),
+      .execute_op_mfspr_o               (execute_op_mfspr_o),
+      .execute_op_mtspr_o               (execute_op_mtspr_o),
+      .execute_op_rfe_o                 (execute_op_rfe_o),
+      .execute_op_add_o                 (execute_op_add_o),
+      .execute_op_mul_o                 (execute_op_mul_o),
+      .execute_op_mul_signed_o          (execute_op_mul_signed_o),
+      .execute_op_mul_unsigned_o        (execute_op_mul_unsigned_o),
+      .execute_op_div_o                 (execute_op_div_o),
+      .execute_op_div_signed_o          (execute_op_div_signed_o),
+      .execute_op_div_unsigned_o        (execute_op_div_unsigned_o),
+      .execute_op_shift_o               (execute_op_shift_o),
+      .execute_op_ffl1_o                (execute_op_ffl1_o),
+      .execute_op_movhi_o               (execute_op_movhi_o),
+      .execute_op_msync_o               (execute_op_msync_o),
+      .execute_jal_result_o             (execute_jal_result_o[OPTION_OPERAND_WIDTH-1:0]),
+      .execute_opc_insn_o               (execute_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]),
+      .decode_branch_o                  (decode_branch_o),
+      .decode_branch_target_o           (decode_branch_target_o[OPTION_OPERAND_WIDTH-1:0]),
+      .execute_except_ibus_err_o        (execute_except_ibus_err_o),
+      .execute_except_itlb_miss_o       (execute_except_itlb_miss_o),
+      .execute_except_ipagefault_o      (execute_except_ipagefault_o),
+      .execute_except_illegal_o         (execute_except_illegal_o),
+      .execute_except_ibus_align_o      (execute_except_ibus_align_o),
+      .execute_except_syscall_o         (execute_except_syscall_o),
+      .execute_except_trap_o            (execute_except_trap_o),
+      .pc_execute_o                     (pc_decode_to_execute),  // Templated
+      .decode_valid_o                   (decode_valid_o),
+      .decode_bubble_o                  (decode_bubble_o),
+      .execute_bubble_o                 (execute_bubble_o),
       // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .padv_i				(padv_decode_o),	 // Templated
-      .pc_decode_i			(pc_fetch_to_decode),	 // Templated
-      .decode_rfb_i			(decode_rfb_o),		 // Templated
-      .execute_rfb_i			(execute_rfb_o),	 // Templated
-      .predicted_flag_i			(predicted_flag_o),	 // Templated
-      .pipeline_flush_i			(pipeline_flush_o),	 // Templated
-      .decode_opc_alu_i			(decode_opc_alu_o),	 // Templated
-      .decode_opc_alu_secondary_i	(decode_opc_alu_secondary_o), // Templated
-      .decode_imm16_i			(decode_imm16_o),	 // Templated
-      .decode_immediate_i		(decode_immediate_o),	 // Templated
-      .decode_immediate_sel_i		(decode_immediate_sel_o), // Templated
-      .decode_adder_do_sub_i		(decode_adder_do_sub_o), // Templated
-      .decode_adder_do_carry_i		(decode_adder_do_carry_o), // Templated
-      .decode_immjbr_upper_i		(decode_immjbr_upper_o), // Templated
-      .decode_rfd_adr_i			(decode_rfd_adr_o),	 // Templated
-      .decode_rfa_adr_i			(decode_rfa_adr_o),	 // Templated
-      .decode_rfb_adr_i			(decode_rfb_adr_o),	 // Templated
-      .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),	 // Templated
-      .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),	 // Templated
-      .ctrl_op_mfspr_i			(ctrl_op_mfspr_o),	 // Templated
-      .ctrl_op_mul_i			(ctrl_op_mul_o),	 // Templated
-      .decode_rf_wb_i			(decode_rf_wb_o),	 // Templated
-      .decode_op_alu_i			(decode_op_alu_o),	 // Templated
-      .decode_op_setflag_i		(decode_op_setflag_o),	 // Templated
-      .decode_op_jbr_i			(decode_op_jbr_o),	 // Templated
-      .decode_op_jr_i			(decode_op_jr_o),	 // Templated
-      .decode_op_jal_i			(decode_op_jal_o),	 // Templated
-      .decode_op_bf_i			(decode_op_bf_o),	 // Templated
-      .decode_op_bnf_i			(decode_op_bnf_o),	 // Templated
-      .decode_op_brcond_i		(decode_op_brcond_o),	 // Templated
-      .decode_op_branch_i		(decode_op_branch_o),	 // Templated
-      .decode_op_lsu_load_i		(decode_op_lsu_load_o),	 // Templated
-      .decode_op_lsu_store_i		(decode_op_lsu_store_o), // Templated
-      .decode_op_lsu_atomic_i		(decode_op_lsu_atomic_o), // Templated
-      .decode_lsu_length_i		(decode_lsu_length_o[1:0]), // Templated
-      .decode_lsu_zext_i		(decode_lsu_zext_o),	 // Templated
-      .decode_op_mfspr_i		(decode_op_mfspr_o),	 // Templated
-      .decode_op_mtspr_i		(decode_op_mtspr_o),	 // Templated
-      .decode_op_rfe_i			(decode_op_rfe_o),	 // Templated
-      .decode_op_add_i			(decode_op_add_o),	 // Templated
-      .decode_op_mul_i			(decode_op_mul_o),	 // Templated
-      .decode_op_mul_signed_i		(decode_op_mul_signed_o), // Templated
-      .decode_op_mul_unsigned_i		(decode_op_mul_unsigned_o), // Templated
-      .decode_op_div_i			(decode_op_div_o),	 // Templated
-      .decode_op_div_signed_i		(decode_op_div_signed_o), // Templated
-      .decode_op_div_unsigned_i		(decode_op_div_unsigned_o), // Templated
-      .decode_op_shift_i		(decode_op_shift_o),	 // Templated
-      .decode_op_ffl1_i			(decode_op_ffl1_o),	 // Templated
-      .decode_op_movhi_i		(decode_op_movhi_o),	 // Templated
-      .decode_opc_insn_i		(decode_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]), // Templated
-      .decode_except_ibus_err_i		(decode_except_ibus_err_o), // Templated
-      .decode_except_itlb_miss_i	(decode_except_itlb_miss_o), // Templated
-      .decode_except_ipagefault_i	(decode_except_ipagefault_o), // Templated
-      .decode_except_illegal_i		(decode_except_illegal_o), // Templated
-      .decode_except_syscall_i		(decode_except_syscall_o), // Templated
-      .decode_except_trap_i		(decode_except_trap_o));	 // Templated
+      .clk                              (clk),
+      .rst                              (rst),
+      .padv_i                           (padv_decode_o),         // Templated
+      .pc_decode_i                      (pc_fetch_to_decode),    // Templated
+      .decode_rfb_i                     (decode_rfb_o),          // Templated
+      .execute_rfb_i                    (execute_rfb_o),         // Templated
+      .predicted_flag_i                 (predicted_flag_o),      // Templated
+      .pipeline_flush_i                 (pipeline_flush_o),      // Templated
+      .decode_opc_alu_i                 (decode_opc_alu_o),      // Templated
+      .decode_opc_alu_secondary_i       (decode_opc_alu_secondary_o), // Templated
+      .decode_imm16_i                   (decode_imm16_o),        // Templated
+      .decode_immediate_i               (decode_immediate_o),    // Templated
+      .decode_immediate_sel_i           (decode_immediate_sel_o), // Templated
+      .decode_adder_do_sub_i            (decode_adder_do_sub_o), // Templated
+      .decode_adder_do_carry_i          (decode_adder_do_carry_o), // Templated
+      .decode_immjbr_upper_i            (decode_immjbr_upper_o), // Templated
+      .decode_rfd_adr_i                 (decode_rfd_adr_o),      // Templated
+      .decode_rfa_adr_i                 (decode_rfa_adr_o),      // Templated
+      .decode_rfb_adr_i                 (decode_rfb_adr_o),      // Templated
+      .ctrl_rfd_adr_i                   (ctrl_rfd_adr_o),        // Templated
+      .ctrl_op_lsu_load_i               (ctrl_op_lsu_load_o),    // Templated
+      .ctrl_op_mfspr_i                  (ctrl_op_mfspr_o),       // Templated
+      .ctrl_op_mul_i                    (ctrl_op_mul_o),         // Templated
+      .decode_rf_wb_i                   (decode_rf_wb_o),        // Templated
+      .decode_op_alu_i                  (decode_op_alu_o),       // Templated
+      .decode_op_setflag_i              (decode_op_setflag_o),   // Templated
+      .decode_op_jbr_i                  (decode_op_jbr_o),       // Templated
+      .decode_op_jr_i                   (decode_op_jr_o),        // Templated
+      .decode_op_jal_i                  (decode_op_jal_o),       // Templated
+      .decode_op_bf_i                   (decode_op_bf_o),        // Templated
+      .decode_op_bnf_i                  (decode_op_bnf_o),       // Templated
+      .decode_op_brcond_i               (decode_op_brcond_o),    // Templated
+      .decode_op_branch_i               (decode_op_branch_o),    // Templated
+      .decode_op_lsu_load_i             (decode_op_lsu_load_o),  // Templated
+      .decode_op_lsu_store_i            (decode_op_lsu_store_o), // Templated
+      .decode_op_lsu_atomic_i           (decode_op_lsu_atomic_o), // Templated
+      .decode_lsu_length_i              (decode_lsu_length_o[1:0]), // Templated
+      .decode_lsu_zext_i                (decode_lsu_zext_o),     // Templated
+      .decode_op_mfspr_i                (decode_op_mfspr_o),     // Templated
+      .decode_op_mtspr_i                (decode_op_mtspr_o),     // Templated
+      .decode_op_rfe_i                  (decode_op_rfe_o),       // Templated
+      .decode_op_add_i                  (decode_op_add_o),       // Templated
+      .decode_op_mul_i                  (decode_op_mul_o),       // Templated
+      .decode_op_mul_signed_i           (decode_op_mul_signed_o), // Templated
+      .decode_op_mul_unsigned_i         (decode_op_mul_unsigned_o), // Templated
+      .decode_op_div_i                  (decode_op_div_o),       // Templated
+      .decode_op_div_signed_i           (decode_op_div_signed_o), // Templated
+      .decode_op_div_unsigned_i         (decode_op_div_unsigned_o), // Templated
+      .decode_op_shift_i                (decode_op_shift_o),     // Templated
+      .decode_op_ffl1_i                 (decode_op_ffl1_o),      // Templated
+      .decode_op_movhi_i                (decode_op_movhi_o),     // Templated
+      .decode_op_msync_i                (decode_op_msync_o),     // Templated
+      .decode_opc_insn_i                (decode_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]), // Templated
+      .decode_except_ibus_err_i         (decode_except_ibus_err_o), // Templated
+      .decode_except_itlb_miss_i        (decode_except_itlb_miss_o), // Templated
+      .decode_except_ipagefault_i       (decode_except_ipagefault_o), // Templated
+      .decode_except_illegal_i          (decode_except_illegal_o), // Templated
+      .decode_except_syscall_i          (decode_except_syscall_o), // Templated
+      .decode_except_trap_i             (decode_except_trap_o));  // Templated
 
    /* mor1kx_branch_prediction AUTO_TEMPLATE (
       .op_bf_i				(decode_op_bf_o),
@@ -734,17 +742,17 @@ module mor1kx_cpu_cappuccino
    mor1kx_branch_prediction
      (/*AUTOINST*/
       // Outputs
-      .predicted_flag_o			(predicted_flag_o),
-      .branch_mispredict_o		(branch_mispredict_o),
+      .predicted_flag_o                 (predicted_flag_o),
+      .branch_mispredict_o              (branch_mispredict_o),
       // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .op_bf_i				(decode_op_bf_o),	 // Templated
-      .op_bnf_i				(decode_op_bnf_o),	 // Templated
-      .immjbr_upper_i			(decode_immjbr_upper_o), // Templated
-      .prev_op_brcond_i			(execute_op_brcond_o),	 // Templated
-      .prev_predicted_flag_i		(execute_predicted_flag_o), // Templated
-      .flag_i				(ctrl_flag_o));		 // Templated
+      .clk                              (clk),
+      .rst                              (rst),
+      .op_bf_i                          (decode_op_bf_o),        // Templated
+      .op_bnf_i                         (decode_op_bnf_o),       // Templated
+      .immjbr_upper_i                   (decode_immjbr_upper_o), // Templated
+      .prev_op_brcond_i                 (execute_op_brcond_o),   // Templated
+      .prev_predicted_flag_i            (execute_predicted_flag_o), // Templated
+      .flag_i                           (ctrl_flag_o));           // Templated
 
    /* mor1kx_execute_alu AUTO_TEMPLATE (
     .padv_decode_i			(padv_decode_o),
@@ -813,57 +821,57 @@ module mor1kx_cpu_cappuccino
      mor1kx_execute_alu
      (/*AUTOINST*/
       // Outputs
-      .flag_set_o			(flag_set_o),
-      .flag_clear_o			(flag_clear_o),
-      .carry_set_o			(carry_set_o),
-      .carry_clear_o			(carry_clear_o),
-      .overflow_set_o			(overflow_set_o),
-      .overflow_clear_o			(overflow_clear_o),
-      .alu_result_o			(alu_result_o[OPTION_OPERAND_WIDTH-1:0]),
-      .alu_valid_o			(alu_valid_o),
-      .mul_result_o			(mul_result_o[OPTION_OPERAND_WIDTH-1:0]),
-      .adder_result_o			(adder_result_o[OPTION_OPERAND_WIDTH-1:0]),
+      .flag_set_o                       (flag_set_o),
+      .flag_clear_o                     (flag_clear_o),
+      .carry_set_o                      (carry_set_o),
+      .carry_clear_o                    (carry_clear_o),
+      .overflow_set_o                   (overflow_set_o),
+      .overflow_clear_o                 (overflow_clear_o),
+      .alu_result_o                     (alu_result_o[OPTION_OPERAND_WIDTH-1:0]),
+      .alu_valid_o                      (alu_valid_o),
+      .mul_result_o                     (mul_result_o[OPTION_OPERAND_WIDTH-1:0]),
+      .adder_result_o                   (adder_result_o[OPTION_OPERAND_WIDTH-1:0]),
       // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .padv_decode_i			(padv_decode_o),	 // Templated
-      .padv_execute_i			(padv_execute_o),	 // Templated
-      .padv_ctrl_i			(padv_ctrl_o),		 // Templated
-      .opc_alu_i			(execute_opc_alu_o),	 // Templated
-      .opc_alu_secondary_i		(execute_opc_alu_secondary_o), // Templated
-      .imm16_i				(execute_imm16_o),	 // Templated
-      .immediate_i			(execute_immediate_o),	 // Templated
-      .immediate_sel_i			(execute_immediate_sel_o), // Templated
-      .decode_immediate_i		(decode_immediate_o),	 // Templated
-      .decode_immediate_sel_i		(decode_immediate_sel_o), // Templated
-      .decode_valid_i			(decode_valid_o),	 // Templated
-      .decode_op_mul_i			(decode_op_mul_o),	 // Templated
-      .op_alu_i				(execute_op_alu_o),	 // Templated
-      .op_add_i				(execute_op_add_o),	 // Templated
-      .op_mul_i				(execute_op_mul_o),	 // Templated
-      .op_mul_signed_i			(execute_op_mul_signed_o), // Templated
-      .op_mul_unsigned_i		(execute_op_mul_unsigned_o), // Templated
-      .op_div_i				(execute_op_div_o),	 // Templated
-      .op_div_signed_i			(execute_op_div_signed_o), // Templated
-      .op_div_unsigned_i		(execute_op_div_unsigned_o), // Templated
-      .op_shift_i			(execute_op_shift_o),	 // Templated
-      .op_ffl1_i			(execute_op_ffl1_o),	 // Templated
-      .op_setflag_i			(execute_op_setflag_o),	 // Templated
-      .op_mtspr_i			(execute_op_mtspr_o),	 // Templated
-      .op_mfspr_i			(execute_op_mfspr_o),	 // Templated
-      .op_movhi_i			(execute_op_movhi_o),	 // Templated
-      .op_jbr_i				(execute_op_jbr_o),	 // Templated
-      .op_jr_i				(execute_op_jr_o),	 // Templated
-      .immjbr_upper_i			(execute_immjbr_upper_o), // Templated
-      .pc_execute_i			(pc_decode_to_execute),	 // Templated
-      .adder_do_sub_i			(execute_adder_do_sub_o), // Templated
-      .adder_do_carry_i			(execute_adder_do_carry_o), // Templated
-      .decode_rfa_i			(decode_rfa_o),		 // Templated
-      .decode_rfb_i			(decode_rfb_o),		 // Templated
-      .rfa_i				(execute_rfa_o),	 // Templated
-      .rfb_i				(execute_rfb_o),	 // Templated
-      .flag_i				(ctrl_flag_o),		 // Templated
-      .carry_i				(ctrl_carry_o));		 // Templated
+      .clk                              (clk),
+      .rst                              (rst),
+      .padv_decode_i                    (padv_decode_o),         // Templated
+      .padv_execute_i                   (padv_execute_o),        // Templated
+      .padv_ctrl_i                      (padv_ctrl_o),           // Templated
+      .opc_alu_i                        (execute_opc_alu_o),     // Templated
+      .opc_alu_secondary_i              (execute_opc_alu_secondary_o), // Templated
+      .imm16_i                          (execute_imm16_o),       // Templated
+      .immediate_i                      (execute_immediate_o),   // Templated
+      .immediate_sel_i                  (execute_immediate_sel_o), // Templated
+      .decode_immediate_i               (decode_immediate_o),    // Templated
+      .decode_immediate_sel_i           (decode_immediate_sel_o), // Templated
+      .decode_valid_i                   (decode_valid_o),        // Templated
+      .decode_op_mul_i                  (decode_op_mul_o),       // Templated
+      .op_alu_i                         (execute_op_alu_o),      // Templated
+      .op_add_i                         (execute_op_add_o),      // Templated
+      .op_mul_i                         (execute_op_mul_o),      // Templated
+      .op_mul_signed_i                  (execute_op_mul_signed_o), // Templated
+      .op_mul_unsigned_i                (execute_op_mul_unsigned_o), // Templated
+      .op_div_i                         (execute_op_div_o),      // Templated
+      .op_div_signed_i                  (execute_op_div_signed_o), // Templated
+      .op_div_unsigned_i                (execute_op_div_unsigned_o), // Templated
+      .op_shift_i                       (execute_op_shift_o),    // Templated
+      .op_ffl1_i                        (execute_op_ffl1_o),     // Templated
+      .op_setflag_i                     (execute_op_setflag_o),  // Templated
+      .op_mtspr_i                       (execute_op_mtspr_o),    // Templated
+      .op_mfspr_i                       (execute_op_mfspr_o),    // Templated
+      .op_movhi_i                       (execute_op_movhi_o),    // Templated
+      .op_jbr_i                         (execute_op_jbr_o),      // Templated
+      .op_jr_i                          (execute_op_jr_o),       // Templated
+      .immjbr_upper_i                   (execute_immjbr_upper_o), // Templated
+      .pc_execute_i                     (pc_decode_to_execute),  // Templated
+      .adder_do_sub_i                   (execute_adder_do_sub_o), // Templated
+      .adder_do_carry_i                 (execute_adder_do_carry_o), // Templated
+      .decode_rfa_i                     (decode_rfa_o),          // Templated
+      .decode_rfb_i                     (decode_rfb_o),          // Templated
+      .rfa_i                            (execute_rfa_o),         // Templated
+      .rfb_i                            (execute_rfb_o),         // Templated
+      .flag_i                           (ctrl_flag_o),           // Templated
+      .carry_i                          (ctrl_carry_o));          // Templated
 
 
    /* mor1kx_lsu_cappuccino AUTO_TEMPLATE (
@@ -879,6 +887,7 @@ module mor1kx_cpu_cappuccino
     .ctrl_op_lsu_load_i			(ctrl_op_lsu_load_o),
     .ctrl_op_lsu_store_i		(ctrl_op_lsu_store_o),
     .ctrl_op_lsu_atomic_i		(ctrl_op_lsu_atomic_o),
+    .ctrl_op_msync_i                    (ctrl_op_msync_o),
     .ctrl_lsu_length_i			(ctrl_lsu_length_o),
     .ctrl_lsu_zext_i			(ctrl_lsu_zext_o),
     .ctrl_epcr_i			(ctrl_epcr_o),
@@ -915,57 +924,59 @@ module mor1kx_cpu_cappuccino
      mor1kx_lsu_cappuccino
      (/*AUTOINST*/
       // Outputs
-      .store_buffer_epcr_o		(store_buffer_epcr_o[OPTION_OPERAND_WIDTH-1:0]),
-      .lsu_result_o			(lsu_result_o[OPTION_OPERAND_WIDTH-1:0]),
-      .lsu_valid_o			(lsu_valid_o),
-      .lsu_except_dbus_o		(lsu_except_dbus_o),
-      .lsu_except_align_o		(lsu_except_align_o),
-      .lsu_except_dtlb_miss_o		(lsu_except_dtlb_miss_o),
-      .lsu_except_dpagefault_o		(lsu_except_dpagefault_o),
-      .store_buffer_err_o		(store_buffer_err_o),
-      .atomic_flag_set_o		(atomic_flag_set_o),
-      .atomic_flag_clear_o		(atomic_flag_clear_o),
-      .spr_bus_dat_dc_o			(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .spr_bus_ack_dc_o			(spr_bus_ack_dc_i),	 // Templated
-      .spr_bus_dat_dmmu_o		(spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .spr_bus_ack_dmmu_o		(spr_bus_ack_dmmu_i),	 // Templated
-      .dbus_adr_o			(dbus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
-      .dbus_req_o			(dbus_req_o),
-      .dbus_dat_o			(dbus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
-      .dbus_bsel_o			(dbus_bsel_o[3:0]),
-      .dbus_we_o			(dbus_we_o),
-      .dbus_burst_o			(dbus_burst_o),
+      .store_buffer_epcr_o              (store_buffer_epcr_o[OPTION_OPERAND_WIDTH-1:0]),
+      .lsu_result_o                     (lsu_result_o[OPTION_OPERAND_WIDTH-1:0]),
+      .lsu_valid_o                      (lsu_valid_o),
+      .lsu_except_dbus_o                (lsu_except_dbus_o),
+      .lsu_except_align_o               (lsu_except_align_o),
+      .lsu_except_dtlb_miss_o           (lsu_except_dtlb_miss_o),
+      .lsu_except_dpagefault_o          (lsu_except_dpagefault_o),
+      .store_buffer_err_o               (store_buffer_err_o),
+      .atomic_flag_set_o                (atomic_flag_set_o),
+      .atomic_flag_clear_o              (atomic_flag_clear_o),
+      .msync_stall_o                    (msync_stall_o),
+      .spr_bus_dat_dc_o                 (spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .spr_bus_ack_dc_o                 (spr_bus_ack_dc_i),      // Templated
+      .spr_bus_dat_dmmu_o               (spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .spr_bus_ack_dmmu_o               (spr_bus_ack_dmmu_i),    // Templated
+      .dbus_adr_o                       (dbus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
+      .dbus_req_o                       (dbus_req_o),
+      .dbus_dat_o                       (dbus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
+      .dbus_bsel_o                      (dbus_bsel_o[3:0]),
+      .dbus_we_o                        (dbus_we_o),
+      .dbus_burst_o                     (dbus_burst_o),
       // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .padv_execute_i			(padv_execute_o),	 // Templated
-      .padv_ctrl_i			(padv_ctrl_o),		 // Templated
-      .decode_valid_i			(decode_valid_o),	 // Templated
-      .exec_lsu_adr_i			(adder_result_o),	 // Templated
-      .ctrl_lsu_adr_i			(ctrl_lsu_adr_o),	 // Templated
-      .ctrl_rfb_i			(ctrl_rfb_o),		 // Templated
-      .exec_op_lsu_load_i		(execute_op_lsu_load_o), // Templated
-      .exec_op_lsu_store_i		(execute_op_lsu_store_o), // Templated
-      .exec_op_lsu_atomic_i		(execute_op_lsu_atomic_o), // Templated
-      .ctrl_op_lsu_load_i		(ctrl_op_lsu_load_o),	 // Templated
-      .ctrl_op_lsu_store_i		(ctrl_op_lsu_store_o),	 // Templated
-      .ctrl_op_lsu_atomic_i		(ctrl_op_lsu_atomic_o),	 // Templated
-      .ctrl_lsu_length_i		(ctrl_lsu_length_o),	 // Templated
-      .ctrl_lsu_zext_i			(ctrl_lsu_zext_o),	 // Templated
-      .ctrl_epcr_i			(ctrl_epcr_o),		 // Templated
-      .spr_bus_addr_i			(spr_bus_addr_o[15:0]),	 // Templated
-      .spr_bus_we_i			(spr_bus_we_o),		 // Templated
-      .spr_bus_stb_i			(spr_bus_stb_o),	 // Templated
-      .spr_bus_dat_i			(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .dc_enable_i			(spr_sr_o[`OR1K_SPR_SR_DCE]), // Templated
-      .dmmu_enable_i			(spr_sr_o[`OR1K_SPR_SR_DME]), // Templated
-      .supervisor_mode_i		(spr_sr_o[`OR1K_SPR_SR_SM]), // Templated
-      .dbus_err_i			(dbus_err_i),
-      .dbus_ack_i			(dbus_ack_i),
-      .dbus_dat_i			(dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
-      .pipeline_flush_i			(pipeline_flush_o),	 // Templated
-      .snoop_adr_i			(snoop_adr_i[31:0]),
-      .snoop_en_i			(snoop_en_i));
+      .clk                              (clk),
+      .rst                              (rst),
+      .padv_execute_i                   (padv_execute_o),        // Templated
+      .padv_ctrl_i                      (padv_ctrl_o),           // Templated
+      .decode_valid_i                   (decode_valid_o),        // Templated
+      .exec_lsu_adr_i                   (adder_result_o),        // Templated
+      .ctrl_lsu_adr_i                   (ctrl_lsu_adr_o),        // Templated
+      .ctrl_rfb_i                       (ctrl_rfb_o),            // Templated
+      .exec_op_lsu_load_i               (execute_op_lsu_load_o), // Templated
+      .exec_op_lsu_store_i              (execute_op_lsu_store_o), // Templated
+      .exec_op_lsu_atomic_i             (execute_op_lsu_atomic_o), // Templated
+      .ctrl_op_lsu_load_i               (ctrl_op_lsu_load_o),    // Templated
+      .ctrl_op_lsu_store_i              (ctrl_op_lsu_store_o),   // Templated
+      .ctrl_op_lsu_atomic_i             (ctrl_op_lsu_atomic_o),  // Templated
+      .ctrl_op_msync_i                  (ctrl_op_msync_o),       // Templated
+      .ctrl_lsu_length_i                (ctrl_lsu_length_o),     // Templated
+      .ctrl_lsu_zext_i                  (ctrl_lsu_zext_o),       // Templated
+      .ctrl_epcr_i                      (ctrl_epcr_o),           // Templated
+      .spr_bus_addr_i                   (spr_bus_addr_o[15:0]),  // Templated
+      .spr_bus_we_i                     (spr_bus_we_o),          // Templated
+      .spr_bus_stb_i                    (spr_bus_stb_o),         // Templated
+      .spr_bus_dat_i                    (spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .dc_enable_i                      (spr_sr_o[`OR1K_SPR_SR_DCE]), // Templated
+      .dmmu_enable_i                    (spr_sr_o[`OR1K_SPR_SR_DME]), // Templated
+      .supervisor_mode_i                (spr_sr_o[`OR1K_SPR_SR_SM]), // Templated
+      .dbus_err_i                       (dbus_err_i),
+      .dbus_ack_i                       (dbus_ack_i),
+      .dbus_dat_i                       (dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
+      .pipeline_flush_i                 (pipeline_flush_o),      // Templated
+      .snoop_adr_i                      (snoop_adr_i[31:0]),
+      .snoop_en_i                       (snoop_en_i));
 
 
    /* mor1kx_wb_mux_cappuccino AUTO_TEMPLATE (
@@ -985,17 +996,17 @@ module mor1kx_cpu_cappuccino
      mor1kx_wb_mux_cappuccino
      (/*AUTOINST*/
       // Outputs
-      .rf_result_o			(rf_result_o[OPTION_OPERAND_WIDTH-1:0]),
+      .rf_result_o                      (rf_result_o[OPTION_OPERAND_WIDTH-1:0]),
       // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .alu_result_i			(ctrl_alu_result_o),	 // Templated
-      .lsu_result_i			(lsu_result_o),		 // Templated
-      .mul_result_i			(mul_result_o),		 // Templated
-      .spr_i				(mfspr_dat_o),		 // Templated
-      .op_mul_i				(ctrl_op_mul_o),	 // Templated
-      .op_lsu_load_i			(ctrl_op_lsu_load_o),	 // Templated
-      .op_mfspr_i			(ctrl_op_mfspr_o));	 // Templated
+      .clk                              (clk),
+      .rst                              (rst),
+      .alu_result_i                     (ctrl_alu_result_o),     // Templated
+      .lsu_result_i                     (lsu_result_o),          // Templated
+      .mul_result_i                     (mul_result_o),          // Templated
+      .spr_i                            (mfspr_dat_o),           // Templated
+      .op_mul_i                         (ctrl_op_mul_o),         // Templated
+      .op_lsu_load_i                    (ctrl_op_lsu_load_o),    // Templated
+      .op_mfspr_i                       (ctrl_op_mfspr_o));       // Templated
 
 
    /* mor1kx_rf_cappuccino AUTO_TEMPLATE (
@@ -1034,37 +1045,37 @@ module mor1kx_cpu_cappuccino
      mor1kx_rf_cappuccino
      (/*AUTOINST*/
       // Outputs
-      .spr_gpr_ack_o			(spr_gpr_ack_o),
-      .spr_gpr_dat_o			(spr_gpr_dat_o[OPTION_OPERAND_WIDTH-1:0]),
-      .decode_rfa_o			(decode_rfa_o[OPTION_OPERAND_WIDTH-1:0]),
-      .decode_rfb_o			(decode_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
-      .execute_rfa_o			(execute_rfa_o[OPTION_OPERAND_WIDTH-1:0]),
-      .execute_rfb_o			(execute_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
+      .spr_gpr_ack_o                    (spr_gpr_ack_o),
+      .spr_gpr_dat_o                    (spr_gpr_dat_o[OPTION_OPERAND_WIDTH-1:0]),
+      .decode_rfa_o                     (decode_rfa_o[OPTION_OPERAND_WIDTH-1:0]),
+      .decode_rfb_o                     (decode_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
+      .execute_rfa_o                    (execute_rfa_o[OPTION_OPERAND_WIDTH-1:0]),
+      .execute_rfb_o                    (execute_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
       // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .padv_decode_i			(padv_decode_o),	 // Templated
-      .padv_execute_i			(padv_execute_o),	 // Templated
-      .padv_ctrl_i			(padv_ctrl_o),		 // Templated
-      .decode_valid_i			(decode_valid_o),	 // Templated
-      .fetch_rf_adr_valid_i		(fetch_rf_adr_valid_o),	 // Templated
-      .fetch_rfa_adr_i			(fetch_rfa_adr_o),	 // Templated
-      .fetch_rfb_adr_i			(fetch_rfb_adr_o),	 // Templated
-      .decode_rfa_adr_i			(decode_rfa_adr_o),	 // Templated
-      .decode_rfb_adr_i			(decode_rfb_adr_o),	 // Templated
-      .execute_rfd_adr_i		(execute_rfd_adr_o),	 // Templated
-      .ctrl_rfd_adr_i			(ctrl_rfd_adr_o),	 // Templated
-      .wb_rfd_adr_i			(wb_rfd_adr_o),		 // Templated
-      .spr_bus_addr_i			(spr_bus_addr_o[15:0]),	 // Templated
-      .spr_bus_stb_i			(spr_bus_stb_o),	 // Templated
-      .spr_bus_we_i			(spr_bus_we_o),		 // Templated
-      .spr_bus_dat_i			(spr_bus_dat_o),	 // Templated
-      .execute_rf_wb_i			(execute_rf_wb_o),	 // Templated
-      .ctrl_rf_wb_i			(ctrl_rf_wb_o),		 // Templated
-      .wb_rf_wb_i			(wb_rf_wb_o),		 // Templated
-      .result_i				(rf_result_o),		 // Templated
-      .ctrl_alu_result_i		(ctrl_alu_result_o),	 // Templated
-      .pipeline_flush_i			(pipeline_flush_o));	 // Templated
+      .clk                              (clk),
+      .rst                              (rst),
+      .padv_decode_i                    (padv_decode_o),         // Templated
+      .padv_execute_i                   (padv_execute_o),        // Templated
+      .padv_ctrl_i                      (padv_ctrl_o),           // Templated
+      .decode_valid_i                   (decode_valid_o),        // Templated
+      .fetch_rf_adr_valid_i             (fetch_rf_adr_valid_o),  // Templated
+      .fetch_rfa_adr_i                  (fetch_rfa_adr_o),       // Templated
+      .fetch_rfb_adr_i                  (fetch_rfb_adr_o),       // Templated
+      .decode_rfa_adr_i                 (decode_rfa_adr_o),      // Templated
+      .decode_rfb_adr_i                 (decode_rfb_adr_o),      // Templated
+      .execute_rfd_adr_i                (execute_rfd_adr_o),     // Templated
+      .ctrl_rfd_adr_i                   (ctrl_rfd_adr_o),        // Templated
+      .wb_rfd_adr_i                     (wb_rfd_adr_o),          // Templated
+      .spr_bus_addr_i                   (spr_bus_addr_o[15:0]),  // Templated
+      .spr_bus_stb_i                    (spr_bus_stb_o),         // Templated
+      .spr_bus_we_i                     (spr_bus_we_o),          // Templated
+      .spr_bus_dat_i                    (spr_bus_dat_o),         // Templated
+      .execute_rf_wb_i                  (execute_rf_wb_o),       // Templated
+      .ctrl_rf_wb_i                     (ctrl_rf_wb_o),          // Templated
+      .wb_rf_wb_i                       (wb_rf_wb_o),            // Templated
+      .result_i                         (rf_result_o),           // Templated
+      .ctrl_alu_result_i                (ctrl_alu_result_o),     // Templated
+      .pipeline_flush_i                 (pipeline_flush_o));      // Templated
 
 
 `ifndef SYNTHESIS
@@ -1123,10 +1134,12 @@ module mor1kx_cpu_cappuccino
     .op_lsu_atomic_i			(execute_op_lsu_atomic_o),
     .lsu_length_i			(execute_lsu_length_o),
     .lsu_zext_i				(execute_lsu_zext_o),
+    .op_msync_i                         (execute_op_msync_o),
     .op_mfspr_i				(execute_op_mfspr_o),
     .op_mtspr_i				(execute_op_mtspr_o),
     .alu_valid_i			(alu_valid_o),
     .lsu_valid_i			(lsu_valid_o),
+    .msync_stall_i                      (msync_stall_o),
     .alu_result_i			(alu_result_o),
     .adder_result_i			(adder_result_o),
     .execute_jal_result_i		(execute_jal_result_o),
@@ -1158,88 +1171,91 @@ module mor1kx_cpu_cappuccino
      mor1kx_execute_ctrl_cappuccino
      (/*AUTOINST*/
       // Outputs
-      .ctrl_rf_wb_o			(ctrl_rf_wb_o),
-      .wb_rf_wb_o			(wb_rf_wb_o),
-      .ctrl_rfd_adr_o			(ctrl_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .wb_rfd_adr_o			(wb_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
-      .ctrl_alu_result_o		(ctrl_alu_result_o[OPTION_OPERAND_WIDTH-1:0]),
-      .ctrl_lsu_adr_o			(ctrl_lsu_adr_o[OPTION_OPERAND_WIDTH-1:0]),
-      .ctrl_rfb_o			(ctrl_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
-      .ctrl_flag_set_o			(ctrl_flag_set_o),
-      .ctrl_flag_clear_o		(ctrl_flag_clear_o),
-      .ctrl_carry_set_o			(ctrl_carry_set_o),
-      .ctrl_carry_clear_o		(ctrl_carry_clear_o),
-      .ctrl_overflow_set_o		(ctrl_overflow_set_o),
-      .ctrl_overflow_clear_o		(ctrl_overflow_clear_o),
-      .pc_ctrl_o			(pc_execute_to_ctrl),	 // Templated
-      .ctrl_op_mul_o			(ctrl_op_mul_o),
-      .ctrl_op_lsu_load_o		(ctrl_op_lsu_load_o),
-      .ctrl_op_lsu_store_o		(ctrl_op_lsu_store_o),
-      .ctrl_op_lsu_atomic_o		(ctrl_op_lsu_atomic_o),
-      .ctrl_lsu_length_o		(ctrl_lsu_length_o[1:0]),
-      .ctrl_lsu_zext_o			(ctrl_lsu_zext_o),
-      .ctrl_op_mfspr_o			(ctrl_op_mfspr_o),
-      .ctrl_op_mtspr_o			(ctrl_op_mtspr_o),
-      .ctrl_op_rfe_o			(ctrl_op_rfe_o),
-      .ctrl_except_ibus_err_o		(ctrl_except_ibus_err_o),
-      .ctrl_except_itlb_miss_o		(ctrl_except_itlb_miss_o),
-      .ctrl_except_ipagefault_o		(ctrl_except_ipagefault_o),
-      .ctrl_except_ibus_align_o		(ctrl_except_ibus_align_o),
-      .ctrl_except_illegal_o		(ctrl_except_illegal_o),
-      .ctrl_except_syscall_o		(ctrl_except_syscall_o),
-      .ctrl_except_dbus_o		(ctrl_except_dbus_o),
-      .ctrl_except_dtlb_miss_o		(ctrl_except_dtlb_miss_o),
-      .ctrl_except_dpagefault_o		(ctrl_except_dpagefault_o),
-      .ctrl_except_align_o		(ctrl_except_align_o),
-      .ctrl_except_trap_o		(ctrl_except_trap_o),
-      .execute_valid_o			(execute_valid_o),
-      .ctrl_valid_o			(ctrl_valid_o),
+      .ctrl_rf_wb_o                     (ctrl_rf_wb_o),
+      .wb_rf_wb_o                       (wb_rf_wb_o),
+      .ctrl_rfd_adr_o                   (ctrl_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .wb_rfd_adr_o                     (wb_rfd_adr_o[OPTION_RF_ADDR_WIDTH-1:0]),
+      .ctrl_alu_result_o                (ctrl_alu_result_o[OPTION_OPERAND_WIDTH-1:0]),
+      .ctrl_lsu_adr_o                   (ctrl_lsu_adr_o[OPTION_OPERAND_WIDTH-1:0]),
+      .ctrl_rfb_o                       (ctrl_rfb_o[OPTION_OPERAND_WIDTH-1:0]),
+      .ctrl_flag_set_o                  (ctrl_flag_set_o),
+      .ctrl_flag_clear_o                (ctrl_flag_clear_o),
+      .ctrl_carry_set_o                 (ctrl_carry_set_o),
+      .ctrl_carry_clear_o               (ctrl_carry_clear_o),
+      .ctrl_overflow_set_o              (ctrl_overflow_set_o),
+      .ctrl_overflow_clear_o            (ctrl_overflow_clear_o),
+      .pc_ctrl_o                        (pc_execute_to_ctrl),    // Templated
+      .ctrl_op_mul_o                    (ctrl_op_mul_o),
+      .ctrl_op_lsu_load_o               (ctrl_op_lsu_load_o),
+      .ctrl_op_lsu_store_o              (ctrl_op_lsu_store_o),
+      .ctrl_op_lsu_atomic_o             (ctrl_op_lsu_atomic_o),
+      .ctrl_lsu_length_o                (ctrl_lsu_length_o[1:0]),
+      .ctrl_lsu_zext_o                  (ctrl_lsu_zext_o),
+      .ctrl_op_msync_o                  (ctrl_op_msync_o),
+      .ctrl_op_mfspr_o                  (ctrl_op_mfspr_o),
+      .ctrl_op_mtspr_o                  (ctrl_op_mtspr_o),
+      .ctrl_op_rfe_o                    (ctrl_op_rfe_o),
+      .ctrl_except_ibus_err_o           (ctrl_except_ibus_err_o),
+      .ctrl_except_itlb_miss_o          (ctrl_except_itlb_miss_o),
+      .ctrl_except_ipagefault_o         (ctrl_except_ipagefault_o),
+      .ctrl_except_ibus_align_o         (ctrl_except_ibus_align_o),
+      .ctrl_except_illegal_o            (ctrl_except_illegal_o),
+      .ctrl_except_syscall_o            (ctrl_except_syscall_o),
+      .ctrl_except_dbus_o               (ctrl_except_dbus_o),
+      .ctrl_except_dtlb_miss_o          (ctrl_except_dtlb_miss_o),
+      .ctrl_except_dpagefault_o         (ctrl_except_dpagefault_o),
+      .ctrl_except_align_o              (ctrl_except_align_o),
+      .ctrl_except_trap_o               (ctrl_except_trap_o),
+      .execute_valid_o                  (execute_valid_o),
+      .ctrl_valid_o                     (ctrl_valid_o),
       // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .padv_i				(padv_execute_o),	 // Templated
-      .padv_ctrl_i			(padv_ctrl_o),		 // Templated
-      .execute_except_ibus_err_i	(execute_except_ibus_err_o), // Templated
-      .execute_except_itlb_miss_i	(execute_except_itlb_miss_o), // Templated
-      .execute_except_ipagefault_i	(execute_except_ipagefault_o), // Templated
-      .execute_except_illegal_i		(execute_except_illegal_o), // Templated
-      .execute_except_ibus_align_i	(execute_except_ibus_align_o), // Templated
-      .execute_except_syscall_i		(execute_except_syscall_o), // Templated
-      .lsu_except_dbus_i		(lsu_except_dbus_o),	 // Templated
-      .lsu_except_align_i		(lsu_except_align_o),	 // Templated
-      .lsu_except_dtlb_miss_i		(lsu_except_dtlb_miss_o), // Templated
-      .lsu_except_dpagefault_i		(lsu_except_dpagefault_o), // Templated
-      .execute_except_trap_i		(execute_except_trap_o), // Templated
-      .pipeline_flush_i			(pipeline_flush_o),	 // Templated
-      .op_mul_i				(execute_op_mul_o),	 // Templated
-      .op_lsu_load_i			(execute_op_lsu_load_o), // Templated
-      .op_lsu_store_i			(execute_op_lsu_store_o), // Templated
-      .op_lsu_atomic_i			(execute_op_lsu_atomic_o), // Templated
-      .lsu_length_i			(execute_lsu_length_o),	 // Templated
-      .lsu_zext_i			(execute_lsu_zext_o),	 // Templated
-      .op_mfspr_i			(execute_op_mfspr_o),	 // Templated
-      .op_mtspr_i			(execute_op_mtspr_o),	 // Templated
-      .alu_valid_i			(alu_valid_o),		 // Templated
-      .lsu_valid_i			(lsu_valid_o),		 // Templated
-      .op_jr_i				(execute_op_jr_o),	 // Templated
-      .op_jal_i				(execute_op_jal_o),	 // Templated
-      .op_rfe_i				(execute_op_rfe_o),	 // Templated
-      .alu_result_i			(alu_result_o),		 // Templated
-      .adder_result_i			(adder_result_o),	 // Templated
-      .rfb_i				(execute_rfb_o),	 // Templated
-      .execute_jal_result_i		(execute_jal_result_o),	 // Templated
-      .flag_set_i			(flag_set_o),		 // Templated
-      .flag_clear_i			(flag_clear_o),		 // Templated
-      .carry_set_i			(carry_set_o),		 // Templated
-      .carry_clear_i			(carry_clear_o),	 // Templated
-      .overflow_set_i			(overflow_set_o),	 // Templated
-      .overflow_clear_i			(overflow_clear_o),	 // Templated
-      .pc_execute_i			(pc_decode_to_execute),	 // Templated
-      .execute_rf_wb_i			(execute_rf_wb_o),	 // Templated
-      .execute_rfd_adr_i		(execute_rfd_adr_o),	 // Templated
-      .execute_bubble_i			(execute_bubble_o),	 // Templated
-      .ctrl_mfspr_ack_i			(ctrl_mfspr_ack_o),	 // Templated
-      .ctrl_mtspr_ack_i			(ctrl_mtspr_ack_o));	 // Templated
+      .clk                              (clk),
+      .rst                              (rst),
+      .padv_i                           (padv_execute_o),        // Templated
+      .padv_ctrl_i                      (padv_ctrl_o),           // Templated
+      .execute_except_ibus_err_i        (execute_except_ibus_err_o), // Templated
+      .execute_except_itlb_miss_i       (execute_except_itlb_miss_o), // Templated
+      .execute_except_ipagefault_i      (execute_except_ipagefault_o), // Templated
+      .execute_except_illegal_i         (execute_except_illegal_o), // Templated
+      .execute_except_ibus_align_i      (execute_except_ibus_align_o), // Templated
+      .execute_except_syscall_i         (execute_except_syscall_o), // Templated
+      .lsu_except_dbus_i                (lsu_except_dbus_o),     // Templated
+      .lsu_except_align_i               (lsu_except_align_o),    // Templated
+      .lsu_except_dtlb_miss_i           (lsu_except_dtlb_miss_o), // Templated
+      .lsu_except_dpagefault_i          (lsu_except_dpagefault_o), // Templated
+      .execute_except_trap_i            (execute_except_trap_o), // Templated
+      .pipeline_flush_i                 (pipeline_flush_o),      // Templated
+      .op_mul_i                         (execute_op_mul_o),      // Templated
+      .op_lsu_load_i                    (execute_op_lsu_load_o), // Templated
+      .op_lsu_store_i                   (execute_op_lsu_store_o), // Templated
+      .op_lsu_atomic_i                  (execute_op_lsu_atomic_o), // Templated
+      .lsu_length_i                     (execute_lsu_length_o),  // Templated
+      .lsu_zext_i                       (execute_lsu_zext_o),    // Templated
+      .op_msync_i                       (execute_op_msync_o),    // Templated
+      .op_mfspr_i                       (execute_op_mfspr_o),    // Templated
+      .op_mtspr_i                       (execute_op_mtspr_o),    // Templated
+      .alu_valid_i                      (alu_valid_o),           // Templated
+      .lsu_valid_i                      (lsu_valid_o),           // Templated
+      .msync_stall_i                    (msync_stall_o),         // Templated
+      .op_jr_i                          (execute_op_jr_o),       // Templated
+      .op_jal_i                         (execute_op_jal_o),      // Templated
+      .op_rfe_i                         (execute_op_rfe_o),      // Templated
+      .alu_result_i                     (alu_result_o),          // Templated
+      .adder_result_i                   (adder_result_o),        // Templated
+      .rfb_i                            (execute_rfb_o),         // Templated
+      .execute_jal_result_i             (execute_jal_result_o),  // Templated
+      .flag_set_i                       (flag_set_o),            // Templated
+      .flag_clear_i                     (flag_clear_o),          // Templated
+      .carry_set_i                      (carry_set_o),           // Templated
+      .carry_clear_i                    (carry_clear_o),         // Templated
+      .overflow_set_i                   (overflow_set_o),        // Templated
+      .overflow_clear_i                 (overflow_clear_o),      // Templated
+      .pc_execute_i                     (pc_decode_to_execute),  // Templated
+      .execute_rf_wb_i                  (execute_rf_wb_o),       // Templated
+      .execute_rfd_adr_i                (execute_rfd_adr_o),     // Templated
+      .execute_bubble_i                 (execute_bubble_o),      // Templated
+      .ctrl_mfspr_ack_i                 (ctrl_mfspr_ack_o),      // Templated
+      .ctrl_mtspr_ack_i                 (ctrl_mtspr_ack_o));      // Templated
 
    /* mor1kx_ctrl_cappuccino AUTO_TEMPLATE (
     .ctrl_alu_result_i		(ctrl_alu_result_o),
@@ -1324,101 +1340,101 @@ module mor1kx_cpu_cappuccino
      mor1kx_ctrl_cappuccino
      (/*AUTOINST*/
       // Outputs
-      .ctrl_epcr_o			(ctrl_epcr_o[OPTION_OPERAND_WIDTH-1:0]),
-      .mfspr_dat_o			(mfspr_dat_o[OPTION_OPERAND_WIDTH-1:0]),
-      .ctrl_mfspr_ack_o			(ctrl_mfspr_ack_o),
-      .ctrl_mtspr_ack_o			(ctrl_mtspr_ack_o),
-      .ctrl_flag_o			(ctrl_flag_o),
-      .ctrl_carry_o			(ctrl_carry_o),
-      .ctrl_branch_exception_o		(ctrl_branch_exception_o),
-      .ctrl_branch_except_pc_o		(ctrl_branch_except_pc_o[OPTION_OPERAND_WIDTH-1:0]),
-      .pipeline_flush_o			(pipeline_flush_o),
-      .doing_rfe_o			(doing_rfe_o),
-      .padv_fetch_o			(padv_fetch_o),
-      .padv_decode_o			(padv_decode_o),
-      .padv_execute_o			(padv_execute_o),
-      .padv_ctrl_o			(padv_ctrl_o),
-      .du_dat_o				(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
-      .du_ack_o				(du_ack_o),
-      .du_stall_o			(du_stall_o),
-      .du_restart_pc_o			(du_restart_pc_o[OPTION_OPERAND_WIDTH-1:0]),
-      .du_restart_o			(du_restart_o),
-      .spr_bus_addr_o			(spr_bus_addr_o[15:0]),
-      .spr_bus_we_o			(spr_bus_we_o),
-      .spr_bus_stb_o			(spr_bus_stb_o),
-      .spr_bus_dat_o			(spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
-      .spr_sr_o				(spr_sr_o[15:0]),
-      .ctrl_bubble_o			(ctrl_bubble_o),
+      .ctrl_epcr_o                      (ctrl_epcr_o[OPTION_OPERAND_WIDTH-1:0]),
+      .mfspr_dat_o                      (mfspr_dat_o[OPTION_OPERAND_WIDTH-1:0]),
+      .ctrl_mfspr_ack_o                 (ctrl_mfspr_ack_o),
+      .ctrl_mtspr_ack_o                 (ctrl_mtspr_ack_o),
+      .ctrl_flag_o                      (ctrl_flag_o),
+      .ctrl_carry_o                     (ctrl_carry_o),
+      .ctrl_branch_exception_o          (ctrl_branch_exception_o),
+      .ctrl_branch_except_pc_o          (ctrl_branch_except_pc_o[OPTION_OPERAND_WIDTH-1:0]),
+      .pipeline_flush_o                 (pipeline_flush_o),
+      .doing_rfe_o                      (doing_rfe_o),
+      .padv_fetch_o                     (padv_fetch_o),
+      .padv_decode_o                    (padv_decode_o),
+      .padv_execute_o                   (padv_execute_o),
+      .padv_ctrl_o                      (padv_ctrl_o),
+      .du_dat_o                         (du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
+      .du_ack_o                         (du_ack_o),
+      .du_stall_o                       (du_stall_o),
+      .du_restart_pc_o                  (du_restart_pc_o[OPTION_OPERAND_WIDTH-1:0]),
+      .du_restart_o                     (du_restart_o),
+      .spr_bus_addr_o                   (spr_bus_addr_o[15:0]),
+      .spr_bus_we_o                     (spr_bus_we_o),
+      .spr_bus_stb_o                    (spr_bus_stb_o),
+      .spr_bus_dat_o                    (spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
+      .spr_sr_o                         (spr_sr_o[15:0]),
+      .ctrl_bubble_o                    (ctrl_bubble_o),
       // Inputs
-      .clk				(clk),
-      .rst				(rst),
-      .ctrl_alu_result_i		(ctrl_alu_result_o),	 // Templated
-      .ctrl_lsu_adr_i			(ctrl_lsu_adr_o),	 // Templated
-      .ctrl_rfb_i			(ctrl_rfb_o),		 // Templated
-      .ctrl_flag_set_i			(ctrl_flag_set_o),	 // Templated
-      .ctrl_flag_clear_i		(ctrl_flag_clear_o),	 // Templated
-      .atomic_flag_set_i		(atomic_flag_set_o),	 // Templated
-      .atomic_flag_clear_i		(atomic_flag_clear_o),	 // Templated
-      .pc_ctrl_i			(pc_execute_to_ctrl),	 // Templated
-      .ctrl_op_mfspr_i			(ctrl_op_mfspr_o),	 // Templated
-      .ctrl_op_mtspr_i			(ctrl_op_mtspr_o),	 // Templated
-      .ctrl_op_rfe_i			(ctrl_op_rfe_o),	 // Templated
-      .decode_branch_i			(decode_branch_o),	 // Templated
-      .decode_branch_target_i		(decode_branch_target_o), // Templated
-      .branch_mispredict_i		(branch_mispredict_o),	 // Templated
-      .execute_mispredict_target_i	(execute_mispredict_target_o), // Templated
-      .pc_execute_i			(pc_decode_to_execute),	 // Templated
-      .execute_op_branch_i		(execute_op_branch_o),	 // Templated
-      .except_ibus_err_i		(ctrl_except_ibus_err_o), // Templated
-      .except_itlb_miss_i		(ctrl_except_itlb_miss_o), // Templated
-      .except_ipagefault_i		(ctrl_except_ipagefault_o), // Templated
-      .except_ibus_align_i		(ctrl_except_ibus_align_o), // Templated
-      .except_illegal_i			(ctrl_except_illegal_o), // Templated
-      .except_syscall_i			(ctrl_except_syscall_o), // Templated
-      .except_dbus_i			(ctrl_except_dbus_o),	 // Templated
-      .except_dtlb_miss_i		(ctrl_except_dtlb_miss_o), // Templated
-      .except_dpagefault_i		(ctrl_except_dpagefault_o), // Templated
-      .except_trap_i			(ctrl_except_trap_o),	 // Templated
-      .except_align_i			(ctrl_except_align_o),	 // Templated
-      .fetch_valid_i			(fetch_valid_o),	 // Templated
-      .decode_valid_i			(decode_valid_o),	 // Templated
-      .execute_valid_i			(execute_valid_o),	 // Templated
-      .ctrl_valid_i			(ctrl_valid_o),		 // Templated
-      .fetch_exception_taken_i		(fetch_exception_taken_o), // Templated
-      .decode_bubble_i			(decode_bubble_o),	 // Templated
-      .execute_bubble_i			(execute_bubble_o),	 // Templated
-      .irq_i				(irq_i[31:0]),
-      .store_buffer_epcr_i		(store_buffer_epcr_o),	 // Templated
-      .store_buffer_err_i		(store_buffer_err_o),	 // Templated
-      .ctrl_carry_set_i			(ctrl_carry_set_o),	 // Templated
-      .ctrl_carry_clear_i		(ctrl_carry_clear_o),	 // Templated
-      .ctrl_overflow_set_i		(ctrl_overflow_set_o),	 // Templated
-      .ctrl_overflow_clear_i		(ctrl_overflow_clear_o), // Templated
-      .du_addr_i			(du_addr_i[15:0]),
-      .du_stb_i				(du_stb_i),
-      .du_dat_i				(du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
-      .du_we_i				(du_we_i),
-      .du_stall_i			(du_stall_i),
-      .spr_bus_dat_dc_i			(spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]),
-      .spr_bus_ack_dc_i			(spr_bus_ack_dc_i),
-      .spr_bus_dat_ic_i			(spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]),
-      .spr_bus_ack_ic_i			(spr_bus_ack_ic_i),
-      .spr_bus_dat_dmmu_i		(spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]),
-      .spr_bus_ack_dmmu_i		(spr_bus_ack_dmmu_i),
-      .spr_bus_dat_immu_i		(spr_bus_dat_immu_i[OPTION_OPERAND_WIDTH-1:0]),
-      .spr_bus_ack_immu_i		(spr_bus_ack_immu_i),
-      .spr_bus_dat_mac_i		(spr_bus_dat_mac_i[OPTION_OPERAND_WIDTH-1:0]),
-      .spr_bus_ack_mac_i		(spr_bus_ack_mac_i),
-      .spr_bus_dat_pmu_i		(spr_bus_dat_pmu_i[OPTION_OPERAND_WIDTH-1:0]),
-      .spr_bus_ack_pmu_i		(spr_bus_ack_pmu_i),
-      .spr_bus_dat_pcu_i		(spr_bus_dat_pcu_i[OPTION_OPERAND_WIDTH-1:0]),
-      .spr_bus_ack_pcu_i		(spr_bus_ack_pcu_i),
-      .spr_bus_dat_fpu_i		(spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
-      .spr_bus_ack_fpu_i		(spr_bus_ack_fpu_i),
-      .spr_gpr_dat_i			(spr_gpr_dat_o),	 // Templated
-      .spr_gpr_ack_i			(spr_gpr_ack_o),	 // Templated
-      .multicore_coreid_i		(multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
-      .multicore_numcores_i		(multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
+      .clk                              (clk),
+      .rst                              (rst),
+      .ctrl_alu_result_i                (ctrl_alu_result_o),     // Templated
+      .ctrl_lsu_adr_i                   (ctrl_lsu_adr_o),        // Templated
+      .ctrl_rfb_i                       (ctrl_rfb_o),            // Templated
+      .ctrl_flag_set_i                  (ctrl_flag_set_o),       // Templated
+      .ctrl_flag_clear_i                (ctrl_flag_clear_o),     // Templated
+      .atomic_flag_set_i                (atomic_flag_set_o),     // Templated
+      .atomic_flag_clear_i              (atomic_flag_clear_o),   // Templated
+      .pc_ctrl_i                        (pc_execute_to_ctrl),    // Templated
+      .ctrl_op_mfspr_i                  (ctrl_op_mfspr_o),       // Templated
+      .ctrl_op_mtspr_i                  (ctrl_op_mtspr_o),       // Templated
+      .ctrl_op_rfe_i                    (ctrl_op_rfe_o),         // Templated
+      .decode_branch_i                  (decode_branch_o),       // Templated
+      .decode_branch_target_i           (decode_branch_target_o), // Templated
+      .branch_mispredict_i              (branch_mispredict_o),   // Templated
+      .execute_mispredict_target_i      (execute_mispredict_target_o), // Templated
+      .pc_execute_i                     (pc_decode_to_execute),  // Templated
+      .execute_op_branch_i              (execute_op_branch_o),   // Templated
+      .except_ibus_err_i                (ctrl_except_ibus_err_o), // Templated
+      .except_itlb_miss_i               (ctrl_except_itlb_miss_o), // Templated
+      .except_ipagefault_i              (ctrl_except_ipagefault_o), // Templated
+      .except_ibus_align_i              (ctrl_except_ibus_align_o), // Templated
+      .except_illegal_i                 (ctrl_except_illegal_o), // Templated
+      .except_syscall_i                 (ctrl_except_syscall_o), // Templated
+      .except_dbus_i                    (ctrl_except_dbus_o),    // Templated
+      .except_dtlb_miss_i               (ctrl_except_dtlb_miss_o), // Templated
+      .except_dpagefault_i              (ctrl_except_dpagefault_o), // Templated
+      .except_trap_i                    (ctrl_except_trap_o),    // Templated
+      .except_align_i                   (ctrl_except_align_o),   // Templated
+      .fetch_valid_i                    (fetch_valid_o),         // Templated
+      .decode_valid_i                   (decode_valid_o),        // Templated
+      .execute_valid_i                  (execute_valid_o),       // Templated
+      .ctrl_valid_i                     (ctrl_valid_o),          // Templated
+      .fetch_exception_taken_i          (fetch_exception_taken_o), // Templated
+      .decode_bubble_i                  (decode_bubble_o),       // Templated
+      .execute_bubble_i                 (execute_bubble_o),      // Templated
+      .irq_i                            (irq_i[31:0]),
+      .store_buffer_epcr_i              (store_buffer_epcr_o),   // Templated
+      .store_buffer_err_i               (store_buffer_err_o),    // Templated
+      .ctrl_carry_set_i                 (ctrl_carry_set_o),      // Templated
+      .ctrl_carry_clear_i               (ctrl_carry_clear_o),    // Templated
+      .ctrl_overflow_set_i              (ctrl_overflow_set_o),   // Templated
+      .ctrl_overflow_clear_i            (ctrl_overflow_clear_o), // Templated
+      .du_addr_i                        (du_addr_i[15:0]),
+      .du_stb_i                         (du_stb_i),
+      .du_dat_i                         (du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
+      .du_we_i                          (du_we_i),
+      .du_stall_i                       (du_stall_i),
+      .spr_bus_dat_dc_i                 (spr_bus_dat_dc_i[OPTION_OPERAND_WIDTH-1:0]),
+      .spr_bus_ack_dc_i                 (spr_bus_ack_dc_i),
+      .spr_bus_dat_ic_i                 (spr_bus_dat_ic_i[OPTION_OPERAND_WIDTH-1:0]),
+      .spr_bus_ack_ic_i                 (spr_bus_ack_ic_i),
+      .spr_bus_dat_dmmu_i               (spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]),
+      .spr_bus_ack_dmmu_i               (spr_bus_ack_dmmu_i),
+      .spr_bus_dat_immu_i               (spr_bus_dat_immu_i[OPTION_OPERAND_WIDTH-1:0]),
+      .spr_bus_ack_immu_i               (spr_bus_ack_immu_i),
+      .spr_bus_dat_mac_i                (spr_bus_dat_mac_i[OPTION_OPERAND_WIDTH-1:0]),
+      .spr_bus_ack_mac_i                (spr_bus_ack_mac_i),
+      .spr_bus_dat_pmu_i                (spr_bus_dat_pmu_i[OPTION_OPERAND_WIDTH-1:0]),
+      .spr_bus_ack_pmu_i                (spr_bus_ack_pmu_i),
+      .spr_bus_dat_pcu_i                (spr_bus_dat_pcu_i[OPTION_OPERAND_WIDTH-1:0]),
+      .spr_bus_ack_pcu_i                (spr_bus_ack_pcu_i),
+      .spr_bus_dat_fpu_i                (spr_bus_dat_fpu_i[OPTION_OPERAND_WIDTH-1:0]),
+      .spr_bus_ack_fpu_i                (spr_bus_ack_fpu_i),
+      .spr_gpr_dat_i                    (spr_gpr_dat_o),         // Templated
+      .spr_gpr_ack_i                    (spr_gpr_ack_o),         // Templated
+      .multicore_coreid_i               (multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
+      .multicore_numcores_i             (multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]));
 
    reg [`OR1K_INSN_WIDTH-1:0] traceport_stage_decode_insn;
    reg [`OR1K_INSN_WIDTH-1:0] traceport_stage_exec_insn;
