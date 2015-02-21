@@ -348,7 +348,7 @@ module pfpu32_intfloat_conv
   // Exponent Normalization
   wire [8:0] s3t_exp_next_mi = s2o_exp8 - {3'd0,s2o_ldz} + 9'd2; // 9 bits - includes carry out
 
-  // Fasu Output will be denormalized ...
+  // Fasu Output will be denormalized
   wire s3t_dn = (s3t_exp_in_00 | (s3t_exp_next_mi[8] & !s3t_carry));
 
   wire [8:0] s3t_exp9 = s2o_exp8 + 8'd1;

@@ -258,22 +258,13 @@ module mor1kx_decode
    // FPU related
    generate
      /* verilator lint_off WIDTH */
-     if (FEATURE_FPU=="ENABLED") begin : fpu_enabled_in_decode
+     if (FEATURE_FPU!="NONE") begin
      /* verilator lint_on WIDTH */
        assign decode_op_fpu_o  = { (opc_insn == `OR1K_OPCODE_FPU), 
-				    decode_insn_i[`OR1K_FPUOP_WIDTH-2:0] };
-     /* verilator lint_off WIDTH */
-     end else if (FEATURE_FPU=="NONE") begin : fpu_none_in_decode
-     /* verilator lint_on WIDTH */
+                                   decode_insn_i[`OR1K_FPUOP_WIDTH-2:0] };
+     end else begin
        assign decode_op_fpu_o  = {`OR1K_FPUOP_WIDTH{1'b0}};
-     end else begin : fpu_undef_in_decode
-         // Incorrect configuration option
-       initial begin
-         $display("%m: Error - chosen FPU implementation (%s) not available",
-                     FEATURE_FPU);
-         $finish;
-       end
-     end   
+     end
    endgenerate // FPU related
 
    // Which instructions cause writeback?

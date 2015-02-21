@@ -34,8 +34,6 @@
 
 `include "mor1kx-defines.v"
 
-//`define NEW_F32_I2F
-
 module pfpu32_i2f
 (
    input             clk,
@@ -51,7 +49,7 @@ module pfpu32_i2f
    output reg  [4:0] i2f_shl_o,
    output reg  [7:0] i2f_exp8shl_o,
    output reg  [7:0] i2f_exp8sh0_o,
-   output reg [34:0] i2f_fract35_o    // {fract32,g,r,s}
+   output reg [31:0] i2f_fract32_o
 );
 
   /*
@@ -129,16 +127,16 @@ module pfpu32_i2f
       i2f_shl_o     <= s1t_shlx;
       i2f_exp8shl_o <= 8'd150 - {3'd0,s1t_shlx};
       i2f_exp8sh0_o <= {8{s1t_fract32[23]}} & 8'd150; // "1" is in [23] / zero
-      i2f_fract35_o <= {s1t_fract32,3'd0};            // {fract32,g,r,s}
+      i2f_fract32_o <= s1t_fract32;
     end // advance
   end // posedge clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
-      i2f_rdy_o <= 0;
+      i2f_rdy_o <= 1'b0;
     else if(flush_i)
-      i2f_rdy_o <= 0;
+      i2f_rdy_o <= 1'b0;
     else if(adv_i)
       i2f_rdy_o <= start_i;
   end // posedge clock

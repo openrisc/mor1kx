@@ -1487,7 +1487,7 @@ end
 endgenerate
 
 generate
-if (FEATURE_FPU!="NONE") begin : fpu_ctrl
+if (FEATURE_FPU!="NONE") begin
    assign spr_access_ack[`OR1K_SPR_FPU_BASE] = spr_bus_ack_fpu_i;
    assign spr_internal_read_dat[`OR1K_SPR_FPU_BASE] =
      spr_bus_dat_fpu_i &

@@ -322,7 +322,7 @@ module pfpu32_mul
   // and appropriatelly corrected exponent
   wire s2o_exp10c_0 = !(|s2o_exp10c);
   wire [9:0] s3t_shr_of_neg_exp = 11'h401 - {1'b0,s2o_exp10c}; // 1024-v+1
-  //...
+  // variants:
   wire [9:0] s3t_shrx;
   wire [9:0] s3t_exp10rx;
   assign {s3t_shrx,s3t_exp10rx} =

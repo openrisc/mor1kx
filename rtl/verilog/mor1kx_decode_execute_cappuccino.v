@@ -311,32 +311,22 @@ module mor1kx_decode_execute_cappuccino
    // FPU related
    generate
      /* verilator lint_off WIDTH */
-     if (FEATURE_FPU=="ENABLED") begin :fpu_enabled_in_decode_execute
+     if (FEATURE_FPU!="NONE") begin
      /* verilator lint_on WIDTH */
        reg [`OR1K_FPUOP_WIDTH-1:0] execute_op_fpu_r;
        assign execute_op_fpu_o = execute_op_fpu_r;
-       always @(posedge clk `OR_ASYNC_RST)
-       if (rst) begin
-	 execute_op_fpu_r <= {`OR1K_FPUOP_WIDTH{1'b0}};
-       end else if (pipeline_flush_i) begin
-	 execute_op_fpu_r <= {`OR1K_FPUOP_WIDTH{1'b0}};
-       end else if (padv_i) begin
-	 execute_op_fpu_r <= (decode_bubble_o ?
-			      {`OR1K_FPUOP_WIDTH{1'b0}} : decode_op_fpu_i);
-       end
-     end
-     /* verilator lint_off WIDTH */
-     else if (FEATURE_FPU=="NONE") begin : fpu_none_in_decode_execute
-     /* verilator lint_on WIDTH */
+       always @(posedge clk `OR_ASYNC_RST) begin
+         if (rst)
+           execute_op_fpu_r <= {`OR1K_FPUOP_WIDTH{1'b0}};
+         else if (pipeline_flush_i)
+           execute_op_fpu_r <= {`OR1K_FPUOP_WIDTH{1'b0}};
+         else if (padv_i)
+           execute_op_fpu_r <= (decode_bubble_o ?
+                               {`OR1K_FPUOP_WIDTH{1'b0}} : decode_op_fpu_i);
+       end // @clk
+     end else begin // no fpu
        assign execute_op_fpu_o  = {`OR1K_FPUOP_WIDTH{1'b0}};
-     end else begin : fpu_undef_in_decode_execute
-         // Incorrect configuration option
-       initial begin
-         $display("%m: Error - chosen FPU implementation (%s) not available",
-                     FEATURE_FPU);
-	 $finish;
-       end
-     end   
+     end
    endgenerate // FPU related
 
    // rfe is a special case, instead of pushing the pipeline full

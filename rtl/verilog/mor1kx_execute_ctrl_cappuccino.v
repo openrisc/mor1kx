@@ -262,36 +262,28 @@ endgenerate
    // FPU related
    generate
      /* verilator lint_off WIDTH */
-     if (FEATURE_FPU=="ENABLED") begin :fpu_enabled_in_execute_ctrl
+     if (FEATURE_FPU!="NONE") begin
      /* verilator lint_on WIDTH */
-       always @(posedge clk `OR_ASYNC_RST)
-       if (rst) begin
-         ctrl_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
-         ctrl_fpcsr_set_o <= 0;
-       end else if (pipeline_flush_i) begin
-         ctrl_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
-         ctrl_fpcsr_set_o <= 0;
-       end else if (padv_i) begin
-  	     ctrl_fpcsr_o <= fpcsr_i;
-	       ctrl_fpcsr_set_o <= fpcsr_set_i;
-       end
+       always @(posedge clk `OR_ASYNC_RST) begin
+         if (rst) begin
+           ctrl_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
+           ctrl_fpcsr_set_o <= 0;
+         end else if (pipeline_flush_i) begin
+           ctrl_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
+           ctrl_fpcsr_set_o <= 0;
+         end else if (padv_i) begin
+           ctrl_fpcsr_o <= fpcsr_i;
+           ctrl_fpcsr_set_o <= fpcsr_set_i;
+         end
+       end // @clk
+     end else begin // no fpu
+       always @(posedge clk `OR_ASYNC_RST) begin
+         if (rst) begin
+           ctrl_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
+           ctrl_fpcsr_set_o <= 0;
+         end
+       end // @clk
      end
-     /* verilator lint_off WIDTH */
-     else if (FEATURE_FPU=="NONE") begin : fpu_none_in_execute_ctrl
-     /* verilator lint_on WIDTH */
-       always @(posedge clk `OR_ASYNC_RST)
-       if (rst) begin
-         ctrl_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
-         ctrl_fpcsr_set_o <= 0;
-       end
-     end else begin : fpu_undef_in_execute_ctrl
-         // Incorrect configuration option
-       initial begin
-          $display("%m: Error - chosen FPU implementation (%s) not available",
-                     FEATURE_FPU);
-          $finish;
-       end
-     end   
    endgenerate // FPU related
 
    always @(posedge clk `OR_ASYNC_RST)

@@ -433,7 +433,7 @@ module pfpu32_div
   // and appropriatelly corrected exponent
   wire s2o_exp10_0 = !(|s2o_exp10);
   wire [9:0] s3t_shr_of_neg_exp = 11'h401 - {1'b0,s2o_exp10}; // 1024-v+1
-  //...
+  // variants:
   wire [9:0] s3t_shrx;
   wire [9:0] s3t_exp10rx;
   assign {s3t_shrx,s3t_exp10rx} =
@@ -455,7 +455,6 @@ module pfpu32_div
   // and the result is non-zero
   // the '1' is maximum number of leading zeros in the quotient
   wire s3t_nlz = ~s2o_qutnt[26];
-    //...
   wire [9:0] s3t_exp10_m1 = s2o_exp10 - 10'd1;
   // left shift flag and corrected exponent
   wire       s3t_shlx;

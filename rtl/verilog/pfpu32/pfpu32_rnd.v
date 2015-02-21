@@ -49,8 +49,6 @@ module pfpu32_rnd
   input        add_rdy_i,       // add/sub is ready
   input        add_sign_i,      // add/sub signum
   input        add_sub_0_i,     // flag that actual substruction is performed and result is zero
-  input        add_shr_i,       // do right shift in align stage
-  input  [9:0] add_exp10shr_i,  // exponent for right shift align
   input  [4:0] add_shl_i,       // do left shift in align stage
   input  [9:0] add_exp10shl_i,  // exponent for left shift align
   input  [9:0] add_exp10sh0_i,  // exponent for no shift in align
@@ -78,7 +76,6 @@ module pfpu32_rnd
   input        div_op_i,        // MUL/DIV output is division
   input        div_sign_rmnd_i, // signum or reminder for IEEE compliant rounding
   input        div_dbz_i,       // division by zero flag
-  input        div_dbinf_i,     // division by infinity flag
   // input from i2f
   input        i2f_rdy_i,       // i2f is ready
   input        i2f_sign_i,      // i2f signum
@@ -87,12 +84,13 @@ module pfpu32_rnd
   input  [4:0] i2f_shl_i,
   input  [7:0] i2f_exp8shl_i,
   input  [7:0] i2f_exp8sh0_i,
-  input [34:0] i2f_fract35_i,   // {fract32,g,r,s}
+  input [31:0] i2f_fract32_i,   
   // input from f2i
   input        f2i_rdy_i,       // f2i is ready
   input        f2i_sign_i,      // f2i signum
-  input [31:0] f2i_int32_i,     // f2i i32 modulo
-  input  [1:0] f2i_rs_i,        // f2i round & sticky bits
+  input [23:0] f2i_int24_i,     // f2i fractional
+  input  [4:0] f2i_shr_i,       // f2i required shift right value
+  input  [3:0] f2i_shl_i,       // f2i required shift left value   
   input        f2i_ovf_i,       // f2i overflow flag
   input        f2i_snan_i,      // f2i signaling NaN input
   // input from cmp
@@ -101,10 +99,13 @@ module pfpu32_rnd
   input        cmp_inv_i,       // cmp invalid flag
   input        cmp_inf_i,       // cmp infinity flag
   // outputs
+  //  arithmetic part's outputs
   output reg                  [31:0] fpu_result_o,
-  output reg                         fpu_valid_o,
+  output reg                         fpu_arith_valid_o,
+  //  comparator's outputs 
   output reg                         fpu_cmp_flag_o,
   output reg                         fpu_cmp_valid_o,
+  //  common output
   output reg [`OR1K_FPCSR_WIDTH-1:0] fpcsr_o
 );
 
@@ -143,25 +144,32 @@ module pfpu32_rnd
   assign {s1t_sign,s1t_inv,s1t_inf,s1t_snan,s1t_qnan,s1t_anan_sign} =
     add_rdy_i ? {s1t_add_sign,add_inv_i,add_inf_i,add_snan_i,add_qnan_i,add_anan_sign_i} :
     mul_rdy_i ? {mul_sign_i,mul_inv_i,mul_inf_i,mul_snan_i,mul_qnan_i,mul_anan_sign_i} :
-    i2f_rdy_i ? {i2f_sign_i,1'b0,1'b0,1'b0,1'b0,1'b0} :
-                {1'b0,1'b0,1'b0,1'b0,1'b0,1'b0};
-
-  // multiplexer for shift values
-  assign {s1t_shr, s1t_shl} =
-    add_rdy_i ? {{4'd0,add_shr_i}, add_shl_i} :
-    mul_rdy_i ? {mul_shr_i, {4'd0,mul_shl_i}} :
-    i2f_rdy_i ? {{1'b0,i2f_shr_i}, i2f_shl_i} :
-                {5'd0,5'd0};
+    f2i_rdy_i ? {f2i_sign_i,1'b0,1'b0,f2i_snan_i,1'b0,f2i_sign_i} :
+                {i2f_sign_i,1'b0,1'b0,1'b0,1'b0,1'b0}; // and i2f by default
 
   // multiplexer for fractionals
   assign s1t_fract35 =
     add_rdy_i ? {7'd0, add_fract28_i} :
     mul_rdy_i ? {7'd0, mul_fract28_i} :
-    i2f_rdy_i ? i2f_fract35_i         :
-                35'd0;
+    f2i_rdy_i ? {8'd0, f2i_int24_i, 3'd0} :
+                {i2f_fract32_i,3'd0}; // and i2f by default
 
+  // overflow bit for add/mul
+  wire s1t_addmul_carry = (add_rdy_i & add_fract28_i[27]) |
+                          (mul_rdy_i & mul_fract28_i[27]);
+
+  // multiplexer for shift values
+  wire [4:0] s1t_shr_t;
+  assign {s1t_shr_t, s1t_shl} =
+    add_rdy_i ? {5'd0, add_shl_i} :
+    mul_rdy_i ? {mul_shr_i, {4'd0,mul_shl_i}} :
+    f2i_rdy_i ? {f2i_shr_i, {1'b0,f2i_shl_i}} :
+                {{1'b0,i2f_shr_i}, i2f_shl_i}; // and i2f by default
+
+  assign s1t_shr = (|s1t_shr_t) ? s1t_shr_t : {4'd0,s1t_addmul_carry};
+ 
   // align
-  wire [26:0] s1t_fract27sh =
+  wire [34:0] s1t_fract35sh =
     (|s1t_shr) ? (s1t_fract35 >> s1t_shr) :
                  (s1t_fract35 << s1t_shl);
 
@@ -219,45 +227,49 @@ module pfpu32_rnd
   wire [9:0] s1t_exp10shl;
   wire [9:0] s1t_exp10sh0;
   assign {s1t_exp10shr, s1t_exp10shl, s1t_exp10sh0} =
-    add_rdy_i ? {add_exp10shr_i, add_exp10shl_i, add_exp10sh0_i} :
+    add_rdy_i ? {add_exp10sh0_i, add_exp10shl_i, add_exp10sh0_i} :
     mul_rdy_i ? {mul_exp10shr_i, mul_exp10shl_i, mul_exp10sh0_i} :
-    i2f_rdy_i ? {{2'd0,i2f_exp8shr_i},{2'd0,i2f_exp8shl_i},{2'd0,i2f_exp8sh0_i}} :
-                {10'd0,10'd0,10'd0};
+    f2i_rdy_i ? {10'd0, 10'd0, 10'd0} :
+                {{2'd0,i2f_exp8shr_i},{2'd0,i2f_exp8shl_i},{2'd0,i2f_exp8sh0_i}}; // i2f by default
 
   wire [9:0] s1t_exp10 =
-    (|s1t_shr) ? s1t_exp10shr :
-    (|s1t_shl) ? s1t_exp10shl :
-                 s1t_exp10sh0;
+    (|s1t_shr_t)     ? s1t_exp10shr :
+    s1t_addmul_carry ? (s1t_exp10sh0 + 10'd1) :
+    (|s1t_shl)       ? s1t_exp10shl :
+                       s1t_exp10sh0;
 
   // output of align stage 
   reg        s1o_sign;
   reg  [9:0] s1o_exp10;
-  reg [23:0] s1o_fract24;
+  reg [31:0] s1o_fract32;
   reg  [1:0] s1o_rs;
   reg        s1o_inv;
   reg        s1o_inf;
   reg        s1o_snan_i;
   reg        s1o_qnan_i;
   reg        s1o_anan_sign_i;
-  reg        s1o_div_op, s1o_div_sign_rmnd, s1o_div_dbz, s1o_div_dbinf;
+  reg        s1o_div_op, s1o_div_sign_rmnd, s1o_div_dbz;
+  reg        s1o_f2i_ovf, s1o_f2i;
   // registering
   always @(posedge clk) begin
     if(adv_i) begin
       s1o_sign    <= s1t_sign;
       s1o_exp10   <= s1t_exp10;
-      s1o_fract24 <= s1t_fract27sh[26:3];
-      s1o_rs      <= {s1t_fract27sh[2],s1t_sticky};
-      //...
+      s1o_fract32 <= s1t_fract35sh[34:3];
+      s1o_rs      <= {s1t_fract35sh[2],s1t_sticky};
+      // various flags:
       s1o_inv         <= s1t_inv;
       s1o_inf         <= s1t_inf;
       s1o_snan_i      <= s1t_snan;
       s1o_qnan_i      <= s1t_qnan;
       s1o_anan_sign_i <= s1t_anan_sign;
-      //...
+      // DIV specials
       s1o_div_op        <= mul_rdy_i & div_op_i;
       s1o_div_sign_rmnd <= div_sign_rmnd_i;
       s1o_div_dbz       <= div_dbz_i;
-      s1o_div_dbinf     <= div_dbinf_i;
+      // I2F specials
+      s1o_f2i_ovf <= f2i_ovf_i;
+      s1o_f2i     <= f2i_rdy_i;
     end // advance
   end // posedge clock
 
@@ -265,31 +277,26 @@ module pfpu32_rnd
   reg s1o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
-      s1o_ready <= 0;
+      s1o_ready <= 1'b0;
     else if(flush_i)
-      s1o_ready <= 0;
+      s1o_ready <= 1'b0;
     else if(adv_i)
-      s1o_ready <= (add_rdy_i | mul_rdy_i | i2f_rdy_i);
+      s1o_ready <= (add_rdy_i | mul_rdy_i | f2i_rdy_i | i2f_rdy_i);
   end // posedge clock
 
 
   /* Stage #2: rounding */
 
 
-  wire        s2t_sign;
-  wire  [9:0] s2t_exp10;
-  wire [31:0] s2t_fract32;
-  wire  [1:0] s2t_rs;
-  wire        s2t_inv;
-  wire        s2t_inf;
-  wire        s2t_snan;
-  wire        s2t_qnan;
-  wire        s2t_anan_sign;
-
-  assign {s2t_sign,s2t_exp10,s2t_fract32,s2t_rs,s2t_inv,s2t_inf,s2t_snan,s2t_qnan,s2t_anan_sign} =
-    s1o_ready ? {s1o_sign,s1o_exp10,{8'd0,s1o_fract24},s1o_rs,s1o_inv,s1o_inf,s1o_snan_i,s1o_qnan_i,s1o_anan_sign_i} :
-    f2i_rdy_i ? {f2i_sign_i,10'd0,f2i_int32_i,f2i_rs_i,1'b0,1'b0,f2i_snan_i,1'b0,f2i_sign_i} :
-                {1'b0,10'd0,32'd0,2'd0,1'b0,1'b0,1'b0,1'b0,1'b0};
+  wire        s2t_sign      = s1o_sign;
+  wire  [9:0] s2t_exp10     = s1o_exp10;
+  wire [31:0] s2t_fract32   = s1o_fract32;
+  wire  [1:0] s2t_rs        = s1o_rs;
+  wire        s2t_inv       = s1o_inv;
+  wire        s2t_inf       = s1o_inf;
+  wire        s2t_snan      = s1o_snan_i;
+  wire        s2t_qnan      = s1o_qnan_i;
+  wire        s2t_anan_sign = s1o_anan_sign_i;
 
   wire s2t_g    = s2t_fract32[0];
   wire s2t_r    = s2t_rs[1];
@@ -314,7 +321,7 @@ module pfpu32_rnd
   // set resulting direction of rounding
   //  a) normalized quotient is rounded by quotient related rules
   //  b) de-normalized quotient is rounded by common rules
-  wire s2t_rnd_n_qtnt = s1o_div_op & s1o_fract24[23]; // normalized quotient
+  wire s2t_rnd_n_qtnt = s1o_div_op & s1o_fract32[23]; // normalized quotient
   wire s2t_set_rnd_up = s2t_rnd_n_qtnt ? s2t_div_rnd_up : s2t_rnd_up;
   wire s2t_set_rnd_dn = s2t_rnd_n_qtnt ? s2t_div_rnd_dn : 1'b0;
 
@@ -335,24 +342,26 @@ module pfpu32_rnd
   reg        s2o_snan_i;
   reg        s2o_qnan_i;
   reg        s2o_anan_sign_i;
-  reg        s2o_dbz, s2o_dbinf, s2o_f2i_ovf, s2o_f2i;
+  reg        s2o_dbz, s2o_f2i_ovf, s2o_f2i;
   // registering
   always @(posedge clk) begin
     if(adv_i) begin
-      s2o_sign    <= s2t_sign;
-      s2o_exp10   <= s2t_exp10;
-      s2o_fract32 <= s2t_fract32 + s2t_rnd_v32;
-      s2o_lost    <= s2t_lost;
-      s2o_dbz     <= s1o_div_dbz & s1o_div_op;
-      s2o_dbinf   <= s1o_div_dbinf & s1o_div_op;
-      s2o_f2i_ovf <= f2i_ovf_i;
-      s2o_f2i     <= f2i_rdy_i;
-      //...
+      // input related flags
       s2o_inv         <= s2t_inv;
       s2o_inf         <= s2t_inf;
       s2o_snan_i      <= s2t_snan;
       s2o_qnan_i      <= s2t_qnan;
       s2o_anan_sign_i <= s2t_anan_sign;
+      // computation related
+      s2o_sign    <= s2t_sign;
+      s2o_exp10   <= s2t_exp10;
+      s2o_fract32 <= s2t_fract32 + s2t_rnd_v32;
+      s2o_lost    <= s2t_lost;
+      // DIV specials
+      s2o_dbz     <= s1o_div_dbz & s1o_div_op;
+      // F2I specials
+      s2o_f2i_ovf <= s1o_f2i_ovf;
+      s2o_f2i     <= s1o_f2i;
     end // advance
   end // posedge clock
 
@@ -360,11 +369,11 @@ module pfpu32_rnd
   reg s2o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
-      s2o_ready <= 0;
+      s2o_ready <= 1'b0;
     else if(flush_i)
-      s2o_ready <= 0;
+      s2o_ready <= 1'b0;
     else if(adv_i)
-      s2o_ready <= (s1o_ready | f2i_rdy_i);
+      s2o_ready <= s1o_ready;
   end // posedge clock
 
 
@@ -401,8 +410,8 @@ module pfpu32_rnd
   wire [31:0] s3t_opc;
   assign {s3t_opc,s3t_ine,s3t_ovf,s3t_inf,s3t_unf,s3t_zer} =
     // f2i
-    s2o_f2i ?       // ine  ovf  inf               unf                 zer
-      {s3t_i32_opc,s2o_lost,1'b0,1'b0,(s3t_i32_int32_00 & s2o_lost),s3t_i32_int32_00} :
+    s2o_f2i ?       //  ine  ovf  inf  unf              zer
+      {s3t_i32_opc,s2o_lost,1'b0,1'b0,1'b0,s3t_i32_int32_00} :
     // qnan output
     (s2o_snan_i | s2o_qnan_i) ? // ine  ovf  inf  unf  zer
       {{s2o_anan_sign_i,QNAN},    1'b0,1'b0,1'b0,1'b0,1'b0} :
@@ -410,11 +419,15 @@ module pfpu32_rnd
     s2o_inv ?        // ine  ovf  inf  unf  zer
       {{s2o_sign,SNAN},1'b0,1'b0,1'b0,1'b0,1'b0} :
     // overflow and infinity
-    ((s3t_f32_exp10 > 10'd254) | s2o_inf | s2o_dbz) ? // ine                         ovf  inf  unf  zer
+    ((s3t_f32_exp10 > 10'd254) | s2o_inf | s2o_dbz) ? // ine                       ovf  inf  unf  zer
       {{s2o_sign,INF},((s2o_lost | (~s2o_inf)) & (~s2o_dbz)),((~s2o_inf) & (~s2o_dbz)),1'b1,1'b0,1'b0} :
-    // zero and underflow
-    (s3t_f32_fract24_dn | s3t_f32_fract24_00) ?// ine  ovf  inf               unf                             zer
-      {{s2o_sign,8'd0,s3t_f32_fract24[22:0]},s2o_lost,1'b0,1'b0,((s3t_f32_fract24_00 & s2o_lost) | s2o_dbinf),s3t_f32_fract24_00} :
+    // zero and denormalized
+    (s3t_f32_fract24_dn | s3t_f32_fract24_00) ?// ine  ovf  inf 
+      {{s2o_sign,8'd0,s3t_f32_fract24[22:0]},s2o_lost,1'b0,1'b0,
+       // unf
+       (s2o_lost & (s3t_f32_fract24_dn | s3t_f32_fract24_00)),
+       // zer
+       s3t_f32_fract24_00} :
     // normal result                                          ine  ovf  inf  unf  zer
     {{s2o_sign,s3t_f32_exp10[7:0],s3t_f32_fract24[22:0]},s2o_lost,1'b0,1'b0,1'b0,1'b0};
 
@@ -422,9 +435,9 @@ module pfpu32_rnd
   // Output Register
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst) begin
-        // overall FPU results
-      fpu_result_o    <= 32'd0;
-      fpu_valid_o     <= 1'b0;
+        // arithmetic results
+      fpu_result_o      <= 32'd0;
+      fpu_arith_valid_o <=  1'b0;
         // comparison specials
       fpu_cmp_flag_o  <= 1'b0;
       fpu_cmp_valid_o <= 1'b0;
@@ -432,9 +445,9 @@ module pfpu32_rnd
       fpcsr_o         <= {`OR1K_FPCSR_WIDTH{1'b0}};
     end
     else if(flush_i) begin
-        // overall FPU results
-      fpu_result_o    <= 32'd0;
-      fpu_valid_o     <= 1'b0;
+        // arithmetic results
+      fpu_result_o      <= 32'd0;
+      fpu_arith_valid_o <=  1'b0;
         // comparison specials
       fpu_cmp_flag_o  <= 1'b0;
       fpu_cmp_valid_o <= 1'b0;
@@ -442,9 +455,9 @@ module pfpu32_rnd
       fpcsr_o         <= {`OR1K_FPCSR_WIDTH{1'b0}};
     end
     else if(adv_i) begin
-        // overall FPU results
-      fpu_result_o    <= s3t_opc;
-      fpu_valid_o     <= s2o_ready | cmp_rdy_i;
+        // arithmetic results
+      fpu_result_o      <= s3t_opc;
+      fpu_arith_valid_o <= s2o_ready;
         // comparison specials
       fpu_cmp_flag_o  <= cmp_res_i;
       fpu_cmp_valid_o <= cmp_rdy_i;

@@ -61,48 +61,34 @@ module pfpu32_top
   input [OPTION_OPERAND_WIDTH-1:0] rfa_i,
   input [OPTION_OPERAND_WIDTH-1:0] rfb_i,
   output [OPTION_OPERAND_WIDTH-1:0] fpu_result_o,
-  output fpu_valid_o,
+  output fpu_arith_valid_o,
   output fpu_cmp_flag_o,
   output fpu_cmp_valid_o,
   output [`OR1K_FPCSR_WIDTH-1:0] fpcsr_o
 );
 
-// some local wires for output (redudant?)
-wire [OPTION_OPERAND_WIDTH-1:0] fpu_result_w;
-wire                            fpu_valid_w;
-wire                            fpu_cmp_flag_w;
-wire                            fpu_cmp_valid_w;
-wire   [`OR1K_FPCSR_WIDTH-1:0]  fpcsr_w;
-// ... connect outputs
-assign fpu_result_o    = fpu_result_w;
-assign fpu_valid_o     = fpu_valid_w;
-assign fpu_cmp_flag_o  = fpu_cmp_flag_w;
-assign fpu_cmp_valid_o = fpu_cmp_valid_w;
-assign fpcsr_o         = fpcsr_w;
-
-
 // MSB (set by decode stage) indicates FPU instruction
 // Get rid of top bit - is FPU op valid bit
 wire   is_op_fpu = op_fpu_i[`OR1K_FPUOP_WIDTH-1];
 wire [`OR1K_FPUOP_WIDTH-1:0] op_fpu = {1'b0,op_fpu_i[`OR1K_FPUOP_WIDTH-2:0]};
-wire [2:0] op_arith = op_fpu_i[2:0]; // alias
-wire [2:0] op_conv  = op_fpu_i[2:0]; // alias
+wire [2:0] op_arith_conv = op_fpu_i[2:0]; // alias
 wire a_cmp = op_fpu_i[3]; // alias for compare bit of fpu's opcode
 
 // advance FPU units
-wire padv_fpu_units = padv_execute_i | (!fpu_valid_w); // (padv_execute_i & fpu_valid_o) | (!fpu_valid_o);
+wire padv_fpu_units = padv_execute_i |
+                      ((~fpu_arith_valid_o) & (~fpu_cmp_valid_o));
 
 // start logic
 reg new_data;
 always @(posedge clk `OR_ASYNC_RST) begin
   if (rst)
-    new_data <= 0;
+    new_data <= 1'b0;
   else if(flush_i)
-    new_data <= 0;
+    new_data <= 1'b0;
   else if(padv_decode_i)
-    new_data <= 1;
+    new_data <= 1'b1;
   else if(padv_fpu_units)
-    new_data <= 0;
+    new_data <= 1'b0;
 end // posedge clock
 
 wire new_fpu_data = new_data & is_op_fpu;
@@ -123,7 +109,7 @@ wire in_snan_a = in_expa_ff & (~in_fracta[22]) & (|in_fracta[21:0]);
 wire in_qnan_a = in_expa_ff &   in_fracta[22];
 //   denormalized/zero of a
 wire in_opa_0  = ~(|rfa_i[30:0]);
-wire in_opa_dn = (~(|in_expa)) & (~in_opa_0);
+wire in_opa_dn = (~(|in_expa)) & (|in_fracta);
 
 //   split input b
 wire        in_signb  = rfb_i[31];
@@ -137,7 +123,7 @@ wire in_snan_b = in_expb_ff & (~in_fractb[22]) & (|in_fractb[21:0]);
 wire in_qnan_b = in_expb_ff &   in_fractb[22];
 //   denormalized/zero of a
 wire in_opb_0  = ~(|rfb_i[30:0]);
-wire in_opb_dn = (~(|in_expb)) & (~in_opb_0);
+wire in_opb_dn = (~(|in_expb)) & (|in_fractb);
 
 // detection of some exceptions
 //   a nan input -> qnan output
@@ -148,16 +134,16 @@ wire in_anan_sign = (in_snan_a | in_qnan_a) ? in_signa :
                                               in_signb;
 
 // restored exponents
-wire [9:0] in_exp10a = {2'd0,in_expa} + {9'd0,in_opa_dn};
-wire [9:0] in_exp10b = {2'd0,in_expb} + {9'd0,in_opb_dn};
+wire [9:0] in_exp10a = {2'd0,in_expa[7:1],(in_expa[0] | in_opa_dn)};
+wire [9:0] in_exp10b = {2'd0,in_expb[7:1],(in_expb[0] | in_opb_dn)};
 // restored fractionals
-wire [23:0] in_fract24a = {(!in_opa_dn & !in_opa_0),in_fracta};
-wire [23:0] in_fract24b = {(!in_opb_dn & !in_opb_0),in_fractb};
+wire [23:0] in_fract24a = {((~in_opa_dn) & (~in_opa_0)),in_fracta};
+wire [23:0] in_fract24b = {((~in_opb_dn) & (~in_opb_0)),in_fractb};
 
 
 // comparator
 //   inputs & outputs
-wire op_cmp = is_op_fpu & a_cmp &
+wire op_cmp = a_cmp &
               new_fpu_data;
 wire addsub_agtb_o, addsub_aeqb_o;
 wire cmp_result, cmp_ready,
@@ -196,14 +182,13 @@ pfpu32_fcmp u_f32_cmp
 
 // addition / substraction
 //   inputs & outputs
-wire the_sub = (op_arith == 3'd1);
-wire op_add = is_op_fpu & (~a_cmp) & ((op_arith == 3'd0) | the_sub);
-wire add_start = op_add & new_fpu_data;
+wire the_sub   = (op_arith_conv == 3'd1);
+wire op_add    = (~a_cmp) & ((op_arith_conv == 3'd0) | the_sub);
+wire add_start = op_add & 
+                 new_fpu_data;
 wire        add_rdy_o;       // add/sub is ready
 wire        add_sign_o;      // add/sub signum
 wire        add_sub_0_o;     // flag that actual substruction is performed and result is zero
-wire        add_shr_o;       // do right shift in align stage
-wire  [9:0] add_exp10shr_o;  // exponent for right shift align
 wire  [4:0] add_shl_o;       // do left shift in align stage
 wire  [9:0] add_exp10shl_o;  // exponent for left shift align
 wire  [9:0] add_exp10sh0_o;  // exponent for no shift in align
@@ -220,7 +205,6 @@ pfpu32_addsub u_f32_addsub
   .rst           (rst),
   .flush_i       (flush_i),        // flushe pipe
   .adv_i         (padv_fpu_units), // advance pipe
-  .rmode_i       (round_mode_i),   // rounding mode
   .start_i       (add_start), 
   .is_sub_i      (the_sub),        // 1: substruction, 0: addition
   // input 'a' related values
@@ -243,8 +227,6 @@ pfpu32_addsub u_f32_addsub
   .add_rdy_o       (add_rdy_o),       // add/sub is ready
   .add_sign_o      (add_sign_o),      // add/sub signum
   .add_sub_0_o     (add_sub_0_o),     // flag that actual substruction is performed and result is zero
-  .add_shr_o       (add_shr_o),       // do right shift in align stage
-  .add_exp10shr_o  (add_exp10shr_o),  // exponent for right shift align
   .add_shl_o       (add_shl_o),       // do left shift in align stage
   .add_exp10shl_o  (add_exp10shl_o),  // exponent for left shift align
   .add_exp10sh0_o  (add_exp10sh0_o),  // exponent for no shift in align
@@ -258,9 +240,10 @@ pfpu32_addsub u_f32_addsub
 
 // MUL/DIV combined pipeline
 //   inputs & outputs
-wire op_mul = is_op_fpu & (~a_cmp) & (op_arith == 3'd2);
-wire op_div = is_op_fpu & (~a_cmp) & (op_arith == 3'd3);
-wire mul_start = (op_mul | op_div) & new_fpu_data;
+wire op_mul    = (~a_cmp) & (op_arith_conv == 3'd2);
+wire op_div    = (~a_cmp) & (op_arith_conv == 3'd3);
+wire mul_start = (op_mul | op_div) & 
+                 new_fpu_data;
 // MUL/DIV common outputs
 wire        mul_rdy_o;       // mul is ready
 wire        mul_sign_o;      // mul signum
@@ -279,7 +262,6 @@ wire        mul_anan_sign_o; // mul signum for output nan
 wire        div_op_o;        // operation is division
 wire        div_sign_rmnd_o; // signum or reminder for IEEE compliant rounding
 wire        div_dbz_o;       // division by zero flag
-wire        div_dbinf_o;     // division by infinity flag
 //   module istance
 pfpu32_muldiv u_f32_muldiv
 (
@@ -295,14 +277,12 @@ pfpu32_muldiv u_f32_muldiv
   .fract24a_i  (in_fract24a),
   .infa_i      (in_infa),
   .zeroa_i     (in_opa_0),
-  .dna_i       (in_opa_dn),    // 'a' is denormalized
   // input 'b' related values
   .signb_i     (in_signb),
   .exp10b_i    (in_exp10b),
   .fract24b_i  (in_fract24b),
   .infb_i      (in_infb),
   .zerob_i     (in_opb_0),
-  .dnb_i       (in_opb_dn),    // 'a' is denormalized
   // 'a'/'b' related
   .snan_i      (in_snan),        
   .qnan_i      (in_qnan),
@@ -324,15 +304,14 @@ pfpu32_muldiv u_f32_muldiv
   // DIV additional outputs
   .div_op_o(div_op_o),                  // operation is division
   .div_sign_rmnd_o(div_sign_rmnd_o),    // signum of reminder for IEEE compliant rounding
-  .div_dbz_o(div_dbz_o),                // division by zero flag
-  .div_dbinf_o(div_dbinf_o)             // division by infinity flag
+  .div_dbz_o(div_dbz_o)                 // division by zero flag
 );
 
 // convertor
 //   i2f signals
-wire op_i2f_cnv = is_op_fpu & (~a_cmp) &
-                  (op_conv == 3'd4);
-wire i2f_start = op_i2f_cnv & new_fpu_data;
+wire op_i2f_cnv = (~a_cmp) & (op_arith_conv == 3'd4);
+wire i2f_start  = op_i2f_cnv & 
+                  new_fpu_data;
 wire        i2f_rdy_o;       // i2f is ready
 wire        i2f_sign_o;      // i2f signum
 wire  [3:0] i2f_shr_o;
@@ -340,7 +319,7 @@ wire  [7:0] i2f_exp8shr_o;
 wire  [4:0] i2f_shl_o;
 wire  [7:0] i2f_exp8shl_o;
 wire  [7:0] i2f_exp8sh0_o;
-wire [34:0] i2f_fract35_o;   // {fract32,g,r,s}
+wire [31:0] i2f_fract32_o;
 //   i2f module instance
 pfpu32_i2f u_i2f_cnv
 (
@@ -357,16 +336,17 @@ pfpu32_i2f u_i2f_cnv
   .i2f_shl_o     (i2f_shl_o),
   .i2f_exp8shl_o (i2f_exp8shl_o),
   .i2f_exp8sh0_o (i2f_exp8sh0_o),
-  .i2f_fract35_o (i2f_fract35_o)    // {fract32,g,r,s}
+  .i2f_fract32_o (i2f_fract32_o)
 );
 //   f2i signals
-wire op_f2i_cnv = is_op_fpu & (~a_cmp) &
-                  (op_conv == 3'd5);
-wire f2i_start = op_f2i_cnv & new_fpu_data;
+wire op_f2i_cnv = (~a_cmp) & (op_arith_conv == 3'd5);
+wire f2i_start  = op_f2i_cnv & 
+                  new_fpu_data;
 wire        f2i_rdy_o;       // f2i is ready
 wire        f2i_sign_o;      // f2i signum
-wire [31:0] f2i_int32_o;     // f2i i32 modulo
-wire  [1:0] f2i_rs_o;        // f2i round & sticky bits
+wire [23:0] f2i_int24_o;     // f2i fractional
+wire  [4:0] f2i_shr_o;       // f2i required shift right value
+wire  [3:0] f2i_shl_o;       // f2i required shift left value   
 wire        f2i_ovf_o;       // f2i overflow flag
 wire        f2i_snan_o;      // f2i signaling NaN output reg
 //    f2i module instance
@@ -384,8 +364,9 @@ pfpu32_f2i u_f2i_cnv
   .qnan_i      (in_qnan),
   .f2i_rdy_o   (f2i_rdy_o),       // f2i is ready
   .f2i_sign_o  (f2i_sign_o),      // f2i signum
-  .f2i_int32_o (f2i_int32_o),     // f2i i32 modulo
-  .f2i_rs_o    (f2i_rs_o),        // f2i round & sticky bits
+  .f2i_int24_o (f2i_int24_o),     // f2i fractional
+  .f2i_shr_o   (f2i_shr_o),       // f2i required shift right value
+  .f2i_shl_o   (f2i_shl_o),       // f2i required shift left value   
   .f2i_ovf_o   (f2i_ovf_o),       // f2i overflow flag
   .f2i_snan_o  (f2i_snan_o)       // f2i signaling NaN output reg
 );
@@ -404,8 +385,6 @@ pfpu32_rnd u_f32_rnd
   .add_rdy_i       (add_rdy_o),       // add/sub is ready
   .add_sign_i      (add_sign_o),      // add/sub signum
   .add_sub_0_i     (add_sub_0_o),     // flag that actual substruction is performed and result is zero
-  .add_shr_i       (add_shr_o),       // do right shift in align stage
-  .add_exp10shr_i  (add_exp10shr_o),  // exponent for right shift align
   .add_shl_i       (add_shl_o),       // do left shift in align stage
   .add_exp10shl_i  (add_exp10shl_o),  // exponent for left shift align
   .add_exp10sh0_i  (add_exp10sh0_o),  // exponent for no shift in align
@@ -432,7 +411,6 @@ pfpu32_rnd u_f32_rnd
   .div_op_i        (div_op_o),         // MUL/DIV output is division
   .div_sign_rmnd_i (div_sign_rmnd_o),  // signum or reminder for IEEE compliant rounding
   .div_dbz_i       (div_dbz_o),        // division by zero flag
-  .div_dbinf_i     (div_dbinf_o),      // division by infinity flag
   // from i2f
   .i2f_rdy_i       (i2f_rdy_o),       // i2f is ready
   .i2f_sign_i      (i2f_sign_o),      // i2f signum
@@ -441,12 +419,13 @@ pfpu32_rnd u_f32_rnd
   .i2f_shl_i       (i2f_shl_o),
   .i2f_exp8shl_i   (i2f_exp8shl_o),
   .i2f_exp8sh0_i   (i2f_exp8sh0_o),
-  .i2f_fract35_i   (i2f_fract35_o),   // {fract32,g,r,s}
+  .i2f_fract32_i   (i2f_fract32_o),
   // from f2i
   .f2i_rdy_i       (f2i_rdy_o),       // f2i is ready
   .f2i_sign_i      (f2i_sign_o),      // f2i signum
-  .f2i_int32_i     (f2i_int32_o),     // f2i i32 modulo
-  .f2i_rs_i        (f2i_rs_o),        // f2i round & sticky bits
+  .f2i_int24_i     (f2i_int24_o),     // f2i fractional
+  .f2i_shr_i       (f2i_shr_o),       // f2i required shift right value
+  .f2i_shl_i       (f2i_shl_o),       // f2i required shift left value   
   .f2i_ovf_i       (f2i_ovf_o),       // f2i overflow flag
   .f2i_snan_i      (f2i_snan_o),      // f2i signaling NaN
    // from cmp
@@ -455,11 +434,11 @@ pfpu32_rnd u_f32_rnd
   .cmp_inv_i       (cmp_inv),         // cmp invalid flag
   .cmp_inf_i       (cmp_inf),         // cmp infinity flag
   // outputs
-  .fpu_result_o    (fpu_result_w),
-  .fpu_valid_o     (fpu_valid_w),
-  .fpu_cmp_flag_o  (fpu_cmp_flag_w),
-  .fpu_cmp_valid_o (fpu_cmp_valid_w),
-  .fpcsr_o         (fpcsr_w)
+  .fpu_result_o      (fpu_result_o),
+  .fpu_arith_valid_o (fpu_arith_valid_o),
+  .fpu_cmp_flag_o    (fpu_cmp_flag_o),
+  .fpu_cmp_valid_o   (fpu_cmp_valid_o),
+  .fpcsr_o           (fpcsr_o)
 );
 
 endmodule // pfpu32_top

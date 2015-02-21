@@ -52,14 +52,12 @@ module pfpu32_muldiv
    input      [23:0] fract24a_i,
    input             infa_i,
    input             zeroa_i,
-   input             dna_i,    // 'a' is denormalized
    // input 'b' related values
    input             signb_i,
    input       [9:0] exp10b_i,
    input      [23:0] fract24b_i,
    input             infb_i,
    input             zerob_i,
-   input             dnb_i,    // 'b' is denormalized
    // 'a'/'b' related
    input             snan_i,
    input             qnan_i,
@@ -81,8 +79,7 @@ module pfpu32_muldiv
    // DIV additional outputs
    output reg        div_op_o,           // operation is division
    output reg        div_sign_rmnd_o,    // signum of reminder for IEEE compliant rounding
-   output reg        div_dbz_o,          // div division by zero flag
-   output reg        div_dbinf_o         // div division by infinity
+   output reg        div_dbz_o           // div division by zero flag
 );
 
   /*
@@ -100,129 +97,149 @@ module pfpu32_muldiv
   /* Stage #1: pre-operation stage */
 
 
-    // both inputs are normalized
-  wire s1t_ab_norm = ~(dna_i | dnb_i);
-
-
     // detection of some exceptions
-  wire s1t_inv = is_div_i ? ((zeroa_i & zerob_i) | (infa_i & infb_i)) : // div: 0/0, inf/inf -> invalid operation; snan output
+  wire s0t_inv = is_div_i ? ((zeroa_i & zerob_i) | (infa_i & infb_i)) : // div: 0/0, inf/inf -> invalid operation; snan output
                             ((zeroa_i & infb_i) | (zerob_i & infa_i));  // mul: 0 * inf -> invalid operation; snan output
-    // division by zero and infinity
-  wire s1t_dbz   = is_div_i & (~zeroa_i) & (~infa_i) & zerob_i;
-  wire s1t_dbinf = is_div_i & (~zeroa_i) & (~infa_i) & infb_i;
+    // division by zero
+  wire s0t_dbz   = is_div_i & (~zeroa_i) & (~infa_i) & zerob_i;
     //   inf input
-  wire s1t_inf_i = infa_i | (infb_i & (~is_div_i)); // for DIV only infA is used
-
-
-    // exponent for normalized inputs
-  wire [9:0] s1t_exp10n = is_div_i ? (exp10a_i - exp10b_i + 10'd127) : // div
-                                     (exp10a_i + exp10b_i - 10'd127);  // mul
+  wire s0t_inf_i = infa_i | (infb_i & (~is_div_i)); // for DIV only infA is used
 
     // force intermediate results to zero
-  wire s1t_opc_0 = zeroa_i | zerob_i | (is_div_i & (infa_i | infb_i));
-  wire [23:0] s1t_fract24az = fract24a_i & {24{~s1t_opc_0}};
+  wire s0t_opc_0 = zeroa_i | zerob_i | (is_div_i & (infa_i | infb_i));
 
   // count leading zeros
-  reg [4:0] s1t_nlza;
-  always @(s1t_fract24az) begin
-    casez(s1t_fract24az) // synopsys full_case parallel_case
-      24'b1???????????????????????: s1t_nlza =  0;
-      24'b01??????????????????????: s1t_nlza =  1;
-      24'b001?????????????????????: s1t_nlza =  2;
-      24'b0001????????????????????: s1t_nlza =  3;
-      24'b00001???????????????????: s1t_nlza =  4;
-      24'b000001??????????????????: s1t_nlza =  5;
-      24'b0000001?????????????????: s1t_nlza =  6;
-      24'b00000001????????????????: s1t_nlza =  7;
-      24'b000000001???????????????: s1t_nlza =  8;
-      24'b0000000001??????????????: s1t_nlza =  9;
-      24'b00000000001?????????????: s1t_nlza = 10;
-      24'b000000000001????????????: s1t_nlza = 11;
-      24'b0000000000001???????????: s1t_nlza = 12;
-      24'b00000000000001??????????: s1t_nlza = 13;
-      24'b000000000000001?????????: s1t_nlza = 14;
-      24'b0000000000000001????????: s1t_nlza = 15;
-      24'b00000000000000001???????: s1t_nlza = 16;
-      24'b000000000000000001??????: s1t_nlza = 17;
-      24'b0000000000000000001?????: s1t_nlza = 18;
-      24'b00000000000000000001????: s1t_nlza = 19;
-      24'b000000000000000000001???: s1t_nlza = 20;
-      24'b0000000000000000000001??: s1t_nlza = 21;
-      24'b00000000000000000000001?: s1t_nlza = 22;
-      24'b000000000000000000000001: s1t_nlza = 23;
-      24'b000000000000000000000000: s1t_nlza =  0; // zero rezult
+  reg [4:0] s0t_nlza;
+  always @(fract24a_i) begin
+    casez(fract24a_i) // synopsys full_case parallel_case
+      24'b1???????????????????????: s0t_nlza =  0;
+      24'b01??????????????????????: s0t_nlza =  1;
+      24'b001?????????????????????: s0t_nlza =  2;
+      24'b0001????????????????????: s0t_nlza =  3;
+      24'b00001???????????????????: s0t_nlza =  4;
+      24'b000001??????????????????: s0t_nlza =  5;
+      24'b0000001?????????????????: s0t_nlza =  6;
+      24'b00000001????????????????: s0t_nlza =  7;
+      24'b000000001???????????????: s0t_nlza =  8;
+      24'b0000000001??????????????: s0t_nlza =  9;
+      24'b00000000001?????????????: s0t_nlza = 10;
+      24'b000000000001????????????: s0t_nlza = 11;
+      24'b0000000000001???????????: s0t_nlza = 12;
+      24'b00000000000001??????????: s0t_nlza = 13;
+      24'b000000000000001?????????: s0t_nlza = 14;
+      24'b0000000000000001????????: s0t_nlza = 15;
+      24'b00000000000000001???????: s0t_nlza = 16;
+      24'b000000000000000001??????: s0t_nlza = 17;
+      24'b0000000000000000001?????: s0t_nlza = 18;
+      24'b00000000000000000001????: s0t_nlza = 19;
+      24'b000000000000000000001???: s0t_nlza = 20;
+      24'b0000000000000000000001??: s0t_nlza = 21;
+      24'b00000000000000000000001?: s0t_nlza = 22;
+      24'b000000000000000000000001: s0t_nlza = 23;
+      24'b000000000000000000000000: s0t_nlza =  0; // zero rezult
     endcase
   end // nlz for 'a'
 
   // count leading zeros
-  reg [4:0] s1t_nlzb;
+  reg [4:0] s0t_nlzb;
   always @(fract24b_i) begin
     casez(fract24b_i) // synopsys full_case parallel_case
-      24'b1???????????????????????: s1t_nlzb =  0;
-      24'b01??????????????????????: s1t_nlzb =  1;
-      24'b001?????????????????????: s1t_nlzb =  2;
-      24'b0001????????????????????: s1t_nlzb =  3;
-      24'b00001???????????????????: s1t_nlzb =  4;
-      24'b000001??????????????????: s1t_nlzb =  5;
-      24'b0000001?????????????????: s1t_nlzb =  6;
-      24'b00000001????????????????: s1t_nlzb =  7;
-      24'b000000001???????????????: s1t_nlzb =  8;
-      24'b0000000001??????????????: s1t_nlzb =  9;
-      24'b00000000001?????????????: s1t_nlzb = 10;
-      24'b000000000001????????????: s1t_nlzb = 11;
-      24'b0000000000001???????????: s1t_nlzb = 12;
-      24'b00000000000001??????????: s1t_nlzb = 13;
-      24'b000000000000001?????????: s1t_nlzb = 14;
-      24'b0000000000000001????????: s1t_nlzb = 15;
-      24'b00000000000000001???????: s1t_nlzb = 16;
-      24'b000000000000000001??????: s1t_nlzb = 17;
-      24'b0000000000000000001?????: s1t_nlzb = 18;
-      24'b00000000000000000001????: s1t_nlzb = 19;
-      24'b000000000000000000001???: s1t_nlzb = 20;
-      24'b0000000000000000000001??: s1t_nlzb = 21;
-      24'b00000000000000000000001?: s1t_nlzb = 22;
-      24'b000000000000000000000001: s1t_nlzb = 23;
-      24'b000000000000000000000000: s1t_nlzb =  0; // zero result
+      24'b1???????????????????????: s0t_nlzb =  0;
+      24'b01??????????????????????: s0t_nlzb =  1;
+      24'b001?????????????????????: s0t_nlzb =  2;
+      24'b0001????????????????????: s0t_nlzb =  3;
+      24'b00001???????????????????: s0t_nlzb =  4;
+      24'b000001??????????????????: s0t_nlzb =  5;
+      24'b0000001?????????????????: s0t_nlzb =  6;
+      24'b00000001????????????????: s0t_nlzb =  7;
+      24'b000000001???????????????: s0t_nlzb =  8;
+      24'b0000000001??????????????: s0t_nlzb =  9;
+      24'b00000000001?????????????: s0t_nlzb = 10;
+      24'b000000000001????????????: s0t_nlzb = 11;
+      24'b0000000000001???????????: s0t_nlzb = 12;
+      24'b00000000000001??????????: s0t_nlzb = 13;
+      24'b000000000000001?????????: s0t_nlzb = 14;
+      24'b0000000000000001????????: s0t_nlzb = 15;
+      24'b00000000000000001???????: s0t_nlzb = 16;
+      24'b000000000000000001??????: s0t_nlzb = 17;
+      24'b0000000000000000001?????: s0t_nlzb = 18;
+      24'b00000000000000000001????: s0t_nlzb = 19;
+      24'b000000000000000000001???: s0t_nlzb = 20;
+      24'b0000000000000000000001??: s0t_nlzb = 21;
+      24'b00000000000000000000001?: s0t_nlzb = 22;
+      24'b000000000000000000000001: s0t_nlzb = 23;
+      24'b000000000000000000000000: s0t_nlzb =  0; // zero result
     endcase
   end // nlz of 'b'
 
 
-  // side back shifters to normalize inputs
-  reg [23:0] s11o_fract24a;
-  reg  [4:0] s11o_shla;
-  reg [23:0] s11o_fract24b;
-  reg  [4:0] s11o_shlb;
-  reg  [9:0] s11o_exp10d; // for denormalized inputs
+  // pre-norm stage outputs
+  //   input related
+  reg s0o_inv, s0o_inf_i,
+      s0o_snan_i, s0o_qnan_i, s0o_anan_i_sign;
+  //   computation related
+  reg        s0o_is_div;
+  reg        s0o_opc_0;
+  reg        s0o_signc;
+  reg  [9:0] s0o_exp10a;
+  reg [23:0] s0o_fract24a;
+  reg  [4:0] s0o_shla;
+  reg  [9:0] s0o_exp10b;
+  reg [23:0] s0o_fract24b;
+  reg  [4:0] s0o_shlb;
+  // DIV additional outputs
+  reg        s0o_dbz;
   // registering
   always @(posedge clk) begin
-    s11o_fract24a <= s1t_fract24az;
-    s11o_shla     <= s1t_nlza;
-    s11o_fract24b <= fract24b_i;
-    s11o_shlb     <= s1t_nlzb;
-    s11o_exp10d   <= {10{~s1t_opc_0}} &
-                     ( is_div_i ? (s1t_exp10n - {5'd0,s1t_nlza} + {5'd0,s1t_nlzb}) :  // div
-                                  (s1t_exp10n - {5'd0,s1t_nlza} - {5'd0,s1t_nlzb}) ); // mul
+    if(adv_i) begin
+        // input related
+      s0o_inv         <= s0t_inv;
+      s0o_inf_i       <= s0t_inf_i;
+      s0o_snan_i      <= snan_i;
+      s0o_qnan_i      <= qnan_i;
+      s0o_anan_i_sign <= anan_sign_i;
+        // computation related
+      s0o_is_div   <= is_div_i;
+      s0o_opc_0    <= s0t_opc_0;
+      s0o_signc    <= signa_i ^ signb_i;
+      s0o_exp10a   <= exp10a_i;
+      s0o_fract24a <= fract24a_i;
+      s0o_shla     <= s0t_nlza;
+      s0o_exp10b   <= exp10b_i;
+      s0o_fract24b <= fract24b_i;
+      s0o_shlb     <= s0t_nlzb;
+        // DIV additional outputs
+      s0o_dbz   <= s0t_dbz;
+    end // push pipe
   end
 
   // route ready through side back
-  reg s11o_ready;
+  reg s0o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
-      s11o_ready <= 0;
+      s0o_ready <= 0;
     else if(flush_i)
-      s11o_ready <= 0;
+      s0o_ready <= 0;
     else if(adv_i)
-      s11o_ready <= start_i & (~s1t_ab_norm);
+      s0o_ready <= start_i;
   end // posedge clock
 
 
   // left-shift the dividend and divisor
-  wire [23:0] s12t_fract24a_sh = s11o_fract24a << s11o_shla;
-  wire [23:0] s12t_fract24b_sh = s11o_fract24b << s11o_shlb;
+  wire [23:0] s1t_fract24a_shl = s0o_fract24a << s0o_shla;
+  wire [23:0] s1t_fract24b_shl = s0o_fract24b << s0o_shlb;
+  
+  // force result to zero
+  wire [23:0] s1t_fract24a = s1t_fract24a_shl & {24{~s0o_opc_0}};
+  wire [23:0] s1t_fract24b = s1t_fract24b_shl & {24{~s0o_opc_0}};
 
-  // pre-operation mux.
-  wire [23:0] s1t_fract24a = s11o_ready ? s12t_fract24a_sh : s1t_fract24az;
-  wire [23:0] s1t_fract24b = s11o_ready ? s12t_fract24b_sh : fract24b_i;
+  // exponent
+  wire [9:0] s1t_exp10mux =
+    s0o_is_div ? (s0o_exp10a - {5'd0,s0o_shla} - s0o_exp10b + {5'd0,s0o_shlb} + 10'd127) :
+                 (s0o_exp10a - {5'd0,s0o_shla} + s0o_exp10b - {5'd0,s0o_shlb} - 10'd127);
+  
+  // force result to zero
+  wire [9:0] s1t_exp10c = s1t_exp10mux & {10{~s0o_opc_0}};
 
 
   // Goldshmidt division iterations control
@@ -238,11 +255,15 @@ module pfpu32_muldiv
       itr_state <= 14'd0;
     else if(flush_i)
       itr_state <= 14'd0;
-    else if(adv_i & (s11o_ready | (start_i & s1t_ab_norm)) & is_div_i & (~itr_en))
+    else if(adv_i & s0o_ready & s0o_is_div & (~itr_en))
       itr_state <= 14'd1;
-    else
+    else if(adv_i)
       itr_state <= {itr_state[12:0],1'b0};
   end // posedge clock
+
+
+  // Multiplication operation flag
+  wire s1t_is_mul = s0o_ready & (~s0o_is_div);
 
 
   // stage #1 outputs
@@ -257,26 +278,23 @@ module pfpu32_muldiv
   reg [23:0] s1o_fract24b;
   // DIV additional outputs
   reg        s1o_dbz;
-  reg        s1o_dbinf;
   //   registering
   always @(posedge clk) begin
-    if(adv_i & (~itr_en)) begin
+    if(adv_i) begin
         // input related
-      s1o_inv         <= s1t_inv;
-      s1o_inf_i       <= s1t_inf_i;
-      s1o_snan_i      <= snan_i;
-      s1o_qnan_i      <= qnan_i;
-      s1o_anan_i_sign <= anan_sign_i;
+      s1o_inv         <= s0o_inv;
+      s1o_inf_i       <= s0o_inf_i;
+      s1o_snan_i      <= s0o_snan_i;
+      s1o_qnan_i      <= s0o_qnan_i;
+      s1o_anan_i_sign <= s0o_anan_i_sign;
         // computation related
-      s1o_opc_0    <= s1t_opc_0;
-      s1o_signc    <= signa_i ^ signb_i;
-      s1o_exp10c   <= s11o_ready ? s11o_exp10d :
-                                  ({10{~s1t_opc_0}} & s1t_exp10n);
+      s1o_opc_0    <= s0o_opc_0;
+      s1o_signc    <= s0o_signc;
+      s1o_exp10c   <= s1t_exp10c;
       s1o_fract24a <= s1t_fract24a;
       s1o_fract24b <= s1t_fract24b;
         // DIV additional outputs
-      s1o_dbz   <= s1t_dbz;
-      s1o_dbinf <= s1t_dbinf;
+      s1o_dbz   <= s0o_dbz;
     end // advance pipe
   end // posedge clock
 
@@ -285,14 +303,36 @@ module pfpu32_muldiv
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       s1o_ready <= 0;
-    else if(flush_i | itr_en)
+    else if(flush_i)
       s1o_ready <= 0;
-    else if(adv_i & (~itr_en))
-      s1o_ready <= (s11o_ready | (start_i & s1t_ab_norm)) & (~is_div_i);
+    else if(adv_i)
+      s1o_ready <= s1t_is_mul; // division is controlles by iteration state register
   end // posedge clock
 
 
   /* Stage #2: 1st part of multiplier */
+
+
+  // rigt shift value
+  // and appropriatelly corrected exponent
+  wire s1o_exp10c_0             = ~(|s1o_exp10c);
+  wire [9:0] s2t_shr_of_neg_exp = 11'h401 - {1'b0,s1o_exp10c}; // 1024-v+1
+  // variants:
+  wire [9:0] s2t_shr_t;
+  wire [9:0] s2t_exp10rx;
+  assign {s2t_shr_t,s2t_exp10rx} =
+    // force zero result
+    s1o_opc_0     ? {10'd0,10'd0} :
+    // negative exponent sum
+    //   (!) takes 1x.xx case into account automatically
+    s1o_exp10c[9] ? {s2t_shr_of_neg_exp,10'd1} :
+    // (a) zero exponent sum (denorm. result potentially)
+    //   (!) takes 1x.xx case into account automatically
+    // (b) normal case
+    //   (!) 1x.xx case is processed in next stage
+                    {{9'd0,s1o_exp10c_0},(s1o_exp10c | {9'd0,s1o_exp10c_0})};
+  // limited by 31 and forced result to zero
+  wire [4:0] s2t_shrx = s2t_shr_t[4:0] | {5{|s2t_shr_t[9:5]}};
 
 
   // Support Goldshmidt iteration
@@ -323,7 +363,7 @@ module pfpu32_muldiv
   wire itr_rndDvsr;
   //   align resulting quotient to support subsequent IEEE-compliant rounding
   wire itr_rndQ = itr_state[10];
-  wire itr_rndQ1xx, itr_rndQ01x;
+  wire [25:0] itr_res_qtnt26; // rounded quotient
   //   Updated quotient or divisor
   wire [32:0] itr_qtnt33;
   //   'F' (2-D) or 'Reminder'
@@ -332,56 +372,48 @@ module pfpu32_muldiv
 
   // control for multiplier's input 'A'
   //   the register also contains quotient to output
-  wire itr_uinA = itr_state[0] | itr_state[3] | itr_state[6] | itr_rndQ;
+  wire itr_uinA = s1t_is_mul   |
+                  itr_state[0] | itr_state[3] | 
+                  itr_state[6] | itr_rndQ;
   // multiplexer for multiplier's input 'A'
   wire [31:0] itr_mul32a =
+     s1t_is_mul              ? {s1t_fract24a,8'd0}     :
      itr_state[0]            ? {itr_recip11b,21'd0}    :
-    (itr_rndQ & itr_rndQ1xx) ? {itr_qtnt33[31:7],7'd0} : // truncate by 2^(-n-1)
-    (itr_rndQ & itr_rndQ01x) ? {itr_qtnt33[31:6],6'd0} : // truncate by 2^(-n-1)
+     itr_rndQ                ? {itr_res_qtnt26,6'd0}   : // truncate by 2^(-n-1)
                                 itr_rmnd33[31:0];
   // register of multiplier's input 'A'
-  reg [31:0] r_mul32_in_a;
+  reg [15:0] s1o_mul16_al;
+  reg [15:0] s1o_mul16_ah;
   // registering
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if(rst)
-      r_mul32_in_a <= 32'd0;
-    else if(itr_uinA)
-      r_mul32_in_a <= itr_mul32a; // div
-    else if(adv_i & (~itr_en))
-      r_mul32_in_a <= {s1t_fract24a,8'd0}; // mul
+  always @(posedge clk) begin
+    if(adv_i & itr_uinA) begin
+      s1o_mul16_al <= itr_mul32a[15: 0];
+      s1o_mul16_ah <= itr_mul32a[31:16];
+    end
   end // posedge clock
 
 
   // control for multiplier's input 'B'
-  wire itr_uinB = itr_state[0] | itr_state[1] |
+  wire itr_uinB = s1t_is_mul   |
+                  itr_state[0] | itr_state[1] |
                   itr_state[3] | itr_state[4] |
                   itr_state[6] | itr_state[7] |
                   itr_rndQ;
   // multiplexer for multiplier's input 'B'
   wire [31:0] itr_mul32b =
+     s1t_is_mul               ? {s1t_fract24b,8'd0} :
     (itr_state[0] | itr_rndQ) ? {s1o_fract24b,8'd0} :
      itr_state[1]             ? {s1o_fract24a,8'd0} :
                                  itr_qtnt33[31:0];
   // register of multiplier's input 'B'
-  reg [31:0] r_mul32_in_b;
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if(rst)
-      r_mul32_in_b <= 32'd0;
-    else if(itr_uinB)
-      r_mul32_in_b <= itr_mul32b; // div
-    else if(adv_i & (~itr_en))
-      r_mul32_in_b <= {s1t_fract24b,8'd0}; // mul
+  reg [15:0] s1o_mul16_bl;
+  reg [15:0] s1o_mul16_bh;
+  always @(posedge clk) begin
+    if(adv_i & itr_uinB) begin
+      s1o_mul16_bl <= itr_mul32b[15: 0];
+      s1o_mul16_bh <= itr_mul32b[31:16];
+    end
   end // posedge clock
-
-
-  // computation related fractionals
-  //  insert leading zeros to signal unsigned values
-  //  for potential usage DSP blocks of a FPGA
-  wire [16:0] s2t_fract17_al = {1'b0, r_mul32_in_a[15: 0]};
-  wire [16:0] s2t_fract17_ah = {1'b0, r_mul32_in_a[31:16]};
-  wire [16:0] s2t_fract17_bl = {1'b0, r_mul32_in_b[15: 0]};
-  wire [16:0] s2t_fract17_bh = {1'b0, r_mul32_in_b[31:16]};
-
 
   // stage #2 outputs
   //   input related
@@ -391,14 +423,12 @@ module pfpu32_muldiv
   reg        s2o_opc_0;
   reg        s2o_signc;
   reg [9:0]  s2o_exp10c;
-  //   multipliers
-  reg [33:0] s2o_fract34_albl;
-  reg [33:0] s2o_fract34_albh;
-  reg [33:0] s2o_fract34_ahbl;
-  reg [33:0] s2o_fract34_ahbh;
+  reg [4:0]  s2o_shrx;
+  reg        s2o_is_shrx;
+  reg [9:0]  s2o_exp10rx;
   //   registering
   always @(posedge clk) begin
-    if(adv_i | itr_en) begin
+    if(adv_i) begin
         // input related
       s2o_inv         <= s1o_inv;
       s2o_inf_i       <= s1o_inf_i;
@@ -406,16 +436,27 @@ module pfpu32_muldiv
       s2o_qnan_i      <= s1o_qnan_i;
       s2o_anan_i_sign <= s1o_anan_i_sign;
         // computation related
-      s2o_opc_0  <= s1o_opc_0;
-      s2o_signc  <= s1o_signc;
-      s2o_exp10c <= s1o_exp10c;
-        // multipliers
-      s2o_fract34_albl <= s2t_fract17_al * s2t_fract17_bl;
-      s2o_fract34_albh <= s2t_fract17_al * s2t_fract17_bh;
-      s2o_fract34_ahbl <= s2t_fract17_ah * s2t_fract17_bl;
-      s2o_fract34_ahbh <= s2t_fract17_ah * s2t_fract17_bh;
+      s2o_opc_0   <= s1o_opc_0;
+      s2o_signc   <= s1o_signc;
+      s2o_exp10c  <= s1o_exp10c;
+      s2o_shrx    <= s2t_shrx;
+      s2o_is_shrx <= (|s2t_shrx);
+      s2o_exp10rx <= s2t_exp10rx;
     end // advance pipe
   end // posedge clock
+
+  //   multipliers
+  reg [31:0] s2o_fract32_albl;
+  reg [31:0] s2o_fract32_albh;
+  reg [31:0] s2o_fract32_ahbl;
+  reg [31:0] s2o_fract32_ahbh;
+  //  ? simplifies usage of FPGA's DSP blocks ?
+  always @(posedge clk) begin
+      s2o_fract32_albl <= s1o_mul16_al * s1o_mul16_bl;
+      s2o_fract32_albh <= s1o_mul16_al * s1o_mul16_bh;
+      s2o_fract32_ahbl <= s1o_mul16_ah * s1o_mul16_bl;
+      s2o_fract32_ahbh <= s1o_mul16_ah * s1o_mul16_bh;
+  end
 
   // ready is special case
   reg s2o_ready;
@@ -432,42 +473,13 @@ module pfpu32_muldiv
   /* Stage #3: 2nd part of multiplier */
 
 
-  // left shift for multipling is impossible
-  //  as input operands are normalised: [1,2)
-
-  // rigt shift value
-  // and appropriatelly corrected exponent
-  wire s2o_exp10c_0 = ~(|s2o_exp10c);
-  wire [9:0] s3t_shr_of_neg_exp = 11'h401 - {1'b0,s2o_exp10c}; // 1024-v+1
-  //...
-  wire [9:0] s3t_shrx;
-  wire [9:0] s3t_exp10rx;
-  assign {s3t_shrx,s3t_exp10rx} =
-      // zero result case
-    s2o_opc_0                     ? {10'd0,10'd0} :
-      // zero exponent sum (denorm. result potentially)
-      //  (!) takes 1x.xx case into account automatically
-    ((~s2o_opc_0) & s2o_exp10c_0) ? {10'd1,10'd1} :
-      // negative exponent sum
-      //  (!) takes 1x.xx case into account automatically
-    s2o_exp10c[9]                 ? {s3t_shr_of_neg_exp,10'd1} :
-      // normal case at last
-      //  (!) 1x.xx case is processed in next stage
-                                    {10'd0,s2o_exp10c};
-  // max. right shift that makes sense is 27bits
-  //  i.e. [27] moves to sticky position: [0]
-  wire [4:0] s3t_shr = (s3t_shrx > 10'd27) ? 5'd27 : s3t_shrx[4:0];
-  wire s3t_is_shrx = |s3t_shrx;
-
-
   // 2nd stage of multiplier
   wire [47:0] s3t_fract48;
-  assign s3t_fract48 = {s2o_fract34_ahbh[31:0],  16'd0} +
-                       {14'd0, s2o_fract34_ahbl} +
-                       {14'd0, s2o_fract34_albh} +
-                       {32'd0,  s2o_fract34_albl[31:16]};
+  assign s3t_fract48 = {s2o_fract32_ahbh,  16'd0} +
+                       {16'd0, s2o_fract32_ahbl} +
+                       {16'd0, s2o_fract32_albh} +
+                       {32'd0, s2o_fract32_albl[31:16]};
 
-  wire s3t_mul_carry = s3t_fract48[47]; // makes sense for MUL only
 
   /* Intermediate results of Goldshmidt's iterations */
 
@@ -475,27 +487,20 @@ module pfpu32_muldiv
   reg [32:0] itr_mul33o; // output
   reg        itr_mul33s; // sticky
   //   registering
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if(rst) begin
-      itr_mul33o <= 33'd0;
-      itr_mul33s <=  1'b0;
-    end
-    else if(itr_en) begin
-      itr_mul33o <= s3t_fract48[47:15];
-      itr_mul33s <= (|s3t_fract48[14:0]) | (|s2o_fract34_albl[15:0]);
-    end
+  always @(posedge clk) begin
+    itr_mul33o <= s3t_fract48[47:15];
+    itr_mul33s <= (|s3t_fract48[14:0]) | (|s2o_fract32_albl[15:0]);
   end // posedge clock
 
   // Feedback from multiplier's output with various rounding tecqs.
   //   +2^(-n-2) in case of rounding 1.xxx qutient
-  assign itr_rndQ1xx = itr_rndQ &   itr_mul33o[31];
+  wire itr_rndQ1xx =   itr_mul33o[31];
   //   +2^(-n-2) in case of rounding 0.1xx qutient
-  assign itr_rndQ01x = itr_rndQ & (~itr_mul33o[31]);
-  //   directed rounding of intermediate divisor 'D'
-  assign itr_rndDvsr = itr_rndD &   itr_mul33s;
+  wire itr_rndQ01x = (~itr_mul33o[31]);
   //   rounding mask:
-  wire [32:0] itr_rndM33 =
-    {26'd0,itr_rndQ1xx,itr_rndQ01x,4'd0,itr_rndDvsr}; // bits [6],[5] ... [0]
+  wire [32:0] itr_rndM33 = // bits [6],[5] ... [0]
+    { 26'd0,(itr_rndQ & itr_rndQ1xx),(itr_rndQ & itr_rndQ01x), // round resulting quotient
+       4'd0,(itr_rndD & itr_mul33s) };                         // round intermediate divisor
   //   rounding
   assign itr_qtnt33 = itr_mul33o + itr_rndM33;
 
@@ -522,25 +527,24 @@ module pfpu32_muldiv
   // It is used for rounding in cases of denormalized result.
   // Stiky bit is forced to be zero.
   // The value are marked by stage #2 output
+  // raw
   reg [25:0] s2o_raw_qtnt26;
+  // rounded
   reg [25:0] s2o_res_qtnt26;
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if(rst) begin
-      s2o_raw_qtnt26 <= 26'd0;
-      s2o_res_qtnt26 <= 26'd0;
-    end
-    else if(itr_rndQ) begin
+  assign     itr_res_qtnt26 = {itr_qtnt33[31:7],itr_qtnt33[6] & itr_rndQ01x};
+  // latching
+  always @(posedge clk ) begin
+    if(itr_rndQ) begin
       s2o_raw_qtnt26 <= itr_mul33o[31:6];
-      s2o_res_qtnt26 <= itr_mul32a[31:6];
+      s2o_res_qtnt26 <= itr_res_qtnt26;
     end
   end
-
+  
   // Possible left shift computation.
   // In fact, as the dividend and divisor was normalized
   //   and the result is non-zero
   //   the '1' is maximum number of leading zeros in the quotient.
   wire s3t_nlz = ~s2o_res_qtnt26[25];
-    //...
   wire [9:0] s3t_exp10_m1 = s2o_exp10c - 10'd1;
   // left shift flag and corrected exponent
   wire       s3t_shlx;
@@ -550,12 +554,12 @@ module pfpu32_muldiv
     (~s3t_nlz)            ? {1'b0,s2o_exp10c} :
       // normalization is possible
     (s2o_exp10c >  10'd1) ? {1'b1,s3t_exp10_m1} :
-      // denormalized cases
-                            {1'b0,10'd1};
+      // denormalized and zero cases
+                            {1'b0,{9'd0,~s2o_opc_0}};
 
   // check if quotient is denormalized
-  wire s3t_denorm = s3t_is_shrx |
-                    ((~s3t_is_shrx) & (~s3t_shlx) & s3t_nlz);
+  wire s3t_denorm = s2o_is_shrx |
+                    ((~s2o_is_shrx) & (~s3t_shlx) & s3t_nlz);
   // Select quotient for subsequent align and rounding
   // The rounded (_res_) quotient is used:
   //   - for normalized result
@@ -569,7 +573,7 @@ module pfpu32_muldiv
 
   // output
   always @(posedge clk) begin
-    if(adv_i | itr_last) begin
+    if(adv_i) begin
         // input related
       muldiv_inv_o       <= s2o_inv;
       muldiv_inf_o       <= s2o_inf_i;
@@ -578,8 +582,8 @@ module pfpu32_muldiv
       muldiv_anan_sign_o <= s2o_anan_i_sign;
         // computation related
       muldiv_sign_o     <= s2o_signc;
-      muldiv_shr_o      <= s3t_is_shrx ? s3t_shr : {4'd0,s3t_mul_carry};
-      muldiv_exp10shr_o <= s3t_is_shrx ? s3t_exp10rx : (s2o_exp10c + {9'd0,s3t_mul_carry});
+      muldiv_shr_o      <= s2o_shrx;
+      muldiv_exp10shr_o <= s2o_exp10rx;
       muldiv_shl_o      <= s3t_shlx & itr_last; // makes sense for DIV only
       muldiv_exp10shl_o <= s3t_exp10lx;
       muldiv_exp10sh0_o <= s2o_exp10c;
@@ -590,7 +594,6 @@ module pfpu32_muldiv
       div_op_o        <= itr_last;
       div_sign_rmnd_o <= itr_sign_rmnd;
       div_dbz_o       <= s1o_dbz;
-      div_dbinf_o     <= s1o_dbinf;
     end // advance pipe
   end // posedge clock
 
@@ -600,7 +603,7 @@ module pfpu32_muldiv
       muldiv_rdy_o <= 0;
     else if(flush_i)
       muldiv_rdy_o <= 0;
-    else if(adv_i | itr_last)
+    else if(adv_i)
       muldiv_rdy_o <= s2o_ready | itr_last;
   end // posedge clock
 
