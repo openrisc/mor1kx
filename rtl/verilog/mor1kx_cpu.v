@@ -81,7 +81,7 @@ module mor1kx_cpu
     parameter FEATURE_EXT		= "NONE",
     parameter FEATURE_CMOV		= "NONE",
     parameter FEATURE_FFL1		= "NONE",
-    parameter FEATURE_MSYNC		= "NONE",
+    parameter FEATURE_MSYNC		= "ENABLED",
     parameter FEATURE_PSYNC		= "NONE",
     parameter FEATURE_CSYNC		= "NONE",
     parameter FEATURE_ATOMIC		= "ENABLED",

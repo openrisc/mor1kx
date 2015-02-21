@@ -43,7 +43,7 @@ module mor1kx_decode
     parameter FEATURE_CMOV = "NONE",
     parameter FEATURE_FFL1 = "NONE",
     parameter FEATURE_ATOMIC = "ENABLED",
-    parameter FEATURE_MSYNC = "NONE",
+    parameter FEATURE_MSYNC = "ENABLED",
     parameter FEATURE_PSYNC = "NONE",
     parameter FEATURE_CSYNC = "NONE",
 
@@ -115,7 +115,10 @@ module mor1kx_decode
     output 			      decode_op_ffl1_o,
     output 			      decode_op_movhi_o,
 
+    // Sync operations
+    output                            decode_op_msync_o,
     output [`OR1K_FPUOP_WIDTH-1:0]    decode_op_fpu_o,
+
 
     // Adder control logic
     output 			      decode_adder_do_sub_o,
@@ -188,6 +191,11 @@ module mor1kx_decode
      endcase
 
    assign decode_lsu_zext_o = opc_insn[0];
+
+   assign decode_op_msync_o = FEATURE_MSYNC!="NONE" &&
+                              opc_insn == `OR1K_OPCODE_SYSTRAPSYNC &&
+                              decode_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
+                              `OR1K_SYSTRAPSYNC_OPC_MSYNC;
 
    assign decode_op_mtspr_o = opc_insn == `OR1K_OPCODE_MTSPR;
 
