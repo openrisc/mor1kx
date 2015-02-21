@@ -142,17 +142,17 @@ module pfpu32_rnd
   wire s1t_add_sign = add_sub_0_i ? rm_to_infm : add_sign_i;
 
   assign {s1t_sign,s1t_inv,s1t_inf,s1t_snan,s1t_qnan,s1t_anan_sign} =
-    add_rdy_i ? {s1t_add_sign,add_inv_i,add_inf_i,add_snan_i,add_qnan_i,add_anan_sign_i} :
-    mul_rdy_i ? {mul_sign_i,mul_inv_i,mul_inf_i,mul_snan_i,mul_qnan_i,mul_anan_sign_i} :
-    f2i_rdy_i ? {f2i_sign_i,1'b0,1'b0,f2i_snan_i,1'b0,f2i_sign_i} :
-                {i2f_sign_i,1'b0,1'b0,1'b0,1'b0,1'b0}; // and i2f by default
+    ({6{add_rdy_i}} & {s1t_add_sign,add_inv_i,add_inf_i,add_snan_i,add_qnan_i,add_anan_sign_i}) |
+    ({6{mul_rdy_i}} & {mul_sign_i,mul_inv_i,mul_inf_i,mul_snan_i,mul_qnan_i,mul_anan_sign_i}) |
+    ({6{f2i_rdy_i}} & {f2i_sign_i,1'b0,1'b0,f2i_snan_i,1'b0,f2i_sign_i}) |
+    ({6{i2f_rdy_i}} & {i2f_sign_i,1'b0,1'b0,1'b0,1'b0,1'b0});
 
   // multiplexer for fractionals
   assign s1t_fract35 =
-    add_rdy_i ? {7'd0, add_fract28_i} :
-    mul_rdy_i ? {7'd0, mul_fract28_i} :
-    f2i_rdy_i ? {8'd0, f2i_int24_i, 3'd0} :
-                {i2f_fract32_i,3'd0}; // and i2f by default
+    ({35{add_rdy_i}} & {7'd0, add_fract28_i}) |
+    ({35{mul_rdy_i}} & {7'd0, mul_fract28_i}) |
+    ({35{f2i_rdy_i}} & {8'd0, f2i_int24_i, 3'd0}) |
+    ({35{i2f_rdy_i}} & {i2f_fract32_i,3'd0});
 
   // overflow bit for add/mul
   wire s1t_addmul_carry = (add_rdy_i & add_fract28_i[27]) |
@@ -161,10 +161,10 @@ module pfpu32_rnd
   // multiplexer for shift values
   wire [4:0] s1t_shr_t;
   assign {s1t_shr_t, s1t_shl} =
-    add_rdy_i ? {5'd0, add_shl_i} :
-    mul_rdy_i ? {mul_shr_i, {4'd0,mul_shl_i}} :
-    f2i_rdy_i ? {f2i_shr_i, {1'b0,f2i_shl_i}} :
-                {{1'b0,i2f_shr_i}, i2f_shl_i}; // and i2f by default
+    ({10{add_rdy_i}} & {5'd0, add_shl_i}) |
+    ({10{mul_rdy_i}} & {mul_shr_i, {4'd0,mul_shl_i}}) |
+    ({10{f2i_rdy_i}} & {f2i_shr_i, {1'b0,f2i_shl_i}}) |
+    ({10{i2f_rdy_i}} & {{1'b0,i2f_shr_i}, i2f_shl_i});
 
   assign s1t_shr = (|s1t_shr_t) ? s1t_shr_t : {4'd0,s1t_addmul_carry};
  
@@ -227,16 +227,15 @@ module pfpu32_rnd
   wire [9:0] s1t_exp10shl;
   wire [9:0] s1t_exp10sh0;
   assign {s1t_exp10shr, s1t_exp10shl, s1t_exp10sh0} =
-    add_rdy_i ? {add_exp10sh0_i, add_exp10shl_i, add_exp10sh0_i} :
-    mul_rdy_i ? {mul_exp10shr_i, mul_exp10shl_i, mul_exp10sh0_i} :
-    f2i_rdy_i ? {10'd0, 10'd0, 10'd0} :
-                {{2'd0,i2f_exp8shr_i},{2'd0,i2f_exp8shl_i},{2'd0,i2f_exp8sh0_i}}; // i2f by default
+    ({30{add_rdy_i}} & {add_exp10sh0_i, add_exp10shl_i, add_exp10sh0_i}) |
+    ({30{mul_rdy_i}} & {mul_exp10shr_i, mul_exp10shl_i, mul_exp10sh0_i}) |
+    ({30{f2i_rdy_i}} & {10'd0, 10'd0, 10'd0}) |
+    ({30{i2f_rdy_i}} & {{2'd0,i2f_exp8shr_i},{2'd0,i2f_exp8shl_i},{2'd0,i2f_exp8sh0_i}});
 
   wire [9:0] s1t_exp10 =
-    (|s1t_shr_t)     ? s1t_exp10shr :
-    s1t_addmul_carry ? (s1t_exp10sh0 + 10'd1) :
-    (|s1t_shl)       ? s1t_exp10shl :
-                       s1t_exp10sh0;
+    (|s1t_shr_t)  ? s1t_exp10shr :
+    (~(|s1t_shl)) ? (s1t_exp10sh0 + {9'd0,s1t_addmul_carry}) :
+                    s1t_exp10shl;
 
   // output of align stage 
   reg        s1o_sign;
