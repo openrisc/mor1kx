@@ -653,8 +653,8 @@ endgenerate
 		   (exec_op_lsu_load_i | exec_op_lsu_store_i) ?
 		   exec_lsu_adr_i : ctrl_lsu_adr_i;
    assign dc_adr_match = dmmu_enable_i ?
-			 {dmmu_phys_addr[OPTION_OPERAND_WIDTH-1:2],2'b0} :
-			 {ctrl_lsu_adr_i[OPTION_OPERAND_WIDTH-1:2],2'b0};
+			 dmmu_phys_addr : //{dmmu_phys_addr[OPTION_OPERAND_WIDTH-1:2],2'b0} :
+			 ctrl_lsu_adr_i;  //{ctrl_lsu_adr_i[OPTION_OPERAND_WIDTH-1:2],2'b0};
 
    assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall &
 		   !(dbus_atomic & dbus_we & !atomic_reserve);
