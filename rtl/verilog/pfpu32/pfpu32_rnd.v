@@ -287,25 +287,17 @@ module pfpu32_rnd
   /* Stage #2: rounding */
 
 
-  wire        s2t_sign      = s1o_sign;
-  wire  [9:0] s2t_exp10     = s1o_exp10;
-  wire [31:0] s2t_fract32   = s1o_fract32;
-  wire  [1:0] s2t_rs        = s1o_rs;
-  wire        s2t_inv       = s1o_inv;
-  wire        s2t_inf       = s1o_inf;
-  wire        s2t_snan      = s1o_snan_i;
-  wire        s2t_qnan      = s1o_qnan_i;
-  wire        s2t_anan_sign = s1o_anan_sign_i;
+  wire s2t_dbz  = s1o_div_dbz;
 
-  wire s2t_g    = s2t_fract32[0];
-  wire s2t_r    = s2t_rs[1];
-  wire s2t_s    = s2t_rs[0];
+  wire s2t_g    = s1o_fract32[0];
+  wire s2t_r    = s1o_rs[1];
+  wire s2t_s    = s1o_rs[0];
   wire s2t_lost = s2t_r | s2t_s;
 
   wire s2t_rnd_up = (rm_nearest & s2t_r & s2t_s) |
                     (rm_nearest & s2t_g & s2t_r & (~s2t_s)) |
-                    (rm_to_infp & (~s2t_sign) & s2t_lost) |
-                    (rm_to_infm &   s2t_sign  & s2t_lost);
+                    (rm_to_infp & (~s1o_sign) & s2t_lost) |
+                    (rm_to_infm &   s1o_sign  & s2t_lost);
 
   // IEEE compliance rounding for qutient
   wire s2t_div_rnd_up =
@@ -329,106 +321,56 @@ module pfpu32_rnd
     s2t_set_rnd_up ? 32'd1        : // +1
     s2t_set_rnd_dn ? 32'hFFFFFFFF : // -1
                      32'd0;         // no rounding
-
-  // 1rst stage output
-  reg        s2o_rdy;
-  reg        s2o_sign;
-  reg  [9:0] s2o_exp10;
-  reg [31:0] s2o_fract32;
-  reg        s2o_lost;
-  reg        s2o_inv;
-  reg        s2o_inf;
-  reg        s2o_snan_i;
-  reg        s2o_qnan_i;
-  reg        s2o_anan_sign_i;
-  reg        s2o_dbz, s2o_f2i_ovf, s2o_f2i;
-  // registering
-  always @(posedge clk) begin
-    if(adv_i) begin
-      // input related flags
-      s2o_inv         <= s2t_inv;
-      s2o_inf         <= s2t_inf;
-      s2o_snan_i      <= s2t_snan;
-      s2o_qnan_i      <= s2t_qnan;
-      s2o_anan_sign_i <= s2t_anan_sign;
-      // computation related
-      s2o_sign    <= s2t_sign;
-      s2o_exp10   <= s2t_exp10;
-      s2o_fract32 <= s2t_fract32 + s2t_rnd_v32;
-      s2o_lost    <= s2t_lost;
-      // DIV specials
-      s2o_dbz     <= s1o_div_dbz & s1o_div_op;
-      // F2I specials
-      s2o_f2i_ovf <= s1o_f2i_ovf;
-      s2o_f2i     <= s1o_f2i;
-    end // advance
-  end // posedge clock
-
-  // ready is special case
-  reg s2o_ready;
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      s2o_ready <= 1'b0;
-    else if(flush_i)
-      s2o_ready <= 1'b0;
-    else if(adv_i)
-      s2o_ready <= s1o_ready;
-  end // posedge clock
-
-
-  /* Stage #3: finish */
+  // rounded fractional
+  wire [31:0] s2t_fract32_rnd = s1o_fract32 + s2t_rnd_v32;
 
 
   // floating point output
-  wire s3t_f32_shr = s2o_fract32[24];
+  wire s2t_f32_shr = s2t_fract32_rnd[24];
   // update exponent and fraction
-  wire [9:0]  s3t_f32_exp10   = s2o_exp10 + {9'd0,s3t_f32_shr};
-  wire [23:0] s3t_f32_fract24 = s3t_f32_shr ? s2o_fract32[24:1] :
-                                              s2o_fract32[23:0];
-   // potentially denormalized
-  wire s3t_f32_fract24_dn = ~s3t_f32_fract24[23];
-   // potentially zero
-  wire s3t_f32_fract24_00 = ~(|s3t_f32_fract24);
+  wire [9:0]  s2t_f32_exp10   = s1o_exp10 + {9'd0,s2t_f32_shr};
+  wire [23:0] s2t_f32_fract24 = s2t_f32_shr ? s2t_fract32_rnd[24:1] :
+                                              s2t_fract32_rnd[23:0];
+   // denormalized or zero
+  wire s2t_f32_fract24_dn = ~s2t_f32_fract24[23];
 
 
   // integer output (f2i)
-  wire s3t_i32_carry_rnd = s2o_fract32[31];
-  wire s3t_i32_inv = ((~s2o_sign) & s3t_i32_carry_rnd) | s2o_f2i_ovf;
+  wire s2t_i32_carry_rnd = s2t_fract32_rnd[31];
+  wire s2t_i32_inv = ((~s1o_sign) & s2t_i32_carry_rnd) | s1o_f2i_ovf;
   // two's complement for negative number
-  wire [31:0] s3t_i32_int32 = (s2o_fract32 ^ {32{s2o_sign}}) + {31'd0,s2o_sign};
+  wire [31:0] s2t_i32_int32 = (s2t_fract32_rnd ^ {32{s1o_sign}}) + {31'd0,s1o_sign};
   // zero
-  wire s3t_i32_int32_00 = (~s3t_i32_inv) & (~(|s3t_i32_int32));
+  wire s2t_i32_int32_00 = (~s2t_i32_inv) & (~(|s2t_i32_int32));
   // int32 output
-  wire [31:0] s3t_i32_opc;
-  assign s3t_i32_opc =
-    s3t_i32_inv ? (32'h7fffffff ^ {32{s2o_sign}}) : s3t_i32_int32;
+  wire [31:0] s2t_i32_opc;
+  assign s2t_i32_opc =
+    s2t_i32_inv ? (32'h7fffffff ^ {32{s1o_sign}}) : s2t_i32_int32;
 
 
    // Generate result and flags
-  wire s3t_ine, s3t_ovf, s3t_inf, s3t_unf, s3t_zer;
-  wire [31:0] s3t_opc;
-  assign {s3t_opc,s3t_ine,s3t_ovf,s3t_inf,s3t_unf,s3t_zer} =
+  wire s2t_ine, s2t_ovf, s2t_inf, s2t_unf, s2t_zer;
+  wire [31:0] s2t_opc;
+  assign {s2t_opc,s2t_ine,s2t_ovf,s2t_inf,s2t_unf,s2t_zer} =
     // f2i
-    s2o_f2i ?       //  ine  ovf  inf  unf              zer
-      {s3t_i32_opc,s2o_lost,1'b0,1'b0,1'b0,s3t_i32_int32_00} :
+    s1o_f2i ?       //  ine  ovf  inf  unf              zer
+      {s2t_i32_opc,s2t_lost,1'b0,1'b0,1'b0,s2t_i32_int32_00} :
     // qnan output
-    (s2o_snan_i | s2o_qnan_i) ? // ine  ovf  inf  unf  zer
-      {{s2o_anan_sign_i,QNAN},    1'b0,1'b0,1'b0,1'b0,1'b0} :
+    (s1o_snan_i | s1o_qnan_i) ? // ine  ovf  inf  unf  zer
+      {{s1o_anan_sign_i,QNAN},    1'b0,1'b0,1'b0,1'b0,1'b0} :
     // snan output
-    s2o_inv ?        // ine  ovf  inf  unf  zer
-      {{s2o_sign,SNAN},1'b0,1'b0,1'b0,1'b0,1'b0} :
+    s1o_inv ?        // ine  ovf  inf  unf  zer
+      {{s1o_sign,SNAN},1'b0,1'b0,1'b0,1'b0,1'b0} :
     // overflow and infinity
-    ((s3t_f32_exp10 > 10'd254) | s2o_inf | s2o_dbz) ? // ine                       ovf  inf  unf  zer
-      {{s2o_sign,INF},((s2o_lost | (~s2o_inf)) & (~s2o_dbz)),((~s2o_inf) & (~s2o_dbz)),1'b1,1'b0,1'b0} :
-    // zero and denormalized
-    (s3t_f32_fract24_dn | s3t_f32_fract24_00) ?// ine  ovf  inf 
-      {{s2o_sign,8'd0,s3t_f32_fract24[22:0]},s2o_lost,1'b0,1'b0,
-       // unf
-       (s2o_lost & (s3t_f32_fract24_dn | s3t_f32_fract24_00)),
-       // zer
-       s3t_f32_fract24_00} :
+    ((s2t_f32_exp10 > 10'd254) | s1o_inf | s2t_dbz) ? // ine                       ovf  inf  unf  zer
+      {{s1o_sign,INF},((s2t_lost | (~s1o_inf)) & (~s2t_dbz)),((~s1o_inf) & (~s2t_dbz)),1'b1,1'b0,1'b0} :
+    // denormalized or zero
+    (s2t_f32_fract24_dn) ?                     // ine  ovf  inf 
+      {{s1o_sign,8'd0,s2t_f32_fract24[22:0]},s2t_lost,1'b0,1'b0,
+                                // unf        zer
+       (s2t_lost & s2t_f32_fract24_dn),~(|s2t_f32_fract24)} :
     // normal result                                          ine  ovf  inf  unf  zer
-    {{s2o_sign,s3t_f32_exp10[7:0],s3t_f32_fract24[22:0]},s2o_lost,1'b0,1'b0,1'b0,1'b0};
+    {{s1o_sign,s2t_f32_exp10[7:0],s2t_f32_fract24[22:0]},s2t_lost,1'b0,1'b0,1'b0,1'b0};
 
 
   // Output Register
@@ -455,23 +397,23 @@ module pfpu32_rnd
     end
     else if(adv_i) begin
         // arithmetic results
-      fpu_result_o      <= s3t_opc;
-      fpu_arith_valid_o <= s2o_ready;
+      fpu_result_o      <= s2t_opc;
+      fpu_arith_valid_o <= s1o_ready;
         // comparison specials
       fpu_cmp_flag_o  <= cmp_res_i;
       fpu_cmp_valid_o <= cmp_rdy_i;
         // exeptions
-      fpcsr_o[`OR1K_FPCSR_OVF] <= s3t_ovf;
-      fpcsr_o[`OR1K_FPCSR_UNF] <= s3t_unf;
-      fpcsr_o[`OR1K_FPCSR_SNF] <= s2o_inv | (s2o_snan_i & s2o_f2i);
-      fpcsr_o[`OR1K_FPCSR_QNF] <= s2o_qnan_i;
-      fpcsr_o[`OR1K_FPCSR_ZF]  <= s3t_zer;
-      fpcsr_o[`OR1K_FPCSR_IXF] <= s3t_ine;
-      fpcsr_o[`OR1K_FPCSR_IVF] <= (s2o_inv | (s3t_i32_inv & s2o_f2i) | s2o_snan_i) |
+      fpcsr_o[`OR1K_FPCSR_OVF] <= s2t_ovf;
+      fpcsr_o[`OR1K_FPCSR_UNF] <= s2t_unf;
+      fpcsr_o[`OR1K_FPCSR_SNF] <= s1o_inv | (s1o_snan_i & s1o_f2i);
+      fpcsr_o[`OR1K_FPCSR_QNF] <= s1o_qnan_i;
+      fpcsr_o[`OR1K_FPCSR_ZF]  <= s2t_zer;
+      fpcsr_o[`OR1K_FPCSR_IXF] <= s2t_ine;
+      fpcsr_o[`OR1K_FPCSR_IVF] <= (s1o_inv | (s2t_i32_inv & s1o_f2i) | s1o_snan_i) |
                                   (cmp_inv_i & cmp_rdy_i);
-      fpcsr_o[`OR1K_FPCSR_INF] <= s3t_inf |
+      fpcsr_o[`OR1K_FPCSR_INF] <= s2t_inf |
                                   (cmp_inf_i & cmp_rdy_i);
-      fpcsr_o[`OR1K_FPCSR_DZF] <= s2o_dbz;
+      fpcsr_o[`OR1K_FPCSR_DZF] <= s2t_dbz;
     end
   end // posedge clock
 
