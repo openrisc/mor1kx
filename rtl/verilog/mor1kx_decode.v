@@ -47,6 +47,8 @@ module mor1kx_decode
     parameter FEATURE_PSYNC = "NONE",
     parameter FEATURE_CSYNC = "NONE",
 
+    parameter FEATURE_FPU   = "NONE", // ENABLED|NONE
+
     parameter FEATURE_CUST1 = "NONE",
     parameter FEATURE_CUST2 = "NONE",
     parameter FEATURE_CUST3 = "NONE",
@@ -115,6 +117,8 @@ module mor1kx_decode
 
     // Sync operations
     output                            decode_op_msync_o,
+    output [`OR1K_FPUOP_WIDTH-1:0]    decode_op_fpu_o,
+
 
     // Adder control logic
     output 			      decode_adder_do_sub_o,
@@ -259,6 +263,19 @@ module mor1kx_decode
 
    assign decode_op_movhi_o = opc_insn == `OR1K_OPCODE_MOVHI;
 
+   // FPU related
+   generate
+     /* verilator lint_off WIDTH */
+     if (FEATURE_FPU!="NONE") begin : fpu_decode_ena
+     /* verilator lint_on WIDTH */
+       assign decode_op_fpu_o  = { (opc_insn == `OR1K_OPCODE_FPU), 
+                                   decode_insn_i[`OR1K_FPUOP_WIDTH-2:0] };
+     end
+     else begin : fpu_decode_none
+       assign decode_op_fpu_o  = {`OR1K_FPUOP_WIDTH{1'b0}};
+     end
+   endgenerate // FPU related
+
    // Which instructions cause writeback?
    assign decode_rf_wb_o = (opc_insn == `OR1K_OPCODE_JAL |
 			    opc_insn == `OR1K_OPCODE_MOVHI |
@@ -401,6 +418,8 @@ module mor1kx_decode
 	 decode_except_illegal_o = (FEATURE_CUST7=="NONE");
        `OR1K_OPCODE_CUST8:
 	 decode_except_illegal_o = (FEATURE_CUST8=="NONE");
+       `OR1K_OPCODE_FPU:
+	 decode_except_illegal_o = (FEATURE_FPU=="NONE");
 
        `OR1K_OPCODE_LD,
 	 `OR1K_OPCODE_SD:
