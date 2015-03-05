@@ -42,6 +42,7 @@ module mor1kx_execute_alu
     parameter FEATURE_CUST7 = "NONE",
     parameter FEATURE_CUST8 = "NONE",
 
+    parameter FEATURE_FPU    = "NONE", // ENABLED|NONE
     parameter OPTION_SHIFTER = "BARREL",
 
     // Pipeline specific internal parameters
@@ -55,6 +56,8 @@ module mor1kx_execute_alu
     input 			      padv_decode_i,
     input 			      padv_execute_i,
     input 			      padv_ctrl_i,
+    
+    input 			      pipeline_flush_i ,// flush pipelined fpu
 
     // inputs to ALU
     input [`OR1K_ALU_OPC_WIDTH-1:0]   opc_alu_i,
@@ -85,6 +88,8 @@ module mor1kx_execute_alu
     input 			      op_mtspr_i,
     input 			      op_mfspr_i,
     input 			      op_movhi_i,
+    input [`OR1K_FPUOP_WIDTH-1:0]   op_fpu_i,
+    input [`OR1K_FPCSR_RM_SIZE-1:0] fpu_round_mode_i,
     input 			      op_jbr_i,
     input 			      op_jr_i,
     input [9:0] 		      immjbr_upper_i,
@@ -112,6 +117,9 @@ module mor1kx_execute_alu
 
     output 			      overflow_set_o,
     output 			      overflow_clear_o,
+
+    output [`OR1K_FPCSR_WIDTH-1:0] fpcsr_o,
+    output                         fpcsr_set_o,
 
     output [OPTION_OPERAND_WIDTH-1:0] alu_result_o,
     output 			      alu_valid_o,
@@ -485,6 +493,61 @@ endgenerate
       end
    endgenerate
 
+
+  // FPU related
+  //  arithmetic part interface
+  wire fpu_op_is_arith;
+  wire fpu_arith_valid;
+  wire [OPTION_OPERAND_WIDTH-1:0] fpu_result;
+  //  comparator part interface
+  wire fpu_op_is_cmp;
+  wire fpu_cmp_valid;
+  wire fpu_cmp_flag;
+  //  instance
+  generate
+    /* verilator lint_off WIDTH */
+    if (FEATURE_FPU!="NONE") begin :  fpu_alu_ena
+    /* verilator lint_on WIDTH */
+      // fpu32 instance
+      pfpu32_top u_pfpu32
+      (
+        .clk(clk),
+        .rst(rst),
+        .flush_i(pipeline_flush_i),
+        .padv_decode_i(padv_decode_i),
+        .padv_execute_i(padv_execute_i),
+        .op_fpu_i(op_fpu_i),
+        .round_mode_i(fpu_round_mode_i),
+        .rfa_i(rfa_i),
+        .rfb_i(rfb_i),
+        .fpu_result_o(fpu_result),
+        .fpu_arith_valid_o(fpu_arith_valid),
+        .fpu_cmp_flag_o(fpu_cmp_flag),
+        .fpu_cmp_valid_o(fpu_cmp_valid),
+        .fpcsr_o(fpcsr_o)
+      );
+      // flag to update FPCSR
+      assign fpcsr_set_o = fpu_arith_valid | fpu_cmp_valid;
+      // some glue logic
+      assign fpu_op_is_arith = op_fpu_i[`OR1K_FPUOP_WIDTH-1] & (~op_fpu_i[3]);
+      assign fpu_op_is_cmp   = op_fpu_i[`OR1K_FPUOP_WIDTH-1] &   op_fpu_i[3];
+    end
+    else begin :  fpu_alu_none
+      // arithmetic part
+      assign fpu_op_is_arith = 0;
+      assign fpu_arith_valid = 0;
+      assign fpu_result      = {OPTION_OPERAND_WIDTH{1'b0}};
+      // comparator part
+      assign fpu_op_is_cmp = 0;
+      assign fpu_cmp_valid = 0;
+      assign fpu_cmp_flag  = 0;
+      // fpu's common
+      assign fpcsr_o     = {`OR1K_FPCSR_WIDTH{1'b0}};
+      assign fpcsr_set_o = 0;
+    end
+  endgenerate // FPU related
+
+
    wire ffl1_valid;
    generate
       if (FEATURE_FFL1!="NONE") begin
@@ -638,8 +701,13 @@ endgenerate
    endgenerate
 
    // Comparison logic
-   assign flag_set_o = flag_set & op_setflag_i;
-   assign flag_clear_o = !flag_set & op_setflag_i;
+   // To update SR[F] either from integer or float point comparision
+   assign flag_set_o   = fpu_op_is_cmp ?
+                         (fpu_cmp_flag & fpu_cmp_valid) :
+                         (flag_set & op_setflag_i);
+   assign flag_clear_o = fpu_op_is_cmp ?
+                         ((~fpu_cmp_flag) & fpu_cmp_valid) :
+                         ((~flag_set) & op_setflag_i);
 
    // Combinatorial block
    always @*
@@ -707,6 +775,8 @@ endgenerate
 			 op_cmov ? cmov_result :
 			 op_movhi_i ? immediate_i :
 			 op_mul_i ? mul_result[OPTION_OPERAND_WIDTH-1:0] :
+			 fpu_arith_valid ? fpu_result :
+			 fpu_cmp_valid ? {OPTION_OPERAND_WIDTH{1'b0}} :
 			 op_shift_i ? shift_result :
 			 op_div_i ? div_result :
 			 op_ffl1_i ? ffl1_result :
@@ -736,6 +806,8 @@ endgenerate
    // Stall logic for multicycle ALU operations
    assign alu_stall = op_div_i & !div_valid |
 		      op_mul_i & !mul_valid |
+		      fpu_op_is_arith & !fpu_arith_valid |
+		      fpu_op_is_cmp & !fpu_cmp_valid |
 		      op_shift_i & !shift_valid |
 		      op_ffl1_i & !ffl1_valid;
 
