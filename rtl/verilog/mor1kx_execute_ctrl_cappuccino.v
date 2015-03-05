@@ -269,7 +269,7 @@ endgenerate
    // FPU related
    generate
      /* verilator lint_off WIDTH */
-     if (FEATURE_FPU!="NONE") begin
+     if (FEATURE_FPU!="NONE") begin : fpu_execute_ctrl_ena
      /* verilator lint_on WIDTH */
        always @(posedge clk `OR_ASYNC_RST) begin
          if (rst) begin
@@ -283,7 +283,8 @@ endgenerate
            ctrl_fpcsr_set_o <= fpcsr_set_i;
          end
        end // @clk
-     end else begin // no fpu
+     end
+     else begin : fpu_execute_ctrl_none
        always @(posedge clk `OR_ASYNC_RST) begin
          if (rst) begin
            ctrl_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};

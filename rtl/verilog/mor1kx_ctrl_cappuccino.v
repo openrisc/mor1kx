@@ -575,7 +575,7 @@ module mor1kx_ctrl_cappuccino
     `endif
 
      /* verilator lint_off WIDTH */
-     if (FEATURE_FPU != "NONE") begin
+     if (FEATURE_FPU != "NONE") begin : fpu_csr_ena
      /* verilator lint_on WIDTH */      
        assign ctrl_fpu_round_mode_o = spr_fpcsr[`OR1K_FPCSR_RM];
 
@@ -629,7 +629,7 @@ module mor1kx_ctrl_cappuccino
          end
        end // FPCSR reg's always(@posedge clk)
      end
-     else begin // no fpu
+     else begin : fpu_csr_none
        assign ctrl_fpu_round_mode_o = {`OR1K_FPCSR_RM_SIZE{1'b0}};
        assign except_fpu = 0;
        // FPU Control & status register
@@ -1487,7 +1487,7 @@ end
 endgenerate
 
 generate
-if (FEATURE_FPU!="NONE") begin
+if (FEATURE_FPU!="NONE") begin : fpu_ctrl
    assign spr_access_ack[`OR1K_SPR_FPU_BASE] = spr_bus_ack_fpu_i;
    assign spr_internal_read_dat[`OR1K_SPR_FPU_BASE] =
      spr_bus_dat_fpu_i &

@@ -1437,7 +1437,7 @@ module mor1kx_ctrl_espresso
    endgenerate
 
    generate
-      if (FEATURE_FPU!="NONE") begin
+      if (FEATURE_FPU!="NONE") begin : fpu_ctrl
          assign spr_access_ack[11] = spr_bus_ack_fpu_i;
          assign spr_internal_read_dat[11] = spr_bus_dat_fpu_i;
       end

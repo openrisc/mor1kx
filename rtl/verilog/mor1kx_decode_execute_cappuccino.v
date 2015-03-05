@@ -317,7 +317,7 @@ module mor1kx_decode_execute_cappuccino
    // FPU related
    generate
      /* verilator lint_off WIDTH */
-     if (FEATURE_FPU!="NONE") begin
+     if (FEATURE_FPU!="NONE") begin : fpu_decode_execute_ena
      /* verilator lint_on WIDTH */
        reg [`OR1K_FPUOP_WIDTH-1:0] execute_op_fpu_r;
        assign execute_op_fpu_o = execute_op_fpu_r;
@@ -330,7 +330,8 @@ module mor1kx_decode_execute_cappuccino
            execute_op_fpu_r <= (decode_bubble_o ?
                                {`OR1K_FPUOP_WIDTH{1'b0}} : decode_op_fpu_i);
        end // @clk
-     end else begin // no fpu
+     end
+     else begin : fpu_decode_execute_none
        assign execute_op_fpu_o  = {`OR1K_FPUOP_WIDTH{1'b0}};
      end
    endgenerate // FPU related

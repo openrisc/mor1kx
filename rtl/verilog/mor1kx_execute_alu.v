@@ -495,19 +495,20 @@ endgenerate
 
 
   // FPU related
-  //  arithmetic part
+  //  arithmetic part interface
   wire fpu_op_is_arith;
   wire fpu_arith_valid;
   wire [OPTION_OPERAND_WIDTH-1:0] fpu_result;
-  //  comparator part
+  //  comparator part interface
   wire fpu_op_is_cmp;
   wire fpu_cmp_valid;
   wire fpu_cmp_flag;
+  //  instance
   generate
     /* verilator lint_off WIDTH */
-    if (FEATURE_FPU!="NONE") begin
+    if (FEATURE_FPU!="NONE") begin :  fpu_alu_ena
     /* verilator lint_on WIDTH */
-      // instance
+      // fpu32 instance
       pfpu32_top u_pfpu32
       (
         .clk(clk),
@@ -530,20 +531,21 @@ endgenerate
       // some glue logic
       assign fpu_op_is_arith = op_fpu_i[`OR1K_FPUOP_WIDTH-1] & (~op_fpu_i[3]);
       assign fpu_op_is_cmp   = op_fpu_i[`OR1K_FPUOP_WIDTH-1] &   op_fpu_i[3];
-     end else begin // no fpu
-       // arithmetic part
-       assign fpu_op_is_arith = 0;
-       assign fpu_arith_valid = 0;
-       assign fpu_result      = {OPTION_OPERAND_WIDTH{1'b0}};
-       // comparator part
-       assign fpu_op_is_cmp = 0;
-       assign fpu_cmp_valid = 0;
-       assign fpu_cmp_flag  = 0;
-       // fpu's common
-       assign fpcsr_o     = {`OR1K_FPCSR_WIDTH{1'b0}};
-       assign fpcsr_set_o = 0;
-     end
-   endgenerate // FPU related
+    end
+    else begin :  fpu_alu_none
+      // arithmetic part
+      assign fpu_op_is_arith = 0;
+      assign fpu_arith_valid = 0;
+      assign fpu_result      = {OPTION_OPERAND_WIDTH{1'b0}};
+      // comparator part
+      assign fpu_op_is_cmp = 0;
+      assign fpu_cmp_valid = 0;
+      assign fpu_cmp_flag  = 0;
+      // fpu's common
+      assign fpcsr_o     = {`OR1K_FPCSR_WIDTH{1'b0}};
+      assign fpcsr_set_o = 0;
+    end
+  endgenerate // FPU related
 
 
    wire ffl1_valid;
@@ -728,21 +730,12 @@ endgenerate
    //
    // Comparison logic
    // To update SR[F] either from integer or float point comparision
-   generate
-     /* verilator lint_off WIDTH */
-     if (FEATURE_FPU!="NONE") begin
-     /* verilator lint_on WIDTH */
-       assign flag_set_o   = fpu_op_is_cmp ?
-                              (fpu_cmp_flag & fpu_cmp_valid) :
-                              (flag_set & op_setflag_i);
-       assign flag_clear_o = fpu_op_is_cmp ?
-                              ((~fpu_cmp_flag) & fpu_cmp_valid) :
-                              ((~flag_set) & op_setflag_i);
-     end else begin
-       assign flag_set_o = flag_set & op_setflag_i;
-       assign flag_clear_o = !flag_set & op_setflag_i;
-     end
-   endgenerate
+   assign flag_set_o   = fpu_op_is_cmp ?
+                         (fpu_cmp_flag & fpu_cmp_valid) :
+                         (flag_set & op_setflag_i);
+   assign flag_clear_o = fpu_op_is_cmp ?
+                         ((~fpu_cmp_flag) & fpu_cmp_valid) :
+                         ((~flag_set) & op_setflag_i);
 
 
    // Logic operations
@@ -779,31 +772,16 @@ endgenerate
    assign op_cmov = op_alu_i & opc_alu_i == `OR1K_ALU_OPC_CMOV;
 
    // Result muxing - result is registered in RF
-generate
-/* verilator lint_off WIDTH */
-if (FEATURE_FPU!="NONE") begin
-/* verilator lint_on WIDTH */
-   assign alu_result_o = 
-     ({OPTION_OPERAND_WIDTH{op_logic}} & logic_result) |
-     ({OPTION_OPERAND_WIDTH{op_cmov}} & cmov_result) |
-     ({OPTION_OPERAND_WIDTH{op_movhi_i}} & immediate_i) |
-     ({OPTION_OPERAND_WIDTH{fpu_arith_valid}} & fpu_result) |
-     ({OPTION_OPERAND_WIDTH{op_mul_i}} & mul_result[OPTION_OPERAND_WIDTH-1:0]) |
-     ({OPTION_OPERAND_WIDTH{op_shift_i}} & shift_result) |
-     ({OPTION_OPERAND_WIDTH{op_div_i}} & div_result) |
-     ({OPTION_OPERAND_WIDTH{op_ffl1_i}} & ffl1_result) |
-     ({OPTION_OPERAND_WIDTH{op_add_i}} & adder_result);
-end else begin
    assign alu_result_o = op_logic ? logic_result :
 			 op_cmov ? cmov_result :
 			 op_movhi_i ? immediate_i :
 			 op_mul_i ? mul_result[OPTION_OPERAND_WIDTH-1:0] :
+			 fpu_arith_valid ? fpu_result :
+			 fpu_cmp_valid ? {OPTION_OPERAND_WIDTH{1'b0}} :
 			 op_shift_i ? shift_result :
 			 op_div_i ? div_result :
 			 op_ffl1_i ? ffl1_result :
 			 adder_result;
-end
-endgenerate
 
    // Carry and overflow flag generation
    assign overflow_set_o = FEATURE_OVERFLOW!="NONE" &
@@ -827,24 +805,12 @@ endgenerate
 			   op_div_unsigned_i & !div_by_zero);
 
    // Stall logic for multicycle ALU operations
-generate
-/* verilator lint_off WIDTH */
-if (FEATURE_FPU!="NONE") begin
-/* verilator lint_on WIDTH */
-   assign alu_stall = 
-          (op_div_i & (~div_valid)) |
-		      (op_mul_i & (~mul_valid)) |
-          (fpu_op_is_arith & (~fpu_arith_valid)) |
-          (fpu_op_is_cmp & (~fpu_cmp_valid)) |
-		      (op_shift_i & (~shift_valid)) |
-		      (op_ffl1_i & (~ffl1_valid));
-end else begin
    assign alu_stall = op_div_i & !div_valid |
 		      op_mul_i & !mul_valid |
+		      fpu_op_is_arith & !fpu_arith_valid |
+		      fpu_op_is_cmp & !fpu_cmp_valid |
 		      op_shift_i & !shift_valid |
 		      op_ffl1_i & !ffl1_valid;
-end
-endgenerate
 
    assign alu_valid_o = !alu_stall;
 
