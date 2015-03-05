@@ -160,6 +160,11 @@ module mor1kx_ctrl_cappuccino
     input 			      ctrl_overflow_set_i,
     input 			      ctrl_overflow_clear_i,
 
+    // FPU Status flags to and from ALU
+    output [`OR1K_FPCSR_RM_SIZE-1:0]  ctrl_fpu_round_mode_o,
+    input  [`OR1K_FPCSR_WIDTH-1:0]    ctrl_fpcsr_i,
+    input                             ctrl_fpcsr_set_i,
+
     // Branch indicator from control unit (l.rfe/exception)
     output 			      ctrl_branch_exception_o,
     // PC out to fetch stage for l.rfe, exceptions
@@ -234,6 +239,11 @@ module mor1kx_ctrl_cappuccino
    // Tick Timer SPRs
    wire [31:0] 			     spr_ttmr;
    wire [31:0] 			     spr_ttcr;
+
+   // FPU Control & Status Register
+   // and related exeption signals
+   reg [`OR1K_FPCSR_WIDTH-1:0]       spr_fpcsr;
+   wire                              except_fpu;
 
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_npc;
@@ -323,7 +333,6 @@ module mor1kx_ctrl_cappuccino
    wire [31:0] 			     spr_iccfgr;
    wire [31:0] 			     spr_dcfgr;
    wire [31:0] 			     spr_pccfgr;
-   wire [31:0] 			     spr_fpcsr;
    wire [31:0] 			     spr_isr [0:7];
 
    assign  b = ctrl_rfb_i;
@@ -333,7 +342,7 @@ module mor1kx_ctrl_cappuccino
    assign exception_pending = (except_ibus_err_i | except_ibus_align_i |
 			       except_illegal_i | except_syscall_i |
 			       except_dbus_i | except_align_i |
-			       except_ticktimer | except_range |
+			       except_ticktimer | except_range | except_fpu |
 			       except_pic | except_trap_i |
 			       except_itlb_miss_i | except_ipagefault_i |
 			       except_dtlb_miss_i | except_dpagefault_i);
@@ -357,6 +366,7 @@ module mor1kx_ctrl_cappuccino
 
    always @(posedge clk)
      ctrl_stage_exceptions <= except_align_i | except_dbus_i | except_range |
+			      except_fpu |
 			      except_dtlb_miss_i | except_dpagefault_i;
 
    always @(posedge clk)
@@ -375,48 +385,52 @@ module mor1kx_ctrl_cappuccino
 	      except_trap_i,
 	      except_dbus_i,
 	      except_range,
+	      except_fpu,
 	      except_pic,
 	      except_ticktimer
 	      }
 	     )
-	 14'b1?????????????:
+	 15'b1??????????????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_ITLB_VECTOR,8'd0};
-	 14'b01????????????:
+	 15'b01?????????????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_IPF_VECTOR,8'd0};
-	 14'b001???????????:
+	 15'b001????????????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_BERR_VECTOR,8'd0};
-	 14'b0001??????????:
+	 15'b0001???????????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_ILLEGAL_VECTOR,8'd0};
-	 14'b00001?????????,
-	   14'b000001????????:
+	 15'b00001??????????,
+	 15'b000001?????????:
 	     exception_pc_addr <= spr_evbar |
 				  {19'd0,`OR1K_ALIGN_VECTOR,8'd0};
-	 14'b0000001???????:
+	 15'b0000001????????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_SYSCALL_VECTOR,8'd0};
-	 14'b00000001??????:
+	 15'b00000001???????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_DTLB_VECTOR,8'd0};
-	 14'b000000001?????:
+	 15'b000000001??????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_DPF_VECTOR,8'd0};
-	 14'b0000000001????:
+	 15'b0000000001????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_TRAP_VECTOR,8'd0};
-	 14'b00000000001???:
+	 15'b00000000001????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_BERR_VECTOR,8'd0};
-	 14'b000000000001??:
+	 15'b000000000001???:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_RANGE_VECTOR,8'd0};
-	 14'b0000000000001?:
+	 15'b0000000000001??:
+	   exception_pc_addr <= spr_evbar |
+				{19'd0,`OR1K_FP_VECTOR,8'd0};
+	 15'b00000000000001?:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_INT_VECTOR,8'd0};
-	 //14'b00000000000001:
+	 //15'b00000000000001:
 	 default:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_TT_VECTOR,8'd0};
@@ -552,6 +566,84 @@ module mor1kx_ctrl_cappuccino
        doing_rfe_r <= ctrl_op_rfe_i;
 
    assign spr_sr_o = spr_sr;
+
+
+   // FPU related: FPCSR and exception
+   generate
+    `ifdef OR1K_FPCSR_MASK_FLAGS
+     reg [`OR1K_FPCSR_ALLF_SIZE-1:0] spr_fpcsr_mf; // mask for FPU flags 
+    `endif
+
+     /* verilator lint_off WIDTH */
+     if (FEATURE_FPU != "NONE") begin : fpu_csr_ena
+     /* verilator lint_on WIDTH */      
+       assign ctrl_fpu_round_mode_o = spr_fpcsr[`OR1K_FPCSR_RM];
+
+       // select all flags
+      `ifdef OR1K_FPCSR_MASK_FLAGS
+       wire [`OR1K_FPCSR_ALLF_SIZE-1:0] masked_fpres_flags =
+         ctrl_fpcsr_i[`OR1K_FPCSR_ALLF] & spr_fpcsr_mf;
+
+       wire [`OR1K_FPCSR_ALLF_SIZE-1:0] masked_fpcsr_flags =
+         spr_fpcsr[`OR1K_FPCSR_ALLF] & spr_fpcsr_mf;
+
+
+       wire [`OR1K_FPCSR_ALLF_SIZE-1:0] fpu_allf =
+         ctrl_fpcsr_set_i ? masked_fpres_flags :
+                            masked_fpcsr_flags;
+      `else
+       wire [`OR1K_FPCSR_ALLF_SIZE-1:0] fpu_allf =
+         ctrl_fpcsr_set_i ? ctrl_fpcsr_i[`OR1K_FPCSR_ALLF] :
+                            spr_fpcsr[`OR1K_FPCSR_ALLF];
+      `endif
+
+       assign except_fpu = (~doing_rfe) &
+                           spr_fpcsr[`OR1K_FPCSR_FPEE] & 
+                           (|fpu_allf);
+        
+       // FPU Control & status register
+       always @(posedge clk `OR_ASYNC_RST) begin
+         if (rst) begin
+           spr_fpcsr <= `OR1K_FPCSR_RESET_VALUE;
+          `ifdef OR1K_FPCSR_MASK_FLAGS
+           spr_fpcsr_mf <= `OR1K_FPCSR_MASK_RESET_VALUE;
+          `endif
+         end
+         else if (exception_re) begin
+           spr_fpcsr[`OR1K_FPCSR_ALLF] <= fpu_allf;
+           spr_fpcsr[`OR1K_FPCSR_RM]   <= spr_fpcsr[`OR1K_FPCSR_RM];
+           spr_fpcsr[`OR1K_FPCSR_FPEE] <= 1'b0;
+         end  
+         else if ((spr_we & spr_access[`OR1K_SPR_SYS_BASE] &
+                  (spr_sr[`OR1K_SPR_SR_SM] & padv_ctrl | du_access)) &&
+                  `SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_FPCSR_ADDR)) begin
+           spr_fpcsr <= spr_write_dat[`OR1K_FPCSR_WIDTH-1:0]; // update all fields
+          `ifdef OR1K_FPCSR_MASK_FLAGS
+           spr_fpcsr_mf <= spr_write_dat[`OR1K_FPCSR_MASK_ALL];
+          `endif
+         end
+         else if (padv_ctrl & ctrl_fpcsr_set_i) begin
+           spr_fpcsr[`OR1K_FPCSR_ALLF] <= fpu_allf;
+           spr_fpcsr[`OR1K_FPCSR_RM]   <= spr_fpcsr[`OR1K_FPCSR_RM];
+           spr_fpcsr[`OR1K_FPCSR_FPEE] <= spr_fpcsr[`OR1K_FPCSR_FPEE];
+         end
+       end // FPCSR reg's always(@posedge clk)
+     end
+     else begin : fpu_csr_none
+       assign ctrl_fpu_round_mode_o = {`OR1K_FPCSR_RM_SIZE{1'b0}};
+       assign except_fpu = 0;
+       // FPU Control & status register
+       always @(posedge clk `OR_ASYNC_RST) begin
+         if (rst) begin
+           spr_fpcsr <= {`OR1K_FPCSR_WIDTH{1'b0}};
+          `ifdef OR1K_FPCSR_MASK_FLAGS
+           spr_fpcsr_mf <= {`OR1K_FPCSR_ALLF_SIZE{1'b0}};
+          `endif
+         end
+       end // FPCSR reg's always(@posedge clk)
+     end
+   endgenerate // FPU related: FPCSR and exception
+
 
    // Supervision register
    always @(posedge clk `OR_ASYNC_RST)
@@ -775,6 +867,7 @@ module mor1kx_ctrl_cappuccino
        .FEATURE_DEBUGUNIT		(FEATURE_DEBUGUNIT),
        .FEATURE_PERFCOUNTERS		(FEATURE_PERFCOUNTERS),
        .FEATURE_MAC			(FEATURE_MAC),
+       .FEATURE_FPU			(FEATURE_FPU), // mor1kx_cfgrs instance
        .FEATURE_SYSCALL			(FEATURE_SYSCALL),
        .FEATURE_TRAP			(FEATURE_TRAP),
        .FEATURE_RANGE			(FEATURE_RANGE),
@@ -794,7 +887,6 @@ module mor1kx_ctrl_cappuccino
       .spr_iccfgr			(spr_iccfgr[31:0]),
       .spr_dcfgr			(spr_dcfgr[31:0]),
       .spr_pccfgr			(spr_pccfgr[31:0]),
-      .spr_fpcsr			(spr_fpcsr[31:0]),
       .spr_avr				(spr_avr[31:0]));
 
    /* Implementation-specific registers */
@@ -842,8 +934,16 @@ module mor1kx_ctrl_cappuccino
 
          `SPR_OFFSET(`OR1K_SPR_PPC_ADDR):
            spr_sys_group_read = spr_ppc;
+        `ifdef OR1K_FPCSR_MASK_FLAGS
          `SPR_OFFSET(`OR1K_SPR_FPCSR_ADDR):
-           spr_sys_group_read = spr_fpcsr;
+           spr_sys_group_read =
+             {{(OPTION_OPERAND_WIDTH-`OR1K_FPCSR_WIDTH-`OR1K_FPCSR_ALLF_SIZE){1'b0}},
+              spr_fpcsr_mf,spr_fpcsr};
+        `else
+         `SPR_OFFSET(`OR1K_SPR_FPCSR_ADDR):
+           spr_sys_group_read = {{(OPTION_OPERAND_WIDTH-`OR1K_FPCSR_WIDTH){1'b0}},
+                                 spr_fpcsr};
+        `endif
          `SPR_OFFSET(`OR1K_SPR_EPCR0_ADDR):
            spr_sys_group_read = spr_epcr;
          `SPR_OFFSET(`OR1K_SPR_EEAR0_ADDR):
