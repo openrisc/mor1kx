@@ -23,6 +23,7 @@ module mor1kx_execute_ctrl_cappuccino
     parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
 				 `OR1K_RESET_VECTOR,8'd0},
     parameter OPTION_RF_ADDR_WIDTH = 5,
+    parameter FEATURE_FPU   = "NONE", // ENABLED|NONE
     parameter FEATURE_MULTIPLIER = "THREESTAGE"
     )
    (
@@ -78,6 +79,10 @@ module mor1kx_execute_ctrl_cappuccino
     input 				  overflow_set_i,
     input 				  overflow_clear_i,
 
+    input [`OR1K_FPCSR_WIDTH-1:0]         fpcsr_i,
+    input                                 fpcsr_set_i,
+    
+
     input [OPTION_OPERAND_WIDTH-1:0] 	  pc_execute_i,
 
     input 				  execute_rf_wb_i,
@@ -105,6 +110,10 @@ module mor1kx_execute_ctrl_cappuccino
     output reg 				  ctrl_carry_clear_o,
     output reg 				  ctrl_overflow_set_o,
     output reg 				  ctrl_overflow_clear_o,
+
+    output reg [`OR1K_FPCSR_WIDTH-1:0]    ctrl_fpcsr_o,
+    output reg                            ctrl_fpcsr_set_o,
+    
 
     output reg [OPTION_OPERAND_WIDTH-1:0] pc_ctrl_o,
 
@@ -256,6 +265,34 @@ end else begin
        ctrl_op_mul_o <= 0;
 end
 endgenerate
+
+   // FPU related
+   generate
+     /* verilator lint_off WIDTH */
+     if (FEATURE_FPU!="NONE") begin : fpu_execute_ctrl_ena
+     /* verilator lint_on WIDTH */
+       always @(posedge clk `OR_ASYNC_RST) begin
+         if (rst) begin
+           ctrl_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
+           ctrl_fpcsr_set_o <= 0;
+         end else if (pipeline_flush_i) begin
+           ctrl_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
+           ctrl_fpcsr_set_o <= 0;
+         end else if (padv_i) begin
+           ctrl_fpcsr_o <= fpcsr_i;
+           ctrl_fpcsr_set_o <= fpcsr_set_i;
+         end
+       end // @clk
+     end
+     else begin : fpu_execute_ctrl_none
+       always @(posedge clk `OR_ASYNC_RST) begin
+         if (rst) begin
+           ctrl_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
+           ctrl_fpcsr_set_o <= 0;
+         end
+       end // @clk
+     end
+   endgenerate // FPU related
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin

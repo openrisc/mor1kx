@@ -340,7 +340,7 @@ module mor1kx_ctrl_prontoespresso
    wire [31:0] 			     spr_iccfgr;
    wire [31:0] 			     spr_dcfgr;
    wire [31:0] 			     spr_pccfgr;
-   wire [31:0] 			     spr_fpcsr;
+   wire [31:0] 			     spr_fpcsr = 0;
    wire [31:0] 			     spr_isr [0:7];
 
    assign b = ctrl_rfb_i;
@@ -851,7 +851,6 @@ module mor1kx_ctrl_prontoespresso
       .spr_iccfgr			(spr_iccfgr[31:0]),
       .spr_dcfgr			(spr_dcfgr[31:0]),
       .spr_pccfgr			(spr_pccfgr[31:0]),
-      .spr_fpcsr			(spr_fpcsr[31:0]),
       .spr_avr				(spr_avr[31:0]));
 
    /* Implementation-specific registers */

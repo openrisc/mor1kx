@@ -300,6 +300,45 @@
 `define OR1K_SPR_DRR_FPE  12
 `define OR1K_SPR_DRR_TE   13
 
+// FPCSR bits
+`define OR1K_FPCSR_FPEE  0
+`define OR1K_FPCSR_RM    2:1
+`define OR1K_FPCSR_OVF   3
+`define OR1K_FPCSR_UNF   4
+`define OR1K_FPCSR_SNF   5
+`define OR1K_FPCSR_QNF   6
+`define OR1K_FPCSR_ZF    7
+`define OR1K_FPCSR_IXF   8
+`define OR1K_FPCSR_IVF   9
+`define OR1K_FPCSR_INF   10
+`define OR1K_FPCSR_DZF   11
+// FPCSR sizes of fields
+`define OR1K_FPCSR_WIDTH    12 // [11:0]
+`define OR1K_FPCSR_RM_SIZE   2
+`define OR1K_FPCSR_ALLF_SIZE 9 // [11:3]
+// FPCSR flags
+`define OR1K_FPCSR_ALLF  `OR1K_FPCSR_DZF:`OR1K_FPCSR_OVF
+// FPCSR reset value
+`define OR1K_FPCSR_RESET_VALUE `OR1K_FPCSR_WIDTH'd1
+// FPCSR extention: maskable FPU flags.
+// -vvvv- uncomment the next line to switch the extention on -vvvv-
+//`define OR1K_FPCSR_MASK_FLAGS
+// bits
+`define OR1K_FPCSR_MASK_OVF   12
+`define OR1K_FPCSR_MASK_UNF   13
+`define OR1K_FPCSR_MASK_SNF   14
+`define OR1K_FPCSR_MASK_QNF   15
+`define OR1K_FPCSR_MASK_ZF    16
+`define OR1K_FPCSR_MASK_IXF   17
+`define OR1K_FPCSR_MASK_IVF   18
+`define OR1K_FPCSR_MASK_INF   19
+`define OR1K_FPCSR_MASK_DZF   20
+// bus select
+`define OR1K_FPCSR_MASK_ALL  `OR1K_FPCSR_MASK_DZF:`OR1K_FPCSR_MASK_OVF
+// reset value. enables: dzf,inf,ivf,snf,ovf
+`define OR1K_FPCSR_MASK_RESET_VALUE `OR1K_FPCSR_ALLF_SIZE'b1_1100_0101
+
+
 // Implementation-specific SPR defines
 `define MOR1KX_SPR_SR_WIDTH 16
 `define MOR1KX_SPR_SR_RESET_VALUE `MOR1KX_SPR_SR_WIDTH'h8001
