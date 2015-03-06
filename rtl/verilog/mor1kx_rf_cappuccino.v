@@ -19,6 +19,7 @@
 module mor1kx_rf_cappuccino
   #(
     parameter FEATURE_FASTCONTEXTS = "NONE",
+    parameter OPTION_RF_CLEAR_ON_INIT = 0,
     parameter OPTION_RF_NUM_SHADOW_GPR = 0,
     parameter OPTION_RF_ADDR_WIDTH = 5,
     parameter OPTION_RF_WORDS = 32,
@@ -302,6 +303,7 @@ endgenerate
      #(
        .ADDR_WIDTH	(RF_ADDR_WIDTH),
        .DATA_WIDTH	(OPTION_OPERAND_WIDTH),
+       .CLEAR_ON_INIT   (OPTION_RF_CLEAR_ON_INIT),
        .ENABLE_BYPASS	(0)
        )
    rfa
@@ -319,6 +321,7 @@ endgenerate
      #(
        .ADDR_WIDTH	(RF_ADDR_WIDTH),
        .DATA_WIDTH	(OPTION_OPERAND_WIDTH),
+       .CLEAR_ON_INIT   (OPTION_RF_CLEAR_ON_INIT),
        .ENABLE_BYPASS	(0)
        )
    rfb
@@ -339,6 +342,7 @@ if (FEATURE_DEBUGUNIT!="NONE" || FEATURE_FASTCONTEXTS!="NONE" ||
      #(
        .ADDR_WIDTH	(RF_ADDR_WIDTH),
        .DATA_WIDTH	(OPTION_OPERAND_WIDTH),
+       .CLEAR_ON_INIT   (OPTION_RF_CLEAR_ON_INIT),
        .ENABLE_BYPASS	(0)
        )
    rfspr
