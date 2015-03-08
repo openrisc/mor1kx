@@ -491,8 +491,6 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
       end
    end
 
-   wire ic_rst = rst | imem_err;
-
    /* mor1kx_icache AUTO_TEMPLATE (
     // Outputs
     .cpu_ack_o			(ic_ack),
@@ -504,7 +502,8 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
     .refill_done_o		(ic_refill_done),
     .invalidate_o		(ic_invalidate),
     // Inputs
-    .rst			(ic_rst),
+    .rst			(rst),
+    .ic_imem_err_i      (imem_err),
     .ic_access_i		(ic_access),
     .cpu_adr_i			(ic_addr),
     .cpu_adr_match_i		(ic_addr_match),
@@ -534,7 +533,8 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
       .spr_bus_ack_o			(spr_bus_ack_ic_o),	 // Templated
       // Inputs
       .clk				(clk),
-      .rst				(ic_rst),		 // Templated
+      .rst				(rst),		 // Templated
+      .ic_imem_err_i    (imem_err), 
       .ic_access_i			(ic_access),		 // Templated
       .cpu_adr_i			(ic_addr),		 // Templated
       .cpu_adr_match_i			(ic_addr_match),	 // Templated

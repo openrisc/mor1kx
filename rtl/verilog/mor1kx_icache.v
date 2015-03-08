@@ -26,6 +26,7 @@ module mor1kx_icache
     input 			      clk,
     input 			      rst,
 
+    input 			      ic_imem_err_i,
     input 			      ic_access_i,
     output 			      refill_o,
     output 			      refill_req_o,
@@ -315,6 +316,8 @@ module mor1kx_icache
       end
 
       if (rst)
+	state <= IDLE;
+      else if(ic_imem_err_i)
 	state <= IDLE;
    end
 

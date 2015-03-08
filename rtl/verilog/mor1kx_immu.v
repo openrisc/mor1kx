@@ -288,9 +288,14 @@ if (FEATURE_IMMU_HW_TLB_RELOAD == "ENABLED") begin
    assign tlb_reload_pagefault_o = tlb_reload_pagefault &
 				    !tlb_reload_pagefault_clear_i;
 
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if (rst)
+        tlb_reload_pagefault <= 0;
+      else if(tlb_reload_pagefault_clear_i)
+        tlb_reload_pagefault <= 0;
+   end // @clock
+   
    always @(posedge clk) begin
-      if (tlb_reload_pagefault_clear_i | rst)
-	tlb_reload_pagefault <= 0;
       itlb_trans_reload_we <= 0;
       itlb_trans_reload_din <= 0;
       itlb_match_reload_we <= 0;

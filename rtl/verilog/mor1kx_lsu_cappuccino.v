@@ -684,8 +684,6 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
       end
    end
 
-   wire dc_rst = rst | dbus_err;
-
    assign dc_bsel = dbus_bsel;
    assign dc_we = exec_op_lsu_store_i & !exec_op_lsu_atomic_i & padv_execute_i |
 		  dbus_atomic & dbus_we_o & !write_done |
@@ -703,7 +701,8 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
             .snoop_hit_o                (dc_snoop_hit),
 	    // Inputs
 	    .clk			(clk),
-	    .rst			(dc_rst),
+	    .rst			(rst),
+	    .dc_dbus_err_i		(dbus_err),
 	    .dc_enable_i		(dc_enabled),
 	    .dc_access_i		(dc_access),
 	    .cpu_dat_i			(lsu_sdat),
@@ -742,7 +741,8 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
 	    // Inputs
 	    .clk			(clk),			 // Templated
-	    .rst			(dc_rst),		 // Templated
+	    .rst			(rst),			 // Templated
+	    .dc_dbus_err_i		(dbus_err),		 // Templated
 	    .dc_enable_i		(dc_enabled),		 // Templated
 	    .dc_access_i		(dc_access),		 // Templated
 	    .cpu_dat_i			(lsu_sdat),		 // Templated

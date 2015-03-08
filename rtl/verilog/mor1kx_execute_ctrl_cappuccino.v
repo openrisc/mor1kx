@@ -370,7 +370,9 @@ endgenerate
    // load and mfpsr can stall from ctrl stage, so we have to hold off the
    // write back on them
    always @(posedge clk `OR_ASYNC_RST)
-     if (rst | pipeline_flush_i)
+     if (rst)
+       wb_rf_wb_o <= 0;
+     else if (pipeline_flush_i)
        wb_rf_wb_o <= 0;
      else if (ctrl_op_mfspr_o)
        wb_rf_wb_o <= ctrl_rf_wb_o & ctrl_mfspr_ack_i;

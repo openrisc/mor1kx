@@ -27,6 +27,7 @@ module mor1kx_dcache
     input 			      clk,
     input 			      rst,
 
+    input 			      dc_dbus_err_i,
     input 			      dc_enable_i,
     input 			      dc_access_i,
     output 			      refill_o,
@@ -342,6 +343,9 @@ module mor1kx_dcache
    integer w1;
    always @(posedge clk `OR_ASYNC_RST) begin
       if (rst) begin
+	 state <= IDLE;
+	 write_pending <= 0;
+      end else if(dc_dbus_err_i) begin
 	 state <= IDLE;
 	 write_pending <= 0;
       end else begin
