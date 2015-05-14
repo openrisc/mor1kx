@@ -72,23 +72,31 @@ module mor1kx_pic
       genvar 	 irqline;
 
       if (OPTION_PIC_TRIGGER=="EDGE") begin : edge_triggered
-	 for(irqline=0;irqline<32;irqline=irqline+1)
-	   begin: picgenerate
-	      // PIC status register
-	      always @(posedge clk `OR_ASYNC_RST)
-		if (rst)
-		  spr_picsr[irqline] <= 0;
-	      // Clear
-		else if (spr_we_i & spr_picsr_access)
-		  spr_picsr[irqline] <= spr_dat_i[irqline] ? 0 :
-					       spr_picsr[irqline];
-	      // Set
-		else if (!spr_picsr[irqline] & irq_unmasked[irqline])
-		  spr_picsr[irqline] <= 1;
-	   end // block: picgenerate
-      end // if (OPTION_PIC_TRIGGER=="EDGE")
+         reg [31:0] irq_unmasked_r;
+         wire [31:0] irq_unmasked_edge;
 
-      else if (OPTION_PIC_TRIGGER=="LEVEL") begin : level_triggered
+         always @(posedge clk `OR_ASYNC_RST)
+           if (rst)
+             irq_unmasked_r <= 0;
+           else
+             irq_unmasked_r <= irq_unmasked;
+
+         for(irqline=0;irqline<32;irqline=irqline+1)  begin: picgenerate
+            assign irq_unmasked_edge[irqline] = irq_unmasked[irqline] &
+                                                !irq_unmasked_r[irqline];
+
+            // PIC status register
+            always @(posedge clk `OR_ASYNC_RST)
+              if (rst)
+                spr_picsr[irqline] <= 0;
+              // Set
+              else if (irq_unmasked_edge[irqline])
+                spr_picsr[irqline] <= 1;
+              // Clear
+              else if (spr_we_i & spr_picsr_access & spr_dat_i[irqline])
+                spr_picsr[irqline] <= 0;
+         end
+      end else if (OPTION_PIC_TRIGGER=="LEVEL") begin : level_triggered
          for(irqline=0;irqline<32;irqline=irqline+1)
            begin: picsrlevelgenerate
               // PIC status register
