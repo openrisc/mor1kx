@@ -415,7 +415,7 @@ module mor1kx_ctrl_cappuccino
 	 15'b000000001??????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_DPF_VECTOR,8'd0};
-	 15'b0000000001????:
+	 15'b0000000001?????:
 	   exception_pc_addr <= spr_evbar |
 				{19'd0,`OR1K_TRAP_VECTOR,8'd0};
 	 15'b00000000001????:
