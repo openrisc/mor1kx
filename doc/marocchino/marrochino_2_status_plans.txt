@@ -1,0 +1,28 @@
+             MAROCCHINO Pipeline Status & Plans
+
+23 June 2015
+  Initial variant of pipeline. The variant was converted from
+CAPPUCCINO by the following steps:
+  a) mor1kx_decode & mor1kx_decode_execute_cappuccino were combined
+     into one mor1kx_decode_marocchino
+  b) mor1kx_execute_alu and mor1kx_execute_ctrl_cappuccino were
+     combined into one mor1kx_execute_marocchino
+  c) LSU related operations and l.mf(t)spr processing were moved from
+     CTRL stage to EXECUTE one. So LSU & CTRL modules were modified
+     appropriately.
+  d) CTRL-stage related registers were removed
+  e) The logic for bubble generation, forwarding results, pipeline
+     control signals generation were significantly simplified
+  f) Exceptions are taken on WB-stage now
+  g) WB registers were extended to handle flags and exceptions
+     additionally to result
+  h) Debug unit support was damaged
+
+Further development plan
+  - pipelined FETCH implementation
+  - pipelined LSU implementation
+  - pipelined integer multiplier implementation
+  - revision and adaptation (if need) FPU pipelines
+  - design reorder buffer
+  - integration all module listed above
+  - update debug unit support in CTRL-module

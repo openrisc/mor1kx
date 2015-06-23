@@ -1,0 +1,70 @@
+                    MAROCCHINO Pipeline Goal
+
+  The MAROCCHHINO pipeline is targeted to be a core with performance
+level close to ARM Cortex-A8/A9 (operating on the same frequency).
+
+Pursuing the goal the following decisions were made:
+  a) The pipeline should consist of the following stages:
+    #1 program counter update
+    #2 fetch
+    #3 decode
+    #4 execution (including load/store & l.mt(f)spr processing)
+    #5 write back (including interrupts/exception processing here)
+  b) The EXECUTION stage should consist of set of pipelined units with
+     parallel operation ability for instructions without
+     data dependency
+  c) The Out-of-Order completion is possible. To restore initial
+     instruction order reorder buffer and appropriate control logic
+     should be implemented
+
+No support for fancy instructions (DSP/Vector) yet.
+
+  Additionally the configuration options number was restricted.
+Currently, the following options are made NOT CONFIGURABLE:
+
+ FEATURE_MAC        == "NONE"
+ FEATURE_MULTIPLIER == "THREESTAGE"
+                       (will be replaced by pipelined version)
+ FEATURE_DIVIDER    == "SERIAL"
+ OPTION_SHIFTER     == "BARREL"
+ FEATURE_ADDC       == "ENABLED"
+ FEATURE_SRA        == "ENABLED"
+ FEATURE_ROR        == "ENABLED"
+ FEATURE_EXT        == "NONE"
+ FEATURE_CMOV       == "ENABLED"
+ EATURE_FFL1        == "ENABLED"
+ FEATURE_ATOMIC     == "ENABLED"
+ FEATURE_CUST1      == "NONE"
+ FEATURE_CUST2      == "NONE"
+ FEATURE_CUST3      == "NONE"
+ FEATURE_CUST4      == "NONE"
+ FEATURE_CUST5      == "NONE"
+ FEATURE_CUST6      == "NONE"
+ FEATURE_CUST7      == "NONE"
+ FEATURE_CUST8      == "NONE"
+
+
+  There is a plan to make NOT CONFIGURABLE at least the following
+options:
+
+ FEATURE_INSTRUCTIONCACHE == "ENABLED"
+ FEATURE_IMMU             == "ENABLED"
+ FEATURE_DATACACHE        == "ENABLED"
+ FEATURE_DMMU             == "ENABLED"
+ FEATURE_FPU              == "ENABLED"
+ FEATURE_MSYNC            == "ENABLED"
+
+
+  Other options statuses (configurable or not) are not defined yet.
+
+
+  There are following reasons to make a lot of options are not
+configurable:
+  a) Simplify design and support testing by reducing configuration
+     variants
+  b) Simplify source code (as a result of (a)) for already complex
+     pipeline
+  c) No sense to care a lot about size for such performance pipeline.
+     If somebody wants a minimized OR1K core, (s)he should get another
+     pipeline implementation (CAPPUCCINO, ESPRESSO or PRONTOESPRESSO)
+     and configure it accordingly with his (her) requirements.
