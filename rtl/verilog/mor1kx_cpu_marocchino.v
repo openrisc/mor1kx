@@ -148,15 +148,12 @@ module mor1kx_cpu_marocchino
 );
 
   wire [`OR1K_INSN_WIDTH-1:0]       dcod_insn;
-
-
+  wire                              dcod_insn_valid;
 
   wire [OPTION_OPERAND_WIDTH-1:0]   pc_decode;
   wire [OPTION_OPERAND_WIDTH-1:0]   pc_exec;
   wire [OPTION_OPERAND_WIDTH-1:0]   pc_wb;
   wire [OPTION_OPERAND_WIDTH-1:0]   ctrl_epcr;
-
-
 
   wire lsu_atomic_flag_set;
   wire lsu_atomic_flag_clear;
@@ -228,7 +225,7 @@ module mor1kx_cpu_marocchino
   // branching
   wire                            dcod_op_bf;
   wire                            dcod_op_bnf;
-  wire                            dcod_op_brcond;
+  wire                            dcod_take_branch; // DECODE->FETCH (marocchino)
   wire                            dcod_branch;
   wire [9:0]                      dcod_immjbr_upper;
   wire [OPTION_OPERAND_WIDTH-1:0] dcod_branch_target;
@@ -354,7 +351,6 @@ module mor1kx_cpu_marocchino
   // Exeptions process:
   wire exec_op_rfe;
   wire wb_op_rfe;
-  wire ctrl_doing_rfe;
   wire ctrl_branch_exception;
   wire [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc;
   //   exeptions process: fetch->ctrl
@@ -368,77 +364,90 @@ module mor1kx_cpu_marocchino
   wire                            fetch_valid;
 
 
-  mor1kx_fetch_cappuccino
+  mor1kx_fetch_marocchino
   #(
     .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
     .OPTION_RESET_PC(OPTION_RESET_PC),
-    .FEATURE_INSTRUCTIONCACHE(FEATURE_INSTRUCTIONCACHE),
+    // ICACHE configuration
     .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
     .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
     .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
     .OPTION_ICACHE_LIMIT_WIDTH(OPTION_ICACHE_LIMIT_WIDTH),
-    .FEATURE_IMMU(FEATURE_IMMU),
+    // IMMU configuration
     .FEATURE_IMMU_HW_TLB_RELOAD(FEATURE_IMMU_HW_TLB_RELOAD),
     .OPTION_IMMU_SET_WIDTH(OPTION_IMMU_SET_WIDTH),
     .OPTION_IMMU_WAYS(OPTION_IMMU_WAYS)
   )
-  u_fetch_cappuccino
+  u_fetch
   (
     // clocks & resets
     .clk  (clk),
     .rst  (rst),
-    // Outputs
-    //   SPR BUS: FETCH -> CTRL
-    .spr_bus_dat_ic_o                 (spr_bus_dat_ic), // FETCH
-    .spr_bus_ack_ic_o                 (spr_bus_ack_ic), // FETCH
-    .spr_bus_dat_immu_o               (spr_bus_dat_immu), // FETCH
-    .spr_bus_ack_immu_o               (spr_bus_ack_immu), // FETCH
-    //   To Instruction bus bridge
-    .ibus_req_o                       (ibus_req_o), // FETCH
-    .ibus_adr_o                       (ibus_adr_o), // FETCH
-    .ibus_burst_o                     (ibus_burst_o), // FETCH
-    //   To DECODE
-    .pc_decode_o                      (pc_decode), // FETCH
-    .decode_insn_o                    (dcod_insn), // FETCH
-    //   To RF
-    .fetch_rfa_adr_o                  (fetch_rfa_adr), // FETCH (not latched, to RF)
-    .fetch_rfb_adr_o                  (fetch_rfb_adr), // FETCH (not latched, to RF)
-    .fetch_rf_adr_valid_o             (fetch_rf_adr_valid), // FETCH (bus-access-done & padv-fetch)
-    //   To CTRL
-    .decode_except_ibus_err_o         (dcod_except_ibus_err), // FETCH
-    .decode_except_itlb_miss_o        (dcod_except_itlb_miss), // FETCH
-    .decode_except_ipagefault_o       (dcod_except_ipagefault), // FETCH
-    .fetch_exception_taken_o          (fetch_ecxeption_taken), // FETCH
-    .fetch_valid_o                    (fetch_valid), // FETCH
-    // Inputs
-    //   SPR BUS: FETCH <- CTRL
+
+    // pipeline control
+    .padv_fetch_i                     (padv_fetch), // FETCH
+    .padv_decode_i                    (padv_decode), // FETCH
+    .dcod_bubble_i                    (dcod_bubble), // FETCH
+    .pipeline_flush_i                 (pipeline_flush), // FETCH
+
+    // configuration
+    .ic_enable_i                      (spr_sr_o[`OR1K_SPR_SR_ICE]), // FETCH
+    .immu_enable_i                    (spr_sr_o[`OR1K_SPR_SR_IME]), // FETCH
+    .supervisor_mode_i                (spr_sr_o[`OR1K_SPR_SR_SM]), // FETCH
+
+    // SPR interface
+    //  input
     .spr_bus_addr_i                   (spr_bus_addr_o[15:0]), // FETCH
     .spr_bus_we_i                     (spr_bus_we_o), // FETCH
     .spr_bus_stb_i                    (spr_bus_stb_o), // FETCH
     .spr_bus_dat_i                    (spr_bus_dat_o), // FETCH
-    //   SPR SR:  FETCH <- CTRL
-    .ic_enable                        (spr_sr_o[`OR1K_SPR_SR_ICE]), // FETCH
-    .immu_enable_i                    (spr_sr_o[`OR1K_SPR_SR_IME]), // FETCH
-    .supervisor_mode_i                (spr_sr_o[`OR1K_SPR_SR_SM]), // FETCH
-    //   From Instruction bus bridge
+    //  output from cache
+    .spr_bus_dat_ic_o                 (spr_bus_dat_ic), // FETCH
+    .spr_bus_ack_ic_o                 (spr_bus_ack_ic), // FETCH
+    //  output from immu
+    .spr_bus_dat_immu_o               (spr_bus_dat_immu), // FETCH
+    .spr_bus_ack_immu_o               (spr_bus_ack_immu), // FETCH
+
+    // interface to ibus
     .ibus_err_i                       (ibus_err_i), // FETCH
     .ibus_ack_i                       (ibus_ack_i), // FETCH
     .ibus_dat_i                       (ibus_dat_i[`OR1K_INSN_WIDTH-1:0]), // FETCH
-    //   From CTRL (pipeline controls)
-    .padv_i                           (padv_fetch),            // FETCH
-    .padv_ctrl_i                      (1'b0),  // FETCH (small hack to delay immu spr reads by one cycle)
-    .pipeline_flush_i                 (pipeline_flush),        // FETCH
-    .doing_rfe_i                      (ctrl_doing_rfe), // FETCH
-    //
-    .decode_branch_i                  (dcod_branch),  // FETCH
-    .decode_branch_target_i           (dcod_branch_target),  // FETCH
-    .ctrl_branch_exception_i          (ctrl_branch_exception),  // FETCH
-    .ctrl_branch_except_pc_i          (ctrl_branch_except_pc),  // FETCH
-    .du_restart_i                     (du_restart),  // FETCH
-    .du_restart_pc_i                  (du_restart_pc),        // FETCH
-    .decode_op_brcond_i               (dcod_op_brcond),     // FETCH
-    .branch_mispredict_i              (branch_mispredict),    // FETCH
-    .execute_mispredict_target_i      (exec_mispredict_target)  // FETCH
+    .ibus_req_o                       (ibus_req_o), // FETCH
+    .ibus_adr_o                       (ibus_adr_o), // FETCH
+    .ibus_burst_o                     (ibus_burst_o), // FETCH
+
+    // branch/jump control transfer
+    .dcod_take_branch_i               (dcod_take_branch), // FETCH
+    .dcod_branch_target_i             (dcod_branch_target), // FETCH
+    .branch_mispredict_i              (branch_mispredict), // FETCH
+    .exec_mispredict_target_i         (exec_mispredict_target), // FETCH
+    
+    // exception/rfe control transfer
+    .ctrl_branch_exception_i          (ctrl_branch_exception), // FETCH
+    .ctrl_branch_except_pc_i          (ctrl_branch_except_pc), // FETCH
+
+    // debug unit command for control transfer
+    .du_restart_i                     (du_restart), // FETCH
+    .du_restart_pc_i                  (du_restart_pc), // FETCH
+
+    //   To RF
+    .fetch_rfa_adr_o                  (fetch_rfa_adr), // FETCH (not latched, to RF)
+    .fetch_rfb_adr_o                  (fetch_rfb_adr), // FETCH (not latched, to RF)
+    .fetch_rf_adr_valid_o             (fetch_rf_adr_valid), // FETCH (bus-access-done & padv-fetch)
+
+    //   To CTRL
+    .fetch_valid_o                    (fetch_valid), // FETCH
+
+    //   To DECODE
+    .pc_decode_o                      (pc_decode), // FETCH
+    .dcod_insn_o                      (dcod_insn), // FETCH
+    .dcod_insn_valid_o                (dcod_insn_valid), // FETCH
+
+    //   Exceptions
+    .dcod_except_ibus_err_o           (dcod_except_ibus_err), // FETCH
+    .dcod_except_itlb_miss_o          (dcod_except_itlb_miss), // FETCH
+    .dcod_except_ipagefault_o         (dcod_except_ipagefault), // FETCH
+    .fetch_exception_taken_o          (fetch_ecxeption_taken) // FETCH
   );
 
 
@@ -458,7 +467,7 @@ module mor1kx_cpu_marocchino
     .FEATURE_CSYNC(FEATURE_CSYNC),
     .FEATURE_FPU(FEATURE_FPU) // pipeline cappuccino: decode instance
   )
-  u_decode_marocchino
+  u_decode
   (
     // clocks & resets
     .clk (clk),
@@ -468,7 +477,7 @@ module mor1kx_cpu_marocchino
     .pipeline_flush_i                 (pipeline_flush), // DECODE & DECODE->EXE
     // INSN
     .dcod_insn_i                      (dcod_insn), // DECODE & DECODE->EXE
-    .fetch_valid_i                    (fetch_valid), // DECODE & DECODE->EXE
+    .dcod_insn_valid_i                (dcod_insn_valid), // DECODE & DECODE->EXE
     // PC
     .pc_decode_i                      (pc_decode), // DECODE & DECODE->EXE
     .pc_exec_o                        (pc_exec), // DECODE & DECODE->EXE
@@ -484,14 +493,13 @@ module mor1kx_cpu_marocchino
     .dcod_op_bf_o                     (dcod_op_bf), // DECODE & DECODE->EXE (not latched, to BRANCH PREDICTION)
     .dcod_op_bnf_o                    (dcod_op_bnf), // DECODE & DECODE->EXE (not latched, to BRANCH PREDICTION)
     .dcod_immjbr_upper_o              (dcod_immjbr_upper), // DECODE & DECODE->EXE (not latched, to BRANCH PREDICTION)
-    .dcod_op_brcond_o                 (dcod_op_brcond), // DECODE & DECODE->EXE (not latched, to FETCH)
+    .dcod_take_branch_o               (dcod_take_branch), // DECODE & DECODE->EXE (not latched, to FETCH)
     .exec_op_setflag_o                (exec_op_setflag), // DECODE & DECODE->EXE
     .exec_op_brcond_o                 (exec_op_brcond), // DECODE & DECODE->EXE
     .exec_op_branch_o                 (exec_op_branch), // DECODE & DECODE->EXE
     .exec_op_jal_o                    (exec_op_jal), // DECODE & DECODE->EXE
     .exec_jal_result_o                (exec_jal_result), // DECODE & DECODE->EXE
     .dcod_rfb_i                       (dcod_rfb), // DECODE & DECODE->EXE
-    .exec_rfb_i                       (exec_rfb), // DECODE & DECODE->EXE
     .dcod_branch_o                    (dcod_branch), // DECODE & DECODE->EXE
     .dcod_branch_target_o             (dcod_branch_target), // DECODE & DECODE->EXE
     .predicted_flag_i                 (predicted_flag), // DECODE & DECODE->EXE
@@ -577,7 +585,7 @@ module mor1kx_cpu_marocchino
     .FEATURE_EXT(FEATURE_EXT),
     .FEATURE_FPU(FEATURE_FPU) // pipeline cappuccino: execute-alu instance
   )
-  u_execute_marocchino
+  u_execute
   (
     // clocks & resets
     .clk (clk),
@@ -685,7 +693,7 @@ module mor1kx_cpu_marocchino
     .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH),
     .FEATURE_ATOMIC(FEATURE_ATOMIC)
   )
-  u_lsu_marocchino
+  u_lsu
   (
     // clocks & resets
     .clk (clk),
@@ -753,7 +761,7 @@ module mor1kx_cpu_marocchino
     .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
     .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH)
   )
-  u_wb_mux_marocchino
+  u_wb_mux
   (
     // clock & reset
     .clk                          (clk),
@@ -829,7 +837,6 @@ module mor1kx_cpu_marocchino
     .wb_excepts_en_o              (wb_excepts_en), // WB_MUX
 
     // RFE processing
-    .doing_rfe_i                  (ctrl_doing_rfe), // WB_MUX
     .exec_op_rfe_i                (exec_op_rfe), // WB_MUX
     .wb_op_rfe_o                  (wb_op_rfe), // WB_MUX
 
@@ -862,7 +869,7 @@ module mor1kx_cpu_marocchino
     .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
     .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT)
   )
-  u_rf_marocchino
+  u_rf
   (
     // clocks & resets
     .clk (clk),
@@ -908,17 +915,17 @@ module mor1kx_cpu_marocchino
       input [4:0]        gpr_num;
       begin
    // TODO: handle load ops
-   if ((mor1kx_rf_marocchino.exec_rfd_adr_i == gpr_num) &
-       mor1kx_rf_marocchino.exec_rf_wb_i)
+   if ((u_rf.exec_rfd_adr_i == gpr_num) &
+       u_rf.exec_rf_wb_i)
      get_gpr = alu_nl_result;
-   else if ((mor1kx_rf_marocchino.ctrl_rfd_adr_i == gpr_num) &
-      mor1kx_rf_marocchino.ctrl_rf_wb_i)
+   else if ((u_rf.ctrl_rfd_adr_i == gpr_num) &
+      u_rf.ctrl_rf_wb_i)
      get_gpr = ctrl_alu_result;
-   else if ((mor1kx_rf_marocchino.wb_rfd_adr_i == gpr_num) &
-      mor1kx_rf_marocchino.wb_rf_wb_i)
-     get_gpr = mor1kx_rf_marocchino.result_i;
+   else if ((u_rf.wb_rfd_adr_i == gpr_num) &
+      u_rf.wb_rf_wb_i)
+     get_gpr = u_rf.result_i;
    else
-     get_gpr = mor1kx_rf_marocchino.rfa.mem[gpr_num];
+     get_gpr = u_rf.rfa.mem[gpr_num];
       end
    endfunction //
 
@@ -928,8 +935,8 @@ module mor1kx_cpu_marocchino
       input [4:0] gpr_num;
       input [OPTION_OPERAND_WIDTH-1:0] gpr_value;
       begin
-   mor1kx_rf_marocchino.rfa.mem[gpr_num] = gpr_value;
-   mor1kx_rf_marocchino.rfb.mem[gpr_num] = gpr_value;
+   u_rf.rfa.mem[gpr_num] = gpr_value;
+   u_rf.rfb.mem[gpr_num] = gpr_value;
       end
    endtask */
 // synthesis translate_on
@@ -951,11 +958,9 @@ module mor1kx_cpu_marocchino
     .FEATURE_DMMU(FEATURE_DMMU),
     .OPTION_DMMU_SET_WIDTH(OPTION_DMMU_SET_WIDTH),
     .OPTION_DMMU_WAYS(OPTION_DMMU_WAYS),
-    .FEATURE_INSTRUCTIONCACHE(FEATURE_INSTRUCTIONCACHE),
     .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
     .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
     .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
-    .FEATURE_IMMU(FEATURE_IMMU),
     .OPTION_IMMU_SET_WIDTH(OPTION_IMMU_SET_WIDTH),
     .OPTION_IMMU_WAYS(OPTION_IMMU_WAYS),
     .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
@@ -972,7 +977,7 @@ module mor1kx_cpu_marocchino
     .FEATURE_OVERFLOW(FEATURE_OVERFLOW),
     .FEATURE_CARRY_FLAG(FEATURE_CARRY_FLAG)
   )
-  u_ctrl_marocchino
+  u_ctrl
   (
     // clocks & resets
     .clk (clk),
@@ -988,7 +993,6 @@ module mor1kx_cpu_marocchino
     .ctrl_branch_exception_o          (ctrl_branch_exception), // CTRL
     .ctrl_branch_except_pc_o          (ctrl_branch_except_pc), // CTRL
     .pipeline_flush_o                 (pipeline_flush), // CTRL
-    .doing_rfe_o                      (ctrl_doing_rfe), // CTRL
     .padv_fetch_o                     (padv_fetch), // CTRL
     .padv_decode_o                    (padv_decode), // CTRL
     .exec_new_input_o                 (exec_new_input), // CTRL

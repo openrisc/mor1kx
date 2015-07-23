@@ -51,7 +51,7 @@ module mor1kx_decode_marocchino
 
   // INSN
   input [`OR1K_INSN_WIDTH-1:0]          dcod_insn_i,
-  input                                 fetch_valid_i,
+  input                                 dcod_insn_valid_i,
 
   // PC
   input      [OPTION_OPERAND_WIDTH-1:0] pc_decode_i,
@@ -71,14 +71,13 @@ module mor1kx_decode_marocchino
   output                                dcod_op_bf_o, // to BRANCH PREDICTION
   output                                dcod_op_bnf_o, // to BRANCH PREDICTION
   output [9:0]                          dcod_immjbr_upper_o, // to BRANCH PREDICTION : Upper 10 bits of immediate for jumps and branches
-  output                                dcod_op_brcond_o, // to FETCH
+  output                                dcod_take_branch_o, // to FETCH
   output reg                            exec_op_setflag_o,
   output reg                            exec_op_brcond_o,
   output reg                            exec_op_branch_o,
   output reg                            exec_op_jal_o,
   output reg [OPTION_OPERAND_WIDTH-1:0] exec_jal_result_o,
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb_i,
-  input      [OPTION_OPERAND_WIDTH-1:0] exec_rfb_i,
   output                                dcod_branch_o,
   output     [OPTION_OPERAND_WIDTH-1:0] dcod_branch_target_o,
   // Branch prediction signals
@@ -152,6 +151,10 @@ module mor1kx_decode_marocchino
   wire                               imm_zext_sel;
   wire [OPTION_OPERAND_WIDTH-1:0]    imm_high;
   wire                               imm_high_sel;
+
+  wire dcod_op_jal; // l.jal | l.jalr : jump and link
+  wire dcod_op_jr; // l.jr  | l.jalr : jump to register
+  wire dcod_op_jb_imm; // l.j  | l.jal  | l.bnf | l.bf : jumps or contitional branches to immediate
 
   // Insn opcode
   wire [`OR1K_OPCODE_WIDTH-1:0] opc_insn = dcod_insn_i[`OR1K_OPCODE_SELECT];
@@ -476,9 +479,6 @@ module mor1kx_decode_marocchino
   wire dcod_except_illegal = illegal_insn_r;
 
 
-  reg                             exec_op_jr;
-
-
   // Calculate the link register result
   wire [OPTION_OPERAND_WIDTH-1:0] next_pc_after_branch_insn =
     (pc_decode_i + 8); // (FEATURE_DELAY_SLOT == "ENABLED")
@@ -490,25 +490,23 @@ module mor1kx_decode_marocchino
 
   // Branch detection
 
-  // unconditional  branches
-  wire dcod_op_jr  = (opc_insn == `OR1K_OPCODE_JR) |
-                     (opc_insn == `OR1K_OPCODE_JALR);
-  wire dcod_op_jal = (opc_insn == `OR1K_OPCODE_JALR) |
-                     (opc_insn == `OR1K_OPCODE_JAL);
+  // jumps to register
+  assign dcod_op_jr = (opc_insn == `OR1K_OPCODE_JR) |
+                      (opc_insn == `OR1K_OPCODE_JALR);
+  // jumps with link
+  assign dcod_op_jal  = (opc_insn == `OR1K_OPCODE_JALR) |
+                        (opc_insn == `OR1K_OPCODE_JAL);
 
   // conditional branches
   assign dcod_op_bf_o     = (opc_insn == `OR1K_OPCODE_BF)  & (~pipeline_flush_i);
   assign dcod_op_bnf_o    = (opc_insn == `OR1K_OPCODE_BNF) & (~pipeline_flush_i);
   // combined conditional branches
-  assign dcod_op_brcond_o = dcod_op_bf_o | dcod_op_bnf_o;
+  wire dcod_op_brcond     = dcod_op_bf_o | dcod_op_bnf_o;
 
-  // combined unconditional/conditional branches
-  wire j_or_b_to_imm = (opc_insn < `OR1K_OPCODE_NOP); // l.j  | l.jal  | l.bnf | l.bf
-  
-  wire dcod_op_branch = j_or_b_to_imm | // l.j  | l.jal  | l.bnf | l.bf
-                        dcod_op_jr;     // l.jr | l.jalr
+  // jumps or contitional branches to immediate
+  assign dcod_op_jb_imm = (opc_insn < `OR1K_OPCODE_NOP); // l.j  | l.jal  | l.bnf | l.bf
 
-  wire branch_to_imm = j_or_b_to_imm &
+  wire branch_to_imm = dcod_op_jb_imm &
                        // l.j/l.jal  or  l.bf/bnf and flag is right
                        (~(|opc_insn[2:1]) | (opc_insn[2] == predicted_flag_i));
 
@@ -516,17 +514,13 @@ module mor1kx_decode_marocchino
     pc_decode_i +
     {{4{dcod_immjbr_upper_o[9]}},dcod_immjbr_upper_o,dcod_imm16,2'b00};
 
-  wire branch_to_reg = dcod_op_jr &
-                       (~(exec_rf_wb_o & (dcod_rfb_adr_o == exec_rfd_adr_o)));
+  wire branch_to_reg = dcod_op_jr & (~(exec_rf_wb_o & (dcod_rfb_adr_o == exec_rfd_adr_o)));
 
-  assign dcod_branch_o = (branch_to_imm | branch_to_reg) &
-                         (~pipeline_flush_i);
+  assign dcod_branch_o = (branch_to_imm | branch_to_reg) & (~pipeline_flush_i);
 
-  assign dcod_branch_target_o = branch_to_imm ? branch_to_imm_target :
-                                                  dcod_rfb_i;
+  assign dcod_branch_target_o = branch_to_imm ? branch_to_imm_target : dcod_rfb_i;
 
-  wire dcod_except_ibus_align = dcod_branch_o &
-                                  (|dcod_branch_target_o[1:0]);
+  wire dcod_except_ibus_align = dcod_branch_o & (|dcod_branch_target_o[1:0]);
 
 
   wire [OPTION_OPERAND_WIDTH-1:0] dcod_mispredict_target =
@@ -536,11 +530,18 @@ module mor1kx_decode_marocchino
 
   // Forward branch prediction signals to execute stage
   always @(posedge clk) begin
-    if (padv_decode_i & dcod_op_brcond_o) begin
+    if (padv_decode_i & dcod_op_brcond) begin
       exec_mispredict_target_o <= dcod_mispredict_target;
       exec_predicted_flag_o    <= predicted_flag_i;
     end
   end
+
+  // take branch flag for FETCH
+  assign dcod_take_branch_o = branch_to_imm | dcod_op_jr;
+
+  // combined unconditional/conditional branches
+  wire dcod_op_branch = dcod_op_jb_imm | // l.j  | l.jal  | l.bnf | l.bf
+                        dcod_op_jr;      // l.jr | l.jalr
 
 
   // Detect the situation where there is a jump to register in decode
@@ -554,12 +555,11 @@ module mor1kx_decode_marocchino
   // up to ctrl stage.
 
   // due to registry hazard for "jr"
-  wire jr_bubble = dcod_op_jr &
-                   (exec_rf_wb_o & (dcod_rfb_adr_o == exec_rfd_adr_o));
+  wire jr_bubble = dcod_op_jr & (exec_rf_wb_o & (dcod_rfb_adr_o == exec_rfd_adr_o));
 
   // all bubbles
   assign dcod_bubble_o = jr_bubble | dcod_op_rfe;
-  wire   padv_bubble     = dcod_bubble_o & padv_decode_i;
+  wire   padv_bubble   = dcod_bubble_o & padv_decode_i;
 
   // to prevent changing PC latched in EXEC->CTRL
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -608,7 +608,6 @@ module mor1kx_decode_marocchino
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst) begin
       // flag and branches
-      exec_op_jr               <= 1'b0;
       exec_op_setflag_o        <= 1'b0;
       exec_op_jal_o            <= 1'b0;
       exec_op_brcond_o         <= 1'b0;
@@ -637,7 +636,6 @@ module mor1kx_decode_marocchino
     else if (pipeline_flush_i | padv_bubble) begin
       // bubble already masked by padv-decode forces clearing exception flags
       // flag and branches
-      exec_op_jr               <= 1'b0;
       exec_op_setflag_o        <= 1'b0;
       exec_op_jal_o            <= 1'b0;
       exec_op_brcond_o         <= 1'b0;
@@ -665,10 +663,9 @@ module mor1kx_decode_marocchino
     end
     else if (padv_decode_i) begin
       // flag and branches
-      exec_op_jr               <= dcod_op_jr;
       exec_op_setflag_o        <= dcod_op_setflag;
       exec_op_jal_o            <= dcod_op_jal;
-      exec_op_brcond_o         <= dcod_op_brcond_o;
+      exec_op_brcond_o         <= dcod_op_brcond;
       exec_op_branch_o         <= dcod_op_branch;
       // ALU common
       exec_op_alu_o            <= dcod_op_alu;
@@ -792,7 +789,7 @@ endgenerate // FPU related
       exec_except_trap_o       <= dcod_except_trap;
       // enable exceptions processing
       // some instructions couldn't be restarted
-      exec_excepts_en_o        <= fetch_valid_i & 
+      exec_excepts_en_o        <= dcod_insn_valid_i & 
                                   (~dcod_bubble_o) & 
                                   (~dcod_op_mtspr) & 
                                   (~dcod_op_rfe);

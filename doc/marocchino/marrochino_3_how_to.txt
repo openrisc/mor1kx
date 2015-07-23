@@ -13,13 +13,11 @@ mor1kx_marocchino_alone
 #(
   .FEATURE_DEBUGUNIT("NONE"), // MAROCCHINO_TODO: not implemented
   // insn cache
-  .FEATURE_INSTRUCTIONCACHE("ENABLED"),
   .OPTION_ICACHE_BLOCK_WIDTH(5),
   .OPTION_ICACHE_SET_WIDTH(8),
   .OPTION_ICACHE_WAYS(4),
   .OPTION_ICACHE_LIMIT_WIDTH(32),
   // insn mmu
-  .FEATURE_IMMU("ENABLED"),
   .OPTION_IMMU_SET_WIDTH(7),
   .FEATURE_IMMU_HW_TLB_RELOAD("NONE"), // MAROCCHINO_TODO: not implemented
   // data cache
@@ -112,7 +110,7 @@ u_mor1kx_marocchino
  your_path/mor1kx/rtl/verilog/mor1kx_cache_lru.v
  your_path/mor1kx/rtl/verilog/mor1kx_immu.v
  your_path/mor1kx/rtl/verilog/mor1kx_icache.v
- your_path/mor1kx/rtl/verilog/mor1kx_fetch_cappuccino.v
+ your_path/mor1kx/rtl/verilog/mor1kx_fetch_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_dmmu.v
  your_path/mor1kx/rtl/verilog/mor1kx_dcache.v
  your_path/mor1kx/rtl/verilog/mor1kx_lsu_marocchino.v

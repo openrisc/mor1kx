@@ -43,12 +43,12 @@ Currently, the following options are made NOT CONFIGURABLE:
  FEATURE_CUST7      == "NONE"
  FEATURE_CUST8      == "NONE"
 
+ FEATURE_INSTRUCTIONCACHE == "ENABLED"
+ FEATURE_IMMU             == "ENABLED"
 
   There is a plan to make NOT CONFIGURABLE at least the following
 options:
 
- FEATURE_INSTRUCTIONCACHE == "ENABLED"
- FEATURE_IMMU             == "ENABLED"
  FEATURE_DATACACHE        == "ENABLED"
  FEATURE_DMMU             == "ENABLED"
  FEATURE_FPU              == "ENABLED"

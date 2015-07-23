@@ -38,11 +38,9 @@ module mor1kx_ctrl_marocchino
   parameter FEATURE_DMMU = "NONE",
   parameter OPTION_DMMU_SET_WIDTH = 6,
   parameter OPTION_DMMU_WAYS = 1,
-  parameter FEATURE_INSTRUCTIONCACHE = "NONE",
   parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
   parameter OPTION_ICACHE_SET_WIDTH = 9,
   parameter OPTION_ICACHE_WAYS = 2,
-  parameter FEATURE_IMMU = "NONE",
   parameter OPTION_IMMU_SET_WIDTH = 6,
   parameter OPTION_IMMU_WAYS = 1,
   parameter FEATURE_TIMER = "ENABLED",
@@ -164,9 +162,6 @@ module mor1kx_ctrl_marocchino
   // Clear instructions from decode and fetch stage
   output                            pipeline_flush_o,
 
-  // Indicate that a rfe is going on
-  output                            doing_rfe_o,
-
   output                            padv_fetch_o,
   output                            padv_decode_o,
   output reg                        exec_new_input_o, // 1-clock delayed of padv-decode
@@ -238,15 +233,14 @@ module mor1kx_ctrl_marocchino
   reg [OPTION_OPERAND_WIDTH-1:0]    spr_ppc;
   reg [OPTION_OPERAND_WIDTH-1:0]    spr_npc;
 
-  reg                               dcod_exec_halt;
-
-  reg                               exception_taken;
   reg                               exception_r;
   reg [OPTION_OPERAND_WIDTH-1:0]    exception_pc_addr;
   wire                              exception_re;
 
   wire                              except_ticktimer;
   wire                              except_pic;
+
+  reg                               doing_rfe_r;
 
   wire [15:0]                       spr_addr;
 
@@ -323,12 +317,9 @@ module mor1kx_ctrl_marocchino
   //-------------------------------------//
 
   // to FETCH: exceptions/rfe command and appropriate address
-  assign ctrl_branch_exception_o =
-    (exception_r & (~exception_taken)) |
-    (doing_rfe_r & (~fetch_exception_taken_i));
+  assign ctrl_branch_exception_o = (exception_r | doing_rfe_r) & ~fetch_exception_taken_i;
 
-  assign ctrl_branch_except_pc_o =
-    (doing_rfe_r & (~fetch_exception_taken_i)) ? spr_epcr : exception_pc_addr;
+  assign ctrl_branch_except_pc_o = exception_r ? exception_pc_addr : spr_epcr;
 
 
   // exceptions detection and processing
@@ -339,30 +330,22 @@ module mor1kx_ctrl_marocchino
     ((except_ibus_err_i | except_ibus_align_i | except_itlb_miss_i | except_ipagefault_i |
       except_illegal_i | except_syscall_i | except_range | except_fpu |except_trap_i |
       except_dbus_i | except_align_i | except_dtlb_miss_i | except_dpagefault_i) |
-     ((except_ticktimer | except_pic) & (~doing_rfe_o) & wb_new_result_o));
+     ((except_ticktimer | except_pic) & wb_new_result_o));
+
 
   assign exception_re = exception & (~exception_r);
 
-
+  wire deassert_exception = fetch_exception_taken_i & exception_r;
+  
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       exception_r <= 1'b0;
-    else if (exception_taken | du_restart_from_stall)
+    else if (deassert_exception | du_restart_from_stall)
       exception_r <= 1'b0;
     else if (exception_re)
       exception_r <= 1'b1;
   end // @ clock
 
-   // Signal to indicate that the incoming exceptions or l.rfe has been taken
-   // and we're waiting for it to propagate through the pipeline.
-   always @(posedge clk `OR_ASYNC_RST) begin
-     if (rst)
-       exception_taken <= 1'b0;
-     else if (exception_taken)
-       exception_taken <= 1'b0;
-     else if (exception_r & fetch_exception_taken_i)
-       exception_taken <= 1'b1;
-  end // @ clock
 
   always @(posedge clk) begin
     if (exception_re)
@@ -403,17 +386,10 @@ module mor1kx_ctrl_marocchino
 
 
   // RFE related logic
-  reg  doing_rfe_r;
-  wire deassert_doing_rfe = fetch_exception_taken_i & doing_rfe_r;
-
-  // as pipeline is flushed by RFE execution, the *_op_rfe is 1-clock length
-  assign doing_rfe_o = (wb_op_rfe_i | doing_rfe_r) &
-                       (~deassert_doing_rfe);
-
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       doing_rfe_r <= 1'b0;
-    else if (deassert_doing_rfe)
+    else if (fetch_exception_taken_i & doing_rfe_r)
       doing_rfe_r <= 1'b0;
     else if (wb_op_rfe_i)
       doing_rfe_r <= 1'b1;
@@ -426,12 +402,12 @@ module mor1kx_ctrl_marocchino
   //------------------------//
 
   assign padv_fetch_o =
-    (~du_cpu_stall) & ((~stepping) | (stepping & pstep[0] & (~fetch_valid_i))) &  // from DU
+    // MAROCCHINO_TODO: (~du_cpu_stall) & ((~stepping) | (stepping & pstep[0] & (~fetch_valid_i))) &  // from DU
     exec_valid_i & (~dcod_bubble_i);
 
   assign padv_decode_o =
-    (~du_cpu_stall) & ((~stepping) | (stepping & pstep[1])) &  // from DU
-    fetch_valid_i & exec_valid_i & (~dcod_exec_halt);
+    // MAROCCHINO_TODO: (~du_cpu_stall) & ((~stepping) | (stepping & pstep[1])) &  // from DU
+    (fetch_valid_i | dcod_bubble_i) & exec_valid_i;
 
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
@@ -443,26 +419,8 @@ module mor1kx_ctrl_marocchino
   assign padv_wb_o       = padv_decode_o;
   assign wb_new_result_o = exec_new_input_o; // 1-clock delayed of padv-wb
 
-  // Pipeline flush
-  assign pipeline_flush_o =
-    du_cpu_stall |                 // from DU
-    exception_re | wb_op_rfe_i;  // by exceptions/rfe
-
-
-  wire deassert_dcod_exec_halt = fetch_exception_taken_i &
-                                 dcod_exec_halt;
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      dcod_exec_halt <= 1'b0;
-    else if (du_restart_from_stall)
-      dcod_exec_halt <= 1'b0;
-    else if (deassert_dcod_exec_halt)
-      dcod_exec_halt <= 1'b0;
-    else if ((wb_op_rfe_i | exception) & (~dcod_exec_halt) &
-             (~exception_taken))
-      dcod_exec_halt <= 1'b1;
-  end // @ clock
-
+  // Pipeline flush by DU/exceptions/rfe
+  assign pipeline_flush_o = du_cpu_stall | exception_re | wb_op_rfe_i;
 
 
   // FPU related: FPCSR and exceptions
@@ -563,9 +521,9 @@ endgenerate // FPU related: FPCSR and exceptions
       spr_sr[`OR1K_SPR_SR_TEE] <= spr_write_dat[`OR1K_SPR_SR_TEE] & (FEATURE_TIMER != "NONE");
       spr_sr[`OR1K_SPR_SR_IEE] <= spr_write_dat[`OR1K_SPR_SR_IEE] & (FEATURE_PIC != "NONE");
       spr_sr[`OR1K_SPR_SR_DCE] <= spr_write_dat[`OR1K_SPR_SR_DCE] & (FEATURE_DATACACHE != "NONE");
-      spr_sr[`OR1K_SPR_SR_ICE] <= spr_write_dat[`OR1K_SPR_SR_ICE] & (FEATURE_INSTRUCTIONCACHE != "NONE");
+      spr_sr[`OR1K_SPR_SR_ICE] <= spr_write_dat[`OR1K_SPR_SR_ICE];
       spr_sr[`OR1K_SPR_SR_DME] <= spr_write_dat[`OR1K_SPR_SR_DME] & (FEATURE_DMMU != "NONE");
-      spr_sr[`OR1K_SPR_SR_IME] <= spr_write_dat[`OR1K_SPR_SR_IME] & (FEATURE_IMMU != "NONE");
+      spr_sr[`OR1K_SPR_SR_IME] <= spr_write_dat[`OR1K_SPR_SR_IME];
       spr_sr[`OR1K_SPR_SR_CE ] <= spr_write_dat[`OR1K_SPR_SR_CE ] & (FEATURE_FASTCONTEXTS != "NONE");
       spr_sr[`OR1K_SPR_SR_CY ] <= spr_write_dat[`OR1K_SPR_SR_CY ] & (FEATURE_CARRY_FLAG != "NONE");
       spr_sr[`OR1K_SPR_SR_OV ] <= spr_write_dat[`OR1K_SPR_SR_OV ] & (FEATURE_OVERFLOW != "NONE");
@@ -574,12 +532,15 @@ endgenerate // FPU related: FPCSR and exceptions
       spr_sr[`OR1K_SPR_SR_EPH] <= spr_write_dat[`OR1K_SPR_SR_EPH];
     end
     else if (wb_new_result_o) begin
-      spr_sr[`OR1K_SPR_SR_F ] <= ctrl_flag_o;
-      spr_sr[`OR1K_SPR_SR_CY] <= ctrl_carry_o;
-      spr_sr[`OR1K_SPR_SR_OV] <= ctrl_overflow;
-      // Skip FO. TODO: make this even more selective.
-      if (wb_op_rfe_i)
+      if (wb_op_rfe_i) begin
+        // Skip FO. TODO: make this even more selective.
         spr_sr[14:0] <= spr_esr[14:0];
+      end
+      else begin
+        spr_sr[`OR1K_SPR_SR_F ] <= ctrl_flag_o;
+        spr_sr[`OR1K_SPR_SR_CY] <= ctrl_carry_o;
+        spr_sr[`OR1K_SPR_SR_OV] <= ctrl_overflow;
+      end
     end
   end // @ clock
 
@@ -587,13 +548,11 @@ endgenerate // FPU related: FPCSR and exceptions
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       spr_esr <= SPR_SR_RESET_VALUE;
-    else if (exception_re) begin
+    else if (exception_re)
       spr_esr <= spr_sr; // by exceptions
-    end
     else if (spr_we & spr_access[`OR1K_SPR_SYS_BASE] &
-             (`SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_ESR0_ADDR))) begin
+             (`SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_ESR0_ADDR)))
       spr_esr <= spr_write_dat[SPR_SR_WIDTH-1:0];
-    end
   end // @ clock
 
 
@@ -717,21 +676,21 @@ endgenerate // FPU related: FPCSR and exceptions
     .FEATURE_DMMU                    (FEATURE_DMMU),
     .OPTION_DMMU_SET_WIDTH           (OPTION_DMMU_SET_WIDTH),
     .OPTION_DMMU_WAYS                (OPTION_DMMU_WAYS),
-    .FEATURE_INSTRUCTIONCACHE        (FEATURE_INSTRUCTIONCACHE),
+    .FEATURE_INSTRUCTIONCACHE        ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .OPTION_ICACHE_BLOCK_WIDTH       (OPTION_ICACHE_BLOCK_WIDTH),
     .OPTION_ICACHE_SET_WIDTH         (OPTION_ICACHE_SET_WIDTH),
     .OPTION_ICACHE_WAYS              (OPTION_ICACHE_WAYS),
-    .FEATURE_IMMU                    (FEATURE_IMMU),
+    .FEATURE_IMMU                    ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .OPTION_IMMU_SET_WIDTH           (OPTION_IMMU_SET_WIDTH),
     .OPTION_IMMU_WAYS                (OPTION_IMMU_WAYS),
     .FEATURE_DEBUGUNIT               (FEATURE_DEBUGUNIT),
     .FEATURE_PERFCOUNTERS            (FEATURE_PERFCOUNTERS),
     .FEATURE_MAC                     (FEATURE_MAC),
-    .FEATURE_FPU                     (FEATURE_FPU), // mor1kx_cfgrs instance
+    .FEATURE_FPU                     (FEATURE_FPU), // mor1kx_cfgrs instance: marocchino
     .FEATURE_SYSCALL                 (FEATURE_SYSCALL),
     .FEATURE_TRAP                    (FEATURE_TRAP),
     .FEATURE_RANGE                   (FEATURE_RANGE),
-    .FEATURE_DELAYSLOT               ("ENABLED"),
+    .FEATURE_DELAYSLOT               ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .FEATURE_EVBAR                   ("ENABLED")
   )
   u_cfgrs
@@ -897,9 +856,9 @@ endgenerate
       `OR1K_SPR_SYS_BASE:  spr_access[`OR1K_SPR_SYS_BASE]  <= 1'b1;
       // modules registers
       `OR1K_SPR_DMMU_BASE: spr_access[`OR1K_SPR_DMMU_BASE] <= (FEATURE_DMMU != "NONE");
-      `OR1K_SPR_IMMU_BASE: spr_access[`OR1K_SPR_IMMU_BASE] <= (FEATURE_IMMU != "NONE");
+      `OR1K_SPR_IMMU_BASE: spr_access[`OR1K_SPR_IMMU_BASE] <= 1'b1;
       `OR1K_SPR_DC_BASE:   spr_access[`OR1K_SPR_DC_BASE]   <= (FEATURE_DATACACHE != "NONE");
-      `OR1K_SPR_IC_BASE:   spr_access[`OR1K_SPR_IC_BASE]   <= (FEATURE_INSTRUCTIONCACHE != "NONE");
+      `OR1K_SPR_IC_BASE:   spr_access[`OR1K_SPR_IC_BASE]   <= 1'b1;
       `OR1K_SPR_MAC_BASE:  spr_access[`OR1K_SPR_MAC_BASE]  <= (FEATURE_MAC != "NONE");
       `OR1K_SPR_DU_BASE:   spr_access[`OR1K_SPR_DU_BASE]   <= (FEATURE_DEBUGUNIT != "NONE");
       `OR1K_SPR_PC_BASE:   spr_access[`OR1K_SPR_PC_BASE]   <= (FEATURE_PERFCOUNTERS != "NONE");
@@ -1066,19 +1025,13 @@ else begin
 end
 endgenerate
 
-generate
-if (FEATURE_IMMU != "NONE") begin : immu_ctrl
+
   assign spr_access_ack[`OR1K_SPR_IMMU_BASE] = spr_bus_ack_immu_i &
                                                spr_access[`OR1K_SPR_IMMU_BASE];
   assign spr_internal_read_dat[`OR1K_SPR_IMMU_BASE] =
     spr_bus_dat_immu_i &
     {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_IMMU_BASE]}};
-end
-else begin
-  assign spr_access_ack[`OR1K_SPR_IMMU_BASE] = 1'b0;
-  assign spr_internal_read_dat[`OR1K_SPR_IMMU_BASE] = 0;
-end
-endgenerate
+
 
 generate
 if (FEATURE_DATACACHE != "NONE") begin : datacache_ctrl
@@ -1093,17 +1046,12 @@ else begin
 end
 endgenerate
 
-generate
-if (FEATURE_INSTRUCTIONCACHE != "NONE") begin : instructioncache_ctrl
+
   assign spr_access_ack[`OR1K_SPR_IC_BASE] = spr_bus_ack_ic_i &
                                              spr_access[`OR1K_SPR_IC_BASE];
   assign spr_internal_read_dat[`OR1K_SPR_IC_BASE] =
     spr_bus_dat_ic_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_IC_BASE]}};
-end else begin
-   assign spr_access_ack[`OR1K_SPR_IC_BASE] = 1'b0;
-   assign spr_internal_read_dat[`OR1K_SPR_IC_BASE] = 0;
-end
-endgenerate
+
 
 generate
 if (FEATURE_MAC != "NONE") begin : mac_ctrl

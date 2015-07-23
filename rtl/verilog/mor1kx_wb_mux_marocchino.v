@@ -95,7 +95,6 @@ module mor1kx_wb_mux_marocchino
   output reg                            wb_excepts_en_o,
 
   // RFE processing
-  input                                 doing_rfe_i,
   input                                 exec_op_rfe_i,
   output reg                            wb_op_rfe_o,
 

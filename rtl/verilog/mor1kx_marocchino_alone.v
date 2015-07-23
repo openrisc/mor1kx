@@ -41,14 +41,12 @@ module mor1kx_marocchino_alone
   parameter OPTION_DMMU_WAYS           = 1,
 
   // istruction cache
-  parameter FEATURE_INSTRUCTIONCACHE  = "NONE",
   parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
   parameter OPTION_ICACHE_SET_WIDTH   = 9,
   parameter OPTION_ICACHE_WAYS        = 2,
   parameter OPTION_ICACHE_LIMIT_WIDTH = 32,
 
   // instruction mmu
-  parameter FEATURE_IMMU               = "NONE",
   parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE",
   parameter OPTION_IMMU_SET_WIDTH      = 6,
   parameter OPTION_IMMU_WAYS           = 1,
@@ -191,9 +189,8 @@ module mor1kx_marocchino_alone
   mor1kx_bus_if_wb32
   #(
     .BUS_IF_TYPE(IBUS_WB_TYPE),
-    .BURST_LENGTH((FEATURE_INSTRUCTIONCACHE != "NONE") ?
-                       ((OPTION_ICACHE_BLOCK_WIDTH == 4) ? 4 :
-                       ((OPTION_ICACHE_BLOCK_WIDTH == 5) ? 8 : 1)) : 1)
+    .BURST_LENGTH((OPTION_ICACHE_BLOCK_WIDTH == 4) ? 4 :
+                  (OPTION_ICACHE_BLOCK_WIDTH == 5) ? 8 : 1)
   )
   ibus_bridge
   (
@@ -280,13 +277,11 @@ module mor1kx_marocchino_alone
     .OPTION_DMMU_SET_WIDTH(OPTION_DMMU_SET_WIDTH),
     .OPTION_DMMU_WAYS(OPTION_DMMU_WAYS),
     // instructon cache
-    .FEATURE_INSTRUCTIONCACHE(FEATURE_INSTRUCTIONCACHE),
     .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
     .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
     .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
     .OPTION_ICACHE_LIMIT_WIDTH(OPTION_ICACHE_LIMIT_WIDTH),
     // instrucion mmu
-    .FEATURE_IMMU(FEATURE_IMMU),
     .FEATURE_IMMU_HW_TLB_RELOAD(FEATURE_IMMU_HW_TLB_RELOAD),
     .OPTION_IMMU_SET_WIDTH(OPTION_IMMU_SET_WIDTH),
     .OPTION_IMMU_WAYS(OPTION_IMMU_WAYS),

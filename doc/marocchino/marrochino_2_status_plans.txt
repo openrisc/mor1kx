@@ -18,11 +18,20 @@ CAPPUCCINO by the following steps:
      additionally to result
   h) Debug unit support was damaged
 
-Further development plan
-  - pipelined FETCH implementation
+
+23 July 2015
+  FETCH refactored. However, the main achievement is simplification
+of logic for generation padv-* and exception processing.
+
+
+Primary TODOs:
   - pipelined LSU implementation
   - pipelined integer multiplier implementation
   - revision and adaptation (if need) FPU pipelines
   - design reorder buffer
   - integration all module listed above
   - update debug unit support in CTRL-module
+
+
+Secondary TODOs:
+  - Various improvements for performance of new FETCH
