@@ -43,16 +43,21 @@ Currently, the following options are made NOT CONFIGURABLE:
  FEATURE_CUST7      == "NONE"
  FEATURE_CUST8      == "NONE"
 
+ FEATURE_DSX        == "ENABLED"
+
+ FEATURE_MSYNC      == "ENABLED"
+ FEATURE_ATOMIC     == "ENABLED"
+
  FEATURE_INSTRUCTIONCACHE == "ENABLED"
  FEATURE_IMMU             == "ENABLED"
+
+ FEATURE_DATACACHE        == "ENABLED"
+ FEATURE_DMMU             == "ENABLED"
 
   There is a plan to make NOT CONFIGURABLE at least the following
 options:
 
- FEATURE_DATACACHE        == "ENABLED"
- FEATURE_DMMU             == "ENABLED"
  FEATURE_FPU              == "ENABLED"
- FEATURE_MSYNC            == "ENABLED"
 
 
   Other options statuses (configurable or not) are not defined yet.

@@ -24,6 +24,11 @@ CAPPUCCINO by the following steps:
 of logic for generation padv-* and exception processing.
 
 
+14 August 2015
+  Some improvement for fetch. As a result, we don't need "fetch_valid"
+flag to control pipeline.
+
+
 Primary TODOs:
   - pipelined LSU implementation
   - pipelined integer multiplier implementation

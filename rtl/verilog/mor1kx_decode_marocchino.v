@@ -34,8 +34,6 @@ module mor1kx_decode_marocchino
   parameter FEATURE_RANGE   = "ENABLED",
 
   parameter FEATURE_EXT    = "NONE",
-  parameter FEATURE_ATOMIC = "ENABLED",
-  parameter FEATURE_MSYNC  = "ENABLED",
   parameter FEATURE_PSYNC  = "NONE",
   parameter FEATURE_CSYNC  = "NONE",
 
@@ -51,6 +49,8 @@ module mor1kx_decode_marocchino
 
   // INSN
   input [`OR1K_INSN_WIDTH-1:0]          dcod_insn_i,
+  input                                 dcod_op_branch_i,
+  input                                 dcod_delay_slot_i,
   input                                 dcod_insn_valid_i,
 
   // PC
@@ -75,6 +75,7 @@ module mor1kx_decode_marocchino
   output reg                            exec_op_setflag_o,
   output reg                            exec_op_brcond_o,
   output reg                            exec_op_branch_o,
+  output reg                            exec_delay_slot_o,
   output reg                            exec_op_jal_o,
   output reg [OPTION_OPERAND_WIDTH-1:0] exec_jal_result_o,
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb_i,
@@ -161,17 +162,14 @@ module mor1kx_decode_marocchino
 
   // load opcodes are 6'b10_0000 to 6'b10_0110, 0 to 6, so check for 7 and up
   wire dcod_op_lsu_load = ((dcod_insn_i[31:30] == 2'b10) &
-                             (~(&dcod_insn_i[28:26])) & (~dcod_insn_i[29])) |
-                            ((opc_insn == `OR1K_OPCODE_LWA) & (FEATURE_ATOMIC!="NONE"));
+                           ~(&dcod_insn_i[28:26]) & ~dcod_insn_i[29]) |
+                          (opc_insn == `OR1K_OPCODE_LWA);
 
   // Detect when instruction is store
-  wire dcod_op_lsu_store = (opc_insn == `OR1K_OPCODE_SW) |
-                             (opc_insn == `OR1K_OPCODE_SB) |
-                             (opc_insn == `OR1K_OPCODE_SH) |
-                             ((opc_insn == `OR1K_OPCODE_SWA) & (FEATURE_ATOMIC!="NONE"));
+  wire dcod_op_lsu_store = (opc_insn == `OR1K_OPCODE_SW) | (opc_insn == `OR1K_OPCODE_SB) |
+                           (opc_insn == `OR1K_OPCODE_SH) | (opc_insn == `OR1K_OPCODE_SWA);
 
-  wire dcod_op_lsu_atomic = ((opc_insn == `OR1K_OPCODE_LWA) | (opc_insn == `OR1K_OPCODE_SWA)) &
-                              (FEATURE_ATOMIC!="NONE");
+  wire dcod_op_lsu_atomic = (opc_insn == `OR1K_OPCODE_LWA) | (opc_insn == `OR1K_OPCODE_SWA);
 
   // Decode length of load/store operation
   reg [1:0] dcod_lsu_length;
@@ -197,10 +195,9 @@ module mor1kx_decode_marocchino
 
   wire dcod_lsu_zext = opc_insn[0];
 
-  wire dcod_op_msync = (FEATURE_MSYNC!="NONE") &
-                         (opc_insn == `OR1K_OPCODE_SYSTRAPSYNC) &
-                         (dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
-                          `OR1K_SYSTRAPSYNC_OPC_MSYNC);
+  wire dcod_op_msync = (opc_insn == `OR1K_OPCODE_SYSTRAPSYNC) &
+                       (dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
+                        `OR1K_SYSTRAPSYNC_OPC_MSYNC);
 
   wire dcod_op_mtspr = (opc_insn == `OR1K_OPCODE_MTSPR);
   wire dcod_op_mfspr = (opc_insn == `OR1K_OPCODE_MFSPR);
@@ -389,7 +386,7 @@ module mor1kx_decode_marocchino
       `OR1K_OPCODE_NOP:    illegal_insn_r = 1'b0;
 
       `OR1K_OPCODE_SWA,
-      `OR1K_OPCODE_LWA:    illegal_insn_r = (FEATURE_ATOMIC=="NONE");
+      `OR1K_OPCODE_LWA:    illegal_insn_r = 1'b0;
 
       `OR1K_OPCODE_CUST1,
       `OR1K_OPCODE_CUST2,
@@ -516,11 +513,11 @@ module mor1kx_decode_marocchino
 
   wire branch_to_reg = dcod_op_jr & (~(exec_rf_wb_o & (dcod_rfb_adr_o == exec_rfd_adr_o)));
 
-  assign dcod_branch_o = (branch_to_imm | branch_to_reg) & (~pipeline_flush_i);
-
   assign dcod_branch_target_o = branch_to_imm ? branch_to_imm_target : dcod_rfb_i;
 
-  wire dcod_except_ibus_align = dcod_branch_o & (|dcod_branch_target_o[1:0]);
+  // exception on wrong branch target
+  assign dcod_branch_o          = branch_to_imm | branch_to_reg;
+  wire   dcod_except_ibus_align = dcod_branch_o & (|dcod_branch_target_o[1:0]);
 
 
   wire [OPTION_OPERAND_WIDTH-1:0] dcod_mispredict_target =
@@ -538,10 +535,6 @@ module mor1kx_decode_marocchino
 
   // take branch flag for FETCH
   assign dcod_take_branch_o = branch_to_imm | dcod_op_jr;
-
-  // combined unconditional/conditional branches
-  wire dcod_op_branch = dcod_op_jb_imm | // l.j  | l.jal  | l.bnf | l.bf
-                        dcod_op_jr;      // l.jr | l.jalr
 
 
   // Detect the situation where there is a jump to register in decode
@@ -612,6 +605,7 @@ module mor1kx_decode_marocchino
       exec_op_jal_o            <= 1'b0;
       exec_op_brcond_o         <= 1'b0;
       exec_op_branch_o         <= 1'b0;
+      exec_delay_slot_o        <= 1'b0;
       // ALU common
       exec_op_alu_o            <= 1'b0;
       exec_opc_alu_o           <= {`OR1K_ALU_OPC_WIDTH{1'b0}};
@@ -640,6 +634,7 @@ module mor1kx_decode_marocchino
       exec_op_jal_o            <= 1'b0;
       exec_op_brcond_o         <= 1'b0;
       exec_op_branch_o         <= 1'b0;
+      exec_delay_slot_o        <= 1'b0;
       // ALU common
       exec_op_alu_o            <= 1'b0;
       exec_opc_alu_o           <= {`OR1K_ALU_OPC_WIDTH{1'b0}};
@@ -666,7 +661,8 @@ module mor1kx_decode_marocchino
       exec_op_setflag_o        <= dcod_op_setflag;
       exec_op_jal_o            <= dcod_op_jal;
       exec_op_brcond_o         <= dcod_op_brcond;
-      exec_op_branch_o         <= dcod_op_branch;
+      exec_op_branch_o         <= dcod_op_branch_i;
+      exec_delay_slot_o        <= dcod_delay_slot_i;
       // ALU common
       exec_op_alu_o            <= dcod_op_alu;
       exec_opc_alu_o           <= dcod_opc_alu;

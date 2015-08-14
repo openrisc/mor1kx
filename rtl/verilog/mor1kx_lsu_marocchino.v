@@ -21,7 +21,6 @@
 module mor1kx_lsu_marocchino
 #(
   // data cache
-  parameter FEATURE_DATACACHE         = "NONE",
   parameter OPTION_OPERAND_WIDTH      = 32,
   parameter OPTION_DCACHE_BLOCK_WIDTH = 5,
   parameter OPTION_DCACHE_SET_WIDTH   = 9,
@@ -29,15 +28,12 @@ module mor1kx_lsu_marocchino
   parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
   parameter OPTION_DCACHE_SNOOP       = "NONE",
   // mmu cache
-  parameter FEATURE_DMMU               = "NONE",
   parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
   parameter OPTION_DMMU_SET_WIDTH      = 6,
   parameter OPTION_DMMU_WAYS           = 1,
   // store buffer
   parameter FEATURE_STORE_BUFFER            = "ENABLED",
-  parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
-  // atomic support
-  parameter FEATURE_ATOMIC = "ENABLED"
+  parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8
 )
 (
   input                             clk,
@@ -606,9 +602,9 @@ module mor1kx_lsu_marocchino
                        (snoop_en_i & (~((snoop_adr_i == dbus_adr_o) & dbus_ack_i)));
 
 
-generate
-if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
-  // Atomic operations logic
+  //-------------------------//
+  // Atomic operations logic //
+  //-------------------------//
 
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
@@ -651,19 +647,6 @@ if (FEATURE_ATOMIC!="NONE") begin : atomic_gen
 
   assign atomic_flag_set_o   = atomic_flag_set;
   assign atomic_flag_clear_o = atomic_flag_clear;
-
-end
-else begin
-  assign atomic_flag_set_o   = 1'b0;
-  assign atomic_flag_clear_o = 1'b0;
-  assign swa_success         = 1'b0;
-  always @(posedge clk) begin
-     atomic_addr    <= 0;
-     atomic_reserve <= 1'b0;
-  end
-end
-endgenerate
-
 
 
   //--------------------//
@@ -775,8 +758,11 @@ endgenerate
   assign dc_refill_allowed = (~(cmd_op_lsu_store | (state == WRITE))) &
                              (~dc_snoop_hit) & (~snoop_valid);
 
+  //-------------------//
+  // Instance of cache //
+  //-------------------//
+
 generate
-if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
   if (OPTION_DCACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
     assign dc_access = cmd_op_lsu_store |
                        (dc_enabled & (~(dmmu_cache_inhibit & dmmu_enable_i)));
@@ -794,6 +780,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
       $finish();
     end
   end
+endgenerate
 
   assign dc_bsel = dbus_bsel;
 
@@ -844,32 +831,16 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
     .spr_bus_addr_i             (spr_bus_addr_i[15:0]),
     .spr_bus_we_i               (spr_bus_we_i),
     .spr_bus_stb_i              (spr_bus_stb_i),
-    .spr_bus_dat_i              (spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0])
+    .spr_bus_dat_i              (spr_bus_dat_i)
   );
-end
-else begin
-   assign dc_access = 0;
-   assign dc_refill = 0;
-   assign dc_refill_done = 0;
-   assign dc_refill_req = 0;
-   assign dc_err = 0;
-   assign dc_ack = 0;
-   assign dc_bsel = 0;
-   assign dc_we = 0;
-   assign dc_snoop_hit = 0;
-end
-endgenerate
 
-generate
-if (FEATURE_DMMU!="NONE") begin : dmmu_gen
-  wire  [OPTION_OPERAND_WIDTH-1:0] virt_addr;
-  wire                             dmmu_enable;
+  //------------------//
+  // Instance of DMMU //
+  //------------------//
 
-  assign virt_addr = dc_adr;
+  wire dmmu_enable = dmmu_enable_i & (~pipeline_flush_i); // used for HW TLB reload only
 
   assign tlb_reload_pagefault_clear = ~cmd_op_lsu_x; // use pipeline_flush_i?
-
-  assign dmmu_enable = dmmu_enable_i & (~pipeline_flush_i);
 
   mor1kx_dmmu
   #(
@@ -880,43 +851,37 @@ if (FEATURE_DMMU!="NONE") begin : dmmu_gen
   )
   u_dmmu
   (
-    // Outputs
+    // clocks and resets
+    .clk                              (clk),
+    .rst                              (rst),
+    // configuration and commands
+    .op_store_i                       (cmd_op_lsu_store),
+    .op_load_i                        (cmd_op_lsu_load),
+    .supervisor_mode_i                (supervisor_mode_i),
+    // Input: virtual address
+    .virt_addr_i                      (dc_adr),
+    .virt_addr_match_i                (cmd_lsu_adr),
+    // Output: physical address and flags
     .phys_addr_o                      (dmmu_phys_addr),
     .cache_inhibit_o                  (dmmu_cache_inhibit),
     .tlb_miss_o                       (tlb_miss),
     .pagefault_o                      (dmmu_pagefault),
+    // HW TLB reload
+    .enable_i                         (dmmu_enable),
+    .tlb_reload_ack_i                 (tlb_reload_ack),
+    .tlb_reload_data_i                (tlb_reload_data),
+    .tlb_reload_pagefault_clear_i     (tlb_reload_pagefault_clear),
     .tlb_reload_req_o                 (tlb_reload_req),
     .tlb_reload_busy_o                (tlb_reload_busy),
     .tlb_reload_addr_o                (tlb_reload_addr),
     .tlb_reload_pagefault_o           (tlb_reload_pagefault),
-    .spr_bus_dat_o                    (spr_bus_dat_dmmu_o),
-    .spr_bus_ack_o                    (spr_bus_ack_dmmu_o),
-    // Inputs
-    .clk                              (clk),
-    .rst                              (rst),
-    .enable_i                         (dmmu_enable),
-    .virt_addr_i                      (virt_addr),
-    .virt_addr_match_i                (cmd_lsu_adr),
-    .op_store_i                       (cmd_op_lsu_store),
-    .op_load_i                        (cmd_op_lsu_load),
-    .supervisor_mode_i                (supervisor_mode_i),
-    .tlb_reload_ack_i                 (tlb_reload_ack),
-    .tlb_reload_data_i                (tlb_reload_data),
-    .tlb_reload_pagefault_clear_i     (tlb_reload_pagefault_clear),
+    // SPR bus
     .spr_bus_addr_i                   (spr_bus_addr_i[15:0]),
     .spr_bus_we_i                     (spr_bus_we_i),
     .spr_bus_stb_i                    (spr_bus_stb_i),
-    .spr_bus_dat_i                    (spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0])
+    .spr_bus_dat_i                    (spr_bus_dat_i),
+    .spr_bus_dat_o                    (spr_bus_dat_dmmu_o),
+    .spr_bus_ack_o                    (spr_bus_ack_dmmu_o)
   );
-end
-else begin
-   assign dmmu_cache_inhibit = 0;
-   assign tlb_miss = 0;
-   assign dmmu_pagefault = 0;
-   assign tlb_reload_busy = 0;
-   assign tlb_reload_req = 0;
-   assign tlb_reload_pagefault = 0;
-end
-endgenerate
 
 endmodule // mor1kx_lsu_marocchino

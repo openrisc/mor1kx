@@ -50,7 +50,7 @@ module mor1kx_wb_mux_marocchino
   input      [OPTION_OPERAND_WIDTH-1:0] pc_exec_i,
 
   // Insn in delay slot indicator (exception processing)
-  input                                 exec_op_branch_i,
+  input                                 exec_delay_slot_i,
 
   // set/clear flags
   input                                 lsu_atomic_flag_set_i,
@@ -148,24 +148,16 @@ module mor1kx_wb_mux_marocchino
     end 
   end // @clock
 
-  //-------------------------------------------------------//
-  // Remember when we're in a delay slot in execute stage. //
-  // For correct exception processing                      //
-  //-------------------------------------------------------//
-  reg store_delay_slot;
+  //-----------------------------------------------------//
+  // Insn in delay slot indicator (exception processing) //
+  //----------------------------------------------------//
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst) begin
-      store_delay_slot <= 1'b0;
+    if (rst)
       wb_delay_slot_o  <= 1'b0;
-    end
-    else if (pipeline_flush_i) begin
-      store_delay_slot <= 1'b0;
+    else if (pipeline_flush_i)
       wb_delay_slot_o  <= 1'b0;
-    end
-    else if (padv_wb_i & (~exec_bubble_i)) begin
-      store_delay_slot <= exec_op_branch_i;
-      wb_delay_slot_o  <= store_delay_slot;
-    end
+    else if (padv_wb_i)
+      wb_delay_slot_o  <= exec_delay_slot_i;
   end // @clock
 
   // FPU related

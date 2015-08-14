@@ -27,7 +27,6 @@ module mor1kx_marocchino_alone
   parameter OPTION_OPERAND_WIDTH      = 32,
 
   // data cache configuration
-  parameter FEATURE_DATACACHE         = "NONE",
   parameter OPTION_DCACHE_BLOCK_WIDTH = 5,
   parameter OPTION_DCACHE_SET_WIDTH   = 9,
   parameter OPTION_DCACHE_WAYS        = 2,
@@ -35,7 +34,6 @@ module mor1kx_marocchino_alone
   parameter OPTION_DCACHE_SNOOP       = "NONE",
 
   // data mmu
-  parameter FEATURE_DMMU               = "NONE",
   parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
   parameter OPTION_DMMU_SET_WIDTH      = 6,
   parameter OPTION_DMMU_WAYS           = 1,
@@ -63,7 +61,6 @@ module mor1kx_marocchino_alone
   parameter OPTION_PIC_TRIGGER        = "LEVEL",
   parameter OPTION_PIC_NMI_WIDTH      = 0,
 
-  parameter FEATURE_DSX               = "ENABLED",
   parameter FEATURE_OVERFLOW          = "ENABLED",
   parameter FEATURE_CARRY_FLAG        = "ENABLED",
 
@@ -76,12 +73,9 @@ module mor1kx_marocchino_alone
   parameter OPTION_RESET_PC           = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
                                          `OR1K_RESET_VECTOR,8'd0},
 
-  parameter FEATURE_EXT = "NONE",
-  parameter FEATURE_MSYNC = "ENABLED",
+  parameter FEATURE_EXT   = "NONE",
   parameter FEATURE_PSYNC = "NONE",
   parameter FEATURE_CSYNC = "NONE",
-
-  parameter FEATURE_ATOMIC = "ENABLED",
 
   parameter FEATURE_FPU     = "NONE", // ENABLED|NONE: actual for cappuccino pipeline only
 
@@ -226,9 +220,8 @@ module mor1kx_marocchino_alone
   mor1kx_bus_if_wb32
   #(
     .BUS_IF_TYPE(DBUS_WB_TYPE),
-    .BURST_LENGTH((FEATURE_DATACACHE != "NONE") ?
-                     ((OPTION_DCACHE_BLOCK_WIDTH == 4) ? 4 :
-                     ((OPTION_DCACHE_BLOCK_WIDTH == 5) ? 8 : 1)) : 1)
+    .BURST_LENGTH((OPTION_DCACHE_BLOCK_WIDTH == 4) ? 4 :
+                  (OPTION_DCACHE_BLOCK_WIDTH == 5) ? 8 : 1)
   )
   dbus_bridge
   (
@@ -265,14 +258,12 @@ module mor1kx_marocchino_alone
   #(
     .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
     // data cache
-    .FEATURE_DATACACHE(FEATURE_DATACACHE),
     .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
     .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
     .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
     .OPTION_DCACHE_LIMIT_WIDTH(OPTION_DCACHE_LIMIT_WIDTH),
     .OPTION_DCACHE_SNOOP(OPTION_DCACHE_SNOOP),
     // data mmu
-    .FEATURE_DMMU(FEATURE_DMMU),
     .FEATURE_DMMU_HW_TLB_RELOAD(FEATURE_DMMU_HW_TLB_RELOAD),
     .OPTION_DMMU_SET_WIDTH(OPTION_DMMU_SET_WIDTH),
     .OPTION_DMMU_WAYS(OPTION_DMMU_WAYS),
@@ -298,7 +289,6 @@ module mor1kx_marocchino_alone
     .FEATURE_SYSCALL(FEATURE_SYSCALL),
     .FEATURE_TRAP(FEATURE_TRAP),
     .FEATURE_RANGE(FEATURE_RANGE),
-    .FEATURE_DSX(FEATURE_DSX),
     .FEATURE_FASTCONTEXTS(FEATURE_FASTCONTEXTS),
     .OPTION_RF_CLEAR_ON_INIT(OPTION_RF_CLEAR_ON_INIT),
     .OPTION_RF_NUM_SHADOW_GPR(OPTION_RF_NUM_SHADOW_GPR),
@@ -309,10 +299,8 @@ module mor1kx_marocchino_alone
     .OPTION_RESET_PC(OPTION_RESET_PC),
      // arithmetic modules
     .FEATURE_EXT(FEATURE_EXT), // MAROCCHINO_TODO
-    .FEATURE_MSYNC(FEATURE_MSYNC),
     .FEATURE_PSYNC(FEATURE_PSYNC),
     .FEATURE_CSYNC(FEATURE_CSYNC),
-    .FEATURE_ATOMIC(FEATURE_ATOMIC),
     .FEATURE_FPU(FEATURE_FPU),
     .FEATURE_STORE_BUFFER(FEATURE_STORE_BUFFER),
     .OPTION_STORE_BUFFER_DEPTH_WIDTH(OPTION_STORE_BUFFER_DEPTH_WIDTH)
