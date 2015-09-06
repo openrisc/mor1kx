@@ -20,143 +20,176 @@ module mor1kx_execute_marocchino
 #(
   parameter OPTION_OPERAND_WIDTH = 32,
   parameter OPTION_RF_ADDR_WIDTH =  5,
-
-  parameter FEATURE_OVERFLOW   = "NONE",
-  parameter FEATURE_CARRY_FLAG = "ENABLED",
-
-  parameter FEATURE_EXT = "NONE",
-
-  parameter FEATURE_FPU = "NONE" // ENABLED|NONE
+  parameter FEATURE_EXT          = "NONE",
+  parameter FEATURE_FPU          = "NONE" // ENABLED|NONE
 )
 (
   // clocks and resets
-  input               clk,
-  input               rst,
+  input                                 clk,
+  input                                 rst,
 
   // pipeline control signal in
-  input               padv_decode_i,
-  input               padv_wb_i,
-  input               pipeline_flush_i,// flush pipelined fpu
+  input                                 padv_decode_i,
+  input                                 padv_wb_i,
+  input                                 pipeline_flush_i,// flush pipelined fpu
 
   // input data
-  input [OPTION_OPERAND_WIDTH-1:0]  rfa_i,
-  input [OPTION_OPERAND_WIDTH-1:0]  rfb_i,
-  input [OPTION_OPERAND_WIDTH-1:0]  immediate_i,
-  input                             immediate_sel_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] rfa_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] rfb_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] immediate_i,
+  input                                 immediate_sel_i,
 
-  // opcode for alu
-  input                             op_alu_i,
-  input [`OR1K_ALU_OPC_WIDTH-1:0]   opc_alu_i,
-  input [`OR1K_ALU_OPC_WIDTH-1:0]   opc_alu_secondary_i,
+  // various instruction related flags & data
+  input                                 exec_bubble_i,      // empty istruction
+  input      [OPTION_RF_ADDR_WIDTH-1:0] exec_rfd_adr_i,     // desination address
+  input                                 exec_rf_wb_i,       // WB-request
+  input      [OPTION_OPERAND_WIDTH-1:0] pc_exec_i,          // insn. address
+  input                                 exec_delay_slot_i,  // delay slot
 
-  // adder's inputs
-  input                             op_add_i,
-  input                             adder_do_sub_i,
-  input                             adder_do_carry_i,
-  // adder's outputs
-  output [OPTION_OPERAND_WIDTH-1:0] exec_lsu_adr_o,
-
-  // multiplier inputs
-  input               op_mul_i,
-
-  // dividion inputs
-  input               op_div_i,
-  input               op_div_signed_i,
-  input               op_div_unsigned_i,
-
-  // shift, ffl1, movhi
-  input               op_shift_i,
-  input               op_ffl1_i,
-  input               op_movhi_i,
-
-  // ALU result forming
+  // 1-clock instruction related inputs
+  input                                 exec_insn_1clk_i,
+  //  # opcode for alu
+  input       [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_i,
+  input       [`OR1K_ALU_OPC_WIDTH-1:0] opc_alu_secondary_i,
+  //  # adder's inputs
+  input                                 op_add_i,
+  input                                 adder_do_sub_i,
+  input                                 adder_do_carry_i,
+  input                                 carry_i,
+  //  # shift, ffl1, movhi, cmov
+  input                                 op_shift_i,
+  input                                 op_ffl1_i,
+  input                                 op_movhi_i,
+  input                                 op_cmov_i,
+  //  # jump & link
   input                                 op_jal_i,
   input      [OPTION_OPERAND_WIDTH-1:0] exec_jal_result_i,
-  output     [OPTION_OPERAND_WIDTH-1:0] alu_nl_result_o, // nl: not latched
+  //  # flag related inputs
+  input                                 op_setflag_i,
+  input                                 flag_i, // feedback from ctrl (for cmov)
 
-  // FPU related
-  input      [`OR1K_FPUOP_WIDTH-1:0]   op_fpu_i,
-  input      [`OR1K_FPCSR_RM_SIZE-1:0] fpu_round_mode_i,
-  output     [`OR1K_FPCSR_WIDTH-1:0]   exec_fpcsr_o,
-  output                               exec_fpcsr_set_o,
+  // multi-clock instruction related inputs
+  //  ## multiplier inputs
+  input                                 op_mul_i,
+  //  ## division inputs
+  input                                 op_div_i,
+  input                                 op_div_signed_i,
+  input                                 op_div_unsigned_i,
+  //  ## FPU-32 arithmetic part
+  input         [`OR1K_FPUOP_WIDTH-1:0] op_fp32_arith_i,
+  input       [`OR1K_FPCSR_RM_SIZE-1:0] fpu_round_mode_i,
+  //  ## FPU-32 comparison part
+  input         [`OR1K_FPUOP_WIDTH-1:0] op_fp32_cmp_i,
+  //  ## MFSPR
+  input                                 ctrl_mfspr_rdy_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_i,
+  //  ## MSYNC related controls
+  input                                 msync_done_i,
+  //  ## LSU related inputs
+  input                                 lsu_valid_i,
+  input                                 wb_lsu_rdy_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] wb_lsu_result_i,
 
-  // flag related inputs
-  input op_setflag_i,
-  input flag_i, // fed back from ctrl (for cmov)
-  // flag related outputs
-  output exec_flag_set_o,
-  output exec_flag_clear_o,
+  // EXCEPTIONS related input
+  //  ## instruction is interruptable
+  input                                 exec_excepts_en_i,
+  //  ## RFE processing
+  input                                 exec_op_rfe_i,
+  //  ## input exceptions
+  input                                 exec_except_ibus_err_i,
+  input                                 exec_except_ipagefault_i,
+  input                                 exec_except_itlb_miss_i,
+  input                                 exec_except_ibus_align_i,
+  input                                 exec_except_illegal_i,
+  input                                 exec_except_syscall_i,
+  input                                 exec_except_trap_i,
+  input                                 lsu_except_dbus_err_i,
+  input                                 lsu_except_dpagefault_i,
+  input                                 lsu_except_dtlb_miss_i,
+  input                                 lsu_except_dbus_align_i,
+  input                                 lsu_excepts_i,
 
-  // carry related inputs
-  input carry_i,
-  // carry related outputs
-  output exec_carry_set_o,
-  output exec_carry_clear_o,
+  // ALU results
+  output     [OPTION_OPERAND_WIDTH-1:0] exec_lsu_adr_o,  // not latched, address to LSU
 
-  // owerflow related outputs
-  output exec_overflow_set_o,
-  output exec_overflow_clear_o,
+  // EXEC ready flag
+  output                                exec_valid_o,
 
-  // MTSPR & MFSPR related inputs
-  input op_mtspr_i,
-  input op_mfspr_i,
-  input ctrl_mfspr_ack_i,
-  input ctrl_mtspr_ack_i,
-
-  // MSYNC related controls
-  input      op_msync_i,
-  input      msync_done_i,
-
-  // LSU related inputs
-  input       op_lsu_load_i,
-  input       op_lsu_store_i,
-  input       lsu_valid_i,
-  input       lsu_excepts_i,
-
-  // ready flags
-  output exec_valid_o
+  // WB outputs
+  output     [OPTION_OPERAND_WIDTH-1:0] wb_result_o,
+  //  ## integer comparison result
+  output reg                            wb_int_flag_set_o,
+  output reg                            wb_int_flag_clear_o,
+  //  ## carry output
+  output reg                            wb_carry_set_o,
+  output reg                            wb_carry_clear_o,
+  //  ## overflow output
+  output reg                            wb_overflow_set_o,
+  output reg                            wb_overflow_clear_o,
+  //  ## FPU-32 arithmetic exceptions
+  output        [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_arith_fpcsr_o,
+  //  ## FPU-32 comparison result
+  output                                wb_fp32_flag_set_o,
+  output                                wb_fp32_flag_clear_o,
+  output        [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_cmp_fpcsr_o,
+  //  ## instruction related information
+  output reg [OPTION_OPERAND_WIDTH-1:0] pc_wb_o,
+  output reg                            wb_delay_slot_o,
+  output reg [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd_adr_o,
+  output reg                            wb_rf_wb_o,
+  //  ## RFE processing
+  output reg                            wb_op_rfe_o,
+  //  ## output exceptions
+  output reg                            wb_except_ibus_err_o,
+  output reg                            wb_except_ipagefault_o,
+  output reg                            wb_except_itlb_miss_o,
+  output reg                            wb_except_ibus_align_o,
+  output reg                            wb_except_illegal_o,
+  output reg                            wb_except_syscall_o,
+  output reg                            wb_except_trap_o,
+  output reg                            wb_except_dbus_o,
+  output reg                            wb_except_dpagefault_o,
+  output reg                            wb_except_dtlb_miss_o,
+  output reg                            wb_except_align_o,
+  output reg                            wb_excepts_en_o
 );
 
   localparam  EXEDW = OPTION_OPERAND_WIDTH; // short name
 
 
-
-  wire [EXEDW-1:0] a = rfa_i;
-  wire [EXEDW-1:0] b = immediate_sel_i ? immediate_i : rfb_i;
-
+  wire [EXEDW-1:0] op_a = rfa_i;
+  wire [EXEDW-1:0] op_b = immediate_sel_i ? immediate_i : rfb_i;
 
 
-  //-----------------
-  // Adder/subtractor
-  //-----------------
+  //------------------//
+  // Adder/subtractor //
+  //------------------//
   // outputs
   wire             adder_carryout;
   wire [EXEDW-1:0] adder_result;
   // inputs
-  wire [EXEDW-1:0] b_neg = ~b;
-  wire [EXEDW-1:0] b_mux = adder_do_sub_i ? b_neg : b;
+  wire [EXEDW-1:0] b_mux = adder_do_sub_i ? (~op_b) : op_b;
   wire carry_in = adder_do_sub_i | (adder_do_carry_i & carry_i);
   // Adder
   assign {adder_carryout, adder_result} =
-            a + b_mux + {{(EXEDW-1){1'b0}},carry_in};
+           op_a + b_mux + {{(EXEDW-1){1'b0}},carry_in};
   // result sign
   wire adder_result_sign = adder_result[EXEDW-1];
   // signed overflow detection
   // Input signs are same and result sign is different to input signs
-  wire adder_signed_overflow =
-            (a[EXEDW-1] == b_mux[EXEDW-1]) &
-            (a[EXEDW-1] ^ adder_result[EXEDW-1]);
+  wire adder_s_ovf =
+         (op_a[EXEDW-1] == b_mux[EXEDW-1]) &
+         (op_a[EXEDW-1] ^ adder_result[EXEDW-1]);
   // unsigned overflow detection
-  wire adder_unsigned_overflow = adder_carryout;
+  wire adder_u_ovf = adder_carryout;
 
 
-
-  //-----------------
-  // Comparison logic
-  //-----------------
-  wire a_eq_b = (a == b);// Equal compare
-  wire a_lts_b = ~(adder_result_sign == adder_signed_overflow);// Signed compare
-  wire a_ltu_b = ~adder_carryout;// Unsigned compare
+  //------------------//
+  // Comparison logic //
+  //------------------//
+  wire a_eq_b  = (op_a == op_b); // Equal compare
+  wire a_lts_b = (adder_result_sign ^ adder_s_ovf); // Signed compare (sign != ovf)
+  wire a_ltu_b = ~adder_carryout; // Unsigned compare
   // comb.
   reg flag_set;
   always @*
@@ -175,205 +208,36 @@ module mor1kx_execute_marocchino
     endcase
 
 
-
-  //--------------------------------------------
-  // 32-bit multiplier
-  //--------------------------------------------
-  reg [EXEDW-1:0] mul_opa;
-  reg [EXEDW-1:0] mul_opb;
-  reg [EXEDW-1:0] mul_result1;
-  reg [EXEDW-1:0] mul_result;
-  reg       [2:0] mul_cnt_shr;
-  wire            mul_valid;
-  // multiplier
-  always @(posedge clk) begin
-    if (op_mul_i) begin
-      mul_opa <= a;
-      mul_opb <= b;
-    end
-    mul_result1 <= mul_opa * mul_opb;
-    mul_result  <= mul_result1;
-  end // @clock
-  // multiplier's clock counter
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      mul_cnt_shr <= 3'd0;
-    else if (padv_decode_i | pipeline_flush_i) // reset @ new decode data
-      mul_cnt_shr <= 3'd0;
-    else if (~(|mul_cnt_shr))
-      mul_cnt_shr <= {2'd0,op_mul_i}; // init
-    else if (~mul_valid)
-      mul_cnt_shr <= {mul_cnt_shr[1:0], 1'b0};
-  end // @clock
-  //  multiplier's ready flag
-  assign mul_valid = mul_cnt_shr[2];
-
-
-
-  //--------------------------------------------
-  // 32-bit divider
-  //--------------------------------------------
-  reg [5:0] div_count;
-  reg [EXEDW-1:0] div_n;
-  reg [EXEDW-1:0] div_d;
-  reg [EXEDW-1:0] div_r;
-  wire [EXEDW:0]  div_sub;
-  reg             div_neg;
-  reg             div_done;
-  reg             div_by_zero_r;
-
-
-  assign div_sub = {div_r[EXEDW-2:0],div_n[EXEDW-1]} - div_d;
-
-  // Cycle counter
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst) begin
-      div_done  <= 1'b0;
-      div_count <= 6'd0;
-    end
-    if (padv_decode_i | pipeline_flush_i) begin // reset @ new decode data
-      div_done  <= 1'b0;
-      div_count <= 6'd0;
-    end
-    else if (op_div_i & (~(|div_count))) begin
-      div_done  <= 1'b0;
-      div_count <= EXEDW;
-    end
-    else if (div_count == 6'd1)
-      div_done <= 1'b1;
-    else if (~div_done)
-      div_count <= div_count - 6'd1;
-  end // @clock
-
-  always @(posedge clk) begin
-    if (op_div_i & (~(|div_count))) begin
-      div_n <= rfa_i;
-      div_d <= rfb_i;
-      div_r <= 0;
-      div_neg <= 1'b0;
-      div_by_zero_r <= ~(|rfb_i);
-      /*
-       * Convert negative operands in the case of signed division.
-       * If only one of the operands is negative, the result is
-       * converted back to negative later on
-       */
-      if (op_div_signed_i) begin
-        if (rfa_i[EXEDW-1] ^ rfb_i[EXEDW-1])
-          div_neg <= 1'b1;
-
-        if (rfa_i[EXEDW-1])
-          div_n <= ~rfa_i + 1;
-
-        if (rfb_i[EXEDW-1])
-          div_d <= ~rfb_i + 1;
-      end
-    end
-    else if (~div_done) begin
-      if (~div_sub[EXEDW]) begin // div_sub >= 0
-        div_r <= div_sub[EXEDW-1:0];
-        div_n <= {div_n[EXEDW-2:0], 1'b1};
-      end else begin // div_sub < 0
-        div_r <= {div_r[EXEDW-2:0],div_n[EXEDW-1]};
-        div_n <= {div_n[EXEDW-2:0], 1'b0};
-      end
-    end // ~done
-  end // @clock
-
-  wire div_valid   = div_done;
-  wire div_by_zero = div_by_zero_r;
-  wire [EXEDW-1:0] div_result = div_neg ? ~div_n + 1 : div_n;
-
-
-
-  //------------
-  // FPU related
-  //------------
-  //  arithmetic part interface
-  wire fpu_op_is_arith;
-  wire fpu_arith_valid;
-  wire [EXEDW-1:0] fpu_result;
-  //  comparator part interface
-  wire fpu_op_is_cmp;
-  wire fpu_cmp_valid;
-  wire fpu_cmp_flag;
-  //  instance
-  generate
-    /* verilator lint_off WIDTH */
-    if (FEATURE_FPU!="NONE") begin :  fpu_alu_ena
-    /* verilator lint_on WIDTH */
-      wire [(`OR1K_FPCSR_WIDTH-1):0] fpcsr_w;
-      // fpu32 instance
-      pfpu32_top u_pfpu32
-      (
-        .clk(clk),
-        .rst(rst),
-        .flush_i(pipeline_flush_i),
-        .padv_decode_i(padv_decode_i),
-        .padv_execute_i(padv_wb_i),
-        .op_fpu_i(op_fpu_i),
-        .round_mode_i(fpu_round_mode_i),
-        .rfa_i(rfa_i),
-        .rfb_i(rfb_i),
-        .fpu_result_o(fpu_result),
-        .fpu_arith_valid_o(fpu_arith_valid),
-        .fpu_cmp_flag_o(fpu_cmp_flag),
-        .fpu_cmp_valid_o(fpu_cmp_valid),
-        .fpcsr_o(fpcsr_w)
-      );
-      // some glue logic
-      assign fpu_op_is_arith = op_fpu_i[`OR1K_FPUOP_WIDTH-1] & (~op_fpu_i[3]);
-      assign fpu_op_is_cmp   = op_fpu_i[`OR1K_FPUOP_WIDTH-1] &   op_fpu_i[3];
-      // flag to update FPCSR
-      assign exec_fpcsr_o     = fpcsr_w;
-      assign exec_fpcsr_set_o = (fpu_arith_valid | fpu_cmp_valid);
-    end
-    else begin :  fpu_alu_none
-      // arithmetic part
-      assign fpu_op_is_arith = 1'b0;
-      assign fpu_arith_valid = 1'b0;
-      assign fpu_result      = {EXEDW{1'b0}};
-      // comparator part
-      assign fpu_op_is_cmp = 1'b0;
-      assign fpu_cmp_valid = 1'b0;
-      assign fpu_cmp_flag  = 1'b0;
-      // fpu's common
-      assign exec_fpcsr_o     = {`OR1K_FPCSR_WIDTH{1'b0}};
-      assign exec_fpcsr_set_o = 1'b0;
-    end // fpu_ena/fpu_none
-  endgenerate // FPU related
-
-
-  //------------
-  // FFL1
-  //------------
+  //------//
+  // FFL1 //
+  //------//
   wire [EXEDW-1:0] ffl1_result;
   assign ffl1_result = (opc_alu_secondary_i[2]) ?
-               (a[31] ? 32 : a[30] ? 31 : a[29] ? 30 :
-                a[28] ? 29 : a[27] ? 28 : a[26] ? 27 :
-                a[25] ? 26 : a[24] ? 25 : a[23] ? 24 :
-                a[22] ? 23 : a[21] ? 22 : a[20] ? 21 :
-                a[19] ? 20 : a[18] ? 19 : a[17] ? 18 :
-                a[16] ? 17 : a[15] ? 16 : a[14] ? 15 :
-                a[13] ? 14 : a[12] ? 13 : a[11] ? 12 :
-                a[10] ? 11 : a[9] ? 10 : a[8] ? 9 :
-                a[7] ? 8 : a[6] ? 7 : a[5] ? 6 : a[4] ? 5 :
-                a[3] ? 4 : a[2] ? 3 : a[1] ? 2 : a[0] ? 1 : 0 ) :
-               (a[0] ? 1 : a[1] ? 2 : a[2] ? 3 : a[3] ? 4 :
-                a[4] ? 5 : a[5] ? 6 : a[6] ? 7 : a[7] ? 8 :
-                a[8] ? 9 : a[9] ? 10 : a[10] ? 11 : a[11] ? 12 :
-                a[12] ? 13 : a[13] ? 14 : a[14] ? 15 :
-                a[15] ? 16 : a[16] ? 17 : a[17] ? 18 :
-                a[18] ? 19 : a[19] ? 20 : a[20] ? 21 :
-                a[21] ? 22 : a[22] ? 23 : a[23] ? 24 :
-                a[24] ? 25 : a[25] ? 26 : a[26] ? 27 :
-                a[27] ? 28 : a[28] ? 29 : a[29] ? 30 :
-                a[30] ? 31 : a[31] ? 32 : 0);
+           (op_a[31] ? 32 : op_a[30] ? 31 : op_a[29] ? 30 :
+            op_a[28] ? 29 : op_a[27] ? 28 : op_a[26] ? 27 :
+            op_a[25] ? 26 : op_a[24] ? 25 : op_a[23] ? 24 :
+            op_a[22] ? 23 : op_a[21] ? 22 : op_a[20] ? 21 :
+            op_a[19] ? 20 : op_a[18] ? 19 : op_a[17] ? 18 :
+            op_a[16] ? 17 : op_a[15] ? 16 : op_a[14] ? 15 :
+            op_a[13] ? 14 : op_a[12] ? 13 : op_a[11] ? 12 :
+            op_a[10] ? 11 : op_a[9] ? 10 : op_a[8] ? 9 :
+            op_a[7] ? 8 : op_a[6] ? 7 : op_a[5] ? 6 : op_a[4] ? 5 :
+            op_a[3] ? 4 : op_a[2] ? 3 : op_a[1] ? 2 : op_a[0] ? 1 : 0 ) :
+           (op_a[0] ? 1 : op_a[1] ? 2 : op_a[2] ? 3 : op_a[3] ? 4 :
+            op_a[4] ? 5 : op_a[5] ? 6 : op_a[6] ? 7 : op_a[7] ? 8 :
+            op_a[8] ? 9 : op_a[9] ? 10 : op_a[10] ? 11 : op_a[11] ? 12 :
+            op_a[12] ? 13 : op_a[13] ? 14 : op_a[14] ? 15 :
+            op_a[15] ? 16 : op_a[16] ? 17 : op_a[17] ? 18 :
+            op_a[18] ? 19 : op_a[19] ? 20 : op_a[20] ? 21 :
+            op_a[21] ? 22 : op_a[22] ? 23 : op_a[23] ? 24 :
+            op_a[24] ? 25 : op_a[25] ? 26 : op_a[26] ? 27 :
+            op_a[27] ? 28 : op_a[28] ? 29 : op_a[29] ? 30 :
+            op_a[30] ? 31 : op_a[31] ? 32 : 0);
 
 
-
-  //---------------
-  // Barrel shifter
-  //---------------
+  //----------------//
+  // Barrel shifter //
+  //----------------//
   // Shifter wires
   wire [`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0] opc_alu_shr;
   assign opc_alu_shr = opc_alu_secondary_i[`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0];
@@ -402,27 +266,24 @@ module mor1kx_execute_marocchino
   // Bit-reverse on left shift, perform right shift,
   // bit-reverse result on left shift.
   //
-  assign shift_lsw = op_sll ? reverse(a) : a;
-  assign shift_msw = op_sra ? {EXEDW{a[EXEDW-1]}} :
-                     op_ror ? a : {EXEDW{1'b0}};
+  assign shift_lsw = op_sll ? reverse(op_a) : op_a;
+  assign shift_msw = op_sra ? {EXEDW{op_a[EXEDW-1]}} :
+                     op_ror ? op_a : {EXEDW{1'b0}};
 
-  assign shift_right = {shift_msw, shift_lsw} >> b[4:0];
+  assign shift_right = {shift_msw, shift_lsw} >> op_b[4:0];
   assign shift_result = op_sll ? reverse(shift_right) : shift_right;
 
 
-
-  //-----------------
-  // Conditional move
-  //-----------------
-  wire op_cmov = op_alu_i & (opc_alu_i == `OR1K_ALU_OPC_CMOV);
+  //------------------//
+  // Conditional move //
+  //------------------//
   wire [EXEDW-1:0] cmov_result;
-  assign cmov_result = flag_i ? a : b;
+  assign cmov_result = flag_i ? op_a : op_b;
 
 
-
-  //-------------------
-  // Logical operations
-  //-------------------
+  //--------------------//
+  // Logical operations //
+  //--------------------//
   // Logic wires
   wire             op_logic;
   reg [EXEDW-1:0]  logic_result;
@@ -435,83 +296,464 @@ module mor1kx_execute_marocchino
       `OR1K_ALU_OPC_XOR: logic_lut = 4'b0110;
       default:           logic_lut = 4'd0;
     endcase
-
-    if (~op_alu_i)
-      logic_lut = 4'd0;
-
-    // Threat mfspr/mtspr as 'OR'
-    if (op_mfspr_i | op_mtspr_i)
-      logic_lut = 4'b1110;
   end
 
   // Extract the result, bit-for-bit, from the look-up-table
   integer i;
   always @(*)
     for (i = 0; i < EXEDW; i=i+1) begin
-      logic_result[i] = logic_lut[{a[i], b[i]}];
+      logic_result[i] = logic_lut[{op_a[i], op_b[i]}];
     end
 
   assign op_logic = |logic_lut;
 
 
+  //------------------------------------------------------------------//
+  // Muxing and registering 1-clk results and integer comparison flag //
+  //------------------------------------------------------------------//
+  wire [EXEDW-1:0] alu_1clk_result_mux = op_shift_i ? shift_result      :
+                                         op_ffl1_i  ? ffl1_result       :
+                                         op_add_i   ? adder_result      :
+                                         op_logic   ? logic_result      :
+                                         op_cmov_i  ? cmov_result       :
+                                         op_movhi_i ? immediate_i       :
+                                         op_jal_i   ? exec_jal_result_i : // for GPR[9]
+                                                      {EXEDW{1'b0}};
+  //  registering output for 1-clock operations
+  reg [EXEDW-1:0] wb_alu_1clk_result;
+  reg             wb_alu_1clk_rdy;
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      wb_alu_1clk_result <= {EXEDW{1'b0}};
+    else if (exec_insn_1clk_i & padv_wb_i)
+      wb_alu_1clk_result <= alu_1clk_result_mux;
+  end // posedge clock
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      wb_alu_1clk_rdy <= 1'b0;
+    else if (pipeline_flush_i)
+      wb_alu_1clk_rdy <= wb_alu_1clk_rdy;
+    else if (padv_wb_i)
+      wb_alu_1clk_rdy <= exec_insn_1clk_i;
+  end // @clock
 
-  //---------------
-  // Results muxing
-  //---------------
-  assign alu_nl_result_o = op_logic        ? logic_result :
-                           op_cmov         ? cmov_result :
-                           op_movhi_i      ? immediate_i :
-                           fpu_arith_valid ? fpu_result :
-                           op_shift_i      ? shift_result :
-                           op_mul_i        ? mul_result :
-                           op_div_i        ? div_result :
-                           op_ffl1_i       ? ffl1_result :
-                           op_jal_i        ? exec_jal_result_i :  // for GPR[9]
-                                             adder_result;
+  // latched integer comparison result for WB
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+      wb_int_flag_set_o   <= 1'b0;
+      wb_int_flag_clear_o <= 1'b0;
+    end
+    else if (pipeline_flush_i) begin
+      wb_int_flag_set_o   <= 1'b0;
+      wb_int_flag_clear_o <= 1'b0;
+    end
+    else if (padv_wb_i) begin
+      if (op_setflag_i) begin
+        wb_int_flag_set_o   <= flag_set;
+        wb_int_flag_clear_o <= ~flag_set;
+      end
+      else begin
+        wb_int_flag_set_o   <= 1'b0;
+        wb_int_flag_clear_o <= 1'b0;
+      end // set-flag-op / not
+    end // wb advance
+  end // @clock
 
 
-  // Update SR[F] either from integer or float point comparision
-  assign exec_flag_set_o   = fpu_op_is_cmp ? (fpu_cmp_flag & fpu_cmp_valid) :
-                                             (flag_set & op_setflag_i);
-  assign exec_flag_clear_o = fpu_op_is_cmp ? ((~fpu_cmp_flag) & fpu_cmp_valid) :
-                                             ((~flag_set) & op_setflag_i);
 
-  // Overflow flag generation
-  assign exec_overflow_set_o   = (FEATURE_OVERFLOW != "NONE") &
-                                 ((op_add_i & adder_signed_overflow) |
-                                  (op_div_signed_i & div_by_zero));
-  assign exec_overflow_clear_o = (FEATURE_OVERFLOW != "NONE") &
-                                 ((op_add_i & (~adder_signed_overflow)) |
-                                  (op_div_signed_i & (~div_by_zero)));
+  //-------------------//
+  // 32-bit multiplier //
+  //-------------------//
+  localparam MULHDW = (EXEDW >> 1);
 
-  // Carry flag generation
-  assign exec_carry_set_o   = (FEATURE_CARRY_FLAG != "NONE") &
-                              ((op_add_i & adder_unsigned_overflow) |
-                               (op_div_unsigned_i & div_by_zero));
-  assign exec_carry_clear_o = (FEATURE_CARRY_FLAG!="NONE") &
-                              ((op_add_i & (~adder_unsigned_overflow)) |
-                               (op_div_unsigned_i & (~div_by_zero)));
+  // algorithm:
+  //   AlBl[dw-1:0] = A[hdw-1:0] * B[hdw-1:0];
+  //   AhBl[dw-1:0] = A[dw-1:hdw] * B[hdw-1:0];
+  //   BhAl[dw-1:0] = B[dw-1:hdw] * A[hdw-1:0];
+  //   Sum[dw-1:0]  = {BhAl[hdw-1:0],{hdw{0}}} +
+  //                  {AlBl[hdw-1:0],{hdw{0}}} +
+  //                  AlBl;
 
-  // lsu address (not latched)
-  assign exec_lsu_adr_o = adder_result;
+  wire mul_valid; // valid flag is 1-clock ahead of latching for WB
+  wire mul_adv = ~mul_valid | padv_wb_i; // advance multiplier pipe
+
+  // stage #1: register inputs & split them on halfed parts
+  reg [MULHDW-1:0] mul_s1_al;
+  reg [MULHDW-1:0] mul_s1_bl;
+  reg [MULHDW-1:0] mul_s1_ah;
+  reg [MULHDW-1:0] mul_s1_bh;
+  //  registering
+  always @(posedge clk) begin
+    if (op_mul_i & mul_adv) begin
+      mul_s1_al <= op_a[MULHDW-1:0];
+      mul_s1_bl <= op_b[MULHDW-1:0];
+      mul_s1_ah <= op_a[EXEDW-1:MULHDW];
+      mul_s1_bh <= op_b[EXEDW-1:MULHDW];
+    end
+  end // posedge clock
+  //  ready flag
+  reg mul_s1_rdy;
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      mul_s1_rdy <= 1'b0;
+    else if (pipeline_flush_i)
+      mul_s1_rdy <= 1'b0;
+    else if (mul_adv)
+      mul_s1_rdy <= op_mul_i;
+  end // posedge clock
+
+  // stage #2: partial products
+  reg [EXEDW-1:0] mul_s2_albl;
+  reg [EXEDW-1:0] mul_s2_ahbl;
+  reg [EXEDW-1:0] mul_s2_bhal;
+  //  registering
+  always @(posedge clk) begin
+    if (mul_s1_rdy & mul_adv) begin
+      mul_s2_albl <= mul_s1_al * mul_s1_bl;
+      mul_s2_ahbl <= mul_s1_ah * mul_s1_bl;
+      mul_s2_bhal <= mul_s1_bh * mul_s1_al;
+    end
+  end // posedge clock
+  //  ready flag
+  reg mul_s2_rdy;
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      mul_s2_rdy <= 1'b0;
+    else if (pipeline_flush_i)
+      mul_s2_rdy <= 1'b0;
+    else if (mul_adv)
+      mul_s2_rdy <= mul_s1_rdy;
+  end // posedge clock
+  // valid flag is 1-clock ahead of latching for WB
+  assign mul_valid = mul_s2_rdy;
+
+  // stage #3: result
+  wire [EXEDW-1:0] mul_s3t_sum;
+  assign mul_s3t_sum = {mul_s2_bhal[MULHDW-1:0],{MULHDW{1'b0}}} +
+                       {mul_s2_ahbl[MULHDW-1:0],{MULHDW{1'b0}}} +
+                        mul_s2_albl;
+  //  registering
+  reg [EXEDW-1:0] wb_mul_result;
+  reg             wb_mul_rdy;
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      wb_mul_result <= {EXEDW{1'b0}};
+    else if (mul_valid & padv_wb_i)
+      wb_mul_result <= mul_s3t_sum;
+  end // posedge clock
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      wb_mul_rdy <= 1'b0;
+    else if (pipeline_flush_i)
+      wb_mul_rdy <= wb_mul_rdy;
+    else if (padv_wb_i)
+      wb_mul_rdy <= mul_valid;
+  end // @clock
+
+
+
+  //----------------//
+  // 32-bit divider //
+  //----------------//
+  reg       [5:0] div_count;
+  reg [EXEDW-1:0] div_n;
+  reg [EXEDW-1:0] div_d;
+  reg [EXEDW-1:0] div_r;
+  wire  [EXEDW:0] div_sub;
+  reg             div_signed, div_unsigned;
+  reg             div_neg;
+  reg             div_valid;
+  reg             div_by_zero;
+
+  assign div_sub = {div_r[EXEDW-2:0],div_n[EXEDW-1]} - div_d;
+
+  // Cycle counter
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+      div_valid <= 1'b0;
+      div_count <= 6'd0;
+    end
+    if (padv_decode_i | pipeline_flush_i) begin // reset @ new decode data
+      div_valid <= 1'b0;
+      div_count <= 6'd0;
+    end
+    else if (op_div_i) begin
+      div_valid <= 1'b0;
+      div_count <= EXEDW;
+    end
+    else if (|div_count) begin
+      if (div_count == 6'd1)
+        div_valid <= 1'b1;
+      else if (~div_valid)
+        div_count <= div_count - 6'd1;
+    end
+  end // @clock
+
+  always @(posedge clk) begin
+    if (op_div_i) begin
+      div_n        <= rfa_i;
+      div_d        <= rfb_i;
+      div_r        <= 0;
+      div_neg      <= 1'b0;
+      div_by_zero  <= ~(|rfb_i);
+      div_signed   <= op_div_signed_i;
+      div_unsigned <= op_div_unsigned_i;
+      /*
+       * Convert negative operands in the case of signed division.
+       * If only one of the operands is negative, the result is
+       * converted back to negative later on
+       */
+      if (op_div_signed_i) begin
+        if (rfa_i[EXEDW-1] ^ rfb_i[EXEDW-1])
+          div_neg <= 1'b1;
+
+        if (rfa_i[EXEDW-1])
+          div_n <= ~rfa_i + 1;
+
+        if (rfb_i[EXEDW-1])
+          div_d <= ~rfb_i + 1;
+      end
+    end
+    else if (~div_valid) begin
+      if (~div_sub[EXEDW]) begin // div_sub >= 0
+        div_r <= div_sub[EXEDW-1:0];
+        div_n <= {div_n[EXEDW-2:0], 1'b1};
+      end
+      else begin                 // div_sub < 0
+        div_r <= {div_r[EXEDW-2:0],div_n[EXEDW-1]};
+        div_n <= {div_n[EXEDW-2:0], 1'b0};
+      end
+    end // ~done
+  end // @clock
+
+  wire [EXEDW-1:0] div_result = div_neg ? ~div_n + 1 : div_n;
+  
+  //  registering
+  reg [EXEDW-1:0] wb_div_result;
+  reg             wb_div_rdy;
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      wb_div_result <= {EXEDW{1'b0}};
+    else if (div_valid & padv_wb_i)
+      wb_div_result <= div_result;
+  end // posedge clock
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      wb_div_rdy <= 1'b0;
+    else if (pipeline_flush_i)
+      wb_div_rdy <= wb_div_rdy;
+    else if (padv_wb_i)
+      wb_div_rdy <= div_valid;
+  end // @clock
+
+
+
+  //-------------//
+  // FPU related //
+  //-------------//
+  //  arithmetic part interface
+  wire        fp32_arith_valid;
+  wire [31:0] wb_fp32_arith_res;
+  wire        wb_fp32_arith_rdy;
+  //  instance
+  generate
+    /* verilator lint_off WIDTH */
+    if (FEATURE_FPU!="NONE") begin :  fpu_alu_ena
+    /* verilator lint_on WIDTH */
+      pfpu32_top_marocchino  u_pfpu32
+      (
+        // clock & reset
+        .clk                    (clk),
+        .rst                    (rst),
+        // pipeline control
+        .flush_i                (pipeline_flush_i),
+        .padv_wb_i              (padv_wb_i),
+        // Operands
+        .rfa_i                  (rfa_i),
+        .rfb_i                  (rfb_i),
+        // FPU-32 arithmetic part
+        .op_arith_i             (op_fp32_arith_i),
+        .round_mode_i           (fpu_round_mode_i),
+        .fp32_arith_valid_o     (fp32_arith_valid),      // WB-latching ahead arithmetic ready flag
+        .wb_fp32_arith_res_o    (wb_fp32_arith_res),     // arithmetic result
+        .wb_fp32_arith_rdy_o    (wb_fp32_arith_rdy),     // arithmetic ready flag
+        .wb_fp32_arith_fpcsr_o  (wb_fp32_arith_fpcsr_o), // arithmetic exceptions
+        // FPU-32 comparison part
+        .op_cmp_i               (op_fp32_cmp_i),
+        .wb_fp32_flag_set_o     (wb_fp32_flag_set_o),   // comparison result
+        .wb_fp32_flag_clear_o   (wb_fp32_flag_clear_o), // comparison result
+        .wb_fp32_cmp_fpcsr_o    (wb_fp32_cmp_fpcsr_o)   // comparison exceptions
+      );
+    end
+    else begin :  fpu_alu_none
+      // arithmetic part
+      assign fp32_arith_valid      =  1'b0;
+      assign wb_fp32_arith_res     = 32'd0;
+      assign wb_fp32_arith_rdy     =  1'b0;
+      assign wb_fp32_arith_fpcsr_o = {`OR1K_FPCSR_WIDTH{1'b0}};
+      // comparison part
+      assign wb_fp32_flag_set_o    =  1'b0;
+      assign wb_fp32_flag_clear_o  =  1'b0;
+      assign wb_fp32_cmp_fpcsr_o   = {`OR1K_FPCSR_WIDTH{1'b0}};
+    end // fpu_ena/fpu_none
+  endgenerate // FPU related
+
+
+
+  //-----------------//
+  // Address for LSU //
+  //-----------------//
+  assign exec_lsu_adr_o = adder_result; // lsu address (not latched)
+
 
 
   //-------------//
   // Stall logic //
   //-------------//
+  assign exec_valid_o =
+    exec_insn_1clk_i | div_valid | mul_valid | fp32_arith_valid |
+    lsu_valid_i | lsu_excepts_i | msync_done_i;
 
-  // ALU wait result
-  wire alu_stall =
-    (op_div_i & (~div_valid)) |
-    (op_mul_i & (~mul_valid)) |
-    (fpu_op_is_arith & (~fpu_arith_valid)) |
-    (fpu_op_is_cmp & (~fpu_cmp_valid)) |
-    ((op_lsu_load_i | op_lsu_store_i) & (~lsu_valid_i) & (~lsu_excepts_i)) |
-    (op_msync_i & (~msync_done_i)) |
-    (op_mfspr_i & (~ctrl_mfspr_ack_i)) |
-    (op_mtspr_i & (~ctrl_mtspr_ack_i));
 
-  // Execute stage can be stalled from ctrl stage and by ALU
-  assign exec_valid_o = ~alu_stall;
+
+  //-----------------------------//
+  // WB multiplexors and latches //
+  //-----------------------------//
+  // combined output
+  assign wb_result_o = ctrl_mfspr_rdy_i  ? mfspr_dat_i :
+                       wb_lsu_rdy_i      ? wb_lsu_result_i :
+                       wb_alu_1clk_rdy   ? wb_alu_1clk_result :
+                       wb_mul_rdy        ? wb_mul_result :
+                       wb_div_rdy        ? wb_div_result :
+                       wb_fp32_arith_rdy ? wb_fp32_arith_res :
+                                           {EXEDW{1'b0}};
+
+  // Overflow flag generation
+  // latched integer comparison result for WB
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+      wb_overflow_set_o   <= 1'b0;
+      wb_overflow_clear_o <= 1'b0;
+    end
+    else if (pipeline_flush_i) begin
+      wb_overflow_set_o   <= 1'b0;
+      wb_overflow_clear_o <= 1'b0;
+    end
+    else if (padv_wb_i) begin
+      wb_overflow_set_o   <= (op_add_i & adder_s_ovf) |
+                             (div_valid & div_signed & div_by_zero);
+      wb_overflow_clear_o <= (op_add_i & (~adder_s_ovf)) |
+                             (div_valid & div_signed & (~div_by_zero));
+    end // wb advance
+  end // @clock
+
+  // Carry flag generation
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+      wb_carry_set_o   <= 1'b0;
+      wb_carry_clear_o <= 1'b0;
+    end
+    else if (pipeline_flush_i) begin
+      wb_carry_set_o   <= 1'b0;
+      wb_carry_clear_o <= 1'b0;
+    end
+    else if (padv_wb_i) begin
+      wb_carry_set_o   <= (op_add_i & adder_u_ovf) |
+                          (div_valid & div_unsigned & div_by_zero);
+      wb_carry_clear_o <= (op_add_i & (~adder_u_ovf)) |
+                          (div_valid & div_unsigned & (~div_by_zero));
+    end // wb advance
+  end // @clock
+
+
+  // write back request
+  wire pipe_excepts = exec_excepts_en_i &
+                      (exec_except_ibus_err_i  | exec_except_ipagefault_i |
+                       exec_except_itlb_miss_i | exec_except_ibus_align_i |
+                       exec_except_illegal_i   | exec_except_syscall_i    |
+                       exec_except_trap_i      | lsu_excepts_i);
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+      wb_rf_wb_o      <= 1'b0;
+      wb_delay_slot_o <= 1'b0;
+    end
+    else if (pipeline_flush_i) begin
+      wb_rf_wb_o      <= 1'b0;
+      wb_delay_slot_o <= 1'b0;
+    end
+    else if (padv_wb_i) begin
+      wb_rf_wb_o      <= exec_rf_wb_i & (~pipe_excepts);
+      wb_delay_slot_o <= exec_delay_slot_i;
+    end
+  end // @clock
+
+  // address of destination register & PC
+  always @(posedge clk) begin
+    if (padv_wb_i & 
+        (~pipeline_flush_i) & (~exec_bubble_i)) begin
+      wb_rfd_adr_o <= exec_rfd_adr_i;
+      pc_wb_o      <= pc_exec_i;
+    end 
+  end // @clock
+
+
+  // EXCEPTIONS & RFE
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+      wb_except_ibus_err_o   <= 1'b0;
+      wb_except_ipagefault_o <= 1'b0;
+      wb_except_itlb_miss_o  <= 1'b0;
+      wb_except_ibus_align_o <= 1'b0;
+      wb_except_illegal_o    <= 1'b0;
+      wb_except_syscall_o    <= 1'b0;
+      wb_except_trap_o       <= 1'b0;
+      wb_except_dbus_o       <= 1'b0;
+      wb_except_dpagefault_o <= 1'b0;
+      wb_except_dtlb_miss_o  <= 1'b0;
+      wb_except_align_o      <= 1'b0;
+      wb_excepts_en_o        <= 1'b0;
+      // RFE
+      wb_op_rfe_o            <= 1'b0;
+    end
+    else if (pipeline_flush_i) begin
+      wb_except_ibus_err_o   <= 1'b0;
+      wb_except_ipagefault_o <= 1'b0;
+      wb_except_itlb_miss_o  <= 1'b0;
+      wb_except_ibus_align_o <= 1'b0;
+      wb_except_illegal_o    <= 1'b0;
+      wb_except_syscall_o    <= 1'b0;
+      wb_except_trap_o       <= 1'b0;
+      wb_except_dbus_o       <= 1'b0;
+      wb_except_dpagefault_o <= 1'b0;
+      wb_except_dtlb_miss_o  <= 1'b0;
+      wb_except_align_o      <= 1'b0;
+      wb_excepts_en_o        <= 1'b0;
+      // RFE
+      wb_op_rfe_o            <= 1'b0;
+    end
+    else if (padv_wb_i) begin
+      wb_except_ibus_err_o   <= exec_except_ibus_err_i;
+      wb_except_ipagefault_o <= exec_except_ipagefault_i;
+      wb_except_itlb_miss_o  <= exec_except_itlb_miss_i;
+      wb_except_ibus_align_o <= exec_except_ibus_align_i;
+      wb_except_illegal_o    <= exec_except_illegal_i;
+      wb_except_syscall_o    <= exec_except_syscall_i;
+      wb_except_trap_o       <= exec_except_trap_i;
+      wb_except_dbus_o       <= lsu_except_dbus_err_i;
+      wb_except_dpagefault_o <= lsu_except_dpagefault_i;
+      wb_except_dtlb_miss_o  <= lsu_except_dtlb_miss_i;
+      wb_except_align_o      <= lsu_except_dbus_align_i;
+      wb_excepts_en_o        <= exec_excepts_en_i;
+      // RFE
+      wb_op_rfe_o            <= exec_op_rfe_i;
+    end
+  end // @clock
 
 endmodule // mor1kx_execute_marocchino

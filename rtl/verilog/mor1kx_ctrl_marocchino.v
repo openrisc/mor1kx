@@ -29,7 +29,6 @@ module mor1kx_ctrl_marocchino
 
   parameter FEATURE_SYSCALL = "ENABLED",
   parameter FEATURE_TRAP = "ENABLED",
-  parameter FEATURE_RANGE = "ENABLED",
 
   parameter OPTION_DCACHE_BLOCK_WIDTH = 5,
   parameter OPTION_DCACHE_SET_WIDTH = 9,
@@ -59,8 +58,6 @@ module mor1kx_ctrl_marocchino
 
   parameter FEATURE_FASTCONTEXTS = "NONE",
   parameter OPTION_RF_NUM_SHADOW_GPR = 0,
-  parameter FEATURE_OVERFLOW = "NONE",
-  parameter FEATURE_CARRY_FLAG = "ENABLED",
 
   parameter SPR_SR_WIDTH = 16,
   parameter SPR_SR_RESET_VALUE = 16'h8001
@@ -69,14 +66,22 @@ module mor1kx_ctrl_marocchino
   input                             clk,
   input                             rst,
 
+  // MF(T)SPR coomand processing
+  input  [OPTION_OPERAND_WIDTH-1:0] exec_rfa_i, // part of addr for MT(F)SPR
+  input  [OPTION_OPERAND_WIDTH-1:0] exec_immediate_i, // part of addr for MT(F)SPR
+  input  [OPTION_OPERAND_WIDTH-1:0] exec_rfb_i, // data for MTSPR
+  input                             exec_op_mfspr_i,
+  input                             exec_op_mtspr_i,
+  output reg                        ctrl_mfspr_rdy_o, // for WB-MUX
+  output [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o,
 
   // LSU address, needed for effective address
   input [OPTION_OPERAND_WIDTH-1:0]  lsu_adr_i,
-  // Operand B from RF might be jump address, might be value for SPR
-  input [OPTION_OPERAND_WIDTH-1:0]  exec_rfb_i,
 
-  input                             wb_flag_set_i,
-  input                             wb_flag_clear_i,
+  input                             wb_int_flag_set_i,
+  input                             wb_int_flag_clear_i,
+  input                             wb_fp32_flag_set_i,
+  input                             wb_fp32_flag_clear_i,
   input                             wb_atomic_flag_set_i,
   input                             wb_atomic_flag_clear_i,
   input                             wb_carry_set_i,
@@ -86,9 +91,6 @@ module mor1kx_ctrl_marocchino
 
   input [OPTION_OPERAND_WIDTH-1:0]  pc_wb_i,
 
-  input [OPTION_OPERAND_WIDTH-1:0]  alu_nl_result_i,
-  input                             exec_op_mfspr_i,
-  input                             exec_op_mtspr_i,
   input                             wb_op_rfe_i,
 
   // Indicate if branch will be taken based on instruction currently in
@@ -138,21 +140,14 @@ module mor1kx_ctrl_marocchino
   input [OPTION_OPERAND_WIDTH-1:0]  store_buffer_epcr_i,
   input                             store_buffer_err_i,
 
-  // SPR data out
-  output [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_o,
-
-  // WE to RF for l.mfspr
-  output                            ctrl_mfspr_ack_o,
-  output                            ctrl_mtspr_ack_o,
-
   // Flag out to branch control, combinatorial
   output                            ctrl_flag_o,
   output                            ctrl_carry_o,
 
   // FPU Status flags to and from ALU
-  output [`OR1K_FPCSR_RM_SIZE-1:0]  ctrl_fpu_round_mode_o,
-  input  [`OR1K_FPCSR_WIDTH-1:0]    wb_fpcsr_i,
-  input                             wb_fpcsr_set_i,
+  output  [`OR1K_FPCSR_RM_SIZE-1:0] ctrl_fpu_round_mode_o,
+  input     [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_arith_fpcsr_i,
+  input     [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_cmp_fpcsr_i,
 
   // Branch indicator from control unit (l.rfe/exceptions)
   output                            ctrl_branch_exception_o,
@@ -269,6 +264,7 @@ module mor1kx_ctrl_marocchino
   reg                               spr_we_en; // 1-clock write ensable strobe for local regs
   wire                              spr_we;
   wire                              spr_ack;
+  wire                              mXspr_ack; // MF(T)SPR done, push pipe
   wire   [OPTION_OPERAND_WIDTH-1:0] spr_write_dat;
   reg        [SPR_ACCESS_WIDTH-1:0] spr_access;
   wire       [SPR_ACCESS_WIDTH-1:0] spr_access_ack;
@@ -293,21 +289,19 @@ module mor1kx_ctrl_marocchino
   wire [31:0]                       spr_isr [0:7];
 
 
-
   // Flag output
-  wire   ctrl_flag_clear = wb_flag_clear_i | wb_atomic_flag_clear_i;
-  wire   ctrl_flag_set   = wb_flag_set_i   | wb_atomic_flag_set_i;
+  wire   ctrl_flag_clear = wb_int_flag_clear_i | wb_fp32_flag_clear_i | wb_atomic_flag_clear_i;
+  wire   ctrl_flag_set   = wb_int_flag_set_i | wb_fp32_flag_set_i | wb_atomic_flag_set_i;
 
   assign ctrl_flag_o     = (~ctrl_flag_clear) &
                            (ctrl_flag_set | spr_sr[`OR1K_SPR_SR_F]);
 
   // Carry output
-  assign ctrl_carry_o = (FEATURE_CARRY_FLAG != "NONE") &
-                        (~wb_carry_clear_i) &
+  assign ctrl_carry_o = (~wb_carry_clear_i) &
                         (wb_carry_set_i | spr_sr[`OR1K_SPR_SR_CY]);
 
   // Overflow
-  wire ctrl_overflow = (FEATURE_RANGE != "NONE") & spr_sr[`OR1K_SPR_SR_OVE] &
+  wire ctrl_overflow = spr_sr[`OR1K_SPR_SR_OVE] &
                        (~wb_overflow_clear_i) &
                        (wb_overflow_set_i | spr_sr[`OR1K_SPR_SR_OV]);
 
@@ -401,16 +395,20 @@ module mor1kx_ctrl_marocchino
   // Pipeline control logic //
   //------------------------//
 
+  wire exe_ctrl_valid = (exec_valid_i | mXspr_ack);
+
   assign padv_fetch_o =
     // MAROCCHINO_TODO: ~du_cpu_stall & ~stepping &  // from DU
-    exec_valid_i & (~dcod_bubble_i);
+    exe_ctrl_valid & (~dcod_bubble_i);
 
   assign padv_decode_o =
     // MAROCCHINO_TODO: ~du_cpu_stall & (~stepping | (stepping & pstep[1])) &  // from DU
-    exec_valid_i;
+    exe_ctrl_valid;
 
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
+      exec_new_input_o <= 1'b0;
+    else if (pipeline_flush_o)
       exec_new_input_o <= 1'b0;
     else
       exec_new_input_o <= padv_decode_o;
@@ -440,15 +438,14 @@ if (FEATURE_FPU != "NONE") begin : fpu_csr_gen
   // (2) Only new arrived flags make sense to detect
   //     FPU exceptions.
  `ifdef OR1K_FPCSR_MASK_FLAGS
-  wire [`OR1K_FPCSR_ALLF_SIZE-1:0] fpu_allf =
-    wb_fpcsr_i[`OR1K_FPCSR_ALLF] & spr_fpcsr_mf;
+  wire [`OR1K_FPCSR_ALLF_SIZE-1:0] fpu_allf = spr_fpcsr_mf &
+    (wb_fp32_arith_fpcsr_i[`OR1K_FPCSR_ALLF] | wb_fp32_cmp_fpcsr_i[`OR1K_FPCSR_ALLF]);
  `else
-  wire [`OR1K_FPCSR_ALLF_SIZE-1:0] fpu_allf = wb_fpcsr_i[`OR1K_FPCSR_ALLF];
+  wire [`OR1K_FPCSR_ALLF_SIZE-1:0] fpu_allf =
+    (wb_fp32_arith_fpcsr_i[`OR1K_FPCSR_ALLF] | wb_fp32_cmp_fpcsr_i[`OR1K_FPCSR_ALLF]);
  `endif
 
-  assign except_fpu = wb_fpcsr_set_i &
-                      spr_fpcsr[`OR1K_FPCSR_FPEE] &
-                      (|fpu_allf);
+  assign except_fpu = spr_fpcsr[`OR1K_FPCSR_FPEE] & (|fpu_allf);
 
   // FPU Control & status register
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -470,11 +467,6 @@ if (FEATURE_FPU != "NONE") begin : fpu_csr_gen
      `ifdef OR1K_FPCSR_MASK_FLAGS
       spr_fpcsr_mf <= spr_write_dat[`OR1K_FPCSR_MASK_ALL];
      `endif
-    end
-    else if (wb_new_result_o & wb_fpcsr_set_i) begin
-      spr_fpcsr[`OR1K_FPCSR_ALLF] <= fpu_allf;
-      spr_fpcsr[`OR1K_FPCSR_RM]   <= spr_fpcsr[`OR1K_FPCSR_RM];
-      spr_fpcsr[`OR1K_FPCSR_FPEE] <= spr_fpcsr[`OR1K_FPCSR_FPEE];
     end
   end // FPCSR reg's always(@posedge clk)
 end
@@ -508,8 +500,8 @@ endgenerate // FPU related: FPCSR and exceptions
       spr_sr[`OR1K_SPR_SR_IEE] <= 1'b0; // block interrupt from PIC
       spr_sr[`OR1K_SPR_SR_DME] <= 1'b0; // D-MMU is off
       spr_sr[`OR1K_SPR_SR_IME] <= 1'b0; // I-MMU is off
-      spr_sr[`OR1K_SPR_SR_OVE] <= 1'b0; // enable overflow excep.
-      // depending on feature configuration
+      spr_sr[`OR1K_SPR_SR_OVE] <= 1'b0; // block overflow excep.
+      spr_sr[`OR1K_SPR_SR_OV ] <= ctrl_overflow; // but save overflow flag
       spr_sr[`OR1K_SPR_SR_DSX] <= wb_delay_slot_i;
     end
     else if ((spr_we & spr_access[`OR1K_SPR_SYS_BASE] &
@@ -525,9 +517,9 @@ endgenerate // FPU related: FPCSR and exceptions
       spr_sr[`OR1K_SPR_SR_DME] <= spr_write_dat[`OR1K_SPR_SR_DME];
       spr_sr[`OR1K_SPR_SR_IME] <= spr_write_dat[`OR1K_SPR_SR_IME];
       spr_sr[`OR1K_SPR_SR_CE ] <= spr_write_dat[`OR1K_SPR_SR_CE ] & (FEATURE_FASTCONTEXTS != "NONE");
-      spr_sr[`OR1K_SPR_SR_CY ] <= spr_write_dat[`OR1K_SPR_SR_CY ] & (FEATURE_CARRY_FLAG != "NONE");
-      spr_sr[`OR1K_SPR_SR_OV ] <= spr_write_dat[`OR1K_SPR_SR_OV ] & (FEATURE_OVERFLOW != "NONE");
-      spr_sr[`OR1K_SPR_SR_OVE] <= spr_write_dat[`OR1K_SPR_SR_OVE] & (FEATURE_OVERFLOW != "NONE");
+      spr_sr[`OR1K_SPR_SR_CY ] <= spr_write_dat[`OR1K_SPR_SR_CY ];
+      spr_sr[`OR1K_SPR_SR_OV ] <= spr_write_dat[`OR1K_SPR_SR_OV ];
+      spr_sr[`OR1K_SPR_SR_OVE] <= spr_write_dat[`OR1K_SPR_SR_OVE];
       spr_sr[`OR1K_SPR_SR_DSX] <= spr_write_dat[`OR1K_SPR_SR_DSX];
       spr_sr[`OR1K_SPR_SR_EPH] <= spr_write_dat[`OR1K_SPR_SR_EPH];
     end
@@ -539,7 +531,6 @@ endgenerate // FPU related: FPCSR and exceptions
       else begin
         spr_sr[`OR1K_SPR_SR_F ] <= ctrl_flag_o;
         spr_sr[`OR1K_SPR_SR_CY] <= ctrl_carry_o;
-        spr_sr[`OR1K_SPR_SR_OV] <= ctrl_overflow;
       end
     end
   end // @ clock
@@ -670,7 +661,7 @@ endgenerate // FPU related: FPCSR and exceptions
     .FEATURE_DSX                     ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .FEATURE_FASTCONTEXTS            (FEATURE_FASTCONTEXTS),
     .OPTION_RF_NUM_SHADOW_GPR        (OPTION_RF_NUM_SHADOW_GPR),
-    .FEATURE_OVERFLOW                (FEATURE_OVERFLOW),
+    .FEATURE_OVERFLOW                ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .FEATURE_DATACACHE               ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .OPTION_DCACHE_BLOCK_WIDTH       (OPTION_DCACHE_BLOCK_WIDTH),
     .OPTION_DCACHE_SET_WIDTH         (OPTION_DCACHE_SET_WIDTH),
@@ -691,7 +682,7 @@ endgenerate // FPU related: FPCSR and exceptions
     .FEATURE_FPU                     (FEATURE_FPU), // mor1kx_cfgrs instance: marocchino
     .FEATURE_SYSCALL                 (FEATURE_SYSCALL),
     .FEATURE_TRAP                    (FEATURE_TRAP),
-    .FEATURE_RANGE                   (FEATURE_RANGE),
+    .FEATURE_RANGE                   ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .FEATURE_DELAYSLOT               ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .FEATURE_EVBAR                   ("ENABLED")
   )
@@ -801,33 +792,27 @@ endgenerate
   // MT(F)SPR command
   reg cmd_op_mfspr;
   reg cmd_op_mtspr;
-  // ...
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst) begin
-      cmd_op_mfspr <= 1'b0;
-      cmd_op_mtspr <= 1'b0;
-    end
-    else if (padv_decode_o | pipeline_flush_o | spr_ack) begin
-      cmd_op_mfspr <= 1'b0;
-      cmd_op_mtspr <= 1'b0;
-    end
-    else if (exec_new_input_o) begin
-      cmd_op_mfspr <= exec_op_mfspr_i;
-      cmd_op_mtspr <= exec_op_mtspr_i;
-    end
-  end // @clock
-
-  // Take MT(F)SPR command
-  wire take_op_mXspr = (~pipeline_flush_o) &
-    exec_new_input_o & (exec_op_mfspr_i | exec_op_mtspr_i);
-
   // MT(F)SPR address & data
   reg                     [15:0] cmd_op_mXspr_addr;
   reg [OPTION_OPERAND_WIDTH-1:0] cmd_op_mXspr_data;
   // ...
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (take_op_mXspr) begin
-      cmd_op_mXspr_addr <= alu_nl_result_i[15:0];
+    if (rst) begin
+      cmd_op_mfspr      <=  1'b0;
+      cmd_op_mtspr      <=  1'b0;
+      cmd_op_mXspr_addr <= 16'd0;
+      cmd_op_mXspr_data <= {OPTION_OPERAND_WIDTH{1'b0}};
+    end
+    else if (padv_decode_o | pipeline_flush_o | spr_ack) begin
+      cmd_op_mfspr      <= 1'b0;
+      cmd_op_mtspr      <= 1'b0;
+      cmd_op_mXspr_addr <= cmd_op_mXspr_addr;
+      cmd_op_mXspr_data <= cmd_op_mXspr_data;
+    end
+    else if (exec_op_mfspr_i | exec_op_mtspr_i) begin
+      cmd_op_mfspr      <= exec_op_mfspr_i;
+      cmd_op_mtspr      <= exec_op_mtspr_i;
+      cmd_op_mXspr_addr <= exec_rfa_i[15:0] | exec_immediate_i[15:0];
       cmd_op_mXspr_data <= exec_rfb_i;
     end
   end // @clock
@@ -837,7 +822,7 @@ endgenerate
     if (rst)
       spr_we_en <= 1'b0;
     else
-      spr_we_en <= (~pipeline_flush_o) & exec_new_input_o & exec_op_mtspr_i;
+      spr_we_en <= (~pipeline_flush_o) & exec_op_mtspr_i;
   end // @clock
 
 
@@ -989,28 +974,42 @@ endgenerate
 
   // data provided by either MFSPR or DU acceess
   reg [OPTION_OPERAND_WIDTH-1:0] mfspr_dat_r;
+  // ---
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       mfspr_dat_r <= {OPTION_OPERAND_WIDTH{1'b0}};
     else if (spr_read_access & spr_ack)
       mfspr_dat_r <= mfspr_dat_w;
   end // @clock
+  // MFSPR data output
+  assign mfspr_dat_o = mfspr_dat_r;
 
-  // ready flag for M(T)SPR access
-  reg mXspr_ack;
+  // MF(T)SPR done, push pipe
+  assign mXspr_ack = (cmd_op_mfspr | cmd_op_mtspr) & spr_ack;
+
+  // MF(T)SPR ready flag for WB-MUX
+  // stored ready flag
+  reg mfspr_rdy_stored;
+  // ---
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      mXspr_ack <= 1'b0;
-    else if (padv_decode_o | pipeline_flush_o)
-      mXspr_ack <= 1'b0;
-    else if ((cmd_op_mfspr | cmd_op_mtspr) & spr_ack)
-      mXspr_ack <= 1'b1;
+    if (rst) begin
+      ctrl_mfspr_rdy_o <= 1'b0;
+      mfspr_rdy_stored <= 1'b0;
+    end
+    else if (pipeline_flush_o) begin
+      ctrl_mfspr_rdy_o <= ctrl_mfspr_rdy_o;
+      mfspr_rdy_stored <= 1'b0;
+    end
+    else if (padv_wb_o) begin
+      ctrl_mfspr_rdy_o <= (mXspr_ack | mfspr_rdy_stored);
+      mfspr_rdy_stored <= 1'b0;
+    end
+    else if (~mfspr_rdy_stored) begin
+      ctrl_mfspr_rdy_o <= ctrl_mfspr_rdy_o;
+      mfspr_rdy_stored <= mXspr_ack;
+    end
   end // @clock
 
-  // M(T)SPR outputs
-  assign mfspr_dat_o      = mfspr_dat_r;
-  assign ctrl_mfspr_ack_o = mXspr_ack;
-  assign ctrl_mtspr_ack_o = mXspr_ack;
 
 // Controls to generate ACKs from units that are external to this module
 

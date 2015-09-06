@@ -29,14 +29,21 @@ of logic for generation padv-* and exception processing.
 flag to control pipeline.
 
 
-Primary TODOs:
-  - pipelined LSU implementation
-  - pipelined integer multiplier implementation
-  - revision and adaptation (if need) FPU pipelines
-  - design reorder buffer
-  - integration all module listed above
-  - update debug unit support in CTRL-module
+ 6 September 2015
+  Pipelined multiplier. Some adaptation for FPU pipelines. Move WB
+latches into mor1kx_execute_marocchino to prepare implementation of
+control for paralleled execution units. So, mor1kx_wbmux_marocchino
+has been removed from design.
 
+
+Primary TODOs:
+  - design initial variant of control for paralleled units
+  - pipelined LSU implementation
+  - design reorder buffer
+  - update debug unit support in CTRL-module
 
 Secondary TODOs:
   - Various improvements for performance of new FETCH
+
+Permanently:
+  - Adaptation FPU pipelines

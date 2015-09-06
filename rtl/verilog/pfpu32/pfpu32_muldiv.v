@@ -83,10 +83,6 @@ module pfpu32_muldiv
 );
 
   /*
-    !!! If an input is denormalized the additional 1-clk stage
-    !!!  (for normalization) is executed.
-    !!! But inputs must not change during the stage.
-
      Any stage's output is registered.
      Definitions:
        s??o_name - "S"tage number "??", "O"utput
@@ -247,6 +243,8 @@ module pfpu32_muldiv
   // iteration characteristic points:
   //   quotient is computed
   wire itr_rndQ = itr_state[10];
+  //   iteration in progress
+  wire itr_Proc = |itr_state;
   // iteration control state machine
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
@@ -277,7 +275,7 @@ module pfpu32_muldiv
   reg        s1o_dbz;
   //   registering
   always @(posedge clk) begin
-    if(adv_i) begin
+    if(adv_i & ~itr_Proc) begin
         // input related
       s1o_inv         <= s0o_inv;
       s1o_inf_i       <= s0o_inf_i;

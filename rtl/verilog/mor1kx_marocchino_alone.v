@@ -27,64 +27,59 @@ module mor1kx_marocchino_alone
   parameter OPTION_OPERAND_WIDTH      = 32,
 
   // data cache configuration
-  parameter OPTION_DCACHE_BLOCK_WIDTH = 5,
-  parameter OPTION_DCACHE_SET_WIDTH   = 9,
-  parameter OPTION_DCACHE_WAYS        = 2,
+  parameter OPTION_DCACHE_BLOCK_WIDTH =  5,
+  parameter OPTION_DCACHE_SET_WIDTH   =  9,
+  parameter OPTION_DCACHE_WAYS        =  2,
   parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
   parameter OPTION_DCACHE_SNOOP       = "NONE",
 
   // data mmu
   parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
-  parameter OPTION_DMMU_SET_WIDTH      = 6,
-  parameter OPTION_DMMU_WAYS           = 1,
+  parameter OPTION_DMMU_SET_WIDTH      =  6,
+  parameter OPTION_DMMU_WAYS           =  1,
 
   // istruction cache
-  parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
-  parameter OPTION_ICACHE_SET_WIDTH   = 9,
-  parameter OPTION_ICACHE_WAYS        = 2,
-  parameter OPTION_ICACHE_LIMIT_WIDTH = 32,
+  parameter OPTION_ICACHE_BLOCK_WIDTH  =  5,
+  parameter OPTION_ICACHE_SET_WIDTH    =  9,
+  parameter OPTION_ICACHE_WAYS         =  2,
+  parameter OPTION_ICACHE_LIMIT_WIDTH  = 32,
 
   // instruction mmu
   parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE",
-  parameter OPTION_IMMU_SET_WIDTH      = 6,
-  parameter OPTION_IMMU_WAYS           = 1,
+  parameter OPTION_IMMU_SET_WIDTH      =  6,
+  parameter OPTION_IMMU_WAYS           =  1,
 
-  parameter FEATURE_TIMER             = "ENABLED",
-  parameter FEATURE_DEBUGUNIT         = "NONE",
-  parameter FEATURE_PERFCOUNTERS      = "NONE",
+  parameter FEATURE_TIMER              = "ENABLED",
+  parameter FEATURE_DEBUGUNIT          = "NONE",
+  parameter FEATURE_PERFCOUNTERS       = "NONE",
 
-  parameter FEATURE_SYSCALL           = "ENABLED",
-  parameter FEATURE_TRAP              = "ENABLED",
-  parameter FEATURE_RANGE             = "ENABLED",
+  parameter FEATURE_SYSCALL            = "ENABLED",
+  parameter FEATURE_TRAP               = "ENABLED",
 
-  parameter FEATURE_PIC               = "ENABLED",
-  parameter OPTION_PIC_TRIGGER        = "LEVEL",
-  parameter OPTION_PIC_NMI_WIDTH      = 0,
+  parameter FEATURE_PIC                = "ENABLED",
+  parameter OPTION_PIC_TRIGGER         = "LEVEL",
+  parameter OPTION_PIC_NMI_WIDTH       =  0,
 
-  parameter FEATURE_OVERFLOW          = "ENABLED",
-  parameter FEATURE_CARRY_FLAG        = "ENABLED",
+  parameter FEATURE_FASTCONTEXTS       = "NONE",
+  parameter OPTION_RF_CLEAR_ON_INIT    =  0,
+  parameter OPTION_RF_NUM_SHADOW_GPR   =  0,
+  parameter OPTION_RF_ADDR_WIDTH       =  5,
+  parameter OPTION_RF_WORDS            = 32,
 
-  parameter FEATURE_FASTCONTEXTS      = "NONE",
-  parameter OPTION_RF_CLEAR_ON_INIT   = 0,
-  parameter OPTION_RF_NUM_SHADOW_GPR  = 0,
-  parameter OPTION_RF_ADDR_WIDTH      = 5,
-  parameter OPTION_RF_WORDS           = 32,
+  parameter OPTION_RESET_PC            = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
+                                          `OR1K_RESET_VECTOR,8'd0},
 
-  parameter OPTION_RESET_PC           = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
-                                         `OR1K_RESET_VECTOR,8'd0},
+  parameter FEATURE_PSYNC              = "NONE",
+  parameter FEATURE_CSYNC              = "NONE",
 
-  parameter FEATURE_EXT   = "NONE",
-  parameter FEATURE_PSYNC = "NONE",
-  parameter FEATURE_CSYNC = "NONE",
+  parameter FEATURE_FPU                = "NONE", // ENABLED|NONE: actual for cappuccino pipeline only
 
-  parameter FEATURE_FPU     = "NONE", // ENABLED|NONE: actual for cappuccino pipeline only
-
-  parameter FEATURE_STORE_BUFFER      = "ENABLED",
+  parameter FEATURE_STORE_BUFFER       = "ENABLED",
   parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
 
-  parameter FEATURE_MULTICORE = "NONE",
+  parameter FEATURE_MULTICORE          = "NONE",
 
-  parameter FEATURE_TRACEPORT_EXEC = "NONE",
+  parameter FEATURE_TRACEPORT_EXEC     = "NONE",
 
 
   parameter IBUS_WB_TYPE              = "B3_READ_BURSTING",
@@ -288,17 +283,13 @@ module mor1kx_marocchino_alone
     .FEATURE_TRACEPORT_EXEC(FEATURE_TRACEPORT_EXEC),
     .FEATURE_SYSCALL(FEATURE_SYSCALL),
     .FEATURE_TRAP(FEATURE_TRAP),
-    .FEATURE_RANGE(FEATURE_RANGE),
     .FEATURE_FASTCONTEXTS(FEATURE_FASTCONTEXTS),
     .OPTION_RF_CLEAR_ON_INIT(OPTION_RF_CLEAR_ON_INIT),
     .OPTION_RF_NUM_SHADOW_GPR(OPTION_RF_NUM_SHADOW_GPR),
-    .FEATURE_OVERFLOW(FEATURE_OVERFLOW),
-    .FEATURE_CARRY_FLAG(FEATURE_CARRY_FLAG),
     .OPTION_RF_ADDR_WIDTH(OPTION_RF_ADDR_WIDTH),
     //.OPTION_RF_WORDS(OPTION_RF_WORDS), // MAROCCHINO_TODO
     .OPTION_RESET_PC(OPTION_RESET_PC),
      // arithmetic modules
-    .FEATURE_EXT(FEATURE_EXT), // MAROCCHINO_TODO
     .FEATURE_PSYNC(FEATURE_PSYNC),
     .FEATURE_CSYNC(FEATURE_CSYNC),
     .FEATURE_FPU(FEATURE_FPU),
