@@ -51,6 +51,9 @@ Currently, the following options are made NOT CONFIGURABLE:
  FEATURE_MSYNC            == "ENABLED"
  FEATURE_ATOMIC           == "ENABLED"
 
+ FEATURE_SYSCALL          == "ENABLED"
+ FEATURE_TRAP             == "ENABLED"
+
  FEATURE_INSTRUCTIONCACHE == "ENABLED"
  FEATURE_IMMU             == "ENABLED"
 

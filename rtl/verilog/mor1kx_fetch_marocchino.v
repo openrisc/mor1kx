@@ -844,7 +844,7 @@ module mor1kx_fetch_marocchino
 
   // flag to rise spr-bus-ic(immu)-cs-r
   assign assert_spr_bus_req = ((spr_bus_ic_stb & ~spr_bus_ic_cs_r & ~spr_bus_ack_ic_r) |
-                               (spr_bus_immu_stb & ~spr_bus_immu_cs_r)) & ibus_fsm_free;
+                               (spr_bus_immu_stb & ~spr_bus_immu_cs_r)) & ~imem_req_r;
 
   // IMMU SPR access processing
   // provide STB-signal after IBUS transaction completion

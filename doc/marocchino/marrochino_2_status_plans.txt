@@ -36,14 +36,16 @@ control for paralleled execution units. So, mor1kx_wbmux_marocchino
 has been removed from design.
 
 
+ 6 November 2015
+  First variant with out-of-order completion and 8-taps
+Order Control Buffer (OCB).
+
+
 Primary TODOs:
-  - design initial variant of control for paralleled units
   - pipelined LSU implementation
-  - design reorder buffer
   - update debug unit support in CTRL-module
 
 Secondary TODOs:
   - Various improvements for performance of new FETCH
-
-Permanently:
-  - Adaptation FPU pipelines
+  - Improvement for control of various pipelines
+    (at least for integer multiplier and FPU)
