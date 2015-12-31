@@ -41,6 +41,16 @@ has been removed from design.
 Order Control Buffer (OCB).
 
 
+ 31 December 2015
+ The major achievement is that all modules, including LSU, DCACHE,
+Store Buffer, etc. are ready for more pipelinization. All RAM blocks are
+replaced with ones containing "enable" signal. And Read/Write conflict
+resolving is moved out from RAM modules. Both of these modifications are
+essential steps toward design of pipeline control logic for each
+pipelined module.
+
+
+
 Primary TODOs:
   - pipelined LSU implementation
   - update debug unit support in CTRL-module

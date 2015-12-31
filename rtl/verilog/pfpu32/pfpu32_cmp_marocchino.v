@@ -46,49 +46,70 @@
 module pfpu32_fcmp_marocchino
 (
   // clocks, resets and other controls
-  input        clk,
-  input        rst,
-  input        flush_i,  // flush pipe
-  input        padv_wb_i,// advance output latches
+  input                               clk,
+  input                               rst,
+  input                               flush_i,  // flush pipe
+  input                               padv_wb_i,// advance output latches
+  input                               grant_wb_to_1clk_i,
   // command
-  input                         fpu_op_is_comp_i,
-  input [`OR1K_FPUOP_WIDTH-1:0] cmp_type_i,
-  // operand 'a' related inputs
-  input        signa_i,
-  input  [9:0] exp10a_i,
-  input [23:0] fract24a_i,
-  input        snana_i,
-  input        qnana_i,
-  input        infa_i,
-  input        zeroa_i,
-  // operand 'b' related inputs
-  input        signb_i,
-  input  [9:0] exp10b_i,
-  input [23:0] fract24b_i,
-  input        snanb_i,
-  input        qnanb_i,
-  input        infb_i,
-  input        zerob_i,
-  // support addsub
-  output addsub_agtb_o,
-  output addsub_aeqb_o,
-  // outputs
-  //  WB latches
-  output reg                         wb_fp32_flag_set_o,   // comparison result
-  output reg                         wb_fp32_flag_clear_o, // comparison result
-  output reg [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_cmp_fpcsr_o   // comparison exceptions
+  input                               fpu_op_is_comp_i,
+  input       [`OR1K_FPUOP_WIDTH-1:0] cmp_type_i,
+  // Operands
+  input                        [31:0] rfa_i,
+  input                        [31:0] rfb_i,
+  // WB latches
+  output reg                          wb_fp32_flag_set_o,   // comparison result
+  output reg                          wb_fp32_flag_clear_o, // comparison result
+  output reg  [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_cmp_fpcsr_o   // comparison exceptions
 );
 
 ////////////////////////////////////////////////////////////////////////
-//
+// Input operand analysis
+
+// analysis of input values
+//   split input a
+wire        in_signa  = rfa_i[31];
+wire  [7:0] in_expa   = rfa_i[30:23];
+wire [22:0] in_fracta = rfa_i[22:0];
+//   detect infinity a
+wire in_expa_ff = &in_expa;
+wire in_infa    = in_expa_ff & (~(|in_fracta));
+//   signaling NaN: exponent is 8hff, [22] is zero,
+//                  rest of fract is non-zero
+//   quiet NaN: exponent is 8hff, [22] is 1
+wire in_snan_a = in_expa_ff & (~in_fracta[22]) & (|in_fracta[21:0]);
+wire in_qnan_a = in_expa_ff &   in_fracta[22];
+//   denormalized/zero of a
+wire in_opa_0  = ~(|rfa_i[30:0]);
+wire in_opa_dn = (~(|in_expa)) & (|in_fracta);
+
+//   split input b
+wire        in_signb  = rfb_i[31];
+wire  [7:0] in_expb   = rfb_i[30:23];
+wire [22:0] in_fractb = rfb_i[22:0];
+//   detect infinity b
+wire in_expb_ff = &in_expb;
+wire in_infb    = in_expb_ff & (~(|in_fractb));
+//   detect NaNs in b
+wire in_snan_b = in_expb_ff & (~in_fractb[22]) & (|in_fractb[21:0]);
+wire in_qnan_b = in_expb_ff &   in_fractb[22];
+//   denormalized/zero of a
+wire in_opb_0  = ~(|rfb_i[30:0]);
+wire in_opb_dn = (~(|in_expb)) & (|in_fractb);
+
+// restored exponents
+wire [9:0] in_exp10a = {2'd0,in_expa[7:1],(in_expa[0] | in_opa_dn)};
+wire [9:0] in_exp10b = {2'd0,in_expb[7:1],(in_expb[0] | in_opb_dn)};
+// restored fractionals
+wire [23:0] in_fract24a = {((~in_opa_dn) & (~in_opa_0)),in_fracta};
+wire [23:0] in_fract24b = {((~in_opb_dn) & (~in_opb_0)),in_fractb};
+
+
+////////////////////////////////////////////////////////////////////////
 // Exception Logic
-//
-
-wire qnan = qnana_i | qnanb_i;
-wire snan = snana_i | snanb_i;
+wire qnan = in_qnan_a | in_qnan_b;
+wire snan = in_snan_a | in_snan_b;
 wire anan = qnan | snan;
-
-
 // Comparison invalid when sNaN in on an equal comparison,
 // or any NaN for any other comparison.
 wire inv_cmp = (snan & (cmp_type_i == `OR1K_FPCOP_SFEQ)) |
@@ -96,26 +117,24 @@ wire inv_cmp = (snan & (cmp_type_i == `OR1K_FPCOP_SFEQ)) |
 
 
 ////////////////////////////////////////////////////////////////////////
-//
 // Comparison Logic
-//
-wire exp_gt = exp10a_i  > exp10b_i;
-wire exp_eq = exp10a_i == exp10b_i;
-wire exp_lt = (~exp_gt) & (~exp_eq); // exp10a_i  < exp10b_i;
+wire exp_gt = in_exp10a  > in_exp10b;
+wire exp_eq = in_exp10a == in_exp10b;
+wire exp_lt = (~exp_gt) & (~exp_eq); // in_exp10a  < in_exp10b;
 
-wire fract_gt = fract24a_i  > fract24b_i;
-wire fract_eq = fract24a_i == fract24b_i;
-wire fract_lt = (~fract_gt) & (~fract_eq); // fract24a_i  < fract24b_i;
+wire fract_gt = in_fract24a  > in_fract24b;
+wire fract_eq = in_fract24a == in_fract24b;
+wire fract_lt = (~fract_gt) & (~fract_eq); // in_fract24a  < in_fract24b;
 
-wire all_zero = zeroa_i & zerob_i;
+wire all_zero = in_opa_0 & in_opb_0;
 
 reg altb, blta, aeqb;
 
-always @( qnan or snan or infa_i or infb_i or signa_i or signb_i or
+always @( qnan or snan or in_infa or in_infb or in_signa or in_signb or
           exp_eq or exp_gt or exp_lt or
           fract_eq or fract_gt or fract_lt or all_zero) begin
 
-  casez( {qnan, snan, infa_i, infb_i, signa_i, signb_i,
+  casez( {qnan, snan, in_infa, in_infb, in_signa, in_signb,
           exp_eq, exp_gt, exp_lt,
           fract_eq, fract_gt, fract_lt, all_zero})
     13'b1?_??_??_???_???_?: {blta, altb, aeqb} = 3'b000; // qnan
@@ -158,6 +177,7 @@ always @( qnan or snan or infa_i or infb_i or signa_i or signb_i or
   endcase
 end // @ clock
 
+
 ////////////////////////////////////////////////////////////////////////
 // Comparison cmp_flag generation
 reg cmp_flag;
@@ -175,13 +195,6 @@ end // always@ *
 
 
 ////////////////////////////////////////////////////////////////////////
-// output to support add/sub
-
-assign addsub_agtb_o = exp_gt | (exp_eq & fract_gt);
-assign addsub_aeqb_o = exp_eq & fract_eq;
-
-
-////////////////////////////////////////////////////////////////////////
 // WB latches
 always @(posedge clk `OR_ASYNC_RST) begin
   if (rst) begin
@@ -195,13 +208,13 @@ always @(posedge clk `OR_ASYNC_RST) begin
     wb_fp32_cmp_fpcsr_o  <= {`OR1K_FPCSR_WIDTH{1'b0}};
   end
   else if(padv_wb_i) begin
-    if (fpu_op_is_comp_i) begin
+    if (fpu_op_is_comp_i & grant_wb_to_1clk_i) begin
       // comparison results
       wb_fp32_flag_set_o   <= cmp_flag;
       wb_fp32_flag_clear_o <= ~cmp_flag;
       // exeptions
       wb_fp32_cmp_fpcsr_o[`OR1K_FPCSR_IVF] <= inv_cmp;
-      wb_fp32_cmp_fpcsr_o[`OR1K_FPCSR_INF] <= infa_i | infb_i;
+      wb_fp32_cmp_fpcsr_o[`OR1K_FPCSR_INF] <= in_infa | in_infb;
     end
     else begin
       // comparison results

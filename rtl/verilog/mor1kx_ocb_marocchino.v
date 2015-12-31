@@ -111,7 +111,7 @@ module mor1kx_ocb_marocchino
   wire ptr_prev_0 = ptr_prev[0];
 
   // "OCB is empty" flag
-  assign empty_o = ptr_curr_0 & ptr_prev_0;
+  assign empty_o = ptr_curr_0 & ptr_prev_0 & (ocbo00_o == RESET_VALUE);
 
   // "OCB is full" flag
   //  # no more availaible taps, pointer is out of range
@@ -161,7 +161,7 @@ module mor1kx_ocb_marocchino
     else if(pipeline_flush_i)
       ptr_prev <= {{(NUM_TAPS-1){1'b0}},1'b1};
     else if(ptr_curr_inc)
-      ptr_prev <= ptr_curr;
+      ptr_prev <= ptr_curr[NUM_TAPS-1:0];
     else if(ptr_prev_dec)
       ptr_prev <= (ptr_prev >> 1);
   end // posedge clock

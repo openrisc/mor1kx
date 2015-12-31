@@ -1,24 +1,30 @@
-/* ****************************************************************************
-  This Source Code Form is subject to the terms of the
-  Open Hardware Description License, v. 1.0. If a copy
-  of the OHDL was not distributed with this file, You
-  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
-
-  Description: Top level for stand alone mor1kx with MAROCCHINO pipeline.
-               Based on mor1kx.v with removing AVALON bus and
-               use exactly mor1kx_cpu_marocchino excluding instances of other
-               variants of pipeline.
-
-  Copyright (C) 2012 Authors
-
-  Author(s): Julius Baxter <juliusbaxter@gmail.com>
-             Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
-
-  Copyright (C) 2015 Authors
-
-  Author(s): Andrey Bacherov <avbacherov@opencores.org>
-
-***************************************************************************** */
+////////////////////////////////////////////////////////////////////////
+//                                                                    //
+//  mor1kx_marocchino_alone                                           //
+//                                                                    //
+//  Description: Top level for stand alone mor1kx with                //
+//               MAROCCHINO pipeline.                                 //
+//               Based on mor1kx.v with removed AVALON bus and        //
+//               use exactly mor1kx_cpu_marocchino excluding          //
+//               instances of other variants of pipeline.             //
+//                                                                    //
+////////////////////////////////////////////////////////////////////////
+//                                                                    //
+//   Copyright (C) 2012 Julius Baxter                                 //
+//                      juliusbaxter@gmail.com                        //
+//                                                                    //
+//                      Stefan Kristiansson                           //
+//                      stefan.kristiansson@saunalahti.fi             //
+//                                                                    //
+//   Copyright (C) 2015 Andrey Bacherov                               //
+//                      avbacherov@opencores.org                      //
+//                                                                    //
+//      This Source Code Form is subject to the terms of the          //
+//      Open Hardware Description License, v. 1.0. If a copy          //
+//      of the OHDL was not distributed with this file, You           //
+//      can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt       //
+//                                                                    //
+////////////////////////////////////////////////////////////////////////
 
 `include "mor1kx-defines.v"
 
@@ -43,11 +49,13 @@ module mor1kx_marocchino_alone
   parameter OPTION_ICACHE_SET_WIDTH    =  9,
   parameter OPTION_ICACHE_WAYS         =  2,
   parameter OPTION_ICACHE_LIMIT_WIDTH  = 32,
+  parameter OPTION_ICACHE_CLEAR_ON_INIT=  0, // !!! activate for simulation only !!!
 
   // instruction mmu
   parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE",
   parameter OPTION_IMMU_SET_WIDTH      =  6,
   parameter OPTION_IMMU_WAYS           =  1,
+  parameter OPTION_IMMU_CLEAR_ON_INIT  =  0, // !!! activate for simulation only !!!
 
   parameter FEATURE_TIMER              = "ENABLED",
   parameter FEATURE_DEBUGUNIT          = "NONE",
@@ -58,7 +66,7 @@ module mor1kx_marocchino_alone
   parameter OPTION_PIC_NMI_WIDTH       =  0,
 
   parameter FEATURE_FASTCONTEXTS       = "NONE",
-  parameter OPTION_RF_CLEAR_ON_INIT    =  0,
+  parameter OPTION_RF_CLEAR_ON_INIT    =  0, // !!! activate for simulation only !!!
   parameter OPTION_RF_NUM_SHADOW_GPR   =  0,
   parameter OPTION_RF_ADDR_WIDTH       =  5,
   parameter OPTION_RF_WORDS            = 32,
@@ -71,7 +79,6 @@ module mor1kx_marocchino_alone
 
   parameter FEATURE_FPU                = "NONE", // ENABLED|NONE: actual for cappuccino pipeline only
 
-  parameter FEATURE_STORE_BUFFER       = "ENABLED",
   parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
 
   parameter FEATURE_MULTICORE          = "NONE",
@@ -264,10 +271,12 @@ module mor1kx_marocchino_alone
     .OPTION_ICACHE_SET_WIDTH          (OPTION_ICACHE_SET_WIDTH),
     .OPTION_ICACHE_WAYS               (OPTION_ICACHE_WAYS),
     .OPTION_ICACHE_LIMIT_WIDTH        (OPTION_ICACHE_LIMIT_WIDTH),
+    .OPTION_ICACHE_CLEAR_ON_INIT      (OPTION_ICACHE_CLEAR_ON_INIT),
     // instrucion mmu
     .FEATURE_IMMU_HW_TLB_RELOAD       (FEATURE_IMMU_HW_TLB_RELOAD),
     .OPTION_IMMU_SET_WIDTH            (OPTION_IMMU_SET_WIDTH),
     .OPTION_IMMU_WAYS                 (OPTION_IMMU_WAYS),
+    .OPTION_IMMU_CLEAR_ON_INIT        (OPTION_IMMU_CLEAR_ON_INIT),
     // interrupt cintroller
     .FEATURE_PIC                      (FEATURE_PIC),
     .OPTION_PIC_TRIGGER               (OPTION_PIC_TRIGGER),
@@ -288,7 +297,6 @@ module mor1kx_marocchino_alone
     .FEATURE_PSYNC                    (FEATURE_PSYNC),
     .FEATURE_CSYNC                    (FEATURE_CSYNC),
     .FEATURE_FPU                      (FEATURE_FPU),
-    .FEATURE_STORE_BUFFER             (FEATURE_STORE_BUFFER),
     .OPTION_STORE_BUFFER_DEPTH_WIDTH  (OPTION_STORE_BUFFER_DEPTH_WIDTH)
   )
   u_cpu_marocchino

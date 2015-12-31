@@ -136,9 +136,13 @@ if ((FEATURE_DEBUGUNIT!="NONE") | (FEATURE_FASTCONTEXTS!="NONE") |
   assign spr_gpr_re = (spr_bus_addr_i[15:9] == 7'h2) &
                       spr_bus_stb_i & (~spr_bus_we_i);
 
-  reg  spr_gpr_read_ack;
-  always @(posedge clk)
-    spr_gpr_read_ack <= spr_gpr_re;
+  reg spr_gpr_read_ack;
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      spr_gpr_read_ack <= 1'b0;
+    else
+      spr_gpr_read_ack <= spr_gpr_re;
+  end
 
   assign spr_gpr_ack_o = spr_gpr_we | (spr_gpr_re & spr_gpr_read_ack);
 

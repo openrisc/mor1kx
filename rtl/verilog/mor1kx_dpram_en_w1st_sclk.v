@@ -49,14 +49,19 @@ module mor1kx_dpram_en_w1st_sclk
   output reg [DATA_WIDTH-1:0] dout_b
 );
 
-  reg [DATA_WIDTH-1:0] mem[(1<<ADDR_WIDTH)-1:0];
+  reg [DATA_WIDTH-1:0] mem[0:((1<<ADDR_WIDTH)-1)];
 
   generate
-  if(CLEAR_ON_INIT) begin : clear_on_init
+  if (CLEAR_ON_INIT) begin : clear_ram
     integer idx;
-    initial
+    initial begin
+      // clear output registers
+      dout_a = {DATA_WIDTH{1'b0}};
+      dout_b = {DATA_WIDTH{1'b0}};
+      // clear memory array
       for (idx=0; idx < (1<<ADDR_WIDTH); idx=idx+1)
         mem[idx] = {DATA_WIDTH{1'b0}};
+    end
   end
   endgenerate
 

@@ -49,6 +49,8 @@ module pfpu32_rnd_marocchino
   input        flush_i,  // flush pipe
   input        adv_i,    // advance pipe
   input        padv_wb_i,// advance output latches
+  input        do_rf_wb_i,
+  input        grant_wb_to_fp32_arith_i,
   input  [1:0] rmode_i,  // rounding mode
   // input from add/sub
   input        add_rdy_i,       // add/sub is ready
@@ -391,13 +393,12 @@ module pfpu32_rnd_marocchino
       wb_fp32_arith_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
     end
     else if(padv_wb_i) begin
-      // arithmetic ready flag
-      wb_fp32_arith_rdy_o <= s1o_ready;
-      // arithmetic result and exceptions
-      if (s1o_ready) begin
+      if (grant_wb_to_fp32_arith_i) begin
+        // arithmetic ready flag
+        wb_fp32_arith_rdy_o <= 1'b1;
         // arithmetic results
         wb_fp32_arith_res_o <= s2t_opc;
-        // exeptions
+        // arithmetic exeptions
         wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_OVF] <= s2t_ovf;
         wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_UNF] <= s2t_unf;
         wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_SNF] <= s1o_inv | (s1o_snan_i & s1o_f2i);
@@ -408,8 +409,10 @@ module pfpu32_rnd_marocchino
         wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_INF] <= s2t_inf;
         wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_DZF] <= s2t_dbz;
       end
-      else
+      else  if (do_rf_wb_i) begin // another unit is granted with guarantee
+        wb_fp32_arith_rdy_o   <= 1'b1;
         wb_fp32_arith_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
+      end
     end // advance WB latches
   end // posedge clock
 

@@ -1,16 +1,24 @@
-/* ****************************************************************************
-  This Source Code Form is subject to the terms of the
-  Open Hardware Description License, v. 1.0. If a copy
-  of the OHDL was not distributed with this file, You
-  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
-
-  Description: MAROCCHINO pipeline CPU module.
-               Derived from mor1kx_cpu_cappuccino.
-
-  Copyright (C) 2012 Julius Baxter <juliusbaxter@gmail.com>
-  Copyright (C) 2015 Andrey Bacherov <avbacherov@opencores.org>
-
-***************************************************************************** */
+////////////////////////////////////////////////////////////////////////
+//                                                                    //
+//  mor1kx_cpu_marocchino                                             //
+//                                                                    //
+//  Description: MAROCCHINO pipeline CPU module                       //
+//               Derived from mor1kx_cpu_cappuccino                   //
+//                                                                    //
+////////////////////////////////////////////////////////////////////////
+//                                                                    //
+//   Copyright (C) 2012 Julius Baxter                                 //
+//                      juliusbaxter@gmail.com                        //
+//                                                                    //
+//   Copyright (C) 2015 Andrey Bacherov                               //
+//                      avbacherov@opencores.org                      //
+//                                                                    //
+//      This Source Code Form is subject to the terms of the          //
+//      Open Hardware Description License, v. 1.0. If a copy          //
+//      of the OHDL was not distributed with this file, You           //
+//      can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt       //
+//                                                                    //
+////////////////////////////////////////////////////////////////////////
 
 `include "mor1kx-defines.v"
 
@@ -32,10 +40,12 @@ module mor1kx_cpu_marocchino
   parameter OPTION_ICACHE_SET_WIDTH    = 9,
   parameter OPTION_ICACHE_WAYS         = 2,
   parameter OPTION_ICACHE_LIMIT_WIDTH  = 32,
+  parameter OPTION_ICACHE_CLEAR_ON_INIT= 0,
   // instruction mmu
   parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE",
   parameter OPTION_IMMU_SET_WIDTH      = 6,
   parameter OPTION_IMMU_WAYS           = 1,
+  parameter OPTION_IMMU_CLEAR_ON_INIT  = 0,
 
   parameter FEATURE_TIMER        = "ENABLED",
   parameter FEATURE_DEBUGUNIT    = "NONE",
@@ -58,7 +68,6 @@ module mor1kx_cpu_marocchino
 
   parameter FEATURE_FPU    = "NONE", // ENABLED|NONE: pipeline marocchino
 
-  parameter FEATURE_STORE_BUFFER            = "ENABLED",
   parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
 
   parameter FEATURE_MULTICORE      = "NONE",
@@ -103,7 +112,7 @@ module mor1kx_cpu_marocchino
   output                            du_stall_o,
 
   output reg                        traceport_exec_valid_o,
-  output reg [31:0]                 traceport_exec_pc_o,
+  output reg                 [31:0] traceport_exec_pc_o,
   output reg [`OR1K_INSN_WIDTH-1:0] traceport_exec_insn_o,
   output [OPTION_OPERAND_WIDTH-1:0] traceport_exec_wbdata_o,
   output [OPTION_RF_ADDR_WIDTH-1:0] traceport_exec_wbreg_o,
@@ -220,6 +229,8 @@ module mor1kx_cpu_marocchino
   wire                            exec_op_brcond;
   wire                            exec_predicted_flag;
   wire [OPTION_OPERAND_WIDTH-1:0] exec_mispredict_target;
+  //  ## drop mispredict flag by drop ecex-op-brcond
+  wire                            mispredict_taken;
 
 
 
@@ -364,17 +375,19 @@ module mor1kx_cpu_marocchino
 
   mor1kx_fetch_marocchino
   #(
-    .OPTION_OPERAND_WIDTH       (OPTION_OPERAND_WIDTH),
-    .OPTION_RESET_PC            (OPTION_RESET_PC),
+    .OPTION_OPERAND_WIDTH         (OPTION_OPERAND_WIDTH),
+    .OPTION_RESET_PC              (OPTION_RESET_PC),
     // ICACHE configuration
-    .OPTION_ICACHE_BLOCK_WIDTH  (OPTION_ICACHE_BLOCK_WIDTH),
-    .OPTION_ICACHE_SET_WIDTH    (OPTION_ICACHE_SET_WIDTH),
-    .OPTION_ICACHE_WAYS         (OPTION_ICACHE_WAYS),
-    .OPTION_ICACHE_LIMIT_WIDTH  (OPTION_ICACHE_LIMIT_WIDTH),
+    .OPTION_ICACHE_BLOCK_WIDTH    (OPTION_ICACHE_BLOCK_WIDTH),
+    .OPTION_ICACHE_SET_WIDTH      (OPTION_ICACHE_SET_WIDTH),
+    .OPTION_ICACHE_WAYS           (OPTION_ICACHE_WAYS),
+    .OPTION_ICACHE_LIMIT_WIDTH    (OPTION_ICACHE_LIMIT_WIDTH),
+    .OPTION_ICACHE_CLEAR_ON_INIT  (OPTION_ICACHE_CLEAR_ON_INIT),
     // IMMU configuration
-    .FEATURE_IMMU_HW_TLB_RELOAD (FEATURE_IMMU_HW_TLB_RELOAD),
-    .OPTION_IMMU_SET_WIDTH      (OPTION_IMMU_SET_WIDTH),
-    .OPTION_IMMU_WAYS           (OPTION_IMMU_WAYS)
+    .FEATURE_IMMU_HW_TLB_RELOAD   (FEATURE_IMMU_HW_TLB_RELOAD),
+    .OPTION_IMMU_SET_WIDTH        (OPTION_IMMU_SET_WIDTH),
+    .OPTION_IMMU_WAYS             (OPTION_IMMU_WAYS),
+    .OPTION_IMMU_CLEAR_ON_INIT    (OPTION_IMMU_CLEAR_ON_INIT)
   )
   u_fetch
   (
@@ -384,7 +397,6 @@ module mor1kx_cpu_marocchino
 
     // pipeline control
     .padv_fetch_i                     (padv_fetch), // FETCH
-    .padv_decode_i                    (padv_decode), // FETCH
     .dcod_bubble_i                    (dcod_bubble), // FETCH
     .pipeline_flush_i                 (pipeline_flush), // FETCH
 
@@ -419,6 +431,7 @@ module mor1kx_cpu_marocchino
     .dcod_branch_target_i             (dcod_branch_target), // FETCH
     .branch_mispredict_i              (branch_mispredict), // FETCH
     .exec_mispredict_target_i         (exec_mispredict_target), // FETCH
+    .mispredict_taken_o               (mispredict_taken), // FETCH
 
     // exception/rfe control transfer
     .ctrl_branch_exception_i          (ctrl_branch_exception), // FETCH
@@ -495,6 +508,7 @@ module mor1kx_cpu_marocchino
     .dcod_rfb_i                       (dcod_rfb), // DECODE & DECODE->EXE
     .dcod_branch_o                    (dcod_branch), // DECODE & DECODE->EXE
     .dcod_branch_target_o             (dcod_branch_target), // DECODE & DECODE->EXE
+    .mispredict_taken_i               (mispredict_taken), // DECODE & DECODE->EXE
     .predicted_flag_i                 (predicted_flag), // DECODE & DECODE->EXE
     .exec_op_brcond_o                 (exec_op_brcond), // DECODE & DECODE->EXE
     .exec_predicted_flag_o            (exec_predicted_flag), // DECODE & DECODE->EXE
@@ -683,7 +697,6 @@ module mor1kx_cpu_marocchino
     .FEATURE_DMMU_HW_TLB_RELOAD       (FEATURE_DMMU_HW_TLB_RELOAD),
     .OPTION_DMMU_SET_WIDTH            (OPTION_DMMU_SET_WIDTH),
     .OPTION_DMMU_WAYS                 (OPTION_DMMU_WAYS),
-    .FEATURE_STORE_BUFFER             (FEATURE_STORE_BUFFER),
     .OPTION_STORE_BUFFER_DEPTH_WIDTH  (OPTION_STORE_BUFFER_DEPTH_WIDTH)
   )
   u_lsu
@@ -849,6 +862,7 @@ module mor1kx_cpu_marocchino
     //           for external (timer/ethernet/uart/etc) interrupts
     .dcod_op_lsu_store_i        (dcod_op_lsu_store), // OMAN
     .dcod_op_mtspr_i            (dcod_op_mtspr), // OMAN
+    .dcod_op_msync_i            (dcod_op_msync), // OMAN
     //  part #4: for MF(T)SPR processing
     .dcod_op_mfspr_i            (dcod_op_mfspr), // OMAN
 

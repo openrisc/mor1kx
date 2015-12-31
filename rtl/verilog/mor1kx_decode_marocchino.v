@@ -1,25 +1,34 @@
-/* ****************************************************************************
-  This Source Code Form is subject to the terms of the
-  Open Hardware Description License, v. 1.0. If a copy
-  of the OHDL was not distributed with this file, You
-  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
-
-  Description: mor1kx decode unit for MAROCCHINO pipeline
-
-  Derived from mor1kx_decode & mor1kx_decode_execute_cappuccino
-
-  Outputs:
-   - ALU operation
-   - indication of other type of op - LSU/SPR
-   - immediates
-   - register file addresses
-   - exception decodes:  illegal, system call
-
-  Copyright (C) 2012 Julius Baxter <juliusbaxter@gmail.com>
-  Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
-  Copyright (C) 2015 Andrey Bacherov <avbacherov@opencores.org>
-
-***************************************************************************** */
+////////////////////////////////////////////////////////////////////////
+//                                                                    //
+//  mor1kx_decode_marocchino                                          //
+//                                                                    //
+//  Description: mor1kx decode unit for MAROCCHINO pipeline           //
+//               Derived from mor1kx_decode and                       //
+//                            mor1kx_decode_execute_cappuccino        //
+//  Outputs:                                                          //
+//   - ALU operation                                                  //
+//   - indication of other type of op - LSU/SPR                       //
+//   - immediates                                                     //
+//   - register file addresses                                        //
+//   - exception decodes:  illegal, system call                       //
+//                                                                    //
+////////////////////////////////////////////////////////////////////////
+//                                                                    //
+//   Copyright (C) 2012 Julius Baxter                                 //
+//                      juliusbaxter@gmail.com                        //
+//                                                                    //
+//   Copyright (C) 2013 Stefan Kristiansson                           //
+//                      stefan.kristiansson@saunalahti.fi             //
+//                                                                    //
+//   Copyright (C) 2015 Andrey Bacherov                               //
+//                      avbacherov@opencores.org                      //
+//                                                                    //
+//      This Source Code Form is subject to the terms of the          //
+//      Open Hardware Description License, v. 1.0. If a copy          //
+//      of the OHDL was not distributed with this file, You           //
+//      can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt       //
+//                                                                    //
+////////////////////////////////////////////////////////////////////////
 
 `include "mor1kx-defines.v"
 
@@ -61,7 +70,7 @@ module mor1kx_decode_marocchino
   output     [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa_adr_o, // address of operand A
   output reg                            dcod_rfb_req_o, // instruction requires operand B
   output     [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb_adr_o, // address of operand B
-  output                                dcod_rf_wb_o,   // instruction performes WB
+  output reg                            dcod_rf_wb_o,   // instruction performes WB
   output     [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd_adr_o, // address of WB
   output                                dcod_flag_wb_o,   // instruction writes comparison flag
   output                                dcod_carry_wb_o,  // instruction writes carry flag
@@ -77,6 +86,7 @@ module mor1kx_decode_marocchino
   output                                dcod_branch_o,
   output     [OPTION_OPERAND_WIDTH-1:0] dcod_branch_target_o,
   // Branch prediction signals
+  input                                 mispredict_taken_i,
   input                                 predicted_flag_i,
   output reg                            exec_op_brcond_o,
   output reg                            exec_predicted_flag_o,
@@ -147,8 +157,6 @@ module mor1kx_decode_marocchino
   wire                            imm_zext_sel;
   wire [OPTION_OPERAND_WIDTH-1:0] imm_high;
   wire                            imm_high_sel;
-
-  wire dcod_op_jb_imm; // l.j  | l.jal  | l.bnf | l.bf : jumps or contitional branches to immediate
 
   // Insn opcode
   wire [`OR1K_OPCODE_WIDTH-1:0]  opc_insn = dcod_insn_i[`OR1K_OPCODE_SELECT];
@@ -334,7 +342,8 @@ module mor1kx_decode_marocchino
           dcod_op_1clk_o        = dcod_op_jal_o; // save GPR[9] by l.jal/l.jalr
           dcod_op_pass_exec_o   = ~dcod_op_jal_o;
           dcod_rfa_req_o        = 1'b0;
-          dcod_rfb_req_o        = dcod_op_jr_o; // l.jr/l.jalr
+          dcod_rfb_req_o        = dcod_op_jr_o;  // l.jr/l.jalr
+          dcod_rf_wb_o          = dcod_op_jal_o; // save GPR[9] by l.jal/l.jalr
         end
 
       `OR1K_OPCODE_MOVHI, // rD <- {Imm16,16'd0}
@@ -346,6 +355,7 @@ module mor1kx_decode_marocchino
           dcod_op_pass_exec_o   = ~dcod_op_movhi_o;
           dcod_rfa_req_o        = 1'b0;
           dcod_rfb_req_o        = 1'b0;
+          dcod_rf_wb_o          = dcod_op_movhi_o;
         end
 
       `OR1K_OPCODE_ADDI,  // rD <- rA + exts(Imm16)
@@ -356,13 +366,14 @@ module mor1kx_decode_marocchino
       `OR1K_OPCODE_MULI,  // rD <- rA * exts(Imm16)
       `OR1K_OPCODE_SF,    // SR[F] <- rA cmp rB
       `OR1K_OPCODE_SFIMM: // SR[F] <- rA cmp exts(Imm16)
-         begin
+        begin
           dcod_except_illegal_o = 1'b0;
           dcod_op_1clk_o        = (opc_insn != `OR1K_OPCODE_MULI);
           dcod_op_pass_exec_o   = 1'b0;
           dcod_rfa_req_o        = 1'b1;
           dcod_rfb_req_o        = (opc_insn == `OR1K_OPCODE_SF);
-         end
+          dcod_rf_wb_o          = (opc_insn != `OR1K_OPCODE_SF) & (opc_insn != `OR1K_OPCODE_SFIMM);
+        end
 
       `OR1K_OPCODE_MFSPR, // rD <- SPR(rA | extz(Imm16))
       `OR1K_OPCODE_LWZ,   // rD <- MEM(rA + exts(Imm16))
@@ -372,13 +383,14 @@ module mor1kx_decode_marocchino
       `OR1K_OPCODE_LHZ,   // rD <- MEM(rA + exts(Imm16))
       `OR1K_OPCODE_LHS,   // rD <- MEM(rA + exts(Imm16))
       `OR1K_OPCODE_LWA:   // rD <- MEM(rA + exts(Imm16))
-         begin
+        begin
           dcod_except_illegal_o = 1'b0;
           dcod_op_1clk_o        = 1'b0;
           dcod_op_pass_exec_o   = 1'b0;
           dcod_rfa_req_o        = 1'b1;
           dcod_rfb_req_o        = 1'b0;
-         end
+          dcod_rf_wb_o          = 1'b1;
+        end
 
       `OR1K_OPCODE_LD:  // rD <- MEM(rA + exts(Imm16))
          begin
@@ -387,6 +399,7 @@ module mor1kx_decode_marocchino
           dcod_op_pass_exec_o   = 1'b0;
           dcod_rfa_req_o        = (OPTION_OPERAND_WIDTH == 64);
           dcod_rfb_req_o        = 1'b0;
+          dcod_rf_wb_o          = (OPTION_OPERAND_WIDTH == 64);
          end
 
       `OR1K_OPCODE_MTSPR, // rB -> SPR(rA | extz(Imm16))
@@ -394,22 +407,24 @@ module mor1kx_decode_marocchino
       `OR1K_OPCODE_SB,    // rB -> MEM(rA + exts(Imm16))
       `OR1K_OPCODE_SH,    // rB -> MEM(rA + exts(Imm16))
       `OR1K_OPCODE_SWA:   // rB -> MEM(rA + exts(Imm16))
-         begin
+        begin
           dcod_except_illegal_o = 1'b0;
           dcod_op_1clk_o        = 1'b0;
           dcod_op_pass_exec_o   = 1'b0;
           dcod_rfa_req_o        = 1'b1;
           dcod_rfb_req_o        = 1'b1;
-         end
+          dcod_rf_wb_o          = 1'b0;
+        end
 
       `OR1K_OPCODE_SD:  // rB -> MEM(rA + exts(Imm16))
-         begin
+        begin
           dcod_except_illegal_o = (OPTION_OPERAND_WIDTH != 64);
           dcod_op_1clk_o        = 1'b0;
           dcod_op_pass_exec_o   = 1'b0;
           dcod_rfa_req_o        = (OPTION_OPERAND_WIDTH == 64);
           dcod_rfb_req_o        = (OPTION_OPERAND_WIDTH == 64);
-         end
+          dcod_rf_wb_o          = 1'b0;
+        end
 
       `OR1K_OPCODE_CUST1,
       `OR1K_OPCODE_CUST2,
@@ -419,19 +434,20 @@ module mor1kx_decode_marocchino
       `OR1K_OPCODE_CUST6,
       `OR1K_OPCODE_CUST7,
       `OR1K_OPCODE_CUST8:
-         begin
+        begin
           dcod_except_illegal_o = 1'b1;
           dcod_op_1clk_o        = 1'b0;
           dcod_op_pass_exec_o   = 1'b0;
           dcod_rfa_req_o        = 1'b0;
           dcod_rfb_req_o        = 1'b0;
-         end
+          dcod_rf_wb_o          = 1'b0;
+        end
 
       // MAROCCHINO_TODO: there are not supported ORFPX32
       //                  and ORFPX64 instruction which
       //                  arn't correctly reflected here.
       `OR1K_OPCODE_FPU:
-         begin
+        begin
           dcod_except_illegal_o = (FEATURE_FPU == "NONE");
           dcod_op_pass_exec_o   = 1'b0;
           case (dcod_insn_i[`OR1K_FPUOP_SELECT])
@@ -446,6 +462,7 @@ module mor1kx_decode_marocchino
                 dcod_op_1clk_o = (FEATURE_FPU != "NONE");
                 dcod_rfa_req_o = (FEATURE_FPU != "NONE");
                 dcod_rfb_req_o = (FEATURE_FPU != "NONE");
+                dcod_rf_wb_o   = 1'b0;
               end
             // FPX32 conversion commands
             `OR1K_FPUOP_ITOF, // rD <- conv(rA)
@@ -454,6 +471,7 @@ module mor1kx_decode_marocchino
                 dcod_op_1clk_o = 1'b0;
                 dcod_rfa_req_o = (FEATURE_FPU != "NONE");
                 dcod_rfb_req_o = 1'b0;
+                dcod_rf_wb_o   = (FEATURE_FPU != "NONE");
               end
             // FPX32 other commands
             default: // rD <- rA op rB
@@ -461,23 +479,25 @@ module mor1kx_decode_marocchino
                 dcod_op_1clk_o = 1'b0;
                 dcod_rfa_req_o = (FEATURE_FPU != "NONE");
                 dcod_rfb_req_o = (FEATURE_FPU != "NONE");
+                dcod_rf_wb_o   = (FEATURE_FPU != "NONE");
               end
           endcase
-         end // fpu
+        end // fpu
 
       //`OR1K_OPCODE_MACRC, // Same to l.movhi - check!
       `OR1K_OPCODE_MACI,
       `OR1K_OPCODE_MAC:
-         begin
+        begin
           dcod_except_illegal_o = 1'b1;
           dcod_op_1clk_o        = 1'b0;
           dcod_op_pass_exec_o   = 1'b0;
           dcod_rfa_req_o        = 1'b0;
           dcod_rfb_req_o        = 1'b0;
+          dcod_rf_wb_o          = 1'b0;
         end
 
       `OR1K_OPCODE_SHRTI:
-         begin
+        begin
           case (dcod_insn_i[`OR1K_ALU_OPC_SECONDARY_SELECT])
             `OR1K_ALU_OPC_SECONDARY_SHRT_SLL, // rD <- SLLI(rA,Imm6)
             `OR1K_ALU_OPC_SECONDARY_SHRT_SRL, // rD <- SRLI(rA,Imm6)
@@ -488,6 +508,7 @@ module mor1kx_decode_marocchino
                 dcod_op_1clk_o        = 1'b1;
                 dcod_rfa_req_o        = 1'b1;
                 dcod_rfb_req_o        = 1'b0;
+                dcod_rf_wb_o          = 1'b1;
               end
             default:
               begin
@@ -495,10 +516,11 @@ module mor1kx_decode_marocchino
                 dcod_op_1clk_o        = 1'b0;
                 dcod_rfa_req_o        = 1'b0;
                 dcod_rfb_req_o        = 1'b0;
+                dcod_rf_wb_o          = 1'b0;
               end
           endcase
           dcod_op_pass_exec_o = 1'b0;
-         end
+        end
 
       `OR1K_OPCODE_ALU:
         case (opc_alu)
@@ -516,6 +538,7 @@ module mor1kx_decode_marocchino
               dcod_op_pass_exec_o   = 1'b0;
               dcod_rfa_req_o        = 1'b1;
               dcod_rfb_req_o        = ~dcod_op_ffl1_o;
+              dcod_rf_wb_o          = 1'b1;
             end
 
           `OR1K_ALU_OPC_DIV,  // rD <- rA / rB
@@ -528,6 +551,7 @@ module mor1kx_decode_marocchino
               dcod_op_pass_exec_o   = 1'b0;
               dcod_rfa_req_o        = 1'b1;
               dcod_rfb_req_o        = 1'b1;
+              dcod_rf_wb_o          = 1'b1;
             end
 
           `OR1K_ALU_OPC_EXTBH,
@@ -538,6 +562,7 @@ module mor1kx_decode_marocchino
               dcod_op_pass_exec_o   = 1'b0;
               dcod_rfa_req_o        = 1'b0;
               dcod_rfb_req_o        = 1'b0;
+              dcod_rf_wb_o          = 1'b0;
             end
 
           `OR1K_ALU_OPC_SHRT:
@@ -552,6 +577,7 @@ module mor1kx_decode_marocchino
                     dcod_op_1clk_o        = 1'b1;
                     dcod_rfa_req_o        = 1'b1;
                     dcod_rfb_req_o        = 1'b1;
+                    dcod_rf_wb_o          = 1'b1;
                   end
                 default:
                   begin
@@ -559,6 +585,7 @@ module mor1kx_decode_marocchino
                     dcod_op_1clk_o        = 1'b0;
                     dcod_rfa_req_o        = 1'b0;
                     dcod_rfb_req_o        = 1'b0;
+                    dcod_rf_wb_o          = 1'b0;
                   end
               endcase // case (dcod_insn_i[`OR1K_ALU_OPC_SECONDARY_SELECT])
               dcod_op_pass_exec_o = 1'b0;
@@ -571,6 +598,7 @@ module mor1kx_decode_marocchino
               dcod_op_pass_exec_o   = 1'b0;
               dcod_rfa_req_o        = 1'b0;
               dcod_rfb_req_o        = 1'b0;
+              dcod_rf_wb_o          = 1'b0;
             end
         endcase // alu_opc
 
@@ -591,6 +619,7 @@ module mor1kx_decode_marocchino
         dcod_op_pass_exec_o = 1'b0;
         dcod_rfa_req_o      = 1'b0;
         dcod_rfb_req_o      = 1'b0;
+        dcod_rf_wb_o        = 1'b0; 
       end // case sys-trap-sync
 
       default:
@@ -600,6 +629,7 @@ module mor1kx_decode_marocchino
           dcod_op_pass_exec_o   = 1'b0;
           dcod_rfa_req_o        = 1'b0;
           dcod_rfb_req_o        = 1'b0;
+          dcod_rf_wb_o          = 1'b0;
         end
     endcase // case (opc-insn)
   end // always
@@ -622,15 +652,12 @@ module mor1kx_decode_marocchino
                          (opc_insn == `OR1K_OPCODE_JAL);
 
   // conditional branches
-  assign dcod_op_bf_o     = (opc_insn == `OR1K_OPCODE_BF)  & (~pipeline_flush_i);
-  assign dcod_op_bnf_o    = (opc_insn == `OR1K_OPCODE_BNF) & (~pipeline_flush_i);
+  assign dcod_op_bf_o     = (opc_insn == `OR1K_OPCODE_BF);
+  assign dcod_op_bnf_o    = (opc_insn == `OR1K_OPCODE_BNF);
 
   // jumps or contitional branches to immediate
-  assign dcod_op_jb_imm = (opc_insn < `OR1K_OPCODE_NOP); // l.j  | l.jal  | l.bnf | l.bf
-
-  wire branch_to_imm = dcod_op_jb_imm &
-                       // l.j/l.jal  or  l.bf/bnf and flag is right
-                       (~(|opc_insn[2:1]) | (opc_insn[2] == predicted_flag_i));
+  wire branch_to_imm = (opc_insn == `OR1K_OPCODE_J) | (opc_insn == `OR1K_OPCODE_JAL) |
+                       (dcod_op_bf_o & predicted_flag_i) | (dcod_op_bnf_o & ~predicted_flag_i);
 
   wire [OPTION_OPERAND_WIDTH-1:0] branch_to_imm_target =
     pc_decode_i +
@@ -650,20 +677,18 @@ module mor1kx_decode_marocchino
 
 
   // For mispredict detection
-  //  # for conditional branches only
-  wire dcod_op_brcond = dcod_op_bf_o | dcod_op_bnf_o;
   //  # latch "branch is conditional" flag
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       exec_op_brcond_o <= 1'b0;
-    else if (pipeline_flush_i)
+    else if (mispredict_taken_i | pipeline_flush_i)
       exec_op_brcond_o <= 1'b0;
     else if (padv_decode_i)
-      exec_op_brcond_o <= dcod_op_brcond;
+      exec_op_brcond_o <= (dcod_op_bf_o | dcod_op_bnf_o);
   end // @clock
   //  # latch predicted flag and mispredicted target
   always @(posedge clk) begin
-    if (padv_decode_i & dcod_op_brcond) begin
+    if (padv_decode_i & (dcod_op_bf_o | dcod_op_bnf_o)) begin
       exec_mispredict_target_o <= dcod_mispredict_target;
       exec_predicted_flag_o    <= predicted_flag_i;
     end
@@ -671,19 +696,6 @@ module mor1kx_decode_marocchino
 
   // take branch flag for FETCH
   assign dcod_take_branch_o = branch_to_imm | dcod_op_jr_o;
-
-
-
-  // Which instructions cause writeback?
-  assign dcod_rf_wb_o =
-    (opc_insn == `OR1K_OPCODE_JAL) | (opc_insn == `OR1K_OPCODE_JALR) |
-    (opc_insn == `OR1K_OPCODE_MOVHI) | (opc_insn == `OR1K_OPCODE_LWA) |
-    // All '10????' opcodes excliding l.sfxxi
-    ((dcod_insn_i[31:30] == 2'b10) & ~(opc_insn == `OR1K_OPCODE_SFIMM)) |
-    // All '11????' opcodes excluding: l.sfxx, l.mtspr and lf.sfxx
-    ((dcod_insn_i[31:30] == 2'b11) & ~(opc_insn == `OR1K_OPCODE_SF) &
-     ~dcod_op_mtspr_o & ~dcod_op_lsu_store_o &
-     ~dcod_op_fp32_cmp_o[(`OR1K_FPUOP_WIDTH-1)]);
 
   // Register file addresses
   assign dcod_rfa_adr_o = dcod_insn_i[`OR1K_RA_SELECT];
@@ -693,10 +705,12 @@ module mor1kx_decode_marocchino
   // Which instructions writes comparison flag?
   assign dcod_flag_wb_o = dcod_op_setflag_o |
                           dcod_op_fp32_cmp_o[(`OR1K_FPUOP_WIDTH-1)] |
-                          dcod_op_lsu_atomic_o;
+                          (opc_insn == `OR1K_OPCODE_SWA);
 
   // Which instructions require comparison flag?
-  assign dcod_flag_req_o = dcod_op_cmov_o | dcod_op_brcond; // l.cmov and correct mispredict detection
+  //  # l.cmov
+  //  # conditional branches for mispredict detection in EXECUTE
+  assign dcod_flag_req_o = dcod_op_cmov_o | dcod_op_bf_o | dcod_op_bnf_o;
 
   // Which instruction writes carry flag?
   assign dcod_carry_wb_o = dcod_op_add_o | dcod_op_div_o;

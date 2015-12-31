@@ -1,23 +1,34 @@
-/* ****************************************************************************
-  This Source Code Form is subject to the terms of the
-  Open Hardware Description License, v. 1.0. If a copy
-  of the OHDL was not distributed with this file, You
-  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
-
-  Description: mor1kx control unit for MAROCCHINO pipeline
-    a) generate pipeline controls
-    b) manage SPRs
-    c) issue addresses for exceptions to fetch stage
-       control branches going to fetch stage
-    d) contains tick timer & PIC logic
-
-  Derived from mor1kx_ctrl_cappuccino.
-
-  Copyright (C) 2012 Julius Baxter <juliusbaxter@gmail.com>
-  Copyright (C) 2012-2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
-  Copyright (C) 2015 Andrey Bacherov <avbacherov@opencores.org>
-
-***************************************************************************** */
+////////////////////////////////////////////////////////////////////////
+//                                                                    //
+//  mor1kx_ctrl_marocchino                                            //
+//                                                                    //
+//  Description:                                                      //
+//    mor1kx control unit for MAROCCHINO pipeline                     //
+//      a) generate pipeline controls                                 //
+//      b) manage SPRs                                                //
+//      c) issue addresses for exceptions to fetch stage              //
+//         control branches going to fetch stage                      //
+//      d) contains tick timer & PIC logic                            //
+//                                                                    //
+//  Derived from mor1kx_ctrl_cappuccino.                              //
+//                                                                    //
+////////////////////////////////////////////////////////////////////////
+//                                                                    //
+//   Copyright (C) 2012 Julius Baxter                                 //
+//                      juliusbaxter@gmail.com                        //
+//                                                                    //
+//   Copyright (C) 2012-2013 Stefan Kristiansson                      //
+//                           stefan.kristiansson@saunalahti.fi        //
+//                                                                    //
+//   Copyright (C) 2015 Andrey Bacherov                               //
+//                      avbacherov@opencores.org                      //
+//                                                                    //
+//      This Source Code Form is subject to the terms of the          //
+//      Open Hardware Description License, v. 1.0. If a copy          //
+//      of the OHDL was not distributed with this file, You           //
+//      can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt       //
+//                                                                    //
+////////////////////////////////////////////////////////////////////////
 
 `include "mor1kx-defines.v"
 
@@ -302,7 +313,7 @@ module mor1kx_ctrl_marocchino
   //-------------------------------------//
 
   // to FETCH: exceptions/rfe command and appropriate address
-  assign ctrl_branch_exception_o = (exception_r | doing_rfe_r) & ~fetch_exception_taken_i;
+  assign ctrl_branch_exception_o = exception_r | doing_rfe_r;
 
   assign ctrl_branch_except_pc_o = exception_r ? exception_pc_addr : spr_epcr;
 
@@ -568,6 +579,8 @@ endgenerate // FPU related: FPCSR and exceptions
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       last_branch_insn_pc <= {OPTION_OPERAND_WIDTH{1'b0}};
+    else if (pipeline_flush_o)
+      last_branch_insn_pc <= last_branch_insn_pc;
     else if (padv_wb_o & op_branch_r)
       last_branch_insn_pc <= pc_branch_r;
   end // @clock
@@ -998,6 +1011,10 @@ endgenerate
       wb_mfspr_rdy_o <= 1'b0;
       wb_mfspr_dat_o <= {OPTION_OPERAND_WIDTH{1'b0}};
     end
+    else if (pipeline_flush_o) begin
+      wb_mfspr_rdy_o <= 1'b0;
+      wb_mfspr_dat_o <= {OPTION_OPERAND_WIDTH{1'b0}};
+    end
     else if (padv_wb_o) begin
       if (cmd_op_mfspr & spr_ack) begin
         wb_mfspr_rdy_o <= 1'b1;
@@ -1012,33 +1029,23 @@ endgenerate
 // Controls to generate ACKs from units that are external to this module
 
   // DMMU
-  assign spr_access_ack[`OR1K_SPR_DMMU_BASE] = spr_bus_ack_dmmu_i &
-                                               spr_access[`OR1K_SPR_DMMU_BASE];
-  assign spr_internal_read_dat[`OR1K_SPR_DMMU_BASE] =
-    spr_bus_dat_dmmu_i &
-    {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_DMMU_BASE]}};
+  assign spr_access_ack[`OR1K_SPR_DMMU_BASE]        = spr_bus_ack_dmmu_i;
+  assign spr_internal_read_dat[`OR1K_SPR_DMMU_BASE] = spr_bus_dat_dmmu_i;
 
 
   // IMMU
-  assign spr_access_ack[`OR1K_SPR_IMMU_BASE] = spr_bus_ack_immu_i &
-                                               spr_access[`OR1K_SPR_IMMU_BASE];
-  assign spr_internal_read_dat[`OR1K_SPR_IMMU_BASE] =
-    spr_bus_dat_immu_i &
-    {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_IMMU_BASE]}};
+  assign spr_access_ack[`OR1K_SPR_IMMU_BASE]        = spr_bus_ack_immu_i;
+  assign spr_internal_read_dat[`OR1K_SPR_IMMU_BASE] = spr_bus_dat_immu_i;
 
 
   // DCACHE
-  assign spr_access_ack[`OR1K_SPR_DC_BASE] = spr_bus_ack_dc_i &
-                                             spr_access[`OR1K_SPR_DC_BASE];
-  assign spr_internal_read_dat[`OR1K_SPR_DC_BASE] =
-    spr_bus_dat_dc_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_DC_BASE]}};
+  assign spr_access_ack[`OR1K_SPR_DC_BASE]        = spr_bus_ack_dc_i;
+  assign spr_internal_read_dat[`OR1K_SPR_DC_BASE] = spr_bus_dat_dc_i;
 
 
   // ICACHE
-  assign spr_access_ack[`OR1K_SPR_IC_BASE] = spr_bus_ack_ic_i &
-                                             spr_access[`OR1K_SPR_IC_BASE];
-  assign spr_internal_read_dat[`OR1K_SPR_IC_BASE] =
-    spr_bus_dat_ic_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_IC_BASE]}};
+  assign spr_access_ack[`OR1K_SPR_IC_BASE]        = spr_bus_ack_ic_i;
+  assign spr_internal_read_dat[`OR1K_SPR_IC_BASE] = spr_bus_dat_ic_i;
 
 
 generate
