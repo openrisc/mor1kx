@@ -29,19 +29,19 @@ of logic for generation padv-* and exception processing.
 flag to control pipeline.
 
 
- 6 September 2015
+6 September 2015
   Pipelined multiplier. Some adaptation for FPU pipelines. Move WB
 latches into mor1kx_execute_marocchino to prepare implementation of
 control for paralleled execution units. So, mor1kx_wbmux_marocchino
 has been removed from design.
 
 
- 6 November 2015
+6 November 2015
   First variant with out-of-order completion and 8-taps
 Order Control Buffer (OCB).
 
 
- 31 December 2015
+31 December 2015
  The major achievement is that all modules, including LSU, DCACHE,
 Store Buffer, etc. are ready for more pipelinization. All RAM blocks are
 replaced with ones containing "enable" signal. And Read/Write conflict
@@ -50,12 +50,17 @@ essential steps toward design of pipeline control logic for each
 pipelined module.
 
 
+5 March 2016
+ (a) Restore LSU pipelinization
+ (b) Remove last stage of FETCH to improve performance
+ (c) Branch prediction is replaced by branch forwarding from EXECUTE
+(in fact most of instructions those affect flag are 1-clock length, so
+flag is usually computed by EXECUTED while FETCH is fetching delay slot)
+ (d) CoreMark 109 Iterations/sec, i.e. 109/50 = 2.18 CoreMark/MHz
+
 
 Primary TODOs:
-  - pipelined LSU implementation
   - update debug unit support in CTRL-module
 
 Secondary TODOs:
-  - Various improvements for performance of new FETCH
-  - Improvement for control of various pipelines
-    (at least for integer multiplier and FPU)
+  - Improvement control of FPU-32 pipelines

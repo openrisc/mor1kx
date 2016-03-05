@@ -41,7 +41,6 @@ module mor1kx_rf_marocchino
   input                             rst,
 
   // pipeline control signals
-  input                             padv_decode_i,
   input                             pipeline_flush_i,
 
   // SPR bus

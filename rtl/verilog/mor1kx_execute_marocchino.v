@@ -82,6 +82,7 @@ module mor1kx_execute_marocchino
   // multi-clock instruction related inputs/outputs
   //  ## multiplier inputs/outputs
   input                                 dcod_op_mul_i,
+  output                                mul_busy_o,
   output                                mul_valid_o,
   input                                 grant_wb_to_mul_i,
   //  ## division inputs/outputs
@@ -103,6 +104,10 @@ module mor1kx_execute_marocchino
   //  ## LSU related inputs
   input                                 wb_lsu_rdy_i,
   input      [OPTION_OPERAND_WIDTH-1:0] wb_lsu_result_i,
+
+  // Forwarding comparision flag
+  output                                exec_op_1clk_cmp_o, // integer or fp32
+  output                                exec_flag_set_o,    // integer or fp32 comparison result
 
   // WB outputs
   output     [OPTION_OPERAND_WIDTH-1:0] wb_result_o,
@@ -322,6 +327,8 @@ module mor1kx_execute_marocchino
   //------------------------//
   // FP-32 comparison logic //
   //------------------------//
+  wire fp32_flag_set; // for forwarding to branch prediction
+  // ---
   generate
     /* verilator lint_off WIDTH */
     if (FEATURE_FPU != "NONE") begin :  alu_fp32_cmp_ena
@@ -340,18 +347,29 @@ module mor1kx_execute_marocchino
         // Operands
         .rfa_i                  (alu_1clk_a), // fp32-cmp
         .rfb_i                  (alu_1clk_b), // fp32-cmp
-        // outputs
+        // Outputs
+        //  # not WB-latched for flag forwarding
+        .fp32_flag_set_o        (fp32_flag_set),
+        //  # WB-latched
         .wb_fp32_flag_set_o     (wb_fp32_flag_set_o),   // fp32-cmp  result
         .wb_fp32_flag_clear_o   (wb_fp32_flag_clear_o), // fp32-cmp  result
         .wb_fp32_cmp_fpcsr_o    (wb_fp32_cmp_fpcsr_o)   // fp32-cmp  exceptions
       );
     end
     else begin :  alu_fp32_cmp_none
+      assign fp32_flag_set         =  1'b0;
       assign wb_fp32_flag_set_o    =  1'b0;
       assign wb_fp32_flag_clear_o  =  1'b0;
       assign wb_fp32_cmp_fpcsr_o   = {`OR1K_FPCSR_WIDTH{1'b0}};
     end // fpu_ena/fpu_none
   endgenerate // FP-32 comparison part related
+
+
+  //--------------------------------------------------//
+  // Forwarding comparision flag to branch prediction //
+  //--------------------------------------------------//
+  assign exec_op_1clk_cmp_o = op_setflag_r | op_fp32_cmp_r[`OR1K_FPUOP_WIDTH-1];
+  assign exec_flag_set_o    = (op_setflag_r & flag_set) | (op_fp32_cmp_r[`OR1K_FPUOP_WIDTH-1] & fp32_flag_set);
 
 
   //------//
@@ -527,16 +545,18 @@ module mor1kx_execute_marocchino
 
   // multiplier controls
   //  ## register for input command
-  reg  op_mul_r;
+  reg    op_mul_r;
   //  ## multiplier stage ready flags
-  reg  mul_s1_rdy;
-  reg  mul_s2_rdy;
+  reg    mul_s1_rdy;
+  reg    mul_s2_rdy;
   assign mul_valid_o = mul_s2_rdy; // valid flag is 1-clock ahead of latching for WB
-  //  ## advance multiplier pipe
-  //   MAROCCHINO_TODO: potential performance improvement
-  //                    more sofisticated control should update stage #1
-  //                    even in case if stage #2 is ready but no WB access yet
-  wire mul_adv = ~mul_valid_o | (padv_wb_i & grant_wb_to_mul_i);
+  //  ## stage busy signals
+  wire   mul_s2_busy = mul_s2_rdy & ~(padv_wb_i & grant_wb_to_mul_i);
+  wire   mul_s1_busy = mul_s1_rdy & mul_s2_busy;
+  assign mul_busy_o  = op_mul_r   & mul_s1_busy;
+  //  ## stage advance signals
+  wire   mul_adv_s2  = mul_s1_rdy & ~mul_s2_busy;
+  wire   mul_adv_s1  = op_mul_r   & ~mul_s1_busy;
 
   // ---
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -546,7 +566,7 @@ module mor1kx_execute_marocchino
       op_mul_r <= 1'b0;
     else if (padv_decode_i & dcod_op_mul_i)
       op_mul_r <= 1'b1;
-    else if (mul_adv)
+    else if (mul_adv_s1)
       op_mul_r <= 1'b0;
   end // posedge clock
 
@@ -607,7 +627,7 @@ module mor1kx_execute_marocchino
   reg [MULHDW-1:0] mul_s1_bh;
   //  registering
   always @(posedge clk) begin
-    if (mul_adv) begin
+    if (mul_adv_s1) begin
       mul_s1_al <= mul_a[MULHDW-1:0];
       mul_s1_bl <= mul_b[MULHDW-1:0];
       mul_s1_ah <= mul_a[EXEDW-1:MULHDW];
@@ -620,8 +640,10 @@ module mor1kx_execute_marocchino
       mul_s1_rdy <= 1'b0;
     else if (pipeline_flush_i)
       mul_s1_rdy <= 1'b0;
-    else if (mul_adv)
-      mul_s1_rdy <= op_mul_r;
+    else if (mul_adv_s1)
+      mul_s1_rdy <= 1'b1;
+    else if (mul_adv_s2)
+      mul_s1_rdy <= 1'b0;
   end // posedge clock
 
   // stage #2: partial products
@@ -630,7 +652,7 @@ module mor1kx_execute_marocchino
   reg [EXEDW-1:0] mul_s2_bhal;
   //  registering
   always @(posedge clk) begin
-    if (mul_adv) begin
+    if (mul_adv_s2) begin
       mul_s2_albl <= mul_s1_al * mul_s1_bl;
       mul_s2_ahbl <= mul_s1_ah * mul_s1_bl;
       mul_s2_bhal <= mul_s1_bh * mul_s1_al;
@@ -642,8 +664,10 @@ module mor1kx_execute_marocchino
       mul_s2_rdy <= 1'b0;
     else if (pipeline_flush_i)
       mul_s2_rdy <= 1'b0;
-    else if (mul_adv)
-      mul_s2_rdy <= mul_s1_rdy;
+    else if (mul_adv_s2)
+      mul_s2_rdy <= 1'b1;
+    else if (padv_wb_i & grant_wb_to_mul_i)
+      mul_s2_rdy <= 1'b0;
   end // posedge clock
 
   // stage #3: result

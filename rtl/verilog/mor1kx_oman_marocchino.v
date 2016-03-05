@@ -52,6 +52,7 @@ module mor1kx_oman_marocchino
   // DECODE non-latched additional information related instruction
   //  part #1: iformation stored in order control buffer
   input                                 dcod_delay_slot_i, // instruction is in delay slot
+  input                                 dcod_flag_await_i, // instruction is multi-cycle computation of flag
   input                                 dcod_flag_wb_i,    // instruction affects comparison flag
   input                                 dcod_carry_wb_i,   // instruction affects carry flag
   input                                 dcod_rf_wb_i,      // instruction generates WB
@@ -65,6 +66,7 @@ module mor1kx_oman_marocchino
   input                                 dcod_flag_req_i,   // need comparison flag (l.cmov)
   input                                 dcod_carry_req_i,  // need carry flag
   input                                 dcod_op_jr_i,      // l.jr/l.jalr require operand B (potentially hazard)
+  input                                 dcod_op_brcond_i,  // l.bf/l.bnf require awaited flag (stall fetch)
   //  part #3: information required for create enable for
   //           for external (timer/ethernet/uart/etc) interrupts
   input                                 dcod_op_lsu_store_i,
@@ -74,6 +76,7 @@ module mor1kx_oman_marocchino
   input                                 dcod_op_mfspr_i,
 
   // collect busy flags from execution module
+  input                                 mul_busy_i,
   input                                 div_busy_i,
   input                                 fp32_arith_busy_i,
   input                                 lsu_busy_i,
@@ -84,7 +87,6 @@ module mor1kx_oman_marocchino
   input                                 mul_valid_i,
   input                                 fp32_arith_valid_i,
   input                                 lsu_valid_i,
-  input                                 lsu_excepts_i,
 
   // FETCH & DECODE exceptions
   input                                 dcod_except_ibus_err_i,
@@ -96,7 +98,7 @@ module mor1kx_oman_marocchino
   input                                 dcod_except_trap_i,
 
   // EXECUTE-to-DECODE hazards
-  output                                dcod_bubble_o,
+  output                                stall_fetch_o,
   output                                exe2dec_hazard_a_o,
   output                                exe2dec_hazard_b_o,
 
@@ -153,8 +155,10 @@ module mor1kx_oman_marocchino
   localparam  OCBT_OP_RFE_POS         = OCBT_OP_LSU_ATOMIC_POS  + 1; // l.rfe
   //  Instruction is in delay slot
   localparam  OCBT_DELAY_SLOT_POS     = OCBT_OP_RFE_POS         + 1;
+  //  Instruction is multi-cycle computation of flag
+  localparam  OCBT_FLAG_AWAIT_POS     = OCBT_DELAY_SLOT_POS     + 1;
   //  Instruction affect comparison flag
-  localparam  OCBT_FLAG_WB_POS        = OCBT_DELAY_SLOT_POS     + 1;
+  localparam  OCBT_FLAG_WB_POS        = OCBT_FLAG_AWAIT_POS     + 1;
   //  Instruction affect carry flag
   localparam  OCBT_CARRY_WB_POS       = OCBT_FLAG_WB_POS        + 1;
   //  Instruction generates WB
@@ -204,6 +208,7 @@ module mor1kx_oman_marocchino
                   dcod_rf_wb_i,      // instruction generates WB
                   dcod_carry_wb_i,   // istruction affects carry flag
                   dcod_flag_wb_i,    // istruction affects comparison flag
+                  dcod_flag_await_i, // instruction is multi-cycle computation of flag
                   dcod_delay_slot_i, // istruction is in delay slot
                   // unit that must be granted for WB
                   dcod_op_rfe_i,     // l.rfe
@@ -291,10 +296,6 @@ module mor1kx_oman_marocchino
   assign exe2dec_hazard_b_o = exec_rf_wb & dcod_rfb_req_i & (exec_rfd_adr == dcod_rfb_adr_i);
 
 
-  // auxiliaries
-  wire lsu_valid_or_excepts = lsu_valid_i | lsu_excepts_i;
-
-
   //   An execute module is ready and granted access to WB
   //   Instructions l.mf(t)spr have got guaranted WB access because
   // no any new instruction is issued into execution till
@@ -307,7 +308,7 @@ module mor1kx_oman_marocchino
                         (div_valid_i & ocbo00[OCBT_OP_DIV_POS]) |
                         (mul_valid_i & ocbo00[OCBT_OP_MUL_POS]) |
                         (fp32_arith_valid_i & ocbo00[OCBT_OP_FP32_POS]) |
-                        (lsu_valid_or_excepts & ocbo00[OCBT_OP_LS_POS]) |
+                        (lsu_valid_i & ocbo00[OCBT_OP_LS_POS]) |
                         ocbo00[OCBT_OP_PASS_EXEC_POS] | // also includes l.rfe in the sense
                         ocbo00[OCBT_FD_AN_EXCEPT_POS];
 
@@ -316,7 +317,7 @@ module mor1kx_oman_marocchino
   wire exec_waiting = (~div_valid_i & ocbo00[OCBT_OP_DIV_POS]) |
                       (~mul_valid_i & ocbo00[OCBT_OP_MUL_POS]) |
                       (~fp32_arith_valid_i & ocbo00[OCBT_OP_FP32_POS]) |
-                      (~lsu_valid_or_excepts & ocbo00[OCBT_OP_LS_POS]);
+                      (~lsu_valid_i & ocbo00[OCBT_OP_LS_POS]);
 
   // DECODE stall components
   //  stall by unit usage hazard
@@ -324,9 +325,9 @@ module mor1kx_oman_marocchino
   wire stall_by_hazard_u =
     (dcod_op_1clk_i & exec_op_1clk_i & ~ocbo00[OCBT_OP_1CLK_POS]) |
     (dcod_op_div_i & (div_busy_i | (div_valid_i & ~ocbo00[OCBT_OP_DIV_POS]))) |
-    (dcod_op_mul_i & mul_valid_i & ~ocbo00[OCBT_OP_MUL_POS]) |
+    (dcod_op_mul_i & (mul_busy_i | (mul_valid_i & ~ocbo00[OCBT_OP_MUL_POS]))) |
     (dcod_op_fp32_arith_i & (fp32_arith_busy_i | (fp32_arith_valid_i & ~ocbo00[OCBT_OP_FP32_POS]))) |
-    ((dcod_op_ls_i | dcod_op_msync_i) & (lsu_busy_i | (lsu_valid_or_excepts & ~ocbo00[OCBT_OP_LS_POS])));
+    ((dcod_op_ls_i | dcod_op_msync_i) & (lsu_busy_i | (lsu_valid_i & ~ocbo00[OCBT_OP_LS_POS])));
 
   //  stall by operand A hazard
   //    hazard has occured inside OCB
@@ -360,7 +361,7 @@ module mor1kx_oman_marocchino
                   ocbo04[OCBT_FLAG_WB_POS] | ocbo03[OCBT_FLAG_WB_POS] | ocbo02[OCBT_FLAG_WB_POS] |
                   ocbo01[OCBT_FLAG_WB_POS];
   //    waiting completion of atomic instruction (others WB-flag instructions are 1-clk)
-  wire flag_waiting = ~lsu_valid_or_excepts & ocbo00[OCBT_OP_LSU_ATOMIC_POS];
+  wire flag_waiting = ~lsu_valid_i & ocbo00[OCBT_OP_LSU_ATOMIC_POS];
   //    combine with DECODE-to-EXECUTE hazard
   wire stall_by_flag = dcod_flag_req_i & (ocb_flag | flag_waiting);
 
@@ -380,7 +381,7 @@ module mor1kx_oman_marocchino
   //       this completion generates padv-wb,
   //       in next turn padv-wb cleans up OCB and restores
   //       instructions issue
-  wire stall_by_mXspr = (dcod_op_mtspr_i | dcod_op_mfspr_i) & (~ocb_empty | lsu_busy_i);
+  wire stall_by_mXspr = (dcod_op_mtspr_i | dcod_op_mfspr_i) & ~ocb_empty;
 
   // combine stalls to decode-valid flag
   assign dcod_valid_o = ~stall_by_hazard_u & ~ocb_full          &
@@ -389,15 +390,28 @@ module mor1kx_oman_marocchino
                         ~stall_by_mXspr;
 
 
-  //   Bubble is just used to block FETCH advance (CTRL).
-  //   Detect the situation where there is a jump to register in decode
+  //   Stall FETCH advance (CTRL).
+  //   a) Detect the situation where there is a jump to register in decode
   // stage and an instruction in execute stage that will write to that
   // register.
-  //   A bubble is also inserted when an rfe instruction is in decode stage,
-  // the main purpose of this is to stall fetch while the rfe is propagating
+  //   b) l.bf/l.bnf waiting flag if it should be computed by multi-cycle
+  //      instruction like l.swa of float64 comparison.
+  //      MAROCCHINO_TODO: performance improvement is possible with
+  //                       forwarding of result of these instructions. 
+  //   c) When an l.rfe/ecxeptions are in decode stage.
+  // The main purpose of this is waiting till l.rfe/exceptions propagate
   // up to WB stage.
-  //   By DECODE exceptions (FETCH exceptions block it in FETCH itself)
-  assign dcod_bubble_o = ((ocb_hazard_b | exe2dec_hazard_b_o) & dcod_op_jr_i) | dcod_op_rfe_i | dcod_an_except;
+  //   d) And the final reason to stop FETCH is l.mf(t)spr execution.
+  //
+  // auxiliary
+  wire flag_await = ocbo07[OCBT_FLAG_AWAIT_POS] | ocbo06[OCBT_FLAG_AWAIT_POS] | ocbo05[OCBT_FLAG_AWAIT_POS] |
+                    ocbo04[OCBT_FLAG_AWAIT_POS] | ocbo03[OCBT_FLAG_AWAIT_POS] | ocbo02[OCBT_FLAG_AWAIT_POS] |
+                    ocbo01[OCBT_FLAG_AWAIT_POS] | ocbo00[OCBT_FLAG_AWAIT_POS];
+  // stall fetch combination
+  assign stall_fetch_o = ((ocb_hazard_b | exe2dec_hazard_b_o) & dcod_op_jr_i) | // stall FETCH
+                         (flag_await & dcod_op_brcond_i)  |                     // stall FETCH
+                         dcod_op_rfe_i   | dcod_an_except |                     // stall FETCH
+                         dcod_op_mtspr_i | dcod_op_mfspr_i;                     // stall FETCH
 
 
   // For debug with  simulatiom

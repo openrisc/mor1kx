@@ -68,7 +68,7 @@ module mor1kx_cpu_marocchino
 
   parameter FEATURE_FPU    = "NONE", // ENABLED|NONE: pipeline marocchino
 
-  parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
+  parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 4, // 16 taps
 
   parameter FEATURE_MULTICORE      = "NONE",
 
@@ -176,12 +176,12 @@ module mor1kx_cpu_marocchino
 
   wire [OPTION_OPERAND_WIDTH-1:0] wb_result;
 
-  wire [OPTION_OPERAND_WIDTH-1:0] wb_lsu_result; // to WB_MUX
-  wire                            wb_lsu_rdy; // to WB_MUX
+  wire [OPTION_OPERAND_WIDTH-1:0] wb_lsu_result;  // to WB_MUX
+  wire                            wb_lsu_rdy;     // to WB_MUX
 
   wire                            dcod_valid;
   wire                            exec_valid;
-  wire                            lsu_valid;
+  wire                            lsu_valid;   // result ready or exceptions
 
 
   wire [OPTION_OPERAND_WIDTH-1:0] dcod_rfa;
@@ -205,10 +205,7 @@ module mor1kx_cpu_marocchino
   wire                            exe2dec_hazard_b;
 
   wire                            dcod_op_jr;
-  wire                            dcod_bubble;
-
-  wire                            dcod_op_branch;
-
+  wire                            stall_fetch;
 
   wire                            dcod_delay_slot;
   wire                            wb_delay_slot;
@@ -217,20 +214,15 @@ module mor1kx_cpu_marocchino
   wire  [`OR1K_FPCSR_RM_SIZE-1:0] ctrl_fpu_round_mode;
 
   // branching
-  wire                            dcod_op_bf;
-  wire                            dcod_op_bnf;
-  wire                            dcod_take_branch; // DECODE->FETCH (marocchino)
-  wire                            dcod_branch;
-  wire [9:0]                      dcod_immjbr_upper;
-  wire [OPTION_OPERAND_WIDTH-1:0] dcod_branch_target;
-  wire                            branch_mispredict;
-  wire                            predicted_flag;
-  //  ## for detect misprediction
-  wire                            exec_op_brcond;
-  wire                            exec_predicted_flag;
-  wire [OPTION_OPERAND_WIDTH-1:0] exec_mispredict_target;
-  //  ## drop mispredict flag by drop ecex-op-brcond
-  wire                            mispredict_taken;
+  //  ## detect jump/branch to indicate "delay slot" for next fetched instruction
+  wire                            dcod_jump_or_branch;
+  //  ## do branch (pedicted or unconditional)
+  wire                            dcod_do_branch;
+  wire [OPTION_OPERAND_WIDTH-1:0] dcod_do_branch_target;
+
+  // Delay conditional fetching till flag computation completion (see OMAN for details)
+  wire                            dcod_flag_await; // wait till flag ready & WB
+  wire                            dcod_op_brcond;  // l.bf or l.bnf
 
 
 
@@ -241,7 +233,6 @@ module mor1kx_cpu_marocchino
   wire                      [1:0] dcod_lsu_length;
   wire                            dcod_lsu_zext;
   wire                            dcod_op_msync;
-  wire [OPTION_OPERAND_WIDTH-1:0] lsu_adr;
   wire                            lsu_busy;
   wire                            grant_wb_to_lsu;
 
@@ -282,6 +273,7 @@ module mor1kx_cpu_marocchino
 
   // Pipelined multiplier
   wire                            dcod_op_mul;
+  wire                            mul_busy;
   wire                            mul_valid;
   wire                            grant_wb_to_mul;
 
@@ -297,6 +289,10 @@ module mor1kx_cpu_marocchino
   wire                            wb_fp32_flag_set;
   wire                            wb_fp32_flag_clear;
   wire    [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_cmp_fpcsr;
+
+  // Forwarding comparision flag
+  wire                            exec_op_1clk_cmp; // integer or fp32
+  wire                            exec_flag_set;    // integer or fp32 comparison result
 
 
   wire [OPTION_OPERAND_WIDTH-1:0] store_buffer_epcr;
@@ -328,9 +324,11 @@ module mor1kx_cpu_marocchino
 
   // pipeline controls from CTRL to units
   wire padv_fetch;
+  wire clean_fetch;
   wire padv_decode;
   wire padv_wb;
   wire pipeline_flush;
+
 
   // Exceptions: reported from FETCH to OMAN
   wire dcod_except_ibus_err;
@@ -341,8 +339,6 @@ module mor1kx_cpu_marocchino
   wire dcod_except_illegal;
   wire dcod_except_syscall;
   wire dcod_except_trap;
-  // Exceptions: reported by LSU
-  wire lsu_excepts;
   // Exceptions: latched by WB latches for processing in CONTROL-unit
   wire wb_except_ibus_err;
   wire wb_except_ipagefault;
@@ -355,6 +351,7 @@ module mor1kx_cpu_marocchino
   wire wb_except_dpagefault;
   wire wb_except_dtlb_miss;
   wire wb_except_align;
+  wire [OPTION_OPERAND_WIDTH-1:0] wb_lsu_except_addr;
   // flag to enabel/disable exterlal interrupts processing
   //  depending on the fact is instructions restartable or not
   wire wb_interrupts_en;
@@ -397,7 +394,8 @@ module mor1kx_cpu_marocchino
 
     // pipeline control
     .padv_fetch_i                     (padv_fetch), // FETCH
-    .dcod_bubble_i                    (dcod_bubble), // FETCH
+    .clean_fetch_i                    (clean_fetch), // FETCH
+    .stall_fetch_i                    (stall_fetch), // FETCH
     .pipeline_flush_i                 (pipeline_flush), // FETCH
 
     // configuration
@@ -427,11 +425,11 @@ module mor1kx_cpu_marocchino
     .ibus_burst_o                     (ibus_burst_o), // FETCH
 
     // branch/jump control transfer
-    .dcod_take_branch_i               (dcod_take_branch), // FETCH
-    .dcod_branch_target_i             (dcod_branch_target), // FETCH
-    .branch_mispredict_i              (branch_mispredict), // FETCH
-    .exec_mispredict_target_i         (exec_mispredict_target), // FETCH
-    .mispredict_taken_o               (mispredict_taken), // FETCH
+    //  ## detect jump/branch to indicate "delay slot" for next fetched instruction
+    .dcod_jump_or_branch_i            (dcod_jump_or_branch), // FETCH
+    //  ## do branch (pedicted or unconditional)
+    .dcod_do_branch_i                 (dcod_do_branch), // FETCH
+    .dcod_do_branch_target_i          (dcod_do_branch_target), // FETCH
 
     // exception/rfe control transfer
     .ctrl_branch_exception_i          (ctrl_branch_exception), // FETCH
@@ -449,7 +447,6 @@ module mor1kx_cpu_marocchino
     //   To DECODE
     .pc_decode_o                      (pc_decode), // FETCH
     .dcod_insn_o                      (dcod_insn), // FETCH
-    .dcod_op_branch_o                 (dcod_op_branch), // FETCH
     .dcod_delay_slot_o                (dcod_delay_slot), // FETCH
     .dcod_insn_valid_o                (dcod_insn_valid), // FETCH
 
@@ -473,12 +470,6 @@ module mor1kx_cpu_marocchino
   )
   u_decode
   (
-    // clocks & resets
-    .clk                              (clk),
-    .rst                              (rst),
-    // pipeline control signal in
-    .padv_decode_i                    (padv_decode), // DECODE & DECODE->EXE
-    .pipeline_flush_i                 (pipeline_flush), // DECODE & DECODE->EXE
     // INSN
     .dcod_insn_i                      (dcod_insn), // DECODE & DECODE->EXE
     // Data dependancy detection
@@ -501,18 +492,18 @@ module mor1kx_cpu_marocchino
     .dcod_flag_req_o                  (dcod_flag_req), // DECODE & DECODE->EXE
     .dcod_carry_req_o                 (dcod_carry_req), // DECODE & DECODE->EXE
     // flag & branches
-    .dcod_op_bf_o                     (dcod_op_bf), // DECODE & DECODE->EXE (not latched, to BRANCH PREDICTION)
-    .dcod_op_bnf_o                    (dcod_op_bnf), // DECODE & DECODE->EXE (not latched, to BRANCH PREDICTION)
-    .dcod_immjbr_upper_o              (dcod_immjbr_upper), // DECODE & DECODE->EXE (not latched, to BRANCH PREDICTION)
-    .dcod_take_branch_o               (dcod_take_branch), // DECODE & DECODE->EXE (not latched, to FETCH)
+    .dcod_jump_or_branch_o            (dcod_jump_or_branch), // DECODE & DECODE->EXE
+    // Forwarding comparision flag
+    .exec_op_1clk_cmp_i               (exec_op_1clk_cmp), // DECODE & DECODE->EXE
+    .exec_flag_set_i                  (exec_flag_set), // DECODE & DECODE->EXE
+    .ctrl_flag_i                      (ctrl_flag), // DECODE & DECODE->EXE
+    // Do jump/branch and jump/branch target for FETCH
     .dcod_rfb_i                       (dcod_rfb), // DECODE & DECODE->EXE
-    .dcod_branch_o                    (dcod_branch), // DECODE & DECODE->EXE
-    .dcod_branch_target_o             (dcod_branch_target), // DECODE & DECODE->EXE
-    .mispredict_taken_i               (mispredict_taken), // DECODE & DECODE->EXE
-    .predicted_flag_i                 (predicted_flag), // DECODE & DECODE->EXE
-    .exec_op_brcond_o                 (exec_op_brcond), // DECODE & DECODE->EXE
-    .exec_predicted_flag_o            (exec_predicted_flag), // DECODE & DECODE->EXE
-    .exec_mispredict_target_o         (exec_mispredict_target), // DECODE & DECODE->EXE
+    .dcod_do_branch_o                 (dcod_do_branch), // DECODE & DECODE->EXE
+    .dcod_do_branch_target_o          (dcod_do_branch_target), // DECODE & DECODE->EXE
+    // Delay conditional fetching till flag computation completion (see OMAN for details)
+    .dcod_flag_await_o                (dcod_flag_await), // DECODE & DECODE->EXE
+    .dcod_op_brcond_o                 (dcod_op_brcond), // DECODE & DECODE->EXE
     // LSU related
     .dcod_imm16_o                     (dcod_imm16), // DECODE & DECODE->EXE
     .dcod_op_lsu_load_o               (dcod_op_lsu_load), // DECODE & DECODE->EXE
@@ -564,27 +555,6 @@ module mor1kx_cpu_marocchino
     .dcod_op_rfe_o                    (dcod_op_rfe) // DECODE & DECODE->EXE
   );
 
-
-  mor1kx_branch_prediction
-  #(
-     .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
-  )
-  u_branch_prediction
-  (
-    // clocks & resets
-    .clk (clk),
-    .rst (rst),
-    // Outputs
-    .predicted_flag_o                 (predicted_flag), // BRANCH PREDICTION
-    .branch_mispredict_o              (branch_mispredict), // BRANCH PREDICTION
-    // Inputs
-    .op_bf_i                          (dcod_op_bf), // BRANCH PREDICTION
-    .op_bnf_i                         (dcod_op_bnf), // BRANCH PREDICTION
-    .immjbr_upper_i                   (dcod_immjbr_upper), // BRANCH PREDICTION
-    .prev_op_brcond_i                 (exec_op_brcond), // BRANCH PREDICTION
-    .prev_predicted_flag_i            (exec_predicted_flag), // BRANCH PREDICTION
-    .flag_i                           (ctrl_flag) // BRANCH PREDICTION
-  );
 
 
   mor1kx_execute_marocchino
@@ -644,6 +614,7 @@ module mor1kx_cpu_marocchino
     // multi-clock instruction related inputs/outputs
     //  ## multiplier inputs/outputs
     .dcod_op_mul_i                    (dcod_op_mul), // EXE
+    .mul_busy_o                       (mul_busy), // EXE
     .mul_valid_o                      (mul_valid), // EXE
     .grant_wb_to_mul_i                (grant_wb_to_mul), // EXE
     //  ## division inputs/outputs
@@ -665,6 +636,10 @@ module mor1kx_cpu_marocchino
     //  ## LSU related inputs
     .wb_lsu_rdy_i                     (wb_lsu_rdy), // EXE
     .wb_lsu_result_i                  (wb_lsu_result), // EXE
+
+    // Forwarding comparision flag
+    .exec_op_1clk_cmp_o               (exec_op_1clk_cmp), // EXE
+    .exec_flag_set_o                  (exec_flag_set), // EXE
 
     // WB outputs
     .wb_result_o                      (wb_result), // EXE
@@ -754,17 +729,16 @@ module mor1kx_cpu_marocchino
     .store_buffer_epcr_o              (store_buffer_epcr), // LSU
     .store_buffer_err_o               (store_buffer_err), // LSU
     .ctrl_epcr_i                      (ctrl_epcr), // LSU
-    .lsu_excepts_o                    (lsu_excepts), // LSU
     // Outputs
     .lsu_busy_o                       (lsu_busy), // LSU
-    .lsu_valid_o                      (lsu_valid), // LSU
-    .lsu_adr_o                        (lsu_adr), // LSU
+    .lsu_valid_o                      (lsu_valid), // LSU: result ready or exceptions
     .wb_lsu_result_o                  (wb_lsu_result), // LSU
     .wb_lsu_rdy_o                     (wb_lsu_rdy), // LSU
     .wb_except_dbus_o                 (wb_except_dbus), // LSU
     .wb_except_dpagefault_o           (wb_except_dpagefault), // LSU
     .wb_except_dtlb_miss_o            (wb_except_dtlb_miss), // LSU
     .wb_except_align_o                (wb_except_align), // LSU
+    .wb_lsu_except_addr_o             (wb_lsu_except_addr), // LSU
     .wb_atomic_flag_set_o             (wb_atomic_flag_set), // LSU
     .wb_atomic_flag_clear_o           (wb_atomic_flag_clear) // LSU
   );
@@ -785,7 +759,6 @@ module mor1kx_cpu_marocchino
     .clk                              (clk),
     .rst                              (rst),
     // pipeline control signals
-    .padv_decode_i                    (padv_decode), // RF
     .pipeline_flush_i                 (pipeline_flush), // RF
     // SPR bus
     .spr_bus_addr_i                   (spr_bus_addr_o[15:0]), // RF
@@ -845,6 +818,7 @@ module mor1kx_cpu_marocchino
     // DECODE non-latched additional information related instruction
     //  part #1: iformation stored in order control buffer
     .dcod_delay_slot_i          (dcod_delay_slot), // OMAN
+    .dcod_flag_await_i          (dcod_flag_await), // OMAN
     .dcod_flag_wb_i             (dcod_flag_wb), // OMAN
     .dcod_carry_wb_i            (dcod_carry_wb), // OMAN
     .dcod_rf_wb_i               (dcod_rf_wb), // OMAN
@@ -858,6 +832,7 @@ module mor1kx_cpu_marocchino
     .dcod_flag_req_i            (dcod_flag_req), // OMAN
     .dcod_carry_req_i           (dcod_carry_req), // OMAN
     .dcod_op_jr_i               (dcod_op_jr), // OMAN
+    .dcod_op_brcond_i           (dcod_op_brcond), // OMAN
     //  part #3: information required for create enable for
     //           for external (timer/ethernet/uart/etc) interrupts
     .dcod_op_lsu_store_i        (dcod_op_lsu_store), // OMAN
@@ -867,6 +842,7 @@ module mor1kx_cpu_marocchino
     .dcod_op_mfspr_i            (dcod_op_mfspr), // OMAN
 
     // collect busy flags from exwcution module
+    .mul_busy_i                 (mul_busy), // OMAN
     .div_busy_i                 (div_busy), // OMAN
     .fp32_arith_busy_i          (fp32_arith_busy), // OMAN
     .lsu_busy_i                 (lsu_busy), // OMAN
@@ -876,8 +852,7 @@ module mor1kx_cpu_marocchino
     .div_valid_i                (div_valid), // OMAN
     .mul_valid_i                (mul_valid), // OMAN
     .fp32_arith_valid_i         (fp32_arith_valid), // OMAN
-    .lsu_valid_i                (lsu_valid), // OMAN
-    .lsu_excepts_i              (lsu_excepts), // OMAN
+    .lsu_valid_i                (lsu_valid), // OMAN: result ready or exceptions
 
     // FETCH & DECODE exceptions
     .dcod_except_ibus_err_i     (dcod_except_ibus_err), // OMAN
@@ -889,7 +864,7 @@ module mor1kx_cpu_marocchino
     .dcod_except_trap_i         (dcod_except_trap), // OMAN
 
     // EXECUTE-to-DECODE hazards
-    .dcod_bubble_o              (dcod_bubble), // OMAN
+    .stall_fetch_o              (stall_fetch), // OMAN
     .exe2dec_hazard_a_o         (exe2dec_hazard_a), // OMAN
     .exe2dec_hazard_b_o         (exe2dec_hazard_b), // OMAN
 
@@ -970,12 +945,13 @@ module mor1kx_cpu_marocchino
 
     // Inputs / Outputs for pipeline control signals
     .dcod_insn_valid_i                (dcod_insn_valid), // CTRL
-    .dcod_bubble_i                    (dcod_bubble), // CTRL
+    .stall_fetch_i                    (stall_fetch), // CTRL
     .dcod_valid_i                     (dcod_valid), // CTRL
     .exec_valid_i                     (exec_valid), // CTRL
     .do_rf_wb_i                       (do_rf_wb), // CTRL (MFSPR support)
     .pipeline_flush_o                 (pipeline_flush), // CTRL
     .padv_fetch_o                     (padv_fetch), // CTRL
+    .clean_fetch_o                    (clean_fetch), // CTRL
     .padv_decode_o                    (padv_decode), // CTRL
     .padv_wb_o                        (padv_wb), // CTRL
 
@@ -991,11 +967,9 @@ module mor1kx_cpu_marocchino
     .wb_mfspr_dat_o                   (wb_mfspr_dat), // CTRL: for WB_MUX
 
     // Track branch address for exception processing support
-    .dcod_branch_i                    (dcod_branch), // CTRL
-    .dcod_branch_target_i             (dcod_branch_target), // CTRL
-    .branch_mispredict_i              (branch_mispredict), // CTRL
-    .exec_mispredict_target_i         (exec_mispredict_target), // CTRL
-    .dcod_op_branch_i                 (dcod_op_branch), // CTRL
+    .dcod_do_branch_i                 (dcod_do_branch), // CTRL
+    .dcod_do_branch_target_i          (dcod_do_branch_target), // CTRL
+    .dcod_jump_or_branch_i            (dcod_jump_or_branch), // CTRL
     .pc_decode_i                      (pc_decode), // CTRL
 
     // Debug Unit related
@@ -1056,7 +1030,7 @@ module mor1kx_cpu_marocchino
     .wb_fp32_arith_fpcsr_i            (wb_fp32_arith_fpcsr), // CTRL
     .wb_fp32_cmp_fpcsr_i              (wb_fp32_cmp_fpcsr), // CTRL
     //  # Excepion processing auxiliaries
-    .lsu_adr_i                        (lsu_adr), // CTRL
+    .wb_lsu_except_addr_i             (wb_lsu_except_addr), // CTRL
     .store_buffer_epcr_i              (store_buffer_epcr), // CTRL
     .store_buffer_err_i               (store_buffer_err), // CTRL
     .ctrl_epcr_o                      (ctrl_epcr), // CTRL

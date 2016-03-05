@@ -76,12 +76,13 @@ module mor1kx_ctrl_marocchino
 
   // Inputs / Outputs for pipeline control signals
   input                                 dcod_insn_valid_i,
-  input                                 dcod_bubble_i,
+  input                                 stall_fetch_i,
   input                                 dcod_valid_i,
   input                                 exec_valid_i,
   input                                 do_rf_wb_i,
   output                                pipeline_flush_o,
   output                                padv_fetch_o,
+  output                                clean_fetch_o,
   output                                padv_decode_o,
   output                                padv_wb_o,
 
@@ -97,11 +98,9 @@ module mor1kx_ctrl_marocchino
   output reg [OPTION_OPERAND_WIDTH-1:0] wb_mfspr_dat_o,
 
   // Track branch address for exception processing support
-  input                                 dcod_branch_i,
-  input      [OPTION_OPERAND_WIDTH-1:0] dcod_branch_target_i,
-  input                                 branch_mispredict_i,
-  input      [OPTION_OPERAND_WIDTH-1:0] exec_mispredict_target_i,
-  input                                 dcod_op_branch_i,
+  input                                 dcod_do_branch_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] dcod_do_branch_target_i,
+  input                                 dcod_jump_or_branch_i,
   input      [OPTION_OPERAND_WIDTH-1:0] pc_decode_i,
 
   // Debug Unit related
@@ -163,7 +162,7 @@ module mor1kx_ctrl_marocchino
   input         [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_arith_fpcsr_i,
   input         [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_cmp_fpcsr_i,
   //  # Excepion processing auxiliaries
-  input      [OPTION_OPERAND_WIDTH-1:0] lsu_adr_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] wb_lsu_except_addr_i,
   //    ## Exception PC input coming from the store buffer
   input      [OPTION_OPERAND_WIDTH-1:0] store_buffer_epcr_i,
   input                                 store_buffer_err_i,
@@ -342,8 +341,10 @@ module mor1kx_ctrl_marocchino
   end // @ clock
 
 
-  always @(posedge clk) begin
-    if (exception_re)
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      exception_pc_addr <= {19'd0,`OR1K_RESET_VECTOR,8'd0};
+    else if (exception_re) begin
       casez({except_itlb_miss_i,
              except_ipagefault_i,
              except_ibus_err_i,
@@ -377,6 +378,7 @@ module mor1kx_ctrl_marocchino
         //15'b00000000000001:
         default:             exception_pc_addr <= spr_evbar | {19'd0,`OR1K_TT_VECTOR,8'd0};
       endcase // casex (...
+    end
   end // @ clock
 
 
@@ -398,11 +400,17 @@ module mor1kx_ctrl_marocchino
 
   assign padv_fetch_o =
     // MAROCCHINO_TODO: ~du_cpu_stall & ~stepping &  // from DU
-    (dcod_valid_i | ~dcod_insn_valid_i) & ~cmd_op_mXspr & ~dcod_bubble_i;
+    (dcod_valid_i | ~dcod_insn_valid_i) & ~cmd_op_mXspr & ~stall_fetch_i;
+
+  // Clean up FETCH output when l.mf(t)spr goes to execution
+  // The condition is same to one is used to start l.mf(t)spr processing  
+  assign clean_fetch_o = padv_decode_o & (dcod_op_mfspr_i | dcod_op_mtspr_i);
+
 
   assign padv_decode_o =
     // MAROCCHINO_TODO: ~du_cpu_stall & (~stepping | (stepping & pstep[1])) &  // from DU
     dcod_valid_i & dcod_insn_valid_i & ~cmd_op_mXspr;
+
 
   assign padv_wb_o = (exec_valid_i & ~cmd_op_mXspr) | mXspr_ack;
 
@@ -555,23 +563,23 @@ endgenerate // FPU related: FPCSR and exceptions
   // Exception PC
   //  # PC of last branch insn
   //   ## 1st store flag of any branch instruction
-  reg op_branch_r;
+  reg dcod_jump_or_branch_r;
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
-      op_branch_r <= 1'b0;
+      dcod_jump_or_branch_r <= 1'b0;
     else if (pipeline_flush_o)
-      op_branch_r <= 1'b0;
+      dcod_jump_or_branch_r <= 1'b0;
     else if (padv_decode_o)
-      op_branch_r <= dcod_op_branch_i;
+      dcod_jump_or_branch_r <= dcod_jump_or_branch_i;
     else if (padv_wb_o)
-      op_branch_r <= 1'b0;
+      dcod_jump_or_branch_r <= 1'b0;
   end // @clock
   //   ## and store the branch's PC
   reg [OPTION_OPERAND_WIDTH-1:0] pc_branch_r;
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       pc_branch_r <= {OPTION_OPERAND_WIDTH{1'b0}};
-    else if (padv_decode_o)
+    else if (padv_decode_o & dcod_jump_or_branch_i)
       pc_branch_r <= pc_decode_i;
   end // @clock
   //   ## 2nd store address of a branch instruction
@@ -581,7 +589,7 @@ endgenerate // FPU related: FPCSR and exceptions
       last_branch_insn_pc <= {OPTION_OPERAND_WIDTH{1'b0}};
     else if (pipeline_flush_o)
       last_branch_insn_pc <= last_branch_insn_pc;
-    else if (padv_wb_o & op_branch_r)
+    else if (padv_wb_o & dcod_jump_or_branch_r)
       last_branch_insn_pc <= pc_branch_r;
   end // @clock
 
@@ -593,7 +601,7 @@ endgenerate // FPU related: FPCSR and exceptions
   always @(posedge clk) begin
     if (exception_re) begin
       if (except_ibus_err_i)
-        spr_epcr <= last_branch_insn_pc;
+        spr_epcr <= last_branch_insn_pc; // IBUS error
       // Syscall is a special case, we return back to the instruction _after_
       // the syscall instruction, unless the syscall was in a delay slot
       else if (except_syscall_i)
@@ -618,7 +626,7 @@ endgenerate // FPU related: FPCSR and exceptions
       if (except_ibus_err_i | except_itlb_miss_i | except_ipagefault_i)
         spr_eear <= pc_wb_i;
       else
-        spr_eear <= lsu_adr_i;
+        spr_eear <= wb_lsu_except_addr_i;
     end
   end // @ clock
 
@@ -639,10 +647,8 @@ endgenerate // FPU related: FPCSR and exceptions
       last_branch_target_pc <= {OPTION_OPERAND_WIDTH{1'b0}};
     else if (pipeline_flush_o)
       last_branch_target_pc <= last_branch_target_pc; // keep state on pipeline flush
-    else if (padv_wb_o & branch_mispredict_i)
-      last_branch_target_pc <= exec_mispredict_target_i;
-    else if (padv_decode_o & dcod_branch_i)
-      last_branch_target_pc <= dcod_branch_target_i;
+    else if (padv_decode_o & dcod_do_branch_i)
+      last_branch_target_pc <= dcod_do_branch_target_i;
   end // @ clock
 
   // Generate the NPC for SPR accesses
@@ -1215,7 +1221,7 @@ if (FEATURE_DEBUGUNIT != "NONE") begin : du
     else if (du_npc_written)
       branch_step <= 0;
     else if (stepping & pstep[2])
-      branch_step <= {branch_step[0], dcod_branch_i};
+      branch_step <= {branch_step[0], dcod_do_branch_i};
     else if ((~stepping) & wb_new_result) // DU
       branch_step <= {branch_step[0], wb_delay_slot_i};// DU
   end // @ clock

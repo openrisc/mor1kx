@@ -117,6 +117,5 @@ u_mor1kx_marocchino
  your_path/mor1kx/rtl/verilog/mor1kx_rf_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_ocb_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_oman_marocchino.v
- your_path/mor1kx/rtl/verilog/mor1kx_branch_prediction.v
  your_path/mor1kx/rtl/verilog/mor1kx_cpu_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_marocchino_alone.v

@@ -44,6 +44,9 @@ module mor1kx_marocchino_alone
   parameter OPTION_DMMU_SET_WIDTH      =  6,
   parameter OPTION_DMMU_WAYS           =  1,
 
+  // store buffer
+  parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 4, // 16 taps
+
   // istruction cache
   parameter OPTION_ICACHE_BLOCK_WIDTH  =  5,
   parameter OPTION_ICACHE_SET_WIDTH    =  9,
@@ -78,8 +81,6 @@ module mor1kx_marocchino_alone
   parameter FEATURE_CSYNC              = "NONE",
 
   parameter FEATURE_FPU                = "NONE", // ENABLED|NONE: actual for cappuccino pipeline only
-
-  parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 8,
 
   parameter FEATURE_MULTICORE          = "NONE",
 
@@ -266,6 +267,8 @@ module mor1kx_marocchino_alone
     .FEATURE_DMMU_HW_TLB_RELOAD       (FEATURE_DMMU_HW_TLB_RELOAD),
     .OPTION_DMMU_SET_WIDTH            (OPTION_DMMU_SET_WIDTH),
     .OPTION_DMMU_WAYS                 (OPTION_DMMU_WAYS),
+    // write buffer
+    .OPTION_STORE_BUFFER_DEPTH_WIDTH  (OPTION_STORE_BUFFER_DEPTH_WIDTH),
     // instructon cache
     .OPTION_ICACHE_BLOCK_WIDTH        (OPTION_ICACHE_BLOCK_WIDTH),
     .OPTION_ICACHE_SET_WIDTH          (OPTION_ICACHE_SET_WIDTH),
@@ -288,6 +291,7 @@ module mor1kx_marocchino_alone
     .FEATURE_MULTICORE                (FEATURE_MULTICORE),
     .FEATURE_TRACEPORT_EXEC           (FEATURE_TRACEPORT_EXEC),
     .FEATURE_FASTCONTEXTS             (FEATURE_FASTCONTEXTS),
+    // Redister File
     .OPTION_RF_CLEAR_ON_INIT          (OPTION_RF_CLEAR_ON_INIT),
     .OPTION_RF_NUM_SHADOW_GPR         (OPTION_RF_NUM_SHADOW_GPR),
     .OPTION_RF_ADDR_WIDTH             (OPTION_RF_ADDR_WIDTH),
@@ -296,8 +300,7 @@ module mor1kx_marocchino_alone
      // arithmetic modules
     .FEATURE_PSYNC                    (FEATURE_PSYNC),
     .FEATURE_CSYNC                    (FEATURE_CSYNC),
-    .FEATURE_FPU                      (FEATURE_FPU),
-    .OPTION_STORE_BUFFER_DEPTH_WIDTH  (OPTION_STORE_BUFFER_DEPTH_WIDTH)
+    .FEATURE_FPU                      (FEATURE_FPU)
   )
   u_cpu_marocchino
   (

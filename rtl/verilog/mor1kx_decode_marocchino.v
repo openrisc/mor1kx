@@ -45,13 +45,6 @@ module mor1kx_decode_marocchino
   parameter FEATURE_FPU          = "NONE" // ENABLED|NONE
 )
 (
-  input                                 clk,
-  input                                 rst,
-
-  // pipeline control signal in
-  input                                 padv_decode_i,
-  input                                 pipeline_flush_i,
-
   // INSN
   input          [`OR1K_INSN_WIDTH-1:0] dcod_insn_i,
 
@@ -78,20 +71,19 @@ module mor1kx_decode_marocchino
   output                                dcod_carry_req_o, // instruction requires carry flag
 
   // flag & branches
-  output                                dcod_op_bf_o, // to BRANCH PREDICTION
-  output                                dcod_op_bnf_o, // to BRANCH PREDICTION
-  output                          [9:0] dcod_immjbr_upper_o, // to BRANCH PREDICTION : Upper 10 bits of immediate for jumps and branches
-  output                                dcod_take_branch_o, // to FETCH
+  output                                dcod_jump_or_branch_o, // detect jump/branch to indicate "delay slot" for next fetched instruction
+  // Forwarding comparision flag
+  input                                 exec_op_1clk_cmp_i, // integer or fp32
+  input                                 exec_flag_set_i,    // integer or fp32 comparison result
+  input                                 ctrl_flag_i,
+  // Do jump/branch and jump/branch target for FETCH
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb_i,
-  output                                dcod_branch_o,
-  output     [OPTION_OPERAND_WIDTH-1:0] dcod_branch_target_o,
-  // Branch prediction signals
-  input                                 mispredict_taken_i,
-  input                                 predicted_flag_i,
-  output reg                            exec_op_brcond_o,
-  output reg                            exec_predicted_flag_o,
-  // The target pc that should be used in case of branch misprediction
-  output reg [OPTION_OPERAND_WIDTH-1:0] exec_mispredict_target_o,
+  output                                dcod_do_branch_o,
+  output     [OPTION_OPERAND_WIDTH-1:0] dcod_do_branch_target_o,
+
+  // Delay conditional fetching till flag computation completion (see OMAN for details)
+  output                                dcod_flag_await_o, // wait till flag ready & WB
+  output                                dcod_op_brcond_o,  // l.bf or l.bnf
 
   // LSU related
   output          [`OR1K_IMM_WIDTH-1:0] dcod_imm16_o,
@@ -267,10 +259,6 @@ module mor1kx_decode_marocchino
     {(FEATURE_FPU != "NONE") & (opc_insn == `OR1K_OPCODE_FPU) & dcod_insn_i[3],
       dcod_insn_i[`OR1K_FPUOP_WIDTH-2:0]};
 
-
-
-  // Upper 10 bits for jump/branch instructions
-  assign dcod_immjbr_upper_o = dcod_insn_i[25:16];
 
   // Immediate in l.mtspr is broken up, reassemble
   assign dcod_imm16_o = (dcod_op_mtspr_o | dcod_op_lsu_store_o) ?
@@ -635,11 +623,9 @@ module mor1kx_decode_marocchino
   end // always
 
 
-  // Calculate the link register result
-  wire [OPTION_OPERAND_WIDTH-1:0] next_pc_after_branch_insn =
-    (pc_decode_i + 8); // (FEATURE_DELAY_SLOT == "ENABLED")
+  // Calculate the link register result and
   // provide it as GPR[9] content for jump & link
-  assign dcod_jal_result_o = next_pc_after_branch_insn;
+  assign dcod_jal_result_o = (pc_decode_i + 8); // (FEATURE_DELAY_SLOT == "ENABLED")
 
 
   // Branch detection
@@ -652,69 +638,60 @@ module mor1kx_decode_marocchino
                          (opc_insn == `OR1K_OPCODE_JAL);
 
   // conditional branches
-  assign dcod_op_bf_o     = (opc_insn == `OR1K_OPCODE_BF);
-  assign dcod_op_bnf_o    = (opc_insn == `OR1K_OPCODE_BNF);
+  wire dcod_op_bf  = (opc_insn == `OR1K_OPCODE_BF);
+  wire dcod_op_bnf = (opc_insn == `OR1K_OPCODE_BNF);
 
-  // jumps or contitional branches to immediate
+  // do jumps or contitional branches to immediate
+  //  # forwarded flag
+  wire the_flag = exec_op_1clk_cmp_i ? exec_flag_set_i : ctrl_flag_i;
+  //  # ---
   wire branch_to_imm = (opc_insn == `OR1K_OPCODE_J) | (opc_insn == `OR1K_OPCODE_JAL) |
-                       (dcod_op_bf_o & predicted_flag_i) | (dcod_op_bnf_o & ~predicted_flag_i);
+                       (dcod_op_bf & the_flag) | (dcod_op_bnf & ~the_flag);
 
   wire [OPTION_OPERAND_WIDTH-1:0] branch_to_imm_target =
-    pc_decode_i +
-    {{4{dcod_immjbr_upper_o[9]}},dcod_immjbr_upper_o,dcod_imm16_o,2'b00};
-
-  assign dcod_branch_target_o = branch_to_imm ? branch_to_imm_target : dcod_rfb_i;
-
-  // exception on wrong branch target
-  assign dcod_branch_o = branch_to_imm | (dcod_op_jr_o & ~exe2dec_hazard_b_i);
-  assign dcod_except_ibus_align_o = dcod_branch_o & (|dcod_branch_target_o[1:0]);
+    pc_decode_i + {{4{dcod_insn_i[25]}},dcod_insn_i[25:16],dcod_imm16_o,2'b00};
 
 
-  wire [OPTION_OPERAND_WIDTH-1:0] dcod_mispredict_target =
-    ((dcod_op_bf_o & (~predicted_flag_i)) |
-     (dcod_op_bnf_o & predicted_flag_i)) ? branch_to_imm_target :
-                                           next_pc_after_branch_insn;
+  // detect jump/branch to indicate "delay slot" for next fetched instruction
+  assign dcod_jump_or_branch_o = ((opc_insn < `OR1K_OPCODE_NOP) |   // l.j  | l.jal  | l.bnf | l.bf
+                                  (opc_insn == `OR1K_OPCODE_JR) |   // l.jr
+                                  (opc_insn == `OR1K_OPCODE_JALR)); // l.jalr
+  // take branch flag / target / align exception
+  //  # take branch flag
+  assign dcod_do_branch_o         = branch_to_imm | dcod_op_jr_o;
+  //  # take branch target
+  assign dcod_do_branch_target_o  = branch_to_imm ? branch_to_imm_target : dcod_rfb_i;
+  //  # take branch align exception
+  assign dcod_except_ibus_align_o = branch_to_imm ? (|branch_to_imm_target[1:0]) :
+                                    dcod_op_jr_o  ? ((|dcod_rfb_i[1:0]) & ~exe2dec_hazard_b_i) :
+                                                    1'b0;
 
-
-  // For mispredict detection
-  //  # latch "branch is conditional" flag
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      exec_op_brcond_o <= 1'b0;
-    else if (mispredict_taken_i | pipeline_flush_i)
-      exec_op_brcond_o <= 1'b0;
-    else if (padv_decode_i)
-      exec_op_brcond_o <= (dcod_op_bf_o | dcod_op_bnf_o);
-  end // @clock
-  //  # latch predicted flag and mispredicted target
-  always @(posedge clk) begin
-    if (padv_decode_i & (dcod_op_bf_o | dcod_op_bnf_o)) begin
-      exec_mispredict_target_o <= dcod_mispredict_target;
-      exec_predicted_flag_o    <= predicted_flag_i;
-    end
-  end
-
-  // take branch flag for FETCH
-  assign dcod_take_branch_o = branch_to_imm | dcod_op_jr_o;
 
   // Register file addresses
   assign dcod_rfa_adr_o = dcod_insn_i[`OR1K_RA_SELECT];
   assign dcod_rfb_adr_o = dcod_insn_i[`OR1K_RB_SELECT];
   assign dcod_rfd_adr_o = dcod_op_jal_o ? 4'd9 : dcod_insn_i[`OR1K_RD_SELECT];
 
+
   // Which instructions writes comparison flag?
   assign dcod_flag_wb_o = dcod_op_setflag_o |
                           dcod_op_fp32_cmp_o[(`OR1K_FPUOP_WIDTH-1)] |
                           (opc_insn == `OR1K_OPCODE_SWA);
-
   // Which instructions require comparison flag?
   //  # l.cmov
-  //  # conditional branches for mispredict detection in EXECUTE
-  assign dcod_flag_req_o = dcod_op_cmov_o | dcod_op_bf_o | dcod_op_bnf_o;
+  assign dcod_flag_req_o = dcod_op_cmov_o;
+
+
+  //  Multicycle instructions which cause stall branch taking in FETCH
+  //  They are multicycle "set flag" like l.swa or float64 comparison,
+  // so they couldn't be forwarded into FETCH immediately from EXECUTE.
+  assign dcod_flag_await_o = (opc_insn == `OR1K_OPCODE_SWA);
+  //  Conditional branches to stall FETCH if we are waiting flag
+  assign dcod_op_brcond_o  = dcod_op_bf | dcod_op_bnf;
+
 
   // Which instruction writes carry flag?
   assign dcod_carry_wb_o = dcod_op_add_o | dcod_op_div_o;
-
   // Which instructions require carry flag?
   assign dcod_carry_req_o = dcod_adder_do_carry_o;
 

@@ -57,7 +57,10 @@ module pfpu32_fcmp_marocchino
   // Operands
   input                        [31:0] rfa_i,
   input                        [31:0] rfb_i,
-  // WB latches
+  // Outputs
+  //  # not WB-latched for flag forwarding
+  output                              fp32_flag_set_o,
+  //  # WB-latched
   output reg                          wb_fp32_flag_set_o,   // comparison result
   output reg                          wb_fp32_flag_clear_o, // comparison result
   output reg  [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_cmp_fpcsr_o   // comparison exceptions
@@ -192,6 +195,11 @@ always @(altb or blta or aeqb or cmp_type_i) begin
     default:          cmp_flag = 1'b0;
   endcase // case (fpu_op_r)
 end // always@ *
+
+
+////////////////////////////////////////////////////////////////////////
+// Not latched output for forwarding to take branch logic
+assign fp32_flag_set_o = cmp_flag;
 
 
 ////////////////////////////////////////////////////////////////////////

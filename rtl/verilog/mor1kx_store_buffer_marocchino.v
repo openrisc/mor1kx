@@ -26,7 +26,7 @@
 
 module mor1kx_store_buffer_marocchino
 #(
-  parameter DEPTH_WIDTH          =  4,
+  parameter DEPTH_WIDTH          =  4, // 16 taps
   parameter OPTION_OPERAND_WIDTH = 32
 )
 (
@@ -37,51 +37,61 @@ module mor1kx_store_buffer_marocchino
   input    [OPTION_OPERAND_WIDTH-1:0] adr_i,
   input    [OPTION_OPERAND_WIDTH-1:0] dat_i,
   input  [OPTION_OPERAND_WIDTH/8-1:0] bsel_i,
-  input                               atomic_i,
   input                               write_i,
 
   output   [OPTION_OPERAND_WIDTH-1:0] pc_o,
   output   [OPTION_OPERAND_WIDTH-1:0] adr_o,
   output   [OPTION_OPERAND_WIDTH-1:0] dat_o,
   output [OPTION_OPERAND_WIDTH/8-1:0] bsel_o,
-  output                              atomic_o,
   input                               read_i,
 
   output                              full_o,
   output                              empty_o
 );
 
-  // The fifo stores address + data + byte sel + pc + atomic
+  // The fifo stores (address + data + byte sel + pc)
   localparam FIFO_DATA_WIDTH = OPTION_OPERAND_WIDTH*3 +
-                               OPTION_OPERAND_WIDTH/8 + 1;
+                               OPTION_OPERAND_WIDTH/8;
 
-  wire [FIFO_DATA_WIDTH-1:0]     fifo_dout;
-  wire [FIFO_DATA_WIDTH-1:0]     fifo_din;
+  wire  [FIFO_DATA_WIDTH-1:0] fifo_dout;
+  wire  [FIFO_DATA_WIDTH-1:0] fifo_din;
 
-  reg [DEPTH_WIDTH:0]                  write_pointer;
-  reg [DEPTH_WIDTH:0]                  read_pointer;
+  reg         [DEPTH_WIDTH:0] write_pointer;
+  wire        [DEPTH_WIDTH:0] write_pointer_next;
+  
+  reg         [DEPTH_WIDTH:0] read_pointer;
+  wire        [DEPTH_WIDTH:0] read_pointer_next;
 
-  assign fifo_din = {adr_i, dat_i, bsel_i, pc_i, atomic_i};
-  assign {adr_o, dat_o, bsel_o, pc_o, atomic_o} = fifo_dout;
+  // write pointer update
+  assign write_pointer_next = write_pointer + {{DEPTH_WIDTH{1'b0}},1'b1};
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      write_pointer <= {(DEPTH_WIDTH+1){1'b0}};
+    else if (write_i)
+      write_pointer <= write_pointer_next;
+  end
 
-  assign full_o = (write_pointer[DEPTH_WIDTH] != read_pointer[DEPTH_WIDTH]) &
-                  (write_pointer[DEPTH_WIDTH-1:0] == read_pointer[DEPTH_WIDTH-1:0]);
+  // read pointer update
+  assign read_pointer_next = read_pointer + {{DEPTH_WIDTH{1'b0}},1'b1};
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      read_pointer <= {(DEPTH_WIDTH+1){1'b0}};
+    else if (read_i)
+      read_pointer <= read_pointer_next;
+  end
 
+  // "buffer is full flag"
+  assign full_o = (write_pointer_next[DEPTH_WIDTH] != read_pointer[DEPTH_WIDTH]) &
+                  (write_pointer_next[DEPTH_WIDTH-1:0] == read_pointer[DEPTH_WIDTH-1:0]);
+
+  // "buffer is empty flag"
   assign empty_o = (write_pointer == read_pointer);
 
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      write_pointer <= 0;
-    else if (write_i)
-      write_pointer <= write_pointer + 1;
-  end
-
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      read_pointer <= 0;
-    else if (read_i)
-      read_pointer <= read_pointer + 1;
-  end
+  // data input/output
+  assign fifo_din = {adr_i, dat_i, bsel_i, pc_i};
+  assign {adr_o, dat_o, bsel_o, pc_o} = fifo_dout;
 
 
   // same addresses for read and write
