@@ -335,8 +335,8 @@
 `define OR1K_FPCSR_MASK_DZF   20
 // bus select
 `define OR1K_FPCSR_MASK_ALL  `OR1K_FPCSR_MASK_DZF:`OR1K_FPCSR_MASK_OVF
-// reset value. enables: dzf,inf,ivf,snf,ovf
-`define OR1K_FPCSR_MASK_RESET_VALUE `OR1K_FPCSR_ALLF_SIZE'b1_1100_0101
+// reset value. 
+`define OR1K_FPCSR_MASK_RESET_VALUE `OR1K_FPCSR_ALLF_SIZE'd0
 
 
 // Implementation-specific SPR defines

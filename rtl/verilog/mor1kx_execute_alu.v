@@ -776,7 +776,6 @@ endgenerate
 			 op_movhi_i ? immediate_i :
 			 op_mul_i ? mul_result[OPTION_OPERAND_WIDTH-1:0] :
 			 fpu_arith_valid ? fpu_result :
-			 fpu_cmp_valid ? {OPTION_OPERAND_WIDTH{1'b0}} :
 			 op_shift_i ? shift_result :
 			 op_div_i ? div_result :
 			 op_ffl1_i ? ffl1_result :
