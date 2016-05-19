@@ -18,35 +18,78 @@
 
 module mor1kx_branch_prediction
   #(
-    parameter OPTION_OPERAND_WIDTH = 32
+    parameter OPTION_OPERAND_WIDTH = 32,
+    parameter FEATURE_BRANCH_PREDICTOR = "NONE"
     )
    (
-    input 	clk,
-    input 	rst,
+   input clk,
+   input rst,
 
-    // Signals belonging to the stage where the branch is predicted.
-    input 	op_bf_i,
-    input 	op_bnf_i,
-    input [9:0] immjbr_upper_i,
-    output 	predicted_flag_o,
+   // Signals belonging to the stage where the branch is predicted.
+   input op_bf_i,               // from decode stage, brn is bf
+   input op_bnf_i,              // from decode stage, brn is bnf
+   input [9:0] immjbr_upper_i,  // from decode stage, imm
+   output predicted_flag_o,     // to decode-execute stage, flag we predicate to be
 
-    // Signals belonging to the stage where the branch is resolved.
-    input 	prev_op_brcond_i,
-    input 	prev_predicted_flag_i,
-    input 	flag_i,
+   // Signals belonging to the stage where the branch is resolved.
+   input prev_op_brcond_i,      // from decode-execute stage, prev brn was cond
+   input prev_predicted_flag_i, // from decode-execute, prev predicated flag
+   input flag_i,                // from execute-ctrl stage, real flag we got
 
-    // Branch misprediction indicator
-    output 	branch_mispredict_o
-    );
+   input padv_decode_i,         // is decode stage stalled
+   input execute_bf_i,          // prev insn was bf
+   input execute_bnf_i,         // prev insn was bnf
+
+   // Branch misprediction indicator
+   output 	branch_mispredict_o // to decode-execute stage, was brn mispredicted or not
+   );
 
    // Compare the real flag with the previously predicted flag and signal a
    // misprediction in case of a mismatch.
-   assign branch_mispredict_o = prev_op_brcond_i &
-				(flag_i != prev_predicted_flag_i);
+   assign branch_mispredict_o = prev_op_brcond_i & (flag_i != prev_predicted_flag_i);
 
-   // Static branch prediction - backward branches are predicted as taken,
-   // forward branches as not taken.
-   assign predicted_flag_o = op_bf_i & immjbr_upper_i[9] |
-			     op_bnf_i & !immjbr_upper_i[9];
+generate
+if (FEATURE_BRANCH_PREDICTOR=="SAT_COUNTER") begin : branch_predictor_saturation_counter
+   mor1kx_branch_predictor_saturation_counter
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
+       )
+      mor1kx_branch_predictor_saturation_counter
+      (
+         // Outputs
+         .predicted_flag_o                 (predicted_flag_o),
+         // Inputs
+         .clk                              (clk),
+         .rst                              (rst),
+         .flag_i                           (flag_i),
+         .execute_op_bf_i                  (execute_op_bf_i),
+         .execute_op_bnf_i                 (execute_op_bnf_i),
+         .op_bf_i                          (op_bf_i),
+         .op_bnf_i                         (op_bnf_i),
+         .prev_op_brcond_i                 (prev_op_brcond_i),
+         .branch_mispredict_i              (branch_mispredict_o));
+       
+end else if (FEATURE_BRANCH_PREDICTOR=="SIMPLE") begin : branch_predictor_simple
+   mor1kx_branch_predictor_simple
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
+       )
+      mor1kx_branch_predictor_simple
+      (
+         // Outputs
+         .predicted_flag_o                 (predicted_flag_o),
+         // Inputs
+         .op_bf_i                          (op_bf_i),
+         .op_bnf_i                         (op_bnf_i),
+         .immjbr_upper_i                   (immjbr_upper_i));
+  
+end else if (FEATURE_BRANCH_PREDICTOR!="SIMPLE" &&
+             FEATURE_BRANCH_PREDICTOR!="SAT_COUNTER") begin
+   initial begin
+      $display("Error: FEATURE_PREDICTOR_TYPE, %s, not valid", FEATURE_BRANCH_PREDICTOR);
+      $finish();
+   end
+end
+endgenerate
 
 endmodule
