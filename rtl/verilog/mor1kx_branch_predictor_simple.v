@@ -16,7 +16,6 @@
 
 module mor1kx_branch_predictor_simple
   #(
-    parameter OPTION_OPERAND_WIDTH = 32
     )
    (
     // Signals belonging to the stage where the branch is predicted.

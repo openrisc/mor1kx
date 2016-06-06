@@ -758,7 +758,6 @@ module mor1kx_cpu_cappuccino
     );*/
    mor1kx_branch_prediction
      #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
        .FEATURE_BRANCH_PREDICTOR(FEATURE_BRANCH_PREDICTOR)
        )
    mor1kx_branch_prediction

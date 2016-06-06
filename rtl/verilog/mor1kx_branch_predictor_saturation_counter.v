@@ -7,14 +7,14 @@
  Description: Saturating counter branch predictor
  This is FSM with 4 states: strongly not taken, weakly not taken,
  weakly taken, strongly taken.
- Fsm changes it state upon real(not predicated) flag.
+ Fsm changes it state upon real(not predicted) flag.
  If flag was "true" and instruction was bf  or flag was "false" and
  instruction was bnf fsm changes its state towards "taken". And vice versa
  otherwise.
- We predicate flag on current fsm state and current branch type.
+ We predict flag on current fsm state and current branch type.
  If we are in any "taken" state and current instruction is bf,
- we predicate flag to be "true". Or we're in any "not taken" state and
- current instruction is bnf, we predicate flag to be "true".
+ we predict flag to be "true". Or we're in any "not taken" state and
+ current instruction is bnf, we predict flag to be "true".
 
  Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
 
@@ -24,7 +24,6 @@
 
 module mor1kx_branch_predictor_saturation_counter
   #(
-    parameter OPTION_OPERAND_WIDTH = 32
     )
    (
     input clk,
@@ -38,7 +37,7 @@ module mor1kx_branch_predictor_saturation_counter
     input op_bf_i,               // cur insn is bf
     input op_bnf_i,              // cur insn is bnf
     input padv_decode_i,         // pipeline is moved
-    input flag_i,                // prev predicated flag
+    input flag_i,                // prev predicted flag
 
     // Signals belonging to the stage where the branch is resolved.
     input prev_op_brcond_i,      // prev op was cond brn

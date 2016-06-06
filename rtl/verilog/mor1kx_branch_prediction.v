@@ -19,7 +19,6 @@
 
 module mor1kx_branch_prediction
   #(
-    parameter OPTION_OPERAND_WIDTH = 32,
     parameter FEATURE_BRANCH_PREDICTOR = "NONE"
     )
    (
@@ -30,11 +29,11 @@ module mor1kx_branch_prediction
    input op_bf_i,               // from decode stage, brn is bf
    input op_bnf_i,              // from decode stage, brn is bnf
    input [9:0] immjbr_upper_i,  // from decode stage, imm
-   output predicted_flag_o,     // to decode-execute stage, flag we predicate to be
+   output predicted_flag_o,     // to decode-execute stage, flag we predict to be
 
    // Signals belonging to the stage where the branch is resolved.
    input prev_op_brcond_i,      // from decode-execute stage, prev brn was cond
-   input prev_predicted_flag_i, // from decode-execute, prev predicated flag
+   input prev_predicted_flag_i, // from decode-execute, prev predicted flag
    input flag_i,                // from execute-ctrl stage, real flag we got
 
    input padv_decode_i,         // is decode stage stalled
@@ -84,8 +83,7 @@ end else if (FEATURE_BRANCH_PREDICTOR=="SIMPLE") begin : branch_predictor_simple
          .op_bnf_i                         (op_bnf_i),
          .immjbr_upper_i                   (immjbr_upper_i));
   
-end else if (FEATURE_BRANCH_PREDICTOR!="SIMPLE" &&
-             FEATURE_BRANCH_PREDICTOR!="SAT_COUNTER") begin
+end else begin
    initial begin
       $display("Error: FEATURE_PREDICTOR_TYPE, %s, not valid", FEATURE_BRANCH_PREDICTOR);
       $finish();
