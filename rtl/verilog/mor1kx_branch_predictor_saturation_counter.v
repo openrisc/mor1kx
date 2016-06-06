@@ -57,31 +57,41 @@ module mor1kx_branch_predictor_saturation_counter
  
    always @(posedge clk) begin
       if (rst) begin
-         // set default state to STATE_WEAKLY_TAKEN
          state <= STATE_WEAKLY_TAKEN;
       end else begin
-         // if previous insn was cond brn and pipe is not stalled
          if (prev_op_brcond_i && padv_decode_i) begin
-            // if brn was not taken
             if (!brn_taken) begin
                // change fsm state:
                //   STATE_STRONGLY_TAKEN -> STATE_WEAKLY_TAKEN
                //   STATE_WEAKLY_TAKEN -> STATE_WEAKLY_NOT_TAKEN
                //   STATE_WEAKLY_NOT_TAKEN -> STATE_STRONGLY_NOT_TAKEN
                //   STATE_STRONGLY_NOT_TAKEN -> STATE_STRONGLY_NOT_TAKEN
-               state <= (state == STATE_STRONGLY_TAKEN) ? STATE_WEAKLY_TAKEN :
-                        (state == STATE_WEAKLY_TAKEN)   ? STATE_WEAKLY_NOT_TAKEN
-                                                        : STATE_STRONGLY_NOT_TAKEN;
-            // if brn was taken
+               case (state)
+                  STATE_STRONGLY_TAKEN:
+                     state <= STATE_WEAKLY_TAKEN;
+                  STATE_WEAKLY_TAKEN:
+                     state <= STATE_WEAKLY_TAKEN;
+                  STATE_WEAKLY_TAKEN:
+                     state <= STATE_STRONGLY_NOT_TAKEN;
+                  STATE_STRONGLY_NOT_TAKEN:
+                     state <= STATE_STRONGLY_NOT_TAKEN;
+               endcase
             end else begin
                // change fsm state:
                //   STATE_STRONGLY_NOT_TAKEN -> STATE_WEAKLY_NOT_TAKEN
                //   STATE_WEAKLY_NOT_TAKEN -> STATE_WEAKLY_TAKEN
                //   STATE_WEAKLY_TAKEN -> STATE_STRONGLY_TAKEN
                //   STATE_STRONGLY_TAKEN -> STATE_STRONGLY_TAKEN
-               state <= (state == STATE_STRONGLY_NOT_TAKEN) ? STATE_WEAKLY_NOT_TAKEN :
-                        (state == STATE_WEAKLY_NOT_TAKEN)   ? STATE_WEAKLY_TAKEN
-                                                            : STATE_STRONGLY_TAKEN;
+               case (state)
+                  STATE_STRONGLY_NOT_TAKEN:
+                     state <= STATE_WEAKLY_NOT_TAKEN;
+                  STATE_WEAKLY_NOT_TAKEN:
+                     state <= STATE_WEAKLY_TAKEN;
+                  STATE_WEAKLY_TAKEN:
+                     state <= STATE_STRONGLY_TAKEN;
+                  STATE_STRONGLY_TAKEN:
+                     state <= STATE_STRONGLY_TAKEN;
+               endcase
             end
          end
       end
