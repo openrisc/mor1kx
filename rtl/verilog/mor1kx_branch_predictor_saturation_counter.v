@@ -4,13 +4,19 @@
  of the OHDL was not distributed with this file, You
  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
- Description: Branch prediction module
- Generates a predicted flag output and compares that to the real flag
- when it comes back in the following pipeline stage.
- Signals are deliberately not named after the pipeline stage they belong to,
- in order to keep this module generic.
+ Description: Saturating counter branch predictor
+ This is FSM with 4 states: strongly not taken, weakly not taken,
+ weakly taken, strongly taken.
+ Fsm changes it state upon real(not predicated) flag.
+ If flag was "true" and instruction was bf  or flag was "false" and
+ instruction was bnf fsm changes its state towards "taken". And vice versa
+ otherwise.
+ We predicate flag on current fsm state and current branch type.
+ If we are in any "taken" state and current instruction is bf,
+ we predicate flag to be "true". Or we're in any "not taken" state and
+ current instruction is bnf, we predicate flag to be "true".
 
- Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
+ Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
 
  ******************************************************************************/
 

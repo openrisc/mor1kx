@@ -11,6 +11,7 @@
  in order to keep this module generic.
 
  Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
+ Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com> 
 
  ******************************************************************************/
 

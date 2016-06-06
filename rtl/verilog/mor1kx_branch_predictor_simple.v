@@ -4,11 +4,9 @@
  of the OHDL was not distributed with this file, You
  can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
 
- Description: Branch prediction module
- Generates a predicted flag output and compares that to the real flag
- when it comes back in the following pipeline stage.
- Signals are deliberately not named after the pipeline stage they belong to,
- in order to keep this module generic.
+ Description: Simple branch predictor implementation
+ We assume flag to be "true" if instruction is bf and it jumps backwords
+ or if instruction is bnf and it jumps forward.
 
  Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
 
