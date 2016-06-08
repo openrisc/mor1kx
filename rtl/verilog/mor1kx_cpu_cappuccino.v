@@ -96,7 +96,8 @@ module mor1kx_cpu_cappuccino
 
     parameter FEATURE_MULTICORE = "NONE",
 
-    parameter FEATURE_TRACEPORT_EXEC = "NONE"
+    parameter FEATURE_TRACEPORT_EXEC = "NONE",
+    parameter FEATURE_BRANCH_PREDICTOR = "SIMPLE"  // SIMPLE|SAT_COUNTER
     )
    (
     input 			      clk,
@@ -665,6 +666,8 @@ module mor1kx_cpu_cappuccino
       .execute_op_movhi_o               (execute_op_movhi_o),
       .execute_op_msync_o               (execute_op_msync_o),
       .execute_op_fpu_o                 (execute_op_fpu_o),
+      .execute_op_bf_o                  (execute_op_bf_o),
+      .execute_op_bnf_o                 (execute_op_bnf_o),
       .execute_jal_result_o             (execute_jal_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .execute_opc_insn_o               (execute_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]),
       .decode_branch_o                  (decode_branch_o),
@@ -745,6 +748,9 @@ module mor1kx_cpu_cappuccino
    /* mor1kx_branch_prediction AUTO_TEMPLATE (
       .op_bf_i				(decode_op_bf_o),
       .op_bnf_i				(decode_op_bnf_o),
+      .execute_bf_i			(execute_op_bf_o),
+      .execute_bnf_i			(execute_op_bnf_o),
+      .padv_decode_i			(padv_decode_o),
       .immjbr_upper_i			(decode_immjbr_upper_o),
       .prev_op_brcond_i			(execute_op_brcond_o),
       .prev_predicted_flag_i		(execute_predicted_flag_o),
@@ -752,7 +758,7 @@ module mor1kx_cpu_cappuccino
     );*/
    mor1kx_branch_prediction
      #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
+       .FEATURE_BRANCH_PREDICTOR(FEATURE_BRANCH_PREDICTOR)
        )
    mor1kx_branch_prediction
      (/*AUTOINST*/
@@ -764,6 +770,9 @@ module mor1kx_cpu_cappuccino
       .rst                              (rst),
       .op_bf_i                          (decode_op_bf_o),        // Templated
       .op_bnf_i                         (decode_op_bnf_o),       // Templated
+      .execute_bf_i                     (execute_op_bf_o),        // Templated
+      .execute_bnf_i                    (execute_op_bnf_o),        // Templated
+      .padv_decode_i                    (padv_decode_o),        // Templated
       .immjbr_upper_i                   (decode_immjbr_upper_o), // Templated
       .prev_op_brcond_i                 (execute_op_brcond_o),   // Templated
       .prev_predicted_flag_i            (execute_predicted_flag_o), // Templated

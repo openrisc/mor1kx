@@ -168,6 +168,8 @@ module mor1kx_decode_execute_cappuccino
     output reg 				  execute_op_shift_o,
     output reg 				  execute_op_ffl1_o,
     output reg 				  execute_op_movhi_o,
+    output reg 				  execute_op_bf_o,
+    output reg 				  execute_op_bnf_o,
     output reg                            execute_op_msync_o,
     output [`OR1K_FPUOP_WIDTH-1:0]        execute_op_fpu_o,
 
@@ -218,6 +220,8 @@ module mor1kx_decode_execute_cappuccino
    // Op control signals to execute stage
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
+	execute_op_bf_o <= 1'b0;
+	execute_op_bnf_o <= 1'b0;
 	execute_op_alu_o <= 1'b0;
 	execute_op_add_o <= 1'b0;
 	execute_op_mul_o <= 1'b0;
@@ -242,6 +246,8 @@ module mor1kx_decode_execute_cappuccino
 	execute_op_brcond_o <= 1'b0;
 	execute_op_branch_o <= 0;
      end else if (pipeline_flush_i) begin
+	execute_op_bf_o <= 1'b0;
+	execute_op_bnf_o <= 1'b0;
 	execute_op_alu_o <= 1'b0;
 	execute_op_add_o <= 1'b0;
 	execute_op_mul_o <= 1'b0;
@@ -264,6 +270,8 @@ module mor1kx_decode_execute_cappuccino
 	execute_op_brcond_o <= 1'b0;
 	execute_op_branch_o <= 1'b0;
      end else if (padv_i) begin
+	execute_op_bf_o <= decode_op_bf_i;
+	execute_op_bnf_o <= decode_op_bnf_i;
 	execute_op_alu_o <= decode_op_alu_i;
 	execute_op_add_o <= decode_op_add_i;
 	execute_op_mul_o <= decode_op_mul_i;
@@ -288,6 +296,8 @@ module mor1kx_decode_execute_cappuccino
 	execute_op_brcond_o <= decode_op_brcond_i;
 	execute_op_branch_o <= decode_op_branch_i;
 	if (decode_bubble_o) begin
+	   execute_op_bf_o <= 1'b0;
+	   execute_op_bnf_o <= 1'b0;
 	   execute_op_alu_o <= 1'b0;
 	   execute_op_add_o <= 1'b0;
 	   execute_op_mul_o <= 1'b0;
