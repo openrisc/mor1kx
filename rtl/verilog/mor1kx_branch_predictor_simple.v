@@ -15,8 +15,6 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_branch_predictor_simple
-  #(
-    )
    (
     // Signals belonging to the stage where the branch is predicted.
     input op_bf_i,               // branch if flag

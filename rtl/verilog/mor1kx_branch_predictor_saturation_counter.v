@@ -23,8 +23,6 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_branch_predictor_saturation_counter
-  #(
-    )
    (
     input clk,
     input rst,
