@@ -53,6 +53,7 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_TIMER = "ENABLED",
     parameter FEATURE_DEBUGUNIT = "NONE",
     parameter FEATURE_PERFCOUNTERS = "NONE",
+    parameter OPTION_PERFCOUNTERS_NUM = 0,
     parameter FEATURE_PMU = "NONE",
     parameter FEATURE_MAC = "NONE",
     parameter FEATURE_FPU = "NONE",
@@ -866,6 +867,7 @@ module mor1kx_ctrl_cappuccino
        .OPTION_IMMU_WAYS		(OPTION_IMMU_WAYS),
        .FEATURE_DEBUGUNIT		(FEATURE_DEBUGUNIT),
        .FEATURE_PERFCOUNTERS		(FEATURE_PERFCOUNTERS),
+       .OPTION_PERFCOUNTERS_NUM  (OPTION_PERFCOUNTERS_NUM),
        .FEATURE_MAC			(FEATURE_MAC),
        .FEATURE_FPU			(FEATURE_FPU), // mor1kx_cfgrs instance
        .FEATURE_SYSCALL			(FEATURE_SYSCALL),
@@ -1064,6 +1066,57 @@ module mor1kx_ctrl_cappuccino
       end // else: !if(FEATURE_PIC !="NONE")
    endgenerate
 
+   // PCU SPR control
+   generate
+
+      if (FEATURE_PERFCOUNTERS !="NONE") begin : pcu
+
+         /* mor1kx_pcu AUTO_TEMPLATE (
+          .spr_bus_ack          (spr_access_ack[`OR1K_SPR_PC_BASE]),
+          .spr_dat_o            (spr_internal_read_dat[`OR1K_SPR_PC_BASE]),
+          // Inputs
+          .spr_we_i             (spr_we),
+          .spr_re_i             (spr_read),
+          .spr_access_i         (spr_access[`OR1K_SPR_PC_BASE])
+          .spr_addr_i           (spr_addr),
+          .spr_dat_i            (spr_write_dat),
+          );*/
+         mor1kx_pcu
+          #(
+            .OPTION_PERFCOUNTERS_NUM(OPTION_PERFCOUNTERS_NUM)
+            )
+         mor1kx_pcu
+           (/*AUTOINST*/
+            // Outputs
+            .spr_bus_ack        (spr_access_ack[`OR1K_SPR_PC_BASE]), // Templated
+            .spr_dat_o          (spr_internal_read_dat[`OR1K_SPR_PC_BASE]), // Templated
+            // Inputs
+            .clk                (clk),
+            .rst                (rst),
+            .spr_access_i       (spr_access[`OR1K_SPR_PC_BASE]), // Templated
+            .spr_we_i           (spr_we),                 // Templated
+            .spr_re_i           (spr_read),               // Templated
+            .spr_addr_i         (spr_addr),               // Templated
+            .spr_dat_i          (spr_write_dat),          // Templated
+            .spr_sys_mode_i     (spr_sr[`OR1K_SPR_SR_SM]),
+            .pcu_event_load_i   (1'd0),
+            .pcu_event_store_i  (1'd0),
+            .pcu_event_ifetch_i (1'd0),
+            .pcu_event_dcache_miss_i(1'd0),
+            .pcu_event_icache_miss_i(1'd0),
+            .pcu_event_ifetch_stall_i(1'd0),
+            .pcu_event_lsu_stall_i(1'd0),
+            .pcu_event_brn_stall_i(1'd0),
+            .pcu_event_dtlb_miss_i(1'd0),
+            .pcu_event_itlb_miss_i(1'd0),
+            .pcu_event_datadep_stall_i(1'd0)
+            );
+      end
+      else begin
+         assign spr_access_ack[`OR1K_SPR_PC_BASE] = 0;
+         assign spr_internal_read_dat[`OR1K_SPR_PC_BASE] = 0;
+      end // else: !if(FEATURE_PERFCOUNTERS !="NONE")
+   endgenerate
 
    generate
       if (FEATURE_TIMER!="NONE") begin : tt
