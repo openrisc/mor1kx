@@ -301,6 +301,8 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0] execute_mispredict_target_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_add_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_alu_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_bf_o;
+   wire                 execute_op_bnf_o;
    wire                 execute_op_branch_o;    // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_brcond_o;    // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_div_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v

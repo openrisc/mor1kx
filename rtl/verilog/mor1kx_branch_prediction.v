@@ -51,9 +51,6 @@ module mor1kx_branch_prediction
 generate
 if (FEATURE_BRANCH_PREDICTOR=="SAT_COUNTER") begin : branch_predictor_saturation_counter
    mor1kx_branch_predictor_saturation_counter
-     #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
-       )
       mor1kx_branch_predictor_saturation_counter
       (
          // Outputs
@@ -62,8 +59,8 @@ if (FEATURE_BRANCH_PREDICTOR=="SAT_COUNTER") begin : branch_predictor_saturation
          .clk                              (clk),
          .rst                              (rst),
          .flag_i                           (flag_i),
-         .execute_op_bf_i                  (execute_op_bf_i),
-         .execute_op_bnf_i                 (execute_op_bnf_i),
+         .execute_op_bf_i                  (execute_bf_i),
+         .execute_op_bnf_i                 (execute_bnf_i),
          .op_bf_i                          (op_bf_i),
          .op_bnf_i                         (op_bnf_i),
          .prev_op_brcond_i                 (prev_op_brcond_i),
@@ -71,9 +68,6 @@ if (FEATURE_BRANCH_PREDICTOR=="SAT_COUNTER") begin : branch_predictor_saturation
        
 end else if (FEATURE_BRANCH_PREDICTOR=="SIMPLE") begin : branch_predictor_simple
    mor1kx_branch_predictor_simple
-     #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
-       )
       mor1kx_branch_predictor_simple
       (
          // Outputs
