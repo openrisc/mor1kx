@@ -44,14 +44,15 @@
 module pfpu32_rnd_marocchino
 (
   // clocks, resets and other controls
-  input        clk,
-  input        rst,
-  input        flush_i,  // flush pipe
-  input        adv_i,    // advance pipe
-  input        padv_wb_i,// advance output latches
-  input        do_rf_wb_i,
-  input        grant_wb_to_fp32_arith_i,
-  input  [1:0] rmode_i,  // rounding mode
+  input                             clk,
+  input                             rst,
+  input                             flush_i,  // flush pipe
+  input                             adv_i,    // advance pipe
+  input                             padv_wb_i,// advance output latches
+  input                             grant_wb_to_fp32_arith_i,
+  input                       [1:0] rmode_i,  // rounding mode
+  input                             except_fpu_enable_i,
+  input [`OR1K_FPCSR_ALLF_SIZE-1:0] ctrl_fpu_mask_flags_i,
   // input from add/sub
   input        add_rdy_i,       // add/sub is ready
   input        add_sign_i,      // add/sub signum
@@ -104,9 +105,10 @@ module pfpu32_rnd_marocchino
   // result ready (1-clk ahead to WB latch)
   output                             fp32_arith_valid_o,
   //  WB latches
-  output reg                  [31:0] wb_fp32_arith_res_o,  // result
-  output reg                         wb_fp32_arith_rdy_o,  // ready flag
-  output reg [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_arith_fpcsr_o // exceptions
+  output reg                      [31:0] wb_fp32_arith_res_o,      // result
+  output reg [`OR1K_FPCSR_ALLF_SIZE-1:0] wb_fp32_arith_fpcsr_o,    // fp32 arithmetic flags
+  output reg                             wb_fp32_arith_wb_fpcsr_o, // update FPCSR
+  output reg                             wb_except_fp32_arith_o    // generate exception
 );
 
   localparam INF  = 31'b1111111100000000000000000000000;
@@ -376,44 +378,52 @@ module pfpu32_rnd_marocchino
   // one clock ahead ready flag
   assign fp32_arith_valid_o = s1o_ready;
 
-  // WB latches
+
+  // EXECUTE level FP32 arithmetic flags
+  wire [`OR1K_FPCSR_ALLF_SIZE-1:0] exec_fp32_arith_fpcsr =
+    {s2t_dbz, s2t_inf, (s1o_inv | (s2t_i32_inv & s1o_f2i) | s1o_snan_i),
+     s2t_ine, s2t_zer, s1o_qnan_i,
+     (s1o_inv | (s1o_snan_i & s1o_f2i)), s2t_unf, s2t_ovf} &
+    ctrl_fpu_mask_flags_i & {`OR1K_FPCSR_ALLF_SIZE{grant_wb_to_fp32_arith_i}};
+
+  // EXECUTE level FP32 arithmetic exception
+  wire exec_except_fp32_arith = except_fpu_enable_i & (|exec_fp32_arith_fpcsr);
+
+
+  // WB: result and flags
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      wb_fp32_arith_res_o <= 32'd0;
+    else if(padv_wb_i)
+      wb_fp32_arith_res_o <= {32{grant_wb_to_fp32_arith_i}} & s2t_opc;
+  end // posedge clock
+
+  // WB: exception
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst) begin
-      // arithmetic results
-      wb_fp32_arith_res_o   <= 32'd0;
-      wb_fp32_arith_rdy_o   <=  1'b0;
-      // exeptions
-      wb_fp32_arith_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
+      wb_fp32_arith_fpcsr_o  <= {`OR1K_FPCSR_ALLF_SIZE{1'b0}};
+      wb_except_fp32_arith_o <= 1'b0;
     end
     else if(flush_i) begin
-      // arithmetic results
-      wb_fp32_arith_res_o   <= 32'd0;
-      wb_fp32_arith_rdy_o   <=  1'b0;
-      // exeptions
-      wb_fp32_arith_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
+      wb_fp32_arith_fpcsr_o  <= {`OR1K_FPCSR_ALLF_SIZE{1'b0}};
+      wb_except_fp32_arith_o <= 1'b0;
     end
     else if(padv_wb_i) begin
-      if (grant_wb_to_fp32_arith_i) begin
-        // arithmetic ready flag
-        wb_fp32_arith_rdy_o <= 1'b1;
-        // arithmetic results
-        wb_fp32_arith_res_o <= s2t_opc;
-        // arithmetic exeptions
-        wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_OVF] <= s2t_ovf;
-        wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_UNF] <= s2t_unf;
-        wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_SNF] <= s1o_inv | (s1o_snan_i & s1o_f2i);
-        wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_QNF] <= s1o_qnan_i;
-        wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_ZF ] <= s2t_zer;
-        wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_IXF] <= s2t_ine;
-        wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_IVF] <= s1o_inv | (s2t_i32_inv & s1o_f2i) | s1o_snan_i;
-        wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_INF] <= s2t_inf;
-        wb_fp32_arith_fpcsr_o[`OR1K_FPCSR_DZF] <= s2t_dbz;
-      end
-      else  if (do_rf_wb_i) begin // another unit is granted with guarantee
-        wb_fp32_arith_rdy_o   <= 1'b1;
-        wb_fp32_arith_fpcsr_o <= {`OR1K_FPCSR_WIDTH{1'b0}};
-      end
-    end // advance WB latches
+      wb_fp32_arith_fpcsr_o  <= exec_fp32_arith_fpcsr;
+      wb_except_fp32_arith_o <= exec_except_fp32_arith;
+    end
   end // posedge clock
+
+  // WB: update FPCSR (1-clock to prevent extra writes into FPCSR)
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      wb_fp32_arith_wb_fpcsr_o <= 1'b0;
+    else if (flush_i)
+      wb_fp32_arith_wb_fpcsr_o <= 1'b0;
+    else if (padv_wb_i)
+      wb_fp32_arith_wb_fpcsr_o <= grant_wb_to_fp32_arith_i;
+    else
+      wb_fp32_arith_wb_fpcsr_o <= 1'b0;
+  end // @clock
 
 endmodule // pfpu32_rnd_marocchino

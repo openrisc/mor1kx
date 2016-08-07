@@ -30,29 +30,32 @@
 
 module mor1kx_marocchino_alone
 #(
-  parameter OPTION_OPERAND_WIDTH      = 32,
+  parameter OPTION_OPERAND_WIDTH        = 32,
 
   // data cache configuration
-  parameter OPTION_DCACHE_BLOCK_WIDTH =  5,
-  parameter OPTION_DCACHE_SET_WIDTH   =  9,
-  parameter OPTION_DCACHE_WAYS        =  2,
-  parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
-  parameter OPTION_DCACHE_SNOOP       = "NONE",
+  parameter OPTION_DCACHE_BLOCK_WIDTH   =  5,
+  parameter OPTION_DCACHE_SET_WIDTH     =  9,
+  parameter OPTION_DCACHE_WAYS          =  2,
+  parameter OPTION_DCACHE_LIMIT_WIDTH   = 32,
+  parameter OPTION_DCACHE_SNOOP         = "NONE",
+  parameter OPTION_DCACHE_CLEAR_ON_INIT =  0, // !!! activate for simulation only !!!
 
   // data mmu
-  parameter FEATURE_DMMU_HW_TLB_RELOAD = "NONE",
-  parameter OPTION_DMMU_SET_WIDTH      =  6,
-  parameter OPTION_DMMU_WAYS           =  1,
+  parameter FEATURE_DMMU_HW_TLB_RELOAD  = "NONE",
+  parameter OPTION_DMMU_SET_WIDTH       =  6,
+  parameter OPTION_DMMU_WAYS            =  1,
+  parameter OPTION_DMMU_CLEAR_ON_INIT   =  0, // !!! activate for simulation only !!!
 
   // store buffer
-  parameter OPTION_STORE_BUFFER_DEPTH_WIDTH = 4, // 16 taps
+  parameter OPTION_STORE_BUFFER_DEPTH_WIDTH   = 4, // 16 taps
+  parameter OPTION_STORE_BUFFER_CLEAR_ON_INIT = 0, // !!! activate for simulation only !!!
 
   // istruction cache
-  parameter OPTION_ICACHE_BLOCK_WIDTH  =  5,
-  parameter OPTION_ICACHE_SET_WIDTH    =  9,
-  parameter OPTION_ICACHE_WAYS         =  2,
-  parameter OPTION_ICACHE_LIMIT_WIDTH  = 32,
-  parameter OPTION_ICACHE_CLEAR_ON_INIT=  0, // !!! activate for simulation only !!!
+  parameter OPTION_ICACHE_BLOCK_WIDTH   =  5,
+  parameter OPTION_ICACHE_SET_WIDTH     =  9,
+  parameter OPTION_ICACHE_WAYS          =  2,
+  parameter OPTION_ICACHE_LIMIT_WIDTH   = 32,
+  parameter OPTION_ICACHE_CLEAR_ON_INIT =  0, // !!! activate for simulation only !!!
 
   // instruction mmu
   parameter FEATURE_IMMU_HW_TLB_RELOAD = "NONE",
@@ -60,17 +63,15 @@ module mor1kx_marocchino_alone
   parameter OPTION_IMMU_WAYS           =  1,
   parameter OPTION_IMMU_CLEAR_ON_INIT  =  0, // !!! activate for simulation only !!!
 
-  parameter FEATURE_TIMER              = "ENABLED",
+  // Timer
   parameter FEATURE_DEBUGUNIT          = "NONE",
   parameter FEATURE_PERFCOUNTERS       = "NONE",
 
-  parameter FEATURE_PIC                = "ENABLED",
+  // PIC
   parameter OPTION_PIC_TRIGGER         = "LEVEL",
   parameter OPTION_PIC_NMI_WIDTH       =  0,
 
-  parameter FEATURE_FASTCONTEXTS       = "NONE",
   parameter OPTION_RF_CLEAR_ON_INIT    =  0, // !!! activate for simulation only !!!
-  parameter OPTION_RF_NUM_SHADOW_GPR   =  0,
   parameter OPTION_RF_ADDR_WIDTH       =  5,
   parameter OPTION_RF_WORDS            = 32,
 
@@ -125,7 +126,7 @@ module mor1kx_marocchino_alone
   // IRQ
   input [31:0]                      irq_i,
 
-  // Debug interface
+  // Debug System accesses CPU SPRs through DU
   input [15:0]                      du_addr_i,
   input                             du_stb_i,
   input [OPTION_OPERAND_WIDTH-1:0]  du_dat_i,
@@ -176,7 +177,6 @@ module mor1kx_marocchino_alone
   wire [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o;
   wire                            spr_bus_stb_o;
   wire                            spr_bus_we_o;
-  wire [15:0]                     spr_sr_o;
 
 
   // BUS-Bridge for CPU instruction port
@@ -263,12 +263,15 @@ module mor1kx_marocchino_alone
     .OPTION_DCACHE_WAYS               (OPTION_DCACHE_WAYS),
     .OPTION_DCACHE_LIMIT_WIDTH        (OPTION_DCACHE_LIMIT_WIDTH),
     .OPTION_DCACHE_SNOOP              (OPTION_DCACHE_SNOOP),
+    .OPTION_DCACHE_CLEAR_ON_INIT      (OPTION_DCACHE_CLEAR_ON_INIT),
     // data mmu
     .FEATURE_DMMU_HW_TLB_RELOAD       (FEATURE_DMMU_HW_TLB_RELOAD),
     .OPTION_DMMU_SET_WIDTH            (OPTION_DMMU_SET_WIDTH),
     .OPTION_DMMU_WAYS                 (OPTION_DMMU_WAYS),
+    .OPTION_DMMU_CLEAR_ON_INIT        (OPTION_DMMU_CLEAR_ON_INIT),
     // write buffer
-    .OPTION_STORE_BUFFER_DEPTH_WIDTH  (OPTION_STORE_BUFFER_DEPTH_WIDTH),
+    .OPTION_STORE_BUFFER_DEPTH_WIDTH    (OPTION_STORE_BUFFER_DEPTH_WIDTH),
+    .OPTION_STORE_BUFFER_CLEAR_ON_INIT  (OPTION_STORE_BUFFER_CLEAR_ON_INIT),
     // instructon cache
     .OPTION_ICACHE_BLOCK_WIDTH        (OPTION_ICACHE_BLOCK_WIDTH),
     .OPTION_ICACHE_SET_WIDTH          (OPTION_ICACHE_SET_WIDTH),
@@ -281,19 +284,15 @@ module mor1kx_marocchino_alone
     .OPTION_IMMU_WAYS                 (OPTION_IMMU_WAYS),
     .OPTION_IMMU_CLEAR_ON_INIT        (OPTION_IMMU_CLEAR_ON_INIT),
     // interrupt cintroller
-    .FEATURE_PIC                      (FEATURE_PIC),
     .OPTION_PIC_TRIGGER               (OPTION_PIC_TRIGGER),
     .OPTION_PIC_NMI_WIDTH             (OPTION_PIC_NMI_WIDTH),
     // timer
-    .FEATURE_TIMER                    (FEATURE_TIMER),
-    .FEATURE_DEBUGUNIT                ("NONE"), // MAROCCHINO_TODO: not implemented FEATURE_DEBUGUNIT
+    .FEATURE_DEBUGUNIT                (FEATURE_DEBUGUNIT),
     .FEATURE_PERFCOUNTERS             (FEATURE_PERFCOUNTERS),
     .FEATURE_MULTICORE                (FEATURE_MULTICORE),
     .FEATURE_TRACEPORT_EXEC           (FEATURE_TRACEPORT_EXEC),
-    .FEATURE_FASTCONTEXTS             (FEATURE_FASTCONTEXTS),
     // Redister File
     .OPTION_RF_CLEAR_ON_INIT          (OPTION_RF_CLEAR_ON_INIT),
-    .OPTION_RF_NUM_SHADOW_GPR         (OPTION_RF_NUM_SHADOW_GPR),
     .OPTION_RF_ADDR_WIDTH             (OPTION_RF_ADDR_WIDTH),
     //.OPTION_RF_WORDS(OPTION_RF_WORDS), // MAROCCHINO_TODO
     .OPTION_RESET_PC                  (OPTION_RESET_PC),
@@ -330,7 +329,6 @@ module mor1kx_marocchino_alone
     .spr_bus_we_o    (spr_bus_we_o),
     .spr_bus_stb_o   (spr_bus_stb_o),
     .spr_bus_dat_o   (spr_bus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
-    .spr_sr_o        (spr_sr_o[15:0]),
     // Inputs
     .ibus_err_i     (ibus_err_i),
     .ibus_ack_i     (ibus_ack_i),
@@ -339,19 +337,11 @@ module mor1kx_marocchino_alone
     .dbus_ack_i     (dbus_ack_i),
     .dbus_dat_i     (dbus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
     .irq_i  (irq_i[31:0]),
-    .du_addr_i   (du_addr_i[15:0]),
+    .du_addr_i   (du_addr_i),
     .du_stb_i    (du_stb_i),
     .du_dat_i    (du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
     .du_we_i     (du_we_i),
     .du_stall_i  (du_stall_i),
-    .spr_bus_dat_mac_i    ({OPTION_OPERAND_WIDTH{1'b0}}),
-    .spr_bus_ack_mac_i    (1'b0),
-    .spr_bus_dat_pmu_i    ({OPTION_OPERAND_WIDTH{1'b0}}),
-    .spr_bus_ack_pmu_i    (1'b0),
-    .spr_bus_dat_pcu_i    ({OPTION_OPERAND_WIDTH{1'b0}}),
-    .spr_bus_ack_pcu_i    (1'b0),
-    .spr_bus_dat_fpu_i    ({OPTION_OPERAND_WIDTH{1'b0}}),
-    .spr_bus_ack_fpu_i    (1'b0),
     .multicore_coreid_i    (multicore_coreid_i[OPTION_OPERAND_WIDTH-1:0]),
     .multicore_numcores_i  (multicore_numcores_i[OPTION_OPERAND_WIDTH-1:0]),
     .snoop_adr_i  (snoop_adr_i[31:0]),

@@ -54,7 +54,6 @@ module mor1kx_fetch_marocchino
 
   // pipeline control
   input                                 padv_fetch_i,
-  input                                 clean_fetch_i,
   input                                 stall_fetch_i,
   input                                 pipeline_flush_i,
 
@@ -91,13 +90,9 @@ module mor1kx_fetch_marocchino
   input                                 dcod_do_branch_i,
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_do_branch_target_i,
 
-  // exception/rfe control transfer
+  // DU/exception/rfe control transfer
   input                                 ctrl_branch_exception_i,
   input      [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc_i,
-
-  // debug unit command for control transfer
-  input                                 du_restart_i,
-  input      [OPTION_OPERAND_WIDTH-1:0] du_restart_pc_i,
 
   // to RF
   output     [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa_adr_o,
@@ -109,9 +104,9 @@ module mor1kx_fetch_marocchino
   output reg                            dcod_delay_slot_o,
   output reg                            dcod_insn_valid_o,
   // exceptions
-  output reg                            dcod_except_ibus_err_o,
-  output reg                            dcod_except_itlb_miss_o,
-  output reg                            dcod_except_ipagefault_o,
+  output reg                            fetch_except_ibus_err_o,
+  output reg                            fetch_except_itlb_miss_o,
+  output reg                            fetch_except_ipagefault_o,
   output reg                            fetch_exception_taken_o
 );
 
@@ -324,13 +319,12 @@ module mor1kx_fetch_marocchino
 
   // Select the PC for next fetch
   wire [OPTION_OPERAND_WIDTH-1:0] virt_addr =
-    // Debug (MAROCCHINO_TODO)
-    du_restart_i                                         ? du_restart_pc_i :
-    // padv-s1 and neither exceptions nor pipeline flush
+    // Use DU/exceptions/rfe provided address
     (ctrl_branch_exception_i & ~fetch_exception_taken_o) ? ctrl_branch_except_pc_i :
-    fetch_ds_stored                                      ? s1t_pc_next :
+    // regular update of IFETCH
+    fetch_ds_stored                                      ? s1t_pc_next             :
     dcod_do_branch_i                                     ? dcod_do_branch_target_i :
-    branch_stored                                        ? branch_target_stored :
+    branch_stored                                        ? branch_target_stored    :
                                                            s1t_pc_next;
 
 
@@ -407,20 +401,20 @@ module mor1kx_fetch_marocchino
       dcod_insn_o               <= {`OR1K_OPCODE_NOP,26'd0};
       dcod_insn_valid_o         <= 1'b0;
       // exceptions
-      dcod_except_ibus_err_o    <= 1'b0;
-      dcod_except_itlb_miss_o   <= 1'b0;
-      dcod_except_ipagefault_o  <= 1'b0;
+      fetch_except_ibus_err_o   <= 1'b0;
+      fetch_except_itlb_miss_o  <= 1'b0;
+      fetch_except_ipagefault_o <= 1'b0;
       // actual programm counter
       pc_decode_o               <= {IFOOW{1'b0}}; // reset
     end
-    else if (flush_by_ctrl | clean_fetch_i) begin
+    else if (flush_by_ctrl) begin
       dcod_delay_slot_o         <= 1'b0;
       dcod_insn_o               <= {`OR1K_OPCODE_NOP,26'd0};
       dcod_insn_valid_o         <= 1'b0;
       // exceptions
-      dcod_except_ibus_err_o    <= 1'b0;
-      dcod_except_itlb_miss_o   <= 1'b0;
-      dcod_except_ipagefault_o  <= 1'b0;
+      fetch_except_ibus_err_o   <= 1'b0;
+      fetch_except_itlb_miss_o  <= 1'b0;
+      fetch_except_ipagefault_o <= 1'b0;
       // actual programm counter
       pc_decode_o               <= {IFOOW{1'b0}}; // flush
     end
@@ -429,9 +423,9 @@ module mor1kx_fetch_marocchino
       dcod_insn_o               <= s2t_insn_mux;
       dcod_insn_valid_o         <= s2t_insn_or_excepts; // valid instruction or exception
       // exceptions
-      dcod_except_ibus_err_o    <= except_ibus_err;
-      dcod_except_itlb_miss_o   <= except_itlb_miss;
-      dcod_except_ipagefault_o  <= except_ipagefault;
+      fetch_except_ibus_err_o   <= except_ibus_err;
+      fetch_except_itlb_miss_o  <= except_itlb_miss;
+      fetch_except_ipagefault_o <= except_ipagefault;
       // actual programm counter
       pc_decode_o               <= (s2t_insn_or_excepts ? virt_addr_fetch : {IFOOW{1'b0}});
     end
@@ -440,7 +434,7 @@ module mor1kx_fetch_marocchino
   // to RF
   assign fetch_rfa_adr_o      = s2t_insn_mux[`OR1K_RA_SELECT];
   assign fetch_rfb_adr_o      = s2t_insn_mux[`OR1K_RB_SELECT];
-  assign fetch_rf_adr_valid_o = padv_fetch_i & s2t_ack & ~(flush_by_branch | flush_by_ctrl | clean_fetch_i);
+  assign fetch_rf_adr_valid_o = padv_fetch_i & s2t_ack & ~(flush_by_branch | flush_by_ctrl);
 
 
   /********** End of FETCH pipe. Start other logics. **********/

@@ -287,7 +287,9 @@ module mor1kx_decode
 			   // All '11????' opcodes except l.sfxx and l.mtspr
 			   (decode_insn_i[31:30] == 2'b11 &
 			    !(opc_insn == `OR1K_OPCODE_SF |
-			      decode_op_mtspr_o | decode_op_lsu_store_o));
+			      decode_op_mtspr_o | decode_op_lsu_store_o) &
+          !((FEATURE_FPU != "NONE") &
+            (opc_insn == `OR1K_OPCODE_FPU) & decode_insn_i[3]));
 
    // Register file addresses
    assign decode_rfa_adr_o = decode_insn_i[`OR1K_RA_SELECT];

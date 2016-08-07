@@ -71,7 +71,7 @@ module mor1kx_immu_marocchino
   input                                 spr_bus_we_i,
   input                                 spr_bus_stb_i,
   input      [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_i,
-  output     [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
+  output reg [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
   output reg                            spr_bus_ack_o
 );
 
@@ -99,17 +99,18 @@ module mor1kx_immu_marocchino
   reg                              itlb_trans_reload_we;
   reg   [OPTION_OPERAND_WIDTH-1:0] itlb_trans_reload_din;
 
-  wire                             itlb_match_spr_cs;
+  wire                             spr_immu_cs;
+  reg                              spr_immu_we_r;  // write on next posedge clock
+  reg                              spr_immu_re_r;  // read on next posedge clock
+  reg                              spr_immu_mux_r; // mux read output and latch it
+
   reg                              itlb_match_spr_cs_r;
-  wire                             itlb_trans_spr_cs;
   reg                              itlb_trans_spr_cs_r;
 
-  wire                             immucr_spr_cs;
+  reg                        [1:0] spr_way_idx_r;
+
   reg                              immucr_spr_cs_r;
   reg   [OPTION_OPERAND_WIDTH-1:0] immucr;
-
-  wire                       [1:0] spr_way_idx;
-  reg                        [1:0] spr_way_idx_r;
 
   wire      [OPTION_IMMU_WAYS-1:0] way_hit;
   wire      [OPTION_IMMU_WAYS-1:0] way_huge_hit;
@@ -121,8 +122,6 @@ module mor1kx_immu_marocchino
   // uxe: user exexute enable
   reg                              sxe;
   reg                              uxe;
-
-  wire                             spr_immu_stb;    // SPR acceess
 
   genvar                           i;
   integer                          j;
@@ -138,7 +137,7 @@ module mor1kx_immu_marocchino
       enable_r          <= 1'b0;
       supervisor_mode_r <= 1'b0;
     end
-    else if (force_off_i | spr_immu_stb) begin
+    else if (force_off_i | spr_immu_cs) begin
       enable_r          <= 1'b0;
       supervisor_mode_r <= 1'b0;
     end
@@ -162,62 +161,80 @@ module mor1kx_immu_marocchino
   //   We don't expect R/W-collisions for SPRbus vs FETCH advance
   // because we execute l.mt(f)spr after pipeline stalling (see OMAN)
 
-  assign spr_immu_stb = spr_bus_stb_i & (spr_bus_addr_i[15:11] == `OR1K_SPR_IMMU_BASE);
+  // overall IMMU "chip select"
+  assign spr_immu_cs = spr_bus_stb_i & (`SPR_BASE(spr_bus_addr_i) == `OR1K_SPR_IMMU_BASE);
 
-  // Process IMMU Control Register
-  //  # IMMUCR "chip select"
-  assign immucr_spr_cs = spr_immu_stb & (~(|spr_bus_addr_i[10:0])) & (FEATURE_IMMU_HW_TLB_RELOAD != "NONE");
-  //  # IMMUCR proc
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      immucr <= {OPTION_OPERAND_WIDTH{1'b0}};
-    else if (immucr_spr_cs & spr_bus_we_i)
-      immucr <= spr_bus_dat_i;
-  end // @ clock
-
-  // SPR ack generation
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      spr_bus_ack_o <= 1'b0;
-    else if (spr_bus_ack_o)
-      spr_bus_ack_o <= 1'b0;
-    else if (spr_immu_stb)
-      spr_bus_ack_o <= 1'b1;
-  end // @ clock
-
-  // match RAM chip select
-  assign itlb_match_spr_cs = spr_immu_stb & (|spr_bus_addr_i[10:9]) & ~spr_bus_addr_i[7];
-  // translate RAM chip select
-  assign itlb_trans_spr_cs = spr_immu_stb & (|spr_bus_addr_i[10:9]) &  spr_bus_addr_i[7];
-  // way select
-  assign spr_way_idx = {spr_bus_addr_i[10], spr_bus_addr_i[8]};
-
-  // SPR data output multiplexer control
+  // SPR processing cycle
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst) begin
       itlb_match_spr_cs_r <= 1'b0;
       itlb_trans_spr_cs_r <= 1'b0;
       immucr_spr_cs_r     <= 1'b0;
       spr_way_idx_r       <= 2'd0;
+      spr_bus_ack_o       <= 1'b0;
+      spr_immu_we_r       <= 1'b0;
+      spr_immu_re_r       <= 1'b0;
+      spr_immu_mux_r      <= 1'b0;
+      spr_bus_dat_o       <= {OPTION_OPERAND_WIDTH{1'b0}};
     end
     else if (spr_bus_ack_o) begin
       itlb_match_spr_cs_r <= 1'b0;
       itlb_trans_spr_cs_r <= 1'b0;
       immucr_spr_cs_r     <= 1'b0;
       spr_way_idx_r       <= 2'd0;
+      spr_bus_ack_o       <= 1'b0;
+      spr_immu_we_r       <= 1'b0;
+      spr_immu_re_r       <= 1'b0;
+      spr_immu_mux_r      <= 1'b0;
+      spr_bus_dat_o       <= {OPTION_OPERAND_WIDTH{1'b0}};
     end
-    else if (spr_immu_stb) begin
-      itlb_match_spr_cs_r <= itlb_match_spr_cs;
-      itlb_trans_spr_cs_r <= itlb_trans_spr_cs;
-      immucr_spr_cs_r     <= immucr_spr_cs;
-      spr_way_idx_r       <= spr_way_idx;
+    else if (spr_immu_mux_r) begin
+      itlb_match_spr_cs_r <= itlb_match_spr_cs_r;
+      itlb_trans_spr_cs_r <= itlb_trans_spr_cs_r;
+      immucr_spr_cs_r     <= immucr_spr_cs_r;
+      spr_way_idx_r       <= spr_way_idx_r;
+      spr_immu_we_r       <= 1'b0;
+      spr_immu_re_r       <= 1'b0;
+      spr_immu_mux_r      <= 1'b0;
+      spr_bus_ack_o       <= 1'b1;
+      spr_bus_dat_o       <= itlb_match_spr_cs_r ? itlb_match_dout[spr_way_idx_r] :
+                             itlb_trans_spr_cs_r ? itlb_trans_dout[spr_way_idx_r] :
+                             immucr_spr_cs_r     ? immucr                         :
+                                                   {OPTION_OPERAND_WIDTH{1'b0}};
+    end
+    else if (spr_immu_re_r) begin
+      itlb_match_spr_cs_r <= itlb_match_spr_cs_r;
+      itlb_trans_spr_cs_r <= itlb_trans_spr_cs_r;
+      immucr_spr_cs_r     <= immucr_spr_cs_r;
+      spr_way_idx_r       <= spr_way_idx_r;
+      spr_immu_we_r       <= 1'b0;
+      spr_immu_re_r       <= 1'b0;
+      spr_immu_mux_r      <= 1'b1;
+      spr_bus_ack_o       <= 1'b0;
+      spr_bus_dat_o       <= {OPTION_OPERAND_WIDTH{1'b0}};
+    end
+    else if (spr_immu_cs) begin
+      itlb_match_spr_cs_r <= (|spr_bus_addr_i[10:9]) & ~spr_bus_addr_i[7];
+      itlb_trans_spr_cs_r <= (|spr_bus_addr_i[10:9]) &  spr_bus_addr_i[7];
+      immucr_spr_cs_r     <= (`SPR_OFFSET(spr_bus_addr_i) == `SPR_OFFSET(`OR1K_SPR_IMMUCR_ADDR));
+      spr_way_idx_r       <= {spr_bus_addr_i[10], spr_bus_addr_i[8]};
+      spr_immu_we_r       <= spr_bus_we_i;
+      spr_immu_re_r       <= ~spr_bus_we_i;
+      spr_immu_mux_r      <= 1'b0;
+      spr_bus_ack_o       <= spr_bus_we_i; // write on next posedge of clock and finish
+      spr_bus_dat_o       <= {OPTION_OPERAND_WIDTH{1'b0}};
     end
   end // @ clock
-  // SPR data output multiplexer
-  assign spr_bus_dat_o = itlb_match_spr_cs_r ? itlb_match_dout[spr_way_idx_r] :
-                         itlb_trans_spr_cs_r ? itlb_trans_dout[spr_way_idx_r] :
-                         immucr_spr_cs_r     ? immucr                         :
-                                               {OPTION_OPERAND_WIDTH{1'b0}};
+
+
+  // Process IMMU Control Register
+  //  # IMMUCR proc
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      immucr <= {OPTION_OPERAND_WIDTH{1'b0}};
+    else if (immucr_spr_cs_r & spr_immu_we_r)
+      immucr <= spr_bus_dat_i;
+  end // @ clock
 
 
   generate
@@ -235,7 +252,7 @@ module mor1kx_immu_marocchino
   endgenerate
 
   reg [OPTION_OPERAND_WIDTH-1:0] phys_addr;
-  
+
   always @(*) begin
     tlb_miss_o        = ~tlb_reload_pagefault & enable_r;
     phys_addr         = virt_addr_fetch_i;
@@ -263,14 +280,14 @@ module mor1kx_immu_marocchino
       itlb_match_we[j] = 1'b0;
       if (itlb_match_reload_we & ~tlb_reload_huge)
         itlb_match_we[j] = 1'b1;
-      if (j == spr_way_idx)
-        itlb_match_we[j] = itlb_match_spr_cs & spr_bus_we_i & ~spr_bus_ack_o;
- 
+      if (j == spr_way_idx_r)
+        itlb_match_we[j] = itlb_match_spr_cs_r & spr_immu_we_r;
+
       itlb_trans_we[j] = 1'b0;
       if (itlb_trans_reload_we & ~tlb_reload_huge)
         itlb_trans_we[j] = 1'b1;
-      if (j == spr_way_idx)
-        itlb_trans_we[j] = itlb_trans_spr_cs & spr_bus_we_i & ~spr_bus_ack_o;
+      if (j == spr_way_idx_r)
+        itlb_trans_we[j] = itlb_trans_spr_cs_r & spr_immu_we_r;
     end
   end // loop by ways
 
@@ -281,8 +298,8 @@ module mor1kx_immu_marocchino
 
   // match 8KB input address
   assign itlb_match_addr =
-    (itlb_match_spr_cs & ~spr_bus_ack_o) ? spr_bus_addr_i[OPTION_IMMU_SET_WIDTH-1:0]          :
-                                           virt_addr_i[13+(OPTION_IMMU_SET_WIDTH-1):13];
+    (itlb_match_spr_cs_r & (spr_immu_we_r | spr_immu_re_r)) ? spr_bus_addr_i[OPTION_IMMU_SET_WIDTH-1:0] :
+                                                              virt_addr_i[13+(OPTION_IMMU_SET_WIDTH-1):13];
   // match huge address and write command
   assign itlb_match_huge_addr = virt_addr_i[24+(OPTION_IMMU_SET_WIDTH-1):24];
   assign itlb_match_huge_we   = itlb_match_reload_we & tlb_reload_huge;
@@ -292,8 +309,8 @@ module mor1kx_immu_marocchino
 
   // translation 8KB input address
   assign itlb_trans_addr =
-    (itlb_trans_spr_cs & ~spr_bus_ack_o) ? spr_bus_addr_i[OPTION_IMMU_SET_WIDTH-1:0]          :
-                                           virt_addr_i[13+(OPTION_IMMU_SET_WIDTH-1):13];
+    (itlb_trans_spr_cs_r & (spr_immu_we_r | spr_immu_re_r)) ? spr_bus_addr_i[OPTION_IMMU_SET_WIDTH-1:0] :
+                                                              virt_addr_i[13+(OPTION_IMMU_SET_WIDTH-1):13];
   // translation huge address and write command
   assign itlb_trans_huge_addr = virt_addr_i[24+(OPTION_IMMU_SET_WIDTH-1):24];
   assign itlb_trans_huge_we   = itlb_trans_reload_we & tlb_reload_huge;
@@ -311,12 +328,12 @@ module mor1kx_immu_marocchino
   /* verilator lint_off WIDTH */
   if (FEATURE_IMMU_HW_TLB_RELOAD != "NONE") begin
   /* verilator lint_on WIDTH */
-  
+
     initial begin
       $display("IMMU ERROR: HW TLB reload is not implemented in MAROCCHINO");
       $finish();
     end
-  
+
     // Hardware TLB reload
     // Compliant with the suggestions outlined in this thread:
     // http://lists.openrisc.net/pipermail/openrisc/2013-July/001806.html
@@ -336,22 +353,22 @@ module mor1kx_immu_marocchino
     /*
     reg [3:0] tlb_reload_state = TLB_IDLE;
     wire      do_reload;
-  
+
     assign do_reload              = enable_r & tlb_miss_o & (immucr[31:10] != 22'd0);
     assign tlb_reload_busy_o      = (tlb_reload_state != TLB_IDLE) | do_reload;
     assign tlb_reload_pagefault_o = tlb_reload_pagefault & ~tlb_reload_pagefault_clear_i;
-  
+
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst)
         tlb_reload_pagefault <= 1'b0;
       else if(tlb_reload_pagefault_clear_i)
         tlb_reload_pagefault <= 1'b0;
-  
+
       itlb_trans_reload_we  <= 1'b0;
       itlb_trans_reload_din <= {OPTION_OPERAND_WIDTH{1'b0}};
       itlb_match_reload_we  <= 1'b0;
       itlb_match_reload_din <= {OPTION_OPERAND_WIDTH{1'b0}};
-  
+
       case (tlb_reload_state)
         TLB_IDLE: begin
           tlb_reload_huge  <= 1'b0;
@@ -362,7 +379,7 @@ module mor1kx_immu_marocchino
             tlb_reload_state  <= TLB_GET_PTE_POINTER;
           end
         end // tlb reload idle
-  
+
         //
         // Here we get the pointer to the PTE table, next is to fetch
         // the actual pte from the offset in the table.
@@ -390,7 +407,7 @@ module mor1kx_immu_marocchino
             end
           end
         end // tlb get pointer
-  
+
         //
         // Here we get the actual PTE, left to do is to translate the
         // PTE data into our translate and match registers.
@@ -415,7 +432,7 @@ module mor1kx_immu_marocchino
               // Cache inhibit, Cache coherent
               itlb_trans_reload_din[5:0] <= tlb_reload_data_i[5:0];
               itlb_trans_reload_we       <= 1'b1;
-  
+
               // Match register generation.
               // VPN
               itlb_match_reload_din[31:13] <= virt_addr_fetch_i[31:13];
@@ -424,17 +441,17 @@ module mor1kx_immu_marocchino
               // Valid
               itlb_match_reload_din[0] <= 1'b1;
               itlb_match_reload_we     <= 1'b1;
-  
+
               tlb_reload_state <= TLB_READ;
             end
           end
         end // tlb get pte
-  
+
         // Let the just written values propagate out on the read ports
         TLB_READ: begin
           tlb_reload_state <= TLB_IDLE;
         end
-  
+
         default:
           tlb_reload_state <= TLB_IDLE;
       endcase
@@ -460,7 +477,7 @@ module mor1kx_immu_marocchino
   // Enable for RAM blocks if:
   //  1) regular FETCH advance
   //  2) SPR access
-  wire ram_re = (adv_i & enable_i) | (spr_immu_stb & ~spr_bus_we_i & ~spr_bus_ack_o);
+  wire ram_re = (adv_i & enable_i) | spr_immu_re_r;
 
   generate
   for (i = 0; i < OPTION_IMMU_WAYS; i=i+1) begin : itlb
@@ -488,7 +505,7 @@ module mor1kx_immu_marocchino
       .din_b  (itlb_match_reload_din),
       .dout_b (itlb_match_huge_dout[i])
     );
-  
+
     // ITLB translate registers
     mor1kx_dpram_en_w1st_sclk
     #(

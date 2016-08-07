@@ -41,6 +41,7 @@ module mor1kx_oman_marocchino
   // DECODE non-latched flags to indicate next required unit
   // (The information is stored in order control buffer)
   input                                 dcod_op_pass_exec_i,
+  input                                 dcod_jump_or_branch_i, // just to support IBUS error handling in CTRL
   input                                 dcod_op_1clk_i,
   input                                 dcod_op_div_i,
   input                                 dcod_op_mul_i,
@@ -75,24 +76,24 @@ module mor1kx_oman_marocchino
   //  part #4: for MF(T)SPR processing
   input                                 dcod_op_mfspr_i,
 
-  // collect busy flags from execution module
+  // collect busy flags from execution modules
+  input                                 op_1clk_busy_i,
   input                                 mul_busy_i,
   input                                 div_busy_i,
   input                                 fp32_arith_busy_i,
   input                                 lsu_busy_i,
 
   // collect valid flags from execution modules
-  input                                 exec_op_1clk_i,
   input                                 div_valid_i,
   input                                 mul_valid_i,
   input                                 fp32_arith_valid_i,
   input                                 lsu_valid_i,
 
   // FETCH & DECODE exceptions
-  input                                 dcod_except_ibus_err_i,
-  input                                 dcod_except_ipagefault_i,
-  input                                 dcod_except_itlb_miss_i,
-  input                                 dcod_except_ibus_align_i,
+  input                                 fetch_except_ibus_err_i,
+  input                                 fetch_except_ipagefault_i,
+  input                                 fetch_except_itlb_miss_i,
+  input                                 fetch_except_ibus_align_i,
   input                                 dcod_except_illegal_i,
   input                                 dcod_except_syscall_i,
   input                                 dcod_except_trap_i,
@@ -117,6 +118,14 @@ module mor1kx_oman_marocchino
   // common flag signaling that WB ir required
   output                                do_rf_wb_o,
 
+  // Support IBUS error handling in CTRL
+  output                                exec_jump_or_branch_o,
+  output     [OPTION_OPERAND_WIDTH-1:0] pc_exec_o,
+
+  //   Flag to enabel/disable exterlal interrupts processing
+  // depending on the fact is instructions restartable or not
+  output                                exec_interrupts_en_o,
+
   // WB outputs
   //  ## instruction related information
   output reg [OPTION_OPERAND_WIDTH-1:0] pc_wb_o,
@@ -125,15 +134,17 @@ module mor1kx_oman_marocchino
   output reg                            wb_rf_wb_o,
   //  ## RFE processing
   output reg                            wb_op_rfe_o,
-  //  ## output exceptions
+  //  ## output exceptions: IFETCH
   output reg                            wb_except_ibus_err_o,
   output reg                            wb_except_ipagefault_o,
   output reg                            wb_except_itlb_miss_o,
   output reg                            wb_except_ibus_align_o,
+  //  ## output exceptions: DECODE
   output reg                            wb_except_illegal_o,
   output reg                            wb_except_syscall_o,
   output reg                            wb_except_trap_o,
-  output reg                            wb_interrupts_en_o
+  //  ## combined DECODE/IFETCH exceptions 
+  output reg                            wb_fd_an_except_o
 );
 
   // [O]rder [C]ontrol [B]uffer [T]ap layout
@@ -146,7 +157,8 @@ module mor1kx_oman_marocchino
   localparam  OCBT_INTERRUPTS_EN_POS  = OCBT_FD_AN_EXCEPT_POS   + 1;
   //  Unit wise requested/ready
   localparam  OCBT_OP_PASS_EXEC_POS   = OCBT_INTERRUPTS_EN_POS  + 1;
-  localparam  OCBT_OP_1CLK_POS        = OCBT_OP_PASS_EXEC_POS   + 1;
+  localparam  OCBT_JUMP_OR_BRANCH_POS = OCBT_OP_PASS_EXEC_POS   + 1;
+  localparam  OCBT_OP_1CLK_POS        = OCBT_JUMP_OR_BRANCH_POS + 1;
   localparam  OCBT_OP_DIV_POS         = OCBT_OP_1CLK_POS        + 1;
   localparam  OCBT_OP_MUL_POS         = OCBT_OP_DIV_POS         + 1;
   localparam  OCBT_OP_FP32_POS        = OCBT_OP_MUL_POS         + 1; // arithmetic part only, FP comparison is 1-clock
@@ -193,8 +205,8 @@ module mor1kx_oman_marocchino
 
 
   // Combine FETCH related exceptions
-  wire fetch_an_except = dcod_except_ibus_err_i  | dcod_except_ipagefault_i |
-                         dcod_except_itlb_miss_i | dcod_except_ibus_align_i;
+  wire fetch_an_except = fetch_except_ibus_err_i  | fetch_except_ipagefault_i |
+                         fetch_except_itlb_miss_i | fetch_except_ibus_align_i;
   // Combine DECODE related exceptions
   wire dcod_an_except = dcod_except_illegal_i | dcod_except_syscall_i |
                         dcod_except_trap_i;
@@ -218,16 +230,17 @@ module mor1kx_oman_marocchino
                   dcod_op_mul_i,
                   dcod_op_div_i,
                   dcod_op_1clk_i,
+                  dcod_jump_or_branch_i,
                   dcod_op_pass_exec_i,
                   // Flag that istruction is restartable
                   interrupts_en,
                   // combined FETCH & DECODE exceptions flag
                   (fetch_an_except | dcod_an_except),
                   // FETCH & DECODE exceptions
-                  dcod_except_ibus_err_i,
-                  dcod_except_ipagefault_i,
-                  dcod_except_itlb_miss_i,
-                  dcod_except_ibus_align_i,
+                  fetch_except_ibus_err_i,
+                  fetch_except_ipagefault_i,
+                  fetch_except_itlb_miss_i,
+                  fetch_except_ibus_align_i,
                   dcod_except_illegal_i,
                   dcod_except_syscall_i,
                   dcod_except_trap_i };
@@ -323,11 +336,11 @@ module mor1kx_oman_marocchino
   //  stall by unit usage hazard
   //     (unit could be either busy or waiting for WB access)
   wire stall_by_hazard_u =
-    (dcod_op_1clk_i & exec_op_1clk_i & ~ocbo00[OCBT_OP_1CLK_POS]) |
-    (dcod_op_div_i & (div_busy_i | (div_valid_i & ~ocbo00[OCBT_OP_DIV_POS]))) |
-    (dcod_op_mul_i & (mul_busy_i | (mul_valid_i & ~ocbo00[OCBT_OP_MUL_POS]))) |
+    (dcod_op_1clk_i & op_1clk_busy_i) |
+    (dcod_op_div_i  & div_busy_i) |
+    (dcod_op_mul_i  & mul_busy_i) |
     (dcod_op_fp32_arith_i & (fp32_arith_busy_i | (fp32_arith_valid_i & ~ocbo00[OCBT_OP_FP32_POS]))) |
-    ((dcod_op_ls_i | dcod_op_msync_i) & (lsu_busy_i | (lsu_valid_i & ~ocbo00[OCBT_OP_LS_POS])));
+    ((dcod_op_ls_i | dcod_op_msync_i) & lsu_busy_i);
 
   //  stall by operand A hazard
   //    hazard has occured inside OCB
@@ -376,7 +389,7 @@ module mor1kx_oman_marocchino
   wire stall_by_carry = dcod_carry_req_i & (ocb_carry | carry_waiting);
 
   //  stall by:
-  //    a) MF(T)SPR in decode till and OCB become empty or LSU insn completion (see here)
+  //    a) MF(T)SPR in decode till and OCB become empty (see here)
   //    b) till completion MF(T)SPR (see CTRL)
   //       this completion generates padv-wb,
   //       in next turn padv-wb cleans up OCB and restores
@@ -409,36 +422,29 @@ module mor1kx_oman_marocchino
                     ocbo01[OCBT_FLAG_AWAIT_POS] | ocbo00[OCBT_FLAG_AWAIT_POS];
   // stall fetch combination
   assign stall_fetch_o = ((ocb_hazard_b | exe2dec_hazard_b_o) & dcod_op_jr_i) | // stall FETCH
-                         (flag_await & dcod_op_brcond_i)  |                     // stall FETCH
-                         dcod_op_rfe_i   | dcod_an_except |                     // stall FETCH
-                         dcod_op_mtspr_i | dcod_op_mfspr_i;                     // stall FETCH
+                         (flag_await & dcod_op_brcond_i) |                      // stall FETCH
+                         dcod_op_rfe_i | dcod_an_except;                        // stall FETCH
 
 
-  // For debug with  simulatiom
-`ifdef SIM_SMPL_SOC // MAROCCHINO_TODO
-  wire [OPTION_OPERAND_WIDTH-1:0] pc_exec = ocbo00[OCBT_PC_MSB:OCBT_PC_LSB];
-`endif
+  // Support IBUS error handling in CTRL
+  assign exec_jump_or_branch_o = ocbo00[OCBT_JUMP_OR_BRANCH_POS];
+  assign pc_exec_o             = ocbo00[OCBT_PC_MSB:OCBT_PC_LSB];
+
+  //   Flag to enabel/disable exterlal interrupts processing
+  // depending on the fact is instructions restartable or not
+  assign exec_interrupts_en_o = ocbo00[OCBT_INTERRUPTS_EN_POS];
 
 
   // WB-request (1-clock to prevent extra writes in RF)
-  // Enable external interrupts (1-clock length by default)
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst) begin
-      wb_rf_wb_o          <= 1'b0;
-      wb_interrupts_en_o  <= 1'b0;
-    end
-    else if (pipeline_flush_i) begin
-      wb_rf_wb_o          <= 1'b0;
-      wb_interrupts_en_o  <= 1'b0;
-    end
-    else if (padv_wb_i) begin
-      wb_rf_wb_o          <= exec_rf_wb;
-      wb_interrupts_en_o  <= ocbo00[OCBT_INTERRUPTS_EN_POS];
-    end
-    else begin
-      wb_rf_wb_o          <= 1'b0;
-      wb_interrupts_en_o  <= 1'b0;
-    end
+    if (rst)
+      wb_rf_wb_o <= 1'b0;
+    else if (pipeline_flush_i)
+      wb_rf_wb_o <= 1'b0;
+    else if (padv_wb_i)
+      wb_rf_wb_o <= exec_rf_wb;
+    else
+      wb_rf_wb_o <= 1'b0;
   end // @clock
 
 
@@ -472,33 +478,42 @@ module mor1kx_oman_marocchino
       wb_except_ipagefault_o <= 1'b0;
       wb_except_itlb_miss_o  <= 1'b0;
       wb_except_ibus_align_o <= 1'b0;
+      // DECODE exceptions
       wb_except_illegal_o    <= 1'b0;
       wb_except_syscall_o    <= 1'b0;
       wb_except_trap_o       <= 1'b0;
+      // Combined DECODE/IFETCH exceptions 
+      wb_fd_an_except_o      <= 1'b0;
     end
     else if (pipeline_flush_i) begin
       // RFE
       wb_op_rfe_o            <= 1'b0;
-      // FETCH/DECODE exceptions
+      // IFETCH exceptions
       wb_except_ibus_err_o   <= 1'b0;
       wb_except_ipagefault_o <= 1'b0;
       wb_except_itlb_miss_o  <= 1'b0;
       wb_except_ibus_align_o <= 1'b0;
+      // DECODE exceptions
       wb_except_illegal_o    <= 1'b0;
       wb_except_syscall_o    <= 1'b0;
       wb_except_trap_o       <= 1'b0;
+      // Combined DECODE/IFETCH exceptions 
+      wb_fd_an_except_o      <= 1'b0;
     end
     else if (padv_wb_i) begin
       // RFE
       wb_op_rfe_o            <= ocbo00[OCBT_OP_RFE_POS];
-      // FETCH/DECODE exceptions
+      // IFETCH exceptions
       wb_except_ibus_err_o   <= ocbo00[6];
       wb_except_ipagefault_o <= ocbo00[5];
       wb_except_itlb_miss_o  <= ocbo00[4];
       wb_except_ibus_align_o <= ocbo00[3];
+      // DECODE exceptions
       wb_except_illegal_o    <= ocbo00[2];
       wb_except_syscall_o    <= ocbo00[1];
       wb_except_trap_o       <= ocbo00[0];
+      // Combined DECODE/IFETCH exceptions 
+      wb_fd_an_except_o      <= ocbo00[OCBT_FD_AN_EXCEPT_POS];
     end
   end // @clock
 

@@ -113,7 +113,6 @@ module mor1kx_dcache
 
    // FSM state signals
    reg [4:0] 			      state;
-   wire				      idle;
    wire				      read;
    wire				      write;
    wire				      refill;
@@ -294,7 +293,6 @@ module mor1kx_dcache
 			       OPTION_DCACHE_BLOCK_WIDTH] &
 		       refill & !write_pending;
 
-   assign idle = (state == IDLE);
    assign refill = (state == REFILL);
    assign read = (state == READ);
    assign write = (state == WRITE);

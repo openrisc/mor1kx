@@ -109,8 +109,8 @@ u_mor1kx_marocchino
  your_path/mor1kx/rtl/verilog/mor1kx_dcache_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_lsu_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_cfgrs.v
- your_path/mor1kx/rtl/verilog/mor1kx_pic.v
- your_path/mor1kx/rtl/verilog/mor1kx_ticktimer.v
+ your_path/mor1kx/rtl/verilog/mor1kx_pic_oneself.v
+ your_path/mor1kx/rtl/verilog/mor1kx_ticktimer_oneself.v
  your_path/mor1kx/rtl/verilog/mor1kx_ctrl_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_decode_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_execute_marocchino.v
@@ -119,3 +119,5 @@ u_mor1kx_marocchino
  your_path/mor1kx/rtl/verilog/mor1kx_oman_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_cpu_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_marocchino_alone.v
+
+  Add "your_path/mor1kx/rtl/verilog" in include paths.

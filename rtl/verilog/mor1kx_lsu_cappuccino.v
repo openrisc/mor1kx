@@ -245,9 +245,6 @@ module mor1kx_lsu_cappuccino
 
    assign lsu_except_dpagefault_o = except_dpagefault & !pipeline_flush_i;
 
-   // Stall until the store buffer is empty
-   assign msync_stall_o = ctrl_op_msync_i & (state == WRITE);
-
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        access_done <= 0;
@@ -520,6 +517,9 @@ module mor1kx_lsu_cappuccino
    assign dbus_stall = tlb_reload_busy | except_align | except_dbus |
 		       except_dtlb_miss | except_dpagefault |
 		       pipeline_flush_i;
+
+   // Stall until the store buffer is empty
+   assign msync_stall_o = ctrl_op_msync_i & (state == WRITE);
 
 generate
 if (FEATURE_ATOMIC!="NONE") begin : atomic_gen

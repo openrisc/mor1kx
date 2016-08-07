@@ -59,8 +59,45 @@ flag is usually computed by EXECUTED while FETCH is fetching delay slot)
  (d) CoreMark 109 Iterations/sec, i.e. 109/50 = 2.18 CoreMark/MHz
 
 
-Primary TODOs:
-  - update debug unit support in CTRL-module
+7 August 2016
+ (a) Make FEATURE_PIC and FEATURE_TIMER "enabled" permanently
+ (b) Decouple PIC and TIMER from CTRL
+ (c) Re-Factoring SPR bus to make all modules data outputs registered
+ (d) DU updated to be compliant to MAROCCHINO pipeline, but not
+     verified because I have not got a JTAG dongle
+ (e) Multi-cycle execution units (MUL, DIV and FP32-arithmetic) were
+     moved out of mor1kx_excecute_maroccchino module. The rest part of
+     mor1kx_excecute_maroccchino were re-named to
+     mor1kx_exec_1clk_marocchino
+ (f) WB- registers in all execution modules were re-designed to make
+     exception processing more straight
 
-Secondary TODOs:
+
+Further development ideas:
+  Design is moving toward Tomasulo algorithm by natural reasons.
+For example, to simplify logic that detects "unit busy" it would be
+useful to add one extra input latches in each execution unit. If these
+latches is filled, than unit is busy. The logic would be better
+localized than analysis off all stages of long pipelines like FPU's
+ones. Coupling them with already implemented input latches we get
+a kind of two stages "reservation stations" at the input of each
+execution module. So, the obvious next steps are:
+ (a) implement register re-naming logic to mark destination
+     register with extra bits
+ (b) use the extended addresses in the reservation stations
+     for forwarding
+ (c) remove data hazard detection in OMAN (order manager)
+     from pipeline control, because just "unit busy" flags from each
+     execution unit should be enough to push pipe
+
+
+Primary TODOs:
+  - Implement two stages reservation stations at input of each
+    execution unit
+  - Implement destination register re-naming, use the extended addresses
+    for forwarding in reservation stations and remove data hazard
+    detection from pipe control. Use just "unit busy" flags from
+    reservation stations instead.
   - Improvement control of FPU-32 pipelines
+  - Verify DU
+

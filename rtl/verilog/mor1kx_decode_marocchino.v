@@ -100,7 +100,6 @@ module mor1kx_decode_marocchino
   // 1-clock instruction
   output reg                            dcod_op_1clk_o,
   // ALU related opc
-  output      [`OR1K_ALU_OPC_WIDTH-1:0] dcod_opc_alu_o,
   output      [`OR1K_ALU_OPC_WIDTH-1:0] dcod_opc_alu_secondary_o,
   // Adder related
   output                                dcod_op_add_o,
@@ -111,6 +110,8 @@ module mor1kx_decode_marocchino
   output                                dcod_op_ffl1_o,
   output                                dcod_op_movhi_o,
   output                                dcod_op_cmov_o,
+  // Logic
+  output      [`OR1K_ALU_OPC_WIDTH-1:0] dcod_opc_logic_o,
   // Jump & Link
   output                                dcod_op_jal_o,
   output     [OPTION_OPERAND_WIDTH-1:0] dcod_jal_result_o,
@@ -134,7 +135,10 @@ module mor1kx_decode_marocchino
   output                                dcod_op_mtspr_o,
 
   // Exceptions detected on decode stage flags
-  output                                dcod_except_ibus_align_o,
+  //  ## enable l.trap exception
+  input                                 du_trap_enable_i,
+  //  ## outcome exception flags
+  output                                fetch_except_ibus_align_o,
   output reg                            dcod_except_illegal_o,
   output                                dcod_except_syscall_o,
   output                                dcod_except_trap_o,
@@ -249,6 +253,14 @@ module mor1kx_decode_marocchino
   assign dcod_op_cmov_o  = (dcod_op_alu & (opc_alu == `OR1K_ALU_OPC_CMOV));
 
 
+  // --- logic ---
+  assign dcod_opc_logic_o =  
+    (((opc_insn == `OR1K_OPCODE_ALU) & (opc_alu == `OR1K_ALU_OPC_OR )) | (opc_insn == `OR1K_OPCODE_ORI )) ? `OR1K_ALU_OPC_OR  :
+    (((opc_insn == `OR1K_OPCODE_ALU) & (opc_alu == `OR1K_ALU_OPC_XOR)) | (opc_insn == `OR1K_OPCODE_XORI)) ? `OR1K_ALU_OPC_XOR :
+    (((opc_insn == `OR1K_OPCODE_ALU) & (opc_alu == `OR1K_ALU_OPC_AND)) | (opc_insn == `OR1K_OPCODE_ANDI)) ? `OR1K_ALU_OPC_AND :
+                                                                                                   {`OR1K_ALU_OPC_WIDTH{1'b0}};
+
+
   // --- FPU-32 arithmetic part ---
   assign dcod_op_fp32_arith_o =
     {(FEATURE_FPU != "NONE") & (opc_insn == `OR1K_OPCODE_FPU) & ~dcod_insn_i[3],
@@ -292,18 +304,13 @@ module mor1kx_decode_marocchino
   assign dcod_immediate_sel_o = imm_sext_sel | imm_zext_sel | imm_high_sel;
 
 
-
-  // ALU opcode
-  assign dcod_opc_alu_o = (opc_insn == `OR1K_OPCODE_ORI)  ? `OR1K_ALU_OPC_OR  :
-                          (opc_insn == `OR1K_OPCODE_ANDI) ? `OR1K_ALU_OPC_AND :
-                          (opc_insn == `OR1K_OPCODE_XORI) ? `OR1K_ALU_OPC_XOR :
-                            ({`OR1K_ALU_OPC_WIDTH{dcod_op_alu}} & opc_alu);
-
+  // ALU related secondary opcode
   assign dcod_opc_alu_secondary_o = dcod_op_setflag_o ?
                                       dcod_insn_i[`OR1K_COMP_OPC_SELECT]:
                                       {1'b0,dcod_insn_i[`OR1K_ALU_OPC_SECONDARY_SELECT]};
 
 
+  // Exceptions and l.rfe
   assign dcod_op_rfe_o = (opc_insn == `OR1K_OPCODE_RFE);
 
   assign dcod_except_syscall_o = (opc_insn == `OR1K_OPCODE_SYSTRAPSYNC) &
@@ -312,7 +319,9 @@ module mor1kx_decode_marocchino
 
   assign dcod_except_trap_o = (opc_insn == `OR1K_OPCODE_SYSTRAPSYNC) &
                               (dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
-                               `OR1K_SYSTRAPSYNC_OPC_TRAP);
+                               `OR1K_SYSTRAPSYNC_OPC_TRAP) &
+                              du_trap_enable_i;
+
 
   // Illegal instruction decode
   // Instruction executed during 1 clock
@@ -591,20 +600,24 @@ module mor1kx_decode_marocchino
         endcase // alu_opc
 
       `OR1K_OPCODE_SYSTRAPSYNC: begin
-        if ((dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_SYSCALL) |
-            (dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_TRAP) |
-            ((dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_PSYNC) &
-             (FEATURE_PSYNC != "NONE")) |
-            ((dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_CSYNC) &
-             (FEATURE_CSYNC != "NONE")) |
-            (dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_MSYNC)) begin
+        if (dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_TRAP) begin
           dcod_except_illegal_o = 1'b0;
+          dcod_op_pass_exec_o   = ~du_trap_enable_i;
+        end
+        else if ((dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_SYSCALL) |
+                 ((dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_PSYNC) &
+                  (FEATURE_PSYNC != "NONE")) |
+                 ((dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_CSYNC) &
+                  (FEATURE_CSYNC != "NONE")) |
+                 (dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_MSYNC)) begin
+          dcod_except_illegal_o = 1'b0;
+          dcod_op_pass_exec_o   = 1'b0;
         end
         else begin
           dcod_except_illegal_o = 1'b1;
+          dcod_op_pass_exec_o   = 1'b0;
         end
         dcod_op_1clk_o      = 1'b0;
-        dcod_op_pass_exec_o = 1'b0;
         dcod_rfa_req_o      = 1'b0;
         dcod_rfb_req_o      = 1'b0;
         dcod_rf_wb_o        = 1'b0; 
@@ -658,13 +671,13 @@ module mor1kx_decode_marocchino
                                   (opc_insn == `OR1K_OPCODE_JALR)); // l.jalr
   // take branch flag / target / align exception
   //  # take branch flag
-  assign dcod_do_branch_o         = branch_to_imm | dcod_op_jr_o;
+  assign dcod_do_branch_o          = branch_to_imm | dcod_op_jr_o;
   //  # take branch target
-  assign dcod_do_branch_target_o  = branch_to_imm ? branch_to_imm_target : dcod_rfb_i;
+  assign dcod_do_branch_target_o   = branch_to_imm ? branch_to_imm_target : dcod_rfb_i;
   //  # take branch align exception
-  assign dcod_except_ibus_align_o = branch_to_imm ? (|branch_to_imm_target[1:0]) :
-                                    dcod_op_jr_o  ? ((|dcod_rfb_i[1:0]) & ~exe2dec_hazard_b_i) :
-                                                    1'b0;
+  assign fetch_except_ibus_align_o = branch_to_imm ? (|branch_to_imm_target[1:0]) :
+                                     dcod_op_jr_o  ? ((|dcod_rfb_i[1:0]) & ~exe2dec_hazard_b_i) :
+                                                     1'b0;
 
 
   // Register file addresses

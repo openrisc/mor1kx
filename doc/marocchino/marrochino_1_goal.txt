@@ -62,6 +62,12 @@ Currently, the following options are made NOT CONFIGURABLE:
 
  FEATURE_STORE_BUFFER     == "ENABLED"
 
+ FEATURE_FASTCONTEXTS     == "NONE"
+ OPTION_RF_NUM_SHADOW_GPR == 0
+
+ FEATURE_PIC              == "ENABLED"
+ FEATURE_TIMER            == "ENABLED"
+
   There is a plan to make NOT CONFIGURABLE at least the following
 options:
 

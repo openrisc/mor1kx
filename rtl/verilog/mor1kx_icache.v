@@ -96,7 +96,6 @@ module mor1kx_icache
 
    // FSM state signals
    reg [3:0] 			      state;
-   wire				      idle;
    wire				      read;
    wire				      refill;
    wire				      invalidate;
@@ -239,7 +238,6 @@ module mor1kx_icache
 			       OPTION_ICACHE_BLOCK_WIDTH] &
 		       refill;
 
-   assign idle = (state == IDLE);
    assign refill = (state == REFILL);
    assign read = (state == READ);
    assign invalidate = (state == INVALIDATE);

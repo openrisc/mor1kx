@@ -73,7 +73,7 @@ module mor1kx_icache_marocchino
   input                                 spr_bus_stb_i,
   input      [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_i,
   output     [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
-  output                                spr_bus_ack_o
+  output reg                            spr_bus_ack_o
 );
 
   // Address space in bytes for a way
@@ -262,9 +262,8 @@ module mor1kx_icache_marocchino
 
   // SPR bus interface
   //  # detect SPR request to ICACHE
-  wire spr_bus_ic_stb = spr_bus_stb_i & spr_bus_we_i & (spr_bus_addr_i == `OR1K_SPR_ICBIR_ADDR);
-  //  # SPR ACK
-  assign spr_bus_ack_o = ic_invalidate;
+  //  # (only invalidation command is implemented)
+  wire spr_bus_ic_invalidate = spr_bus_stb_i & spr_bus_we_i & (spr_bus_addr_i == `OR1K_SPR_ICBIR_ADDR);
   //  # data output
   assign spr_bus_dat_o = {OPTION_OPERAND_WIDTH{1'b0}};
 
@@ -275,11 +274,12 @@ module mor1kx_icache_marocchino
   integer w1;
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst) begin
-      curr_refill_adr <= {OPTION_OPERAND_WIDTH{1'b0}};
+      curr_refill_adr <= {OPTION_OPERAND_WIDTH{1'b0}};  // reset
       lru_way_r       <= {OPTION_ICACHE_WAYS{1'b0}};    // reset
-      refill_hit_r    <= 1'b0;
-      refill_done     <= 0;
-      ic_state        <= IC_IDLE;
+      refill_hit_r    <= 1'b0;    // reset
+      refill_done     <= 0;       // reset
+      ic_state        <= IC_IDLE; // reset
+      spr_bus_ack_o   <= 1'b0;    // reset
     end
     else begin
       // states
@@ -287,8 +287,10 @@ module mor1kx_icache_marocchino
         IC_IDLE: begin
           if (fetch_excepts_i | flush_by_ctrl_i) // ICACHE FSM keeps idle
             ic_state <= IC_IDLE;
-          else if (spr_bus_ic_stb)
-            ic_state <= IC_INVALIDATE;
+          else if (spr_bus_ic_invalidate) begin
+            ic_state      <= IC_INVALIDATE; // idling -> invalidate
+            spr_bus_ack_o <= 1'b1;          // idling -> invalidate
+          end
           else if (ic_fsm_adv)
             ic_state <= IC_READ;
         end
@@ -343,15 +345,17 @@ module mor1kx_icache_marocchino
         end // RE-FILL
 
         IC_INVALIDATE: begin
-          ic_state <= IC_IDLE; // invalidate
+          ic_state      <= IC_IDLE; // invalidate -> idling
+          spr_bus_ack_o <= 1'b0;    // invalidate -> idling
         end
 
         default: begin
-          curr_refill_adr <= {OPTION_OPERAND_WIDTH{1'b0}};
+          curr_refill_adr <= {OPTION_OPERAND_WIDTH{1'b0}};  // default
           lru_way_r       <= {OPTION_ICACHE_WAYS{1'b0}};    // default
-          refill_hit_r    <= 1'b0;
-          refill_done     <= 0;
-          ic_state        <= IC_IDLE;
+          refill_hit_r    <= 1'b0;    // default
+          refill_done     <= 0;       // default
+          ic_state        <= IC_IDLE; // default
+          spr_bus_ack_o   <= 1'b0;    // default
         end
       endcase
     end // reset / regular update

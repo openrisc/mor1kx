@@ -29,12 +29,13 @@
 
 module mor1kx_dcache_marocchino
 #(
-  parameter OPTION_OPERAND_WIDTH      = 32,
-  parameter OPTION_DCACHE_BLOCK_WIDTH =  5,
-  parameter OPTION_DCACHE_SET_WIDTH   =  9,
-  parameter OPTION_DCACHE_WAYS        =  2,
-  parameter OPTION_DCACHE_LIMIT_WIDTH = 32,
-  parameter OPTION_DCACHE_SNOOP       = "NONE"
+  parameter OPTION_OPERAND_WIDTH        = 32,
+  parameter OPTION_DCACHE_BLOCK_WIDTH   =  5,
+  parameter OPTION_DCACHE_SET_WIDTH     =  9,
+  parameter OPTION_DCACHE_WAYS          =  2,
+  parameter OPTION_DCACHE_LIMIT_WIDTH   = 32,
+  parameter OPTION_DCACHE_SNOOP         = "NONE",
+  parameter OPTION_DCACHE_CLEAR_ON_INIT =  0
 )
 (
   // clock & reset
@@ -92,7 +93,7 @@ module mor1kx_dcache_marocchino
   input                                 spr_bus_stb_i,
   input      [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_i,
   output     [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
-  output                                spr_bus_ack_o
+  output reg                            spr_bus_ack_o
 );
 
   // Address space in bytes for a way
@@ -144,9 +145,6 @@ module mor1kx_dcache_marocchino
   wire dc_refill     = (dc_state == DC_REFILL);
   wire dc_invalidate = (dc_state == DC_INVALIDATE);
 
-
-  wire                                          invalidate_cmd;
-  wire                                          invalidate_ack;
 
   reg                [OPTION_OPERAND_WIDTH-1:0] way_wr_dat;
 
@@ -327,15 +325,9 @@ module mor1kx_dcache_marocchino
   assign spr_bus_dat_o = {OPTION_OPERAND_WIDTH{1'b0}};
 
   // An invalidate request is either a block flush or a block invalidate
-  assign invalidate_cmd = spr_bus_stb_i & spr_bus_we_i &
-                          ((spr_bus_addr_i == `OR1K_SPR_DCBFR_ADDR) |
-                           (spr_bus_addr_i == `OR1K_SPR_DCBIR_ADDR));
-
-  // do invalidate
-  assign invalidate_ack = dc_invalidate & ~snoop_hit_o;
-
-  // Acknowledge to the SPR bus.
-  assign spr_bus_ack_o = invalidate_ack;
+  wire spr_bus_dc_invalidate = spr_bus_stb_i & spr_bus_we_i &
+                               ((spr_bus_addr_i == `OR1K_SPR_DCBFR_ADDR) |
+                                (spr_bus_addr_i == `OR1K_SPR_DCBIR_ADDR));
 
 
 
@@ -368,12 +360,13 @@ module mor1kx_dcache_marocchino
       refill_hit_was_r    <= 1'b0;  // on reset
       refill_done         <= 0;     // on reset
       snoop_check         <= 1'b0;  // on reset
-      snoop_tag           <= {TAG_WIDTH{1'b0}}; // on reset
-      snoop_windex        <= {OPTION_DCACHE_SET_WIDTH{1'b0}};
-      tag_save_lru        <= {OPTION_DCACHE_WAYS{1'b0}}; // on reset
+      snoop_tag           <= {TAG_WIDTH{1'b0}};               // on reset
+      snoop_windex        <= {OPTION_DCACHE_SET_WIDTH{1'b0}}; // on reset
+      tag_save_lru        <= {OPTION_DCACHE_WAYS{1'b0}};      // on reset
       for (w1 = 0; w1 < OPTION_DCACHE_WAYS; w1 = w1 + 1) begin
         tag_way_save[w1] <= {TAGMEM_WAY_WIDTH{1'b0}};
       end
+      spr_bus_ack_o       <= 1'b0; // on reset
     end
     else begin
       // snoop processing
@@ -394,9 +387,11 @@ module mor1kx_dcache_marocchino
       // states switching
       case (dc_state)
         DC_IDLE: begin
-          if (dc_force_idle) // keep idle (overcome advance commands)
+          spr_bus_ack_o <= 1'b0; // idling
+          // next states
+          if (dc_force_idle | snoop_hit_o) // keep idle (overcome advance commands)
             dc_state <= DC_IDLE;
-          else if (invalidate_cmd)
+          else if (spr_bus_dc_invalidate)
             dc_state <= DC_INVALIDATE;
           else if (dc_takes_load)
             dc_state <= DC_READ;
@@ -490,8 +485,10 @@ module mor1kx_dcache_marocchino
         end // re-fill
 
         DC_INVALIDATE: begin
-          if (~snoop_hit_o) // wait till snoop-inv completion
-            dc_state <= DC_IDLE;
+          if (~snoop_hit_o) begin // wait till snoop-inv completion
+            dc_state      <= DC_IDLE; // invalidate -> idling
+            spr_bus_ack_o <= 1'b1;    // invalidate -> idling
+          end
         end
 
         default: begin
@@ -692,7 +689,7 @@ module mor1kx_dcache_marocchino
     #(
       .ADDR_WIDTH     (WAY_WIDTH-2),
       .DATA_WIDTH     (OPTION_OPERAND_WIDTH),
-      .CLEAR_ON_INIT  (0)
+      .CLEAR_ON_INIT  (OPTION_DCACHE_CLEAR_ON_INIT)
     )
     dc_way_ram
     (
@@ -755,7 +752,7 @@ module mor1kx_dcache_marocchino
   #(
     .ADDR_WIDTH     (OPTION_DCACHE_SET_WIDTH),
     .DATA_WIDTH     (TAGMEM_WIDTH),
-    .CLEAR_ON_INIT  (0)
+    .CLEAR_ON_INIT  (OPTION_DCACHE_CLEAR_ON_INIT)
   )
   dc_tag_ram
   (
@@ -805,7 +802,7 @@ module mor1kx_dcache_marocchino
     #(
       .ADDR_WIDTH     (OPTION_DCACHE_SET_WIDTH),
       .DATA_WIDTH     (TAGMEM_WIDTH),
-      .CLEAR_ON_INIT  (0)
+      .CLEAR_ON_INIT  (OPTION_DCACHE_CLEAR_ON_INIT)
     )
     dc_snoop_tag_ram
     (

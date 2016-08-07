@@ -27,30 +27,33 @@
 module mor1kx_store_buffer_marocchino
 #(
   parameter DEPTH_WIDTH          =  4, // 16 taps
-  parameter OPTION_OPERAND_WIDTH = 32
+  parameter OPTION_OPERAND_WIDTH = 32,
+  parameter CLEAR_ON_INIT        = 0
 )
 (
   input                               clk,
   input                               rst,
-
-  input    [OPTION_OPERAND_WIDTH-1:0] pc_i,
-  input    [OPTION_OPERAND_WIDTH-1:0] adr_i,
+  // entry port
+  input    [OPTION_OPERAND_WIDTH-1:0] sbuf_epcr_i,
+  input    [OPTION_OPERAND_WIDTH-1:0] virt_addr_i,
+  input    [OPTION_OPERAND_WIDTH-1:0] phys_addr_i,
   input    [OPTION_OPERAND_WIDTH-1:0] dat_i,
   input  [OPTION_OPERAND_WIDTH/8-1:0] bsel_i,
   input                               write_i,
-
-  output   [OPTION_OPERAND_WIDTH-1:0] pc_o,
-  output   [OPTION_OPERAND_WIDTH-1:0] adr_o,
+  // output port
+  output   [OPTION_OPERAND_WIDTH-1:0] sbuf_epcr_o,
+  output   [OPTION_OPERAND_WIDTH-1:0] virt_addr_o,
+  output   [OPTION_OPERAND_WIDTH-1:0] phys_addr_o,
   output   [OPTION_OPERAND_WIDTH-1:0] dat_o,
   output [OPTION_OPERAND_WIDTH/8-1:0] bsel_o,
   input                               read_i,
-
+  // status flags
   output                              full_o,
   output                              empty_o
 );
 
-  // The fifo stores (address + data + byte sel + pc)
-  localparam FIFO_DATA_WIDTH = OPTION_OPERAND_WIDTH*3 +
+  // The fifo stores (pc + virtual_address + physical_address + data + byte-sel)
+  localparam FIFO_DATA_WIDTH = OPTION_OPERAND_WIDTH*4 +
                                OPTION_OPERAND_WIDTH/8;
 
   wire  [FIFO_DATA_WIDTH-1:0] fifo_dout;
@@ -90,8 +93,8 @@ module mor1kx_store_buffer_marocchino
   assign empty_o = (write_pointer == read_pointer);
 
   // data input/output
-  assign fifo_din = {adr_i, dat_i, bsel_i, pc_i};
-  assign {adr_o, dat_o, bsel_o, pc_o} = fifo_dout;
+  assign fifo_din = {bsel_i, dat_i, phys_addr_i, virt_addr_i, sbuf_epcr_i};
+  assign {bsel_o, dat_o, phys_addr_o, virt_addr_o, sbuf_epcr_o} = fifo_dout;
 
 
   // same addresses for read and write
@@ -108,7 +111,7 @@ module mor1kx_store_buffer_marocchino
   #(
     .ADDR_WIDTH     (DEPTH_WIDTH),
     .DATA_WIDTH     (FIFO_DATA_WIDTH),
-    .CLEAR_ON_INIT  (0)
+    .CLEAR_ON_INIT  (CLEAR_ON_INIT)
   )
   fifo_ram
   (

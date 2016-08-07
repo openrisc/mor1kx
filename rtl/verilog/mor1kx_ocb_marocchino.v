@@ -111,7 +111,7 @@ module mor1kx_ocb_marocchino
   wire ptr_prev_0 = ptr_prev[0];
 
   // "OCB is empty" flag
-  assign empty_o = ptr_curr_0 & ptr_prev_0 & (ocbo00_o == RESET_VALUE);
+  assign empty_o = ptr_curr_0 & ptr_prev_0;
 
   // "OCB is full" flag
   //  # no more availaible taps, pointer is out of range

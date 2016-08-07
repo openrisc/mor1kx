@@ -57,13 +57,20 @@ module pfpu32_fcmp_marocchino
   // Operands
   input                        [31:0] rfa_i,
   input                        [31:0] rfb_i,
+  // Modes
+  input                               except_fpu_enable_i,
+  input                               ctrl_fpu_mask_flags_inv_i,
+  input                               ctrl_fpu_mask_flags_inf_i,
   // Outputs
   //  # not WB-latched for flag forwarding
   output                              fp32_flag_set_o,
   //  # WB-latched
   output reg                          wb_fp32_flag_set_o,   // comparison result
   output reg                          wb_fp32_flag_clear_o, // comparison result
-  output reg  [`OR1K_FPCSR_WIDTH-1:0] wb_fp32_cmp_fpcsr_o   // comparison exceptions
+  output reg                          wb_fp32_cmp_inv_o, // comparison flag 'invalid'
+  output reg                          wb_fp32_cmp_inf_o, // comparison flag 'infinity'
+  output reg                          wb_fp32_cmp_wb_fpcsr_o, // update FPCSR
+  output reg                          wb_except_fp32_cmp_o // exception by FP32-comparison
 );
 
 ////////////////////////////////////////////////////////////////////////
@@ -203,36 +210,65 @@ assign fp32_flag_set_o = cmp_flag;
 
 
 ////////////////////////////////////////////////////////////////////////
-// WB latches
+// Just before latching
+//  # access to WB
+wire grant_wb_to_fp32_cmp = fpu_op_is_comp_i & grant_wb_to_1clk_i;
+//  # set/slear commands
+wire exec_fp32_flag_set   = grant_wb_to_fp32_cmp &   cmp_flag;
+wire exec_fp32_flag_clear = grant_wb_to_fp32_cmp & (~cmp_flag);
+//  # FP32 comparison flags
+wire exec_fp32_cmp_inv    = grant_wb_to_fp32_cmp & ctrl_fpu_mask_flags_inv_i & inv_cmp;
+wire exec_fp32_cmp_inf    = grant_wb_to_fp32_cmp & ctrl_fpu_mask_flags_inf_i & (in_infa | in_infb);
+//  # FP32 comparison exception
+wire exec_except_fp32_cmp = except_fpu_enable_i & (exec_fp32_cmp_inv | exec_fp32_cmp_inf);
+
+
+////////////////////////////////////////////////////////////////////////
+// WB latches: flag set/clear; fp-related flags; exception 
 always @(posedge clk `OR_ASYNC_RST) begin
   if (rst) begin
+    // comparison results
     wb_fp32_flag_set_o   <= 1'b0;
     wb_fp32_flag_clear_o <= 1'b0;
-    wb_fp32_cmp_fpcsr_o  <= {`OR1K_FPCSR_WIDTH{1'b0}};
+    // comparison flags
+    wb_fp32_cmp_inv_o    <= 1'b0;
+    wb_fp32_cmp_inf_o    <= 1'b0;
+    // comparison exception
+    wb_except_fp32_cmp_o <= 1'b0;
   end
   else if(flush_i) begin
+    // comparison results
     wb_fp32_flag_set_o   <= 1'b0;
     wb_fp32_flag_clear_o <= 1'b0;
-    wb_fp32_cmp_fpcsr_o  <= {`OR1K_FPCSR_WIDTH{1'b0}};
+    // comparison flags
+    wb_fp32_cmp_inv_o    <= 1'b0;
+    wb_fp32_cmp_inf_o    <= 1'b0;
+    // comparison exception
+    wb_except_fp32_cmp_o <= 1'b0;
   end
   else if(padv_wb_i) begin
-    if (fpu_op_is_comp_i & grant_wb_to_1clk_i) begin
-      // comparison results
-      wb_fp32_flag_set_o   <= cmp_flag;
-      wb_fp32_flag_clear_o <= ~cmp_flag;
-      // exeptions
-      wb_fp32_cmp_fpcsr_o[`OR1K_FPCSR_IVF] <= inv_cmp;
-      wb_fp32_cmp_fpcsr_o[`OR1K_FPCSR_INF] <= in_infa | in_infb;
-    end
-    else begin
-      // comparison results
-      wb_fp32_flag_set_o   <= 1'b0;
-      wb_fp32_flag_clear_o <= 1'b0;
-      // exeptions
-      wb_fp32_cmp_fpcsr_o[`OR1K_FPCSR_IVF] <= 1'b0;
-      wb_fp32_cmp_fpcsr_o[`OR1K_FPCSR_INF] <= 1'b0;
-    end // comp-op / not
+    // comparison results
+    wb_fp32_flag_set_o   <= exec_fp32_flag_set;
+    wb_fp32_flag_clear_o <= exec_fp32_flag_clear;
+    // comparison flags
+    wb_fp32_cmp_inv_o    <= exec_fp32_cmp_inv;
+    wb_fp32_cmp_inf_o    <= exec_fp32_cmp_inf;
+    // comparison exception
+    wb_except_fp32_cmp_o <= exec_except_fp32_cmp;
   end // advance WB latches
 end // posedge clock
+
+////////////////////////////////////////////////////////////////////////
+// WB latches: update FPCSR (1-clock to prevent extra writes into FPCSR)
+always @(posedge clk `OR_ASYNC_RST) begin
+  if (rst)
+    wb_fp32_cmp_wb_fpcsr_o <= 1'b0;
+  else if (flush_i)
+    wb_fp32_cmp_wb_fpcsr_o <= 1'b0;
+  else if (padv_wb_i)
+    wb_fp32_cmp_wb_fpcsr_o <= grant_wb_to_fp32_cmp;
+  else
+    wb_fp32_cmp_wb_fpcsr_o <= 1'b0;
+end // @clock
 
 endmodule // pfpu32_fcmp_marocchino
