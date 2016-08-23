@@ -40,6 +40,7 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_TIMER = "ENABLED",
     parameter FEATURE_DEBUGUNIT = "NONE",
     parameter FEATURE_PERFCOUNTERS = "NONE",
+    parameter OPTION_PERFCOUNTERS_NUM = 7,
     parameter FEATURE_MAC = "NONE",
 
     parameter FEATURE_SYSCALL = "ENABLED",
@@ -1368,6 +1369,7 @@ module mor1kx_cpu_cappuccino
        .OPTION_IMMU_WAYS(OPTION_IMMU_WAYS),
        .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
        .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
+       .OPTION_PERFCOUNTERS_NUM(OPTION_PERFCOUNTERS_NUM),
        .FEATURE_MAC(FEATURE_MAC),
        .FEATURE_FPU(FEATURE_FPU), // pipeline cappuccino: ctrl instance
        .FEATURE_MULTICORE(FEATURE_MULTICORE),

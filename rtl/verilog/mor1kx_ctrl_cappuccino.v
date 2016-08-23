@@ -53,6 +53,7 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_TIMER = "ENABLED",
     parameter FEATURE_DEBUGUNIT = "NONE",
     parameter FEATURE_PERFCOUNTERS = "NONE",
+    parameter OPTION_PERFCOUNTERS_NUM = 0,
     parameter FEATURE_PMU = "NONE",
     parameter FEATURE_MAC = "NONE",
     parameter FEATURE_FPU = "NONE",
@@ -866,6 +867,7 @@ module mor1kx_ctrl_cappuccino
        .OPTION_IMMU_WAYS		(OPTION_IMMU_WAYS),
        .FEATURE_DEBUGUNIT		(FEATURE_DEBUGUNIT),
        .FEATURE_PERFCOUNTERS		(FEATURE_PERFCOUNTERS),
+       .OPTION_PERFCOUNTERS_NUM  (OPTION_PERFCOUNTERS_NUM),
        .FEATURE_MAC			(FEATURE_MAC),
        .FEATURE_FPU			(FEATURE_FPU), // mor1kx_cfgrs instance
        .FEATURE_SYSCALL			(FEATURE_SYSCALL),
@@ -1079,6 +1081,10 @@ module mor1kx_ctrl_cappuccino
           .spr_addr_i           (spr_addr),
           .spr_dat_i            (spr_write_dat),
           );*/
+         mor1kx_pic
+          #(
+            .OPTION_PERFCOUNTERS_NUM(OPTION_PERFCOUNTERS_NUM)
+         )
          mor1kx_pcu
            (/*AUTOINST*/
             // Outputs

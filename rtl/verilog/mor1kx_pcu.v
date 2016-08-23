@@ -28,7 +28,7 @@ module mor1kx_pcu
    spr_sys_mode_i
    );
 
-   parameter OPTION_PCU_NUM = 8;
+   parameter OPTION_PERFCOUNTERS_NUM = 7;
 
    input clk;
    input rst;
@@ -95,7 +95,7 @@ module mor1kx_pcu
 
    genvar pcu_num;
    generate
-      for(pcu_num = 0; pcu_num < OPTION_PCU_NUM; pcu_num = pcu_num + 1) begin: pcu_generate
+      for(pcu_num = 0; pcu_num < OPTION_PERFCOUNTERS_NUM + 1; pcu_num = pcu_num + 1) begin: pcu_generate
          always @(posedge clk `OR_ASYNC_RST) begin
             if (rst) begin
                pcu_pccr[pcu_num] = 32'd0;
