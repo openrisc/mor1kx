@@ -15,6 +15,9 @@
 `include "mor1kx-defines.v"
 
 module mor1kx_pcu
+  #(
+    parameter OPTION_PERFCOUNTERS_NUM = 7
+  )
   (/*AUTOARG*/
    // Outputs
    spr_bus_ack, spr_dat_o,
@@ -27,8 +30,6 @@ module mor1kx_pcu
    pcu_event_datadep_stall_i,
    spr_sys_mode_i
    );
-
-   parameter OPTION_PERFCOUNTERS_NUM = 7;
 
    input clk;
    input rst;
@@ -58,8 +59,8 @@ module mor1kx_pcu
    input         pcu_event_datadep_stall_i;
 
    // Registers
-   reg [31:0]    pcu_pccr[0:OPTION_PCU_NUM - 1];
-   reg [31:0]    pcu_pcmr[0:OPTION_PCU_NUM - 1];
+   reg [31:0]    pcu_pccr[0:OPTION_PERFCOUNTERS_NUM];
+   reg [31:0]    pcu_pcmr[0:OPTION_PERFCOUNTERS_NUM];
 
    wire pcu_pccr_access;
    wire pcu_pcmr_access;

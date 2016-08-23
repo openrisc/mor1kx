@@ -40,7 +40,7 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_TIMER = "ENABLED",
     parameter FEATURE_DEBUGUNIT = "NONE",
     parameter FEATURE_PERFCOUNTERS = "NONE",
-    parameter OPTION_PERFCOUNTERS_NUM = 7,
+    parameter OPTION_PERFCOUNTERS_NUM = 0,
     parameter FEATURE_MAC = "NONE",
 
     parameter FEATURE_SYSCALL = "ENABLED",
