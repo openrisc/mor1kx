@@ -17,126 +17,130 @@
 module mor1kx_pcu
   (/*AUTOARG*/
    // Outputs
-   spr_picmr_o, spr_picsr_o, spr_bus_ack, spr_dat_o,
+   spr_bus_ack, spr_dat_o,
    // Inputs
-   clk, rst, irq_i, spr_access_i, spr_we_i, spr_addr_i, spr_dat_i
+   clk, rst, spr_access_i, spr_we_i, spr_addr_i, spr_dat_i, spr_re_i,
+   pcu_event_load_i, pcu_event_store_i, pcu_event_ifetch_i,
+   pcu_event_dcache_miss_i, pcu_event_icache_miss_i,
+   pcu_event_ifetch_stall_i, pcu_event_lsu_stall_i,
+   pcu_event_brn_stall_i, pcu_event_dtlb_miss_i, pcu_event_itlb_miss_i,
+   pcu_event_datadep_stall_i,
+   spr_sys_mode_i
    );
 
-   parameter OPTION_PIC_TRIGGER="LEVEL";
-   parameter OPTION_PIC_NMI_WIDTH = 0;
+   parameter OPTION_PCU_NUM = 8;
 
    input clk;
    input rst;
 
-   input [31:0] irq_i;
-
-   output [31:0] spr_picmr_o;
-   output [31:0] spr_picsr_o;
-
    // SPR Bus interface
    input         spr_access_i;
    input         spr_we_i;
+   input         spr_re_i;
    input [15:0]  spr_addr_i;
    input [31:0]  spr_dat_i;
    output        spr_bus_ack;
    output [31:0] spr_dat_o;
 
+   // Current cpu mode: user/supervisor
+   input         spr_sys_mode_i;
+   // Events that can occur
+   input         pcu_event_load_i;
+   input         pcu_event_store_i;
+   input         pcu_event_ifetch_i;
+   input         pcu_event_dcache_miss_i;
+   input         pcu_event_icache_miss_i;
+   input         pcu_event_ifetch_stall_i;
+   input         pcu_event_lsu_stall_i;
+   input         pcu_event_brn_stall_i;
+   input         pcu_event_dtlb_miss_i;
+   input         pcu_event_itlb_miss_i;
+   input         pcu_event_datadep_stall_i;
+
    // Registers
-   reg [31:0]    spr_picmr;
-   reg [31:0]    spr_picsr;
+   reg [31:0]    pcu_pccr[0:OPTION_PCU_NUM - 1];
+   reg [31:0]    pcu_pcmr[0:OPTION_PCU_NUM - 1];
 
-   wire spr_picmr_access;
-   wire spr_picsr_access;
+   wire pcu_pccr_access;
+   wire pcu_pcmr_access;
 
-   wire [31:0]   irq_unmasked;
-
-   assign spr_picmr_o = spr_picmr;
-   assign spr_picsr_o = spr_picsr;
-
-   assign spr_picmr_access =
+   // check if we access pcu
+   assign pcu_pccr_access =
      spr_access_i &
-     (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PICMR_ADDR));
-   assign spr_picsr_access =
-     spr_access_i &
-     (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PICSR_ADDR));
+     ((`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCCR0_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCCR1_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCCR2_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCCR3_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCCR4_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCCR5_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCCR6_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCCR7_ADDR)));
 
+   assign pcu_pcmr_access =
+     spr_access_i &
+     ((`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCMR0_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCMR1_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCMR2_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCMR3_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCMR4_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCMR5_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCMR6_ADDR)) |
+      (`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCMR7_ADDR)));
+
+   // put data on data bus
    assign spr_bus_ack = spr_access_i;
-   assign spr_dat_o =  (spr_access_i & spr_picsr_access) ? spr_picsr :
-                       (spr_access_i & spr_picmr_access) ? spr_picmr :
-                       0;
+   assign spr_dat_o   = (spr_access_i & pcu_pccr_access & spr_re_i) ? pcu_pccr[spr_addr_i[2:0]] :
+                        (spr_access_i & pcu_pcmr_access & spr_re_i & spr_sys_mode_i) ? pcu_pcmr[spr_addr_i[2:0]] :
+                        0;
 
-   assign irq_unmasked = spr_picmr & irq_i;
-
-   generate
-
-      genvar 	 irqline;
-
-      if (OPTION_PIC_TRIGGER=="EDGE") begin : edge_triggered
-         reg [31:0] irq_unmasked_r;
-         wire [31:0] irq_unmasked_edge;
-
-         always @(posedge clk `OR_ASYNC_RST)
-           if (rst)
-             irq_unmasked_r <= 0;
-           else
-             irq_unmasked_r <= irq_unmasked;
-
-         for(irqline=0;irqline<32;irqline=irqline+1)  begin: picgenerate
-            assign irq_unmasked_edge[irqline] = irq_unmasked[irqline] &
-                                                !irq_unmasked_r[irqline];
-
-            // PIC status register
-            always @(posedge clk `OR_ASYNC_RST)
-              if (rst)
-                spr_picsr[irqline] <= 0;
-              // Set
-              else if (irq_unmasked_edge[irqline])
-                spr_picsr[irqline] <= 1;
-              // Clear
-              else if (spr_we_i & spr_picsr_access & spr_dat_i[irqline])
-                spr_picsr[irqline] <= 0;
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if (rst) begin
+         generate
+            genvar pcu_num;
+            for(pcu_num = 0; pcu_num < OPTION_PCU_NUM; pcu_num = pcu_num + 1) begin: pcu_rst_generate
+               pcu_pccr[pcu_num] = 32'd0;
+               pcu_pcmr[pcu_num] = 32'd0 | 1 << `OR1K_PCMR_CP;
+            end
+         endgenerate
+      end else begin
+         if (spr_we_i) begin
+            if (spr_sys_mode_i) begin
+               if (pcu_pccr_access)
+                  pcu_pccr[spr_addr_i[2:0]] <= spr_dat_i;
+               if (pcu_pcmr)
+                  pcu_pccr[spr_addr_i[2:0]][25:1] <= spr_dat_i[25:1];
+            end else begin
+            end
+         end else begin
+            generate
+               genvar pcu_num;
+               for(pcu_num = 0; pcu_num < OPTION_PCU_NUM; pcu_num = pcu_num + 1) begin: pcu_cnt_generate
+                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_load_i << `OR1K_PCMR_LA))
+                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_store_i << `OR1K_PCMR_SA))
+                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_ifetch_i << `OR1K_PCMR_IF))
+                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_dcache_miss_i << `OR1K_PCMR_DCM))
+                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_icache_miss_i << `OR1K_PCMR_ICM))
+                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_ifetch_stall_i << `OR1K_PCMR_IFS))
+                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_lsu_stall_i << `OR1K_PCMR_LSUS))
+                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_brn_stall_i << `OR1K_PCMR_BS))
+                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_dtlb_miss_i << `OR1K_PCMR_DTLBM))
+                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_itlb_miss_i << `OR1K_PCMR_ITLBM))
+                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_datadep_stall_i << `OR1K_PCMR_DDS))
+                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               end
+            endgenerate
          end
-      end else if (OPTION_PIC_TRIGGER=="LEVEL") begin : level_triggered
-         for(irqline=0;irqline<32;irqline=irqline+1)
-           begin: picsrlevelgenerate
-              // PIC status register
-              always @(*)
-                spr_picsr[irqline] <= irq_unmasked[irqline];
-           end
-      end // if (OPTION_PIC_TRIGGER=="LEVEL")
-
-      else if (OPTION_PIC_TRIGGER=="LATCHED_LEVEL") begin : latched_level
-	 for(irqline=0;irqline<32;irqline=irqline+1)
-	   begin: piclatchedlevelgenerate
-	      // PIC status register
-	      always @(posedge clk `OR_ASYNC_RST)
-		if (rst)
-		  spr_picsr[irqline] <= 0;
-		else if (spr_we_i && spr_picsr_access)
-		  spr_picsr[irqline] <= irq_unmasked[irqline] |
-					       spr_dat_i[irqline];
-		else
-		  spr_picsr[irqline] <= spr_picsr[irqline] |
-					irq_unmasked[irqline];
-	   end // block: picgenerate
-      end // if (OPTION_PIC_TRIGGER=="EDGE")
-
-      else begin : invalid
-	 initial begin
-	    $display("Error - invalid PIC level detection option %s",
-		     OPTION_PIC_TRIGGER);
-	    $finish;
-	 end
-      end // else: !if(OPTION_PIC_TRIGGER=="LEVEL")
-   endgenerate
-
-   // PIC (un)mask register
-   always @(posedge clk `OR_ASYNC_RST)
-     if (rst)
-       spr_picmr <= {{(32-OPTION_PIC_NMI_WIDTH){1'b0}},
-		     {OPTION_PIC_NMI_WIDTH{1'b1}}};
-     else if (spr_we_i && spr_picmr_access)
-       spr_picmr <= {spr_dat_i[31:OPTION_PIC_NMI_WIDTH],
-		     {OPTION_PIC_NMI_WIDTH{1'b1}}};
+      end
+   end
 
 endmodule // mor1kx_pcu

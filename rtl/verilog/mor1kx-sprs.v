@@ -103,7 +103,21 @@
 
 `define OR1K_SPR_PC_BASE        {5'd7}
 `define OR1K_SPR_PCCR0_ADDR     {5'd7,11'd0}
+`define OR1K_SPR_PCCR1_ADDR     {5'd7,11'd1}
+`define OR1K_SPR_PCCR2_ADDR     {5'd7,11'd2}
+`define OR1K_SPR_PCCR3_ADDR     {5'd7,11'd3}
+`define OR1K_SPR_PCCR4_ADDR     {5'd7,11'd4}
+`define OR1K_SPR_PCCR5_ADDR     {5'd7,11'd5}
+`define OR1K_SPR_PCCR6_ADDR     {5'd7,11'd6}
+`define OR1K_SPR_PCCR7_ADDR     {5'd7,11'd7}
 `define OR1K_SPR_PCMR0_ADDR     {5'd7,11'd8}
+`define OR1K_SPR_PCMR1_ADDR     {5'd7,11'd9}
+`define OR1K_SPR_PCMR2_ADDR     {5'd7,11'd10}
+`define OR1K_SPR_PCMR3_ADDR     {5'd7,11'd11}
+`define OR1K_SPR_PCMR4_ADDR     {5'd7,11'd12}
+`define OR1K_SPR_PCMR5_ADDR     {5'd7,11'd13}
+`define OR1K_SPR_PCMR6_ADDR     {5'd7,11'd14}
+`define OR1K_SPR_PCMR7_ADDR     {5'd7,11'd15}
 
 `define OR1K_SPR_PM_BASE        {5'd8}
 `define OR1K_SPR_PMR_ADDR       {5'd8,11'd0}
@@ -338,6 +352,24 @@
 // reset value. 
 `define OR1K_FPCSR_MASK_RESET_VALUE `OR1K_FPCSR_ALLF_SIZE'd0
 
+// PCU PCMR bits
+`define OR1K_PCMR_CP     0
+`define OR1K_PCMR_RSVD_1 1
+`define OR1K_PCMR_CSIM   2
+`define OR1K_PCMR_CIUM   3
+`define OR1K_PCMR_LA     4
+`define OR1K_PCMR_SA     5
+`define OR1K_PCMR_IF     6
+`define OR1K_PCMR_DCM    7
+`define OR1K_PCMR_ICM    8
+`define OR1K_PCMR_IFS    9
+`define OR1K_PCMR_LSUS   10
+`define OR1K_PCMR_BS     11
+`define OR1K_PCMR_DTLBM  12
+`define OR1K_PCMR_ITLBM  13
+`define OR1K_PCMR_DDS    14
+`define OR1K_PCMR_WPE    25:15
+`define OR1K_PCMR_RSVD_2 31:26
 
 // Implementation-specific SPR defines
 `define MOR1KX_SPR_SR_WIDTH 16
