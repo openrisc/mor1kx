@@ -93,28 +93,23 @@ module mor1kx_pcu
                         (spr_access_i & pcu_pcmr_access & spr_re_i & spr_sys_mode_i) ? pcu_pcmr[spr_addr_i[2:0]] :
                         0;
 
-   always @(posedge clk `OR_ASYNC_RST) begin
-      if (rst) begin
-         generate
-            genvar pcu_num;
-            for(pcu_num = 0; pcu_num < OPTION_PCU_NUM; pcu_num = pcu_num + 1) begin: pcu_rst_generate
+   genvar pcu_num;
+   generate
+      for(pcu_num = 0; pcu_num < OPTION_PCU_NUM; pcu_num = pcu_num + 1) begin: pcu_generate
+         always @(posedge clk `OR_ASYNC_RST) begin
+            if (rst) begin
                pcu_pccr[pcu_num] = 32'd0;
                pcu_pcmr[pcu_num] = 32'd0 | 1 << `OR1K_PCMR_CP;
-            end
-         endgenerate
-      end else begin
-         if (spr_we_i) begin
-            if (spr_sys_mode_i) begin
-               if (pcu_pccr_access)
-                  pcu_pccr[spr_addr_i[2:0]] <= spr_dat_i;
-               if (pcu_pcmr)
-                  pcu_pccr[spr_addr_i[2:0]][25:1] <= spr_dat_i[25:1];
             end else begin
-            end
-         end else begin
-            generate
-               genvar pcu_num;
-               for(pcu_num = 0; pcu_num < OPTION_PCU_NUM; pcu_num = pcu_num + 1) begin: pcu_cnt_generate
+               if (spr_we_i) begin
+                  if (spr_sys_mode_i) begin
+                     if (pcu_pccr_access)
+                        pcu_pccr[spr_addr_i[2:0]] <= spr_dat_i;
+                     if (pcu_pcmr_access)
+                        pcu_pccr[spr_addr_i[2:0]][25:1] <= spr_dat_i[25:1];
+                  end else begin
+                  end
+               end else begin
                   if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_load_i << `OR1K_PCMR_LA))
                      pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
                   if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_store_i << `OR1K_PCMR_SA))
@@ -138,9 +133,9 @@ module mor1kx_pcu
                   if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_datadep_stall_i << `OR1K_PCMR_DDS))
                      pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
                end
-            endgenerate
+            end
          end
       end
-   end
+   endgenerate
 
 endmodule // mor1kx_pcu
