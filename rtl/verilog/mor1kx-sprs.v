@@ -355,7 +355,7 @@
 // PCU PCMR bits
 `define OR1K_PCMR_CP     0
 `define OR1K_PCMR_RSVD_1 1
-`define OR1K_PCMR_CSIM   2
+`define OR1K_PCMR_CISM   2
 `define OR1K_PCMR_CIUM   3
 `define OR1K_PCMR_LA     4
 `define OR1K_PCMR_SA     5

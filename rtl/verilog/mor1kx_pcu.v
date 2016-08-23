@@ -110,28 +110,31 @@ module mor1kx_pcu
                   end else begin
                   end
                end else begin
-                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_load_i << `OR1K_PCMR_LA))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_store_i << `OR1K_PCMR_SA))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_ifetch_i << `OR1K_PCMR_IF))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_dcache_miss_i << `OR1K_PCMR_DCM))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_icache_miss_i << `OR1K_PCMR_ICM))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_ifetch_stall_i << `OR1K_PCMR_IFS))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_lsu_stall_i << `OR1K_PCMR_LSUS))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_brn_stall_i << `OR1K_PCMR_BS))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_dtlb_miss_i << `OR1K_PCMR_DTLBM))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_itlb_miss_i << `OR1K_PCMR_ITLBM))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_datadep_stall_i << `OR1K_PCMR_DDS))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  if (((pcu_pcmr[pcu_num][`OR1K_PCMR_CISM] & spr_sys_mode_i) | (pcu_pcmr[pcu_num][`OR1K_PCMR_CIUM] & ~spr_sys_mode_i))) begin
+                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_load_i << `OR1K_PCMR_LA))
+                        pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_store_i << `OR1K_PCMR_SA))
+                        pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_ifetch_i << `OR1K_PCMR_IF))
+                        pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_dcache_miss_i << `OR1K_PCMR_DCM))
+                        pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_icache_miss_i << `OR1K_PCMR_ICM))
+                        pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_ifetch_stall_i << `OR1K_PCMR_IFS))
+                        pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_lsu_stall_i << `OR1K_PCMR_LSUS))
+                        pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_brn_stall_i << `OR1K_PCMR_BS))
+                        pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_dtlb_miss_i << `OR1K_PCMR_DTLBM))
+                        pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_itlb_miss_i << `OR1K_PCMR_ITLBM))
+                        pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_datadep_stall_i << `OR1K_PCMR_DDS))
+                        pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+                  end else begin
+                  end
                end
             end
          end
