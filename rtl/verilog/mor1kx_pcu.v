@@ -46,17 +46,17 @@ module mor1kx_pcu
    // Current cpu mode: user/supervisor
    input         spr_sys_mode_i;
    // Events that can occur
-   input         pcu_event_load_i;
-   input         pcu_event_store_i;
-   input         pcu_event_ifetch_i;
-   input         pcu_event_dcache_miss_i;
-   input         pcu_event_icache_miss_i;
-   input         pcu_event_ifetch_stall_i;
-   input         pcu_event_lsu_stall_i;
-   input         pcu_event_brn_stall_i;
-   input         pcu_event_dtlb_miss_i;
-   input         pcu_event_itlb_miss_i;
-   input         pcu_event_datadep_stall_i;
+   input         pcu_event_load_i;            // track load insn  
+   input         pcu_event_store_i;           // track store insn
+   input         pcu_event_ifetch_i;          // track insn fetch
+   input         pcu_event_dcache_miss_i;     // track data cache miss
+   input         pcu_event_icache_miss_i;     // track insn cache miss
+   input         pcu_event_ifetch_stall_i;    // track SOME stall
+   input         pcu_event_lsu_stall_i;       // track LSU stall
+   input         pcu_event_brn_stall_i;       // track brn miss
+   input         pcu_event_dtlb_miss_i;       // track data tlb miss
+   input         pcu_event_itlb_miss_i;       // track insn tlb miss
+   input         pcu_event_datadep_stall_i;   // track SOME stall
 
    // Registers
    reg [31:0]    pcu_pccr[0:OPTION_PERFCOUNTERS_NUM];
@@ -106,33 +106,34 @@ module mor1kx_pcu
                   if (spr_sys_mode_i) begin
                      if (pcu_pccr_access)
                         pcu_pccr[spr_addr_i[2:0]] <= spr_dat_i;
+                     // WPE are not implemented, hence we do not update WPE part
                      if (pcu_pcmr_access)
-                        pcu_pccr[spr_addr_i[2:0]][25:1] <= spr_dat_i[25:1];
+                        pcu_pccr[spr_addr_i[2:0]][14:1] <= spr_dat_i[14:1];
                   end else begin
                   end
                end else begin
                   if (((pcu_pcmr[pcu_num][`OR1K_PCMR_CISM] & spr_sys_mode_i) | (pcu_pcmr[pcu_num][`OR1K_PCMR_CIUM] & ~spr_sys_mode_i))) begin
-                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_load_i << `OR1K_PCMR_LA))
+                     if (pcu_pcmr[pcu_num] & (pcu_event_load_i << `OR1K_PCMR_LA))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_store_i << `OR1K_PCMR_SA))
+                     if (pcu_pcmr[pcu_num] & (pcu_event_store_i << `OR1K_PCMR_SA))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_ifetch_i << `OR1K_PCMR_IF))
+                     if (pcu_pcmr[pcu_num] & (pcu_event_ifetch_i << `OR1K_PCMR_IF))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_dcache_miss_i << `OR1K_PCMR_DCM))
+                     if (pcu_pcmr[pcu_num] & (pcu_event_dcache_miss_i << `OR1K_PCMR_DCM))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_icache_miss_i << `OR1K_PCMR_ICM))
+                     if (pcu_pcmr[pcu_num] & (pcu_event_icache_miss_i << `OR1K_PCMR_ICM))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_ifetch_stall_i << `OR1K_PCMR_IFS))
+                     if (pcu_pcmr[pcu_num] & (pcu_event_ifetch_stall_i << `OR1K_PCMR_IFS))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_lsu_stall_i << `OR1K_PCMR_LSUS))
+                     if (pcu_pcmr[pcu_num] & (pcu_event_lsu_stall_i << `OR1K_PCMR_LSUS))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_brn_stall_i << `OR1K_PCMR_BS))
+                     if (pcu_pcmr[pcu_num] & (pcu_event_brn_stall_i << `OR1K_PCMR_BS))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_dtlb_miss_i << `OR1K_PCMR_DTLBM))
+                     if (pcu_pcmr[pcu_num] & (pcu_event_dtlb_miss_i << `OR1K_PCMR_DTLBM))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_itlb_miss_i << `OR1K_PCMR_ITLBM))
+                     if (pcu_pcmr[pcu_num] & (pcu_event_itlb_miss_i << `OR1K_PCMR_ITLBM))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                     if (pcu_pcmr[pcu_num][`OR1K_PCMR_WPE] & (pcu_event_datadep_stall_i << `OR1K_PCMR_DDS))
+                     if (pcu_pcmr[pcu_num] & (pcu_event_datadep_stall_i << `OR1K_PCMR_DDS))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
                   end else begin
                   end
