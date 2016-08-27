@@ -66,6 +66,7 @@ module mor1kx_pcu
    wire pcu_pcmr_access;
 
    // check if we access pcu
+   // TODO: generate this signals according to present units
    assign pcu_pccr_access =
      spr_access_i &
      ((`SPR_OFFSET(spr_addr_i) == `SPR_OFFSET(`OR1K_SPR_PCCR0_ADDR)) |
@@ -94,6 +95,11 @@ module mor1kx_pcu
                         (spr_access_i & pcu_pcmr_access & spr_re_i & spr_sys_mode_i) ? pcu_pcmr[spr_addr_i[2:0]] :
                         0;
 
+   wire [31:0] test;
+   wire [31:0] test1;
+   assign test = pcu_pccr[0];
+   assign test1 = pcu_pcmr[0];
+
    genvar pcu_num;
    generate
       for(pcu_num = 0; pcu_num < OPTION_PERFCOUNTERS_NUM + 1; pcu_num = pcu_num + 1) begin: pcu_generate
@@ -107,12 +113,15 @@ module mor1kx_pcu
                      if (pcu_pccr_access)
                         pcu_pccr[spr_addr_i[2:0]] <= spr_dat_i;
                      // WPE are not implemented, hence we do not update WPE part
-                     if (pcu_pcmr_access)
-                        pcu_pccr[spr_addr_i[2:0]][14:1] <= spr_dat_i[14:1];
+                     if (pcu_pcmr_access) begin
+                        pcu_pcmr[spr_addr_i[2:0]][`OR1K_PCMR_DDS:`OR1K_PCMR_CISM] <=
+                           spr_dat_i[`OR1K_PCMR_DDS:`OR1K_PCMR_CISM];
+                     end
                   end else begin
                   end
                end else begin
-                  if (((pcu_pcmr[pcu_num][`OR1K_PCMR_CISM] & spr_sys_mode_i) | (pcu_pcmr[pcu_num][`OR1K_PCMR_CIUM] & ~spr_sys_mode_i))) begin
+                  if (((pcu_pcmr[pcu_num][`OR1K_PCMR_CISM] & spr_sys_mode_i) |
+                       (pcu_pcmr[pcu_num][`OR1K_PCMR_CIUM] & ~spr_sys_mode_i))) begin
                      if (pcu_pcmr[pcu_num] & (pcu_event_load_i << `OR1K_PCMR_LA))
                         pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
                      if (pcu_pcmr[pcu_num] & (pcu_event_store_i << `OR1K_PCMR_SA))
