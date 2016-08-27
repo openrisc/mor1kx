@@ -42,7 +42,7 @@ module mor1kx
     parameter OPTION_IMMU_WAYS		= 1,
     parameter FEATURE_TIMER		= "ENABLED",
     parameter FEATURE_DEBUGUNIT		= "NONE",
-    parameter FEATURE_PERFCOUNTERS	= "ENABLED",
+    parameter FEATURE_PERFCOUNTERS	= "NONE",
     parameter OPTION_PERFCOUNTERS_NUM = 0,
     parameter FEATURE_MAC		= "NONE",
 

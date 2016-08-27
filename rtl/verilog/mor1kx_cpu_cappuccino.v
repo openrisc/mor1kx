@@ -98,7 +98,7 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_MULTICORE = "NONE",
 
     parameter FEATURE_TRACEPORT_EXEC = "NONE",
-    parameter FEATURE_BRANCH_PREDICTOR = "SAT_COUNTER"  // SIMPLE|SAT_COUNTER
+    parameter FEATURE_BRANCH_PREDICTOR = "SIMPLE"  // SIMPLE|SAT_COUNTER
     )
    (
     input 			      clk,
