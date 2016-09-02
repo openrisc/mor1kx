@@ -909,6 +909,39 @@ module mor1kx_monitor #(parameter LOG_DIR= "../out") ();
 		    $sformat(insnstring, "l.csync");
 		endcase // case (insn[`OR1K_SYSTRAPSYNC_OPC_SELECT])
 	     end
+       `OR1K_OPCODE_FPU:
+         begin
+             case (insn[`OR1K_FPUOP_SELECT])
+                 `OR1K_FPUOP_ADD:
+                  $sformat(insnstring, "lf.add.s   r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+                 `OR1K_FPUOP_SUB:
+                  $sformat(insnstring, "lf.sub.s   r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+                 `OR1K_FPUOP_MUL:
+                  $sformat(insnstring, "lf.mul.s   r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+                 `OR1K_FPUOP_DIV:
+                  $sformat(insnstring, "lf.div.s   r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+                 `OR1K_FPUOP_ITOF:
+                  $sformat(insnstring, "lf.itof.s  r%0d,r%0d",rD_num,rA_num);
+                 `OR1K_FPUOP_FTOI:
+                  $sformat(insnstring, "lf.ftoi.s  r%0d,r%0d",rD_num,rA_num);
+                 `OR1K_FPUOP_REM:
+                  $sformat(insnstring, "lf.rem.s   r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+                 `OR1K_FPCOP_SFEQ:
+                  $sformat(insnstring, "lf.sfeq.s   r%0d,r%0d",rA_num,rB_num);
+                 `OR1K_FPCOP_SFNE:
+                  $sformat(insnstring, "lf.sfne.s   r%0d,r%0d",rA_num,rB_num);
+                 `OR1K_FPCOP_SFGT:
+                  $sformat(insnstring, "lf.sfgt.s   r%0d,r%0d",rA_num,rB_num);
+                 `OR1K_FPCOP_SFGE:
+                  $sformat(insnstring, "lf.sfge.s   r%0d,r%0d",rA_num,rB_num);
+                 `OR1K_FPCOP_SFLT:
+                  $sformat(insnstring, "lf.sflt.s   r%0d,r%0d",rA_num,rB_num);
+                 `OR1K_FPCOP_SFLE:
+                  $sformat(insnstring, "lf.sfle.s   r%0d,r%0d",rA_num,rB_num);
+                 default:
+                  $sformat(insnstring, "%t: FPU opcode 0x%0h, r%0d,r%0d,r%0d", $time, opcode, rD_num,rA_num,rB_num);
+             endcase // case(insn[`OR1K_FPUOP_SELECT])
+         end
 	   default:
 	     begin
 		$sformat(insnstring, "%t: Unknown opcode 0x%0h",$time,opcode);
