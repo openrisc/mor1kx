@@ -1196,8 +1196,8 @@ module mor1kx_cpu_cappuccino
     .carry_clear_i		        (carry_clear_o),
     .overflow_set_i		        (overflow_set_o),
     .overflow_clear_i		        (overflow_clear_o),
-    .fpcsr_i(fpcsr_o),
-    .fpcsr_set_i(fpcsr_set_o)
+    .fpcsr_i                            (fpcsr_o),
+    .fpcsr_set_i                        (fpcsr_set_o),
     ); */
    mor1kx_execute_ctrl_cappuccino
      #(
