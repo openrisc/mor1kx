@@ -68,8 +68,8 @@ module mor1kx_branch_predictor_saturation_counter
                   STATE_STRONGLY_TAKEN:
                      state <= STATE_WEAKLY_TAKEN;
                   STATE_WEAKLY_TAKEN:
-                     state <= STATE_WEAKLY_TAKEN;
-                  STATE_WEAKLY_TAKEN:
+                     state <= STATE_WEAKLY_NOT_TAKEN;
+                  STATE_WEAKLY_NOT_TAKEN:
                      state <= STATE_STRONGLY_NOT_TAKEN;
                   STATE_STRONGLY_NOT_TAKEN:
                      state <= STATE_STRONGLY_NOT_TAKEN;
