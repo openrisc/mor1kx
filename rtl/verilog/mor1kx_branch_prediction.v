@@ -64,6 +64,7 @@ if (FEATURE_BRANCH_PREDICTOR=="SAT_COUNTER") begin : branch_predictor_saturation
          .op_bf_i                          (op_bf_i),
          .op_bnf_i                         (op_bnf_i),
          .prev_op_brcond_i                 (prev_op_brcond_i),
+         .padv_decode_i                    (padv_decode_i),
          .branch_mispredict_i              (branch_mispredict_o));
        
 end else if (FEATURE_BRANCH_PREDICTOR=="SIMPLE") begin : branch_predictor_simple
