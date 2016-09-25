@@ -98,7 +98,7 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_MULTICORE = "NONE",
 
     parameter FEATURE_TRACEPORT_EXEC = "NONE",
-    parameter FEATURE_BRANCH_PREDICTOR = "SIMPLE"  // SIMPLE|SAT_COUNTER
+    parameter FEATURE_BRANCH_PREDICTOR = "SIMPLE"  // SIMPLE|SAT_COUNTER|GSHARE
     )
    (
     input 			      clk,
@@ -760,11 +760,13 @@ module mor1kx_cpu_cappuccino
       .immjbr_upper_i			(decode_immjbr_upper_o),
       .prev_op_brcond_i			(execute_op_brcond_o),
       .prev_predicted_flag_i		(execute_predicted_flag_o),
+      .brn_pc_i			(pc_fetch_to_decode),
       .flag_i				(ctrl_flag_o),
     );*/
    mor1kx_branch_prediction
      #(
-       .FEATURE_BRANCH_PREDICTOR(FEATURE_BRANCH_PREDICTOR)
+       .FEATURE_BRANCH_PREDICTOR(FEATURE_BRANCH_PREDICTOR),
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
        )
    mor1kx_branch_prediction
      (/*AUTOINST*/
@@ -782,6 +784,7 @@ module mor1kx_cpu_cappuccino
       .immjbr_upper_i                   (decode_immjbr_upper_o), // Templated
       .prev_op_brcond_i                 (execute_op_brcond_o),   // Templated
       .prev_predicted_flag_i            (execute_predicted_flag_o), // Templated
+      .brn_pc_i                         (pc_fetch_to_decode),      // Templated
       .flag_i                           (ctrl_flag_o));           // Templated
 
    /* mor1kx_execute_alu AUTO_TEMPLATE (
