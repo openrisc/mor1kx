@@ -19,32 +19,32 @@ module mor1kx_pcu
     parameter OPTION_PERFCOUNTERS_NUM = 7
   )
   (
-   input clk;
-   input rst;
+   input clk,
+   input rst,
 
    // SPR Bus interface
-   input         spr_access_i;
-   input         spr_we_i;
-   input         spr_re_i;
-   input [15:0]  spr_addr_i;
-   input [31:0]  spr_dat_i;
-   output        spr_bus_ack;
-   output [31:0] spr_dat_o;
+   input         spr_access_i,
+   input         spr_we_i,
+   input         spr_re_i,
+   input [15:0]  spr_addr_i,
+   input [31:0]  spr_dat_i,
+   output        spr_bus_ack,
+   output [31:0] spr_dat_o,
 
    // Current cpu mode: user/supervisor
-   input         spr_sys_mode_i;
+   input         spr_sys_mode_i,
    // Events that can occur
-   input         pcu_event_load_i;            // track load insn  
-   input         pcu_event_store_i;           // track store insn
-   input         pcu_event_ifetch_i;          // track insn fetch
-   input         pcu_event_dcache_miss_i;     // track data cache miss
-   input         pcu_event_icache_miss_i;     // track insn cache miss
-   input         pcu_event_ifetch_stall_i;    // track SOME stall
-   input         pcu_event_lsu_stall_i;       // track LSU stall
-   input         pcu_event_brn_stall_i;       // track brn miss
-   input         pcu_event_dtlb_miss_i;       // track data tlb miss
-   input         pcu_event_itlb_miss_i;       // track insn tlb miss
-   input         pcu_event_datadep_stall_i;   // track SOME stall
+   input         pcu_event_load_i,            // track load insn  
+   input         pcu_event_store_i,           // track store insn
+   input         pcu_event_ifetch_i,          // track insn fetch
+   input         pcu_event_dcache_miss_i,     // track data cache miss
+   input         pcu_event_icache_miss_i,     // track insn cache miss
+   input         pcu_event_ifetch_stall_i,    // track SOME stall
+   input         pcu_event_lsu_stall_i,       // track LSU stall
+   input         pcu_event_brn_stall_i,       // track brn miss
+   input         pcu_event_dtlb_miss_i,       // track data tlb miss
+   input         pcu_event_itlb_miss_i,       // track insn tlb miss
+   input         pcu_event_datadep_stall_i    // track SOME stall
    );
 
    // Registers
