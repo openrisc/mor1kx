@@ -19,7 +19,8 @@
 
 module mor1kx_branch_prediction
   #(
-    parameter FEATURE_BRANCH_PREDICTOR = "NONE"
+    parameter FEATURE_BRANCH_PREDICTOR = "NONE",
+    parameter OPTION_OPERAND_WIDTH = 32
     )
    (
    input clk,
@@ -29,6 +30,7 @@ module mor1kx_branch_prediction
    input op_bf_i,               // from decode stage, brn is bf
    input op_bnf_i,              // from decode stage, brn is bnf
    input [9:0] immjbr_upper_i,  // from decode stage, imm
+   input [OPTION_OPERAND_WIDTH - 1:0] brn_pc_i, // pc of brn being predicted
    output predicted_flag_o,     // to decode-execute stage, flag we predict to be
 
    // Signals belonging to the stage where the branch is resolved.
@@ -66,6 +68,28 @@ if (FEATURE_BRANCH_PREDICTOR=="SAT_COUNTER") begin : branch_predictor_saturation
          .prev_op_brcond_i                 (prev_op_brcond_i),
          .branch_mispredict_i              (branch_mispredict_o));
        
+end else if (FEATURE_BRANCH_PREDICTOR=="GSHARE") begin : branch_predictor_gshare
+   mor1kx_branch_predictor_gshare
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
+       )
+      mor1kx_branch_predictor_gshare
+      (
+         // Outputs
+         .predicted_flag_o                 (predicted_flag_o),
+         // Inputs
+         .clk                              (clk),
+         .rst                              (rst),
+         .flag_i                           (flag_i),
+         .execute_op_bf_i                  (execute_bf_i),
+         .execute_op_bnf_i                 (execute_bnf_i),
+         .op_bf_i                          (op_bf_i),
+         .brn_pc_i                         (brn_pc_i),
+         .op_bnf_i                         (op_bnf_i),
+         .prev_op_brcond_i                 (prev_op_brcond_i),
+         .padv_decode_i                    (padv_decode_i),
+         .branch_mispredict_i              (branch_mispredict_o));
+
 end else if (FEATURE_BRANCH_PREDICTOR=="SIMPLE") begin : branch_predictor_simple
    mor1kx_branch_predictor_simple
       mor1kx_branch_predictor_simple
