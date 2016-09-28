@@ -61,7 +61,7 @@ module mor1kx_store_buffer
      if (rst)
        write_pointer <= 0;
      else if (write_i)
-       write_pointer <= write_pointer + 1;
+       write_pointer <= write_pointer + 1'b1;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
