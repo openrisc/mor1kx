@@ -32,7 +32,7 @@ module mor1kx_cfgrs
     parameter OPTION_DCACHE_SET_WIDTH    = 9,
     parameter OPTION_DCACHE_WAYS         = 2,
     parameter FEATURE_DMMU               = "NONE",
-    parameter OPTION_DMMU_SET_WIDTH      = 6,
+    parameter [2:0] OPTION_DMMU_SET_WIDTH      = 6,
     parameter OPTION_DMMU_WAYS           = 1,
     parameter FEATURE_INSTRUCTIONCACHE   = "NONE",
     parameter OPTION_ICACHE_BLOCK_WIDTH  = 5,
