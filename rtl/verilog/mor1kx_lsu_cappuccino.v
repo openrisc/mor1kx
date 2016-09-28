@@ -141,13 +141,11 @@ module mor1kx_lsu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0]   lsu_sdat;
    wire				     lsu_ack;
 
-   wire 			     dc_err;
    wire 			     dc_ack;
    wire [31:0] 			     dc_ldat;
    wire [31:0] 			     dc_sdat;
    wire [31:0] 			     dc_adr;
    wire [31:0] 			     dc_adr_match;
-   wire 			     dc_req;
    wire 			     dc_we;
    wire [3:0] 			     dc_bsel;
 
@@ -662,13 +660,13 @@ endgenerate
 			 {dmmu_phys_addr[OPTION_OPERAND_WIDTH-1:2],2'b0} :
 			 {ctrl_lsu_adr_i[OPTION_OPERAND_WIDTH-1:2],2'b0};
 
-   assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall &
-		   !(dbus_atomic & dbus_we & !atomic_reserve);
    assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE) &
 			      !dc_snoop_hit & !snoop_valid;
 
 generate
 if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
+   wire dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall &
+		   !(dbus_atomic & dbus_we & !atomic_reserve);
    if (OPTION_DCACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
       assign dc_access =  ctrl_op_lsu_store_i | dc_enabled &
 			 !(dmmu_cache_inhibit & dmmu_enable_i);
@@ -733,7 +731,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .refill_o			(dc_refill),		 // Templated
 	    .refill_req_o		(dc_refill_req),	 // Templated
 	    .refill_done_o		(dc_refill_done),	 // Templated
-	    .cpu_err_o			(dc_err),		 // Templated
+	    .cpu_err_o			(),			 // Templated
 	    .cpu_ack_o			(dc_ack),		 // Templated
 	    .cpu_dat_o			(dc_ldat),		 // Templated
 	    .snoop_hit_o		(dc_snoop_hit),		 // Templated
@@ -766,11 +764,11 @@ end else begin
    assign dc_refill = 0;
    assign dc_refill_done = 0;
    assign dc_refill_req = 0;
-   assign dc_err = 0;
    assign dc_ack = 0;
    assign dc_bsel = 0;
    assign dc_we = 0;
    assign dc_snoop_hit = 0;
+   assign dc_ldat = 0;
 end
 
 endgenerate
