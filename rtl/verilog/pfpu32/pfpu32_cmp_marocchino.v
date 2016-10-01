@@ -52,8 +52,8 @@ module pfpu32_fcmp_marocchino
   input                               padv_wb_i,// advance output latches
   input                               grant_wb_to_1clk_i,
   // command
-  input                               fpu_op_is_comp_i,
-  input       [`OR1K_FPUOP_WIDTH-1:0] cmp_type_i,
+  input                               op_fp32_cmp_i,
+  input                         [2:0] opc_fp32_cmp_i,
   // Operands
   input                        [31:0] rfa_i,
   input                        [31:0] rfb_i,
@@ -72,6 +72,13 @@ module pfpu32_fcmp_marocchino
   output reg                          wb_fp32_cmp_wb_fpcsr_o, // update FPCSR
   output reg                          wb_except_fp32_cmp_o // exception by FP32-comparison
 );
+
+localparam FP_OPC_SFEQ = 3'b000;
+localparam FP_OPC_SFNE = 3'b001;
+localparam FP_OPC_SFGT = 3'b010;
+localparam FP_OPC_SFGE = 3'b011;
+localparam FP_OPC_SFLT = 3'b100;
+localparam FP_OPC_SFLE = 3'b101;
 
 ////////////////////////////////////////////////////////////////////////
 // Input operand analysis
@@ -122,8 +129,8 @@ wire snan = in_snan_a | in_snan_b;
 wire anan = qnan | snan;
 // Comparison invalid when sNaN in on an equal comparison,
 // or any NaN for any other comparison.
-wire inv_cmp = (snan & (cmp_type_i == `OR1K_FPCOP_SFEQ)) |
-               (anan & (cmp_type_i != `OR1K_FPCOP_SFEQ));
+wire inv_cmp = (snan & (opc_fp32_cmp_i == FP_OPC_SFEQ)) |
+               (anan & (opc_fp32_cmp_i != FP_OPC_SFEQ));
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -191,15 +198,15 @@ end // @ clock
 ////////////////////////////////////////////////////////////////////////
 // Comparison cmp_flag generation
 reg cmp_flag;
-always @(altb or blta or aeqb or cmp_type_i) begin
-  case(cmp_type_i)
-    `OR1K_FPCOP_SFEQ: cmp_flag = aeqb;
-    `OR1K_FPCOP_SFNE: cmp_flag = ~aeqb;
-    `OR1K_FPCOP_SFGT: cmp_flag = blta & ~aeqb;
-    `OR1K_FPCOP_SFGE: cmp_flag = blta | aeqb;
-    `OR1K_FPCOP_SFLT: cmp_flag = altb & ~aeqb;
-    `OR1K_FPCOP_SFLE: cmp_flag = altb | aeqb;
-    default:          cmp_flag = 1'b0;
+always @(altb or blta or aeqb or opc_fp32_cmp_i) begin
+  case(opc_fp32_cmp_i)
+    FP_OPC_SFEQ: cmp_flag = aeqb;
+    FP_OPC_SFNE: cmp_flag = ~aeqb;
+    FP_OPC_SFGT: cmp_flag = blta & ~aeqb;
+    FP_OPC_SFGE: cmp_flag = blta | aeqb;
+    FP_OPC_SFLT: cmp_flag = altb & ~aeqb;
+    FP_OPC_SFLE: cmp_flag = altb | aeqb;
+    default:     cmp_flag = 1'b0;
   endcase // case (fpu_op_r)
 end // always@ *
 
@@ -212,7 +219,7 @@ assign fp32_flag_set_o = cmp_flag;
 ////////////////////////////////////////////////////////////////////////
 // Just before latching
 //  # access to WB
-wire grant_wb_to_fp32_cmp = fpu_op_is_comp_i & grant_wb_to_1clk_i;
+wire grant_wb_to_fp32_cmp = op_fp32_cmp_i & grant_wb_to_1clk_i;
 //  # set/slear commands
 wire exec_fp32_flag_set   = grant_wb_to_fp32_cmp &   cmp_flag;
 wire exec_fp32_flag_clear = grant_wb_to_fp32_cmp & (~cmp_flag);

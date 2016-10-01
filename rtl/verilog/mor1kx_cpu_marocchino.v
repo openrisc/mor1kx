@@ -182,7 +182,6 @@ module mor1kx_cpu_marocchino
 
   wire [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd_adr;
   wire                            dcod_rf_wb;
-  wire                            do_rf_wb;
   wire [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd_adr;
   wire                            wb_rf_wb;
 
@@ -206,9 +205,12 @@ module mor1kx_cpu_marocchino
   wire                            dcod_do_branch;
   wire [OPTION_OPERAND_WIDTH-1:0] dcod_do_branch_target;
 
-  // Delay conditional fetching till flag computation completion (see OMAN for details)
-  wire                            dcod_flag_await; // wait till flag ready & WB
-  wire                            dcod_op_brcond;  // l.bf or l.bnf
+  // Signals to stall FETCH if we are waiting flag
+  //  # flag is going to be written by multi-cycle instruction
+  //  # like 64-bit FPU comparison or l.swa
+  wire                            dcod_flag_wb_mcycle;
+  //  # conditional branch: l.bf or l.bnf
+  wire                            dcod_op_brcond;
 
 
 
@@ -265,7 +267,13 @@ module mor1kx_cpu_marocchino
   wire                            grant_wb_to_mul;
 
   // FPU-32 arithmetic part
-  wire      [`OR1K_FPUOP_WIDTH-1:0] dcod_op_fp32_arith;
+  wire                              dcod_op_fp32_arith; // to OMAN and FPU32_ARITH
+  wire                              dcod_op_fp32_add; // to FPU32_ARITH
+  wire                              dcod_op_fp32_sub; // to FPU32_ARITH
+  wire                              dcod_op_fp32_mul; // to FPU32_ARITH
+  wire                              dcod_op_fp32_div; // to FPU32_ARITH
+  wire                              dcod_op_fp32_i2f; // to FPU32_ARITH
+  wire                              dcod_op_fp32_f2i; // to FPU32_ARITH
   wire                              fp32_arith_busy; // idicates that arihmetic units are busy
   wire                              fp32_arith_valid;
   wire                              grant_wb_to_fp32_arith;
@@ -274,7 +282,8 @@ module mor1kx_cpu_marocchino
   wire                              wb_except_fp32_arith;   // generate FPx exception by FPx flags
 
   // FPU-32 comparison part
-  wire    [`OR1K_FPUOP_WIDTH-1:0] dcod_op_fp32_cmp;
+  wire                            dcod_op_fp32_cmp;
+  wire                      [2:0] dcod_opc_fp32_cmp;
   wire                            wb_fp32_flag_set;
   wire                            wb_fp32_flag_clear;
   wire                            wb_fp32_cmp_inv;
@@ -283,6 +292,7 @@ module mor1kx_cpu_marocchino
   wire                            wb_except_fp32_cmp;
 
   // Forwarding comparision flag
+  wire                            busy_op_1clk_cmp; // integer or fp32
   wire                            exec_op_1clk_cmp; // integer or fp32
   wire                            exec_flag_set;    // integer or fp32 comparison result
 
@@ -528,8 +538,11 @@ module mor1kx_cpu_marocchino
     .dcod_rfb_i                       (dcod_rfb), // DECODE & DECODE->EXE
     .dcod_do_branch_o                 (dcod_do_branch), // DECODE & DECODE->EXE
     .dcod_do_branch_target_o          (dcod_do_branch_target), // DECODE & DECODE->EXE
-    // Delay conditional fetching till flag computation completion (see OMAN for details)
-    .dcod_flag_await_o                (dcod_flag_await), // DECODE & DECODE->EXE
+    // Signals to stall FETCH if we are waiting flag
+    //  # flag is going to be written by multi-cycle instruction
+    //  # like 64-bit FPU comparison or l.swa
+    .dcod_flag_wb_mcycle_o            (dcod_flag_wb_mcycle), // DECODE & DECODE->EXE
+    //  # conditional branch
     .dcod_op_brcond_o                 (dcod_op_brcond), // DECODE & DECODE->EXE
     // LSU related
     .dcod_imm16_o                     (dcod_imm16), // DECODE & DECODE->EXE
@@ -562,6 +575,7 @@ module mor1kx_cpu_marocchino
     // Set flag related
     .dcod_op_setflag_o                (dcod_op_setflag), // DECODE & DECODE->EXE
     .dcod_op_fp32_cmp_o               (dcod_op_fp32_cmp), // DECODE & DECODE->EXE
+    .dcod_opc_fp32_cmp_o              (dcod_opc_fp32_cmp), // DECODE & DECODE->EXE
     // Multiplier related
     .dcod_op_mul_o                    (dcod_op_mul), // DECODE & DECODE->EXE
     // Divider related
@@ -570,6 +584,12 @@ module mor1kx_cpu_marocchino
     .dcod_op_div_unsigned_o           (dcod_op_div_unsigned), // DECODE & DECODE->EXE
     // FPU arithmmetic related
     .dcod_op_fp32_arith_o             (dcod_op_fp32_arith), // DECODE & DECODE->EXE
+    .dcod_op_fp32_add_o               (dcod_op_fp32_add), // DECODE & DECODE->EXE
+    .dcod_op_fp32_sub_o               (dcod_op_fp32_sub), // DECODE & DECODE->EXE
+    .dcod_op_fp32_mul_o               (dcod_op_fp32_mul), // DECODE & DECODE->EXE
+    .dcod_op_fp32_div_o               (dcod_op_fp32_div), // DECODE & DECODE->EXE
+    .dcod_op_fp32_i2f_o               (dcod_op_fp32_i2f), // DECODE & DECODE->EXE
+    .dcod_op_fp32_f2i_o               (dcod_op_fp32_f2i), // DECODE & DECODE->EXE
     // MTSPR / MFSPR
     .dcod_op_mfspr_o                  (dcod_op_mfspr), // DECODE & DECODE->EXE
     .dcod_op_mtspr_o                  (dcod_op_mtspr), // DECODE & DECODE->EXE
@@ -758,6 +778,7 @@ module mor1kx_cpu_marocchino
 
     // FP32 comparison flag
     .dcod_op_fp32_cmp_i               (dcod_op_fp32_cmp), // 1CLK
+    .dcod_opc_fp32_cmp_i              (dcod_opc_fp32_cmp), // 1CLK
     .except_fpu_enable_i              (except_fpu_enable), // 1CLK
     .ctrl_fpu_mask_flags_inv_i        (ctrl_fpu_mask_flags[`OR1K_FPCSR_IVF - `OR1K_FPCSR_OVF]), // 1CLK
     .ctrl_fpu_mask_flags_inf_i        (ctrl_fpu_mask_flags[`OR1K_FPCSR_INF - `OR1K_FPCSR_OVF]), // 1CLK
@@ -770,6 +791,7 @@ module mor1kx_cpu_marocchino
     .wb_except_fp32_cmp_o             (wb_except_fp32_cmp), // 1CLK
 
     // Forwarding comparision flag result for conditional branch take/not
+    .busy_op_1clk_cmp_o               (busy_op_1clk_cmp), // 1CLK
     .exec_op_1clk_cmp_o               (exec_op_1clk_cmp), // 1CLK
     .exec_flag_set_o                  (exec_flag_set) // 1CLK
   );
@@ -790,7 +812,7 @@ module mor1kx_cpu_marocchino
       .rst                      (rst), // FPU32_ARITH
 
       // pipeline control inputs
-      .flush_i                  (pipeline_flush), // FPU32_ARITH
+      .pipeline_flush_i         (pipeline_flush), // FPU32_ARITH
       .padv_decode_i            (padv_decode), // FPU32_ARITH
       .padv_wb_i                (padv_wb), // FPU32_ARITH
       .grant_wb_to_fp32_arith_i (grant_wb_to_fp32_arith), // FPU32_ARITH
@@ -806,6 +828,12 @@ module mor1kx_cpu_marocchino
 
       // Operands and commands
       .dcod_op_fp32_arith_i     (dcod_op_fp32_arith), // FPU32_ARITH
+      .dcod_op_fp32_add_i       (dcod_op_fp32_add), // FPU32_ARITH
+      .dcod_op_fp32_sub_i       (dcod_op_fp32_sub), // FPU32_ARITH
+      .dcod_op_fp32_mul_i       (dcod_op_fp32_mul), // FPU32_ARITH
+      .dcod_op_fp32_div_i       (dcod_op_fp32_div), // FPU32_ARITH
+      .dcod_op_fp32_i2f_i       (dcod_op_fp32_i2f), // FPU32_ARITH
+      .dcod_op_fp32_f2i_i       (dcod_op_fp32_f2i), // FPU32_ARITH
       //   from DECODE
       .dcod_rfa_i               (dcod_rfa), // FPU32_ARITH
       .dcod_rfb_i               (dcod_rfb), // FPU32_ARITH
@@ -1030,20 +1058,20 @@ module mor1kx_cpu_marocchino
     .dcod_op_1clk_i             (dcod_op_1clk), // OMAN
     .dcod_op_div_i              (dcod_op_div), // OMAN
     .dcod_op_mul_i              (dcod_op_mul), // OMAN
-    .dcod_op_fp32_arith_i       (dcod_op_fp32_arith[(`OR1K_FPUOP_WIDTH-1)]), // OMAN
+    .dcod_op_fp32_arith_i       (dcod_op_fp32_arith), // OMAN
     .dcod_op_ls_i               (dcod_op_lsu_load | dcod_op_lsu_store), // OMAN
     .dcod_op_lsu_atomic_i       (dcod_op_lsu_atomic), // OMAN
     .dcod_op_rfe_i              (dcod_op_rfe), // OMAN
 
     // DECODE non-latched additional information related instruction
     //  part #1: iformation stored in order control buffer
-    .dcod_delay_slot_i          (dcod_delay_slot), // OMAN
-    .dcod_flag_await_i          (dcod_flag_await), // OMAN
-    .dcod_flag_wb_i             (dcod_flag_wb), // OMAN
-    .dcod_carry_wb_i            (dcod_carry_wb), // OMAN
-    .dcod_rf_wb_i               (dcod_rf_wb), // OMAN
-    .dcod_rfd_adr_i             (dcod_rfd_adr), // OMAN
     .pc_decode_i                (pc_decode), // OMAN
+    .dcod_rfd_adr_i             (dcod_rfd_adr), // OMAN
+    .dcod_rf_wb_i               (dcod_rf_wb), // OMAN
+    .dcod_carry_wb_i            (dcod_carry_wb), // OMAN
+    .dcod_flag_wb_mcycle_i      (dcod_flag_wb_mcycle), // OMAN
+    .dcod_flag_wb_i             (dcod_flag_wb), // OMAN
+    .dcod_delay_slot_i          (dcod_delay_slot), // OMAN
     //  part #2: information required for data dependancy detection
     .dcod_rfa_req_i             (dcod_rfa_req), // OMAN
     .dcod_rfa_adr_i             (dcod_rfa_adr), // OMAN
@@ -1053,6 +1081,7 @@ module mor1kx_cpu_marocchino
     .dcod_carry_req_i           (dcod_carry_req), // OMAN
     .dcod_op_jr_i               (dcod_op_jr), // OMAN
     .dcod_op_brcond_i           (dcod_op_brcond), // OMAN
+    .busy_op_1clk_cmp_i         (busy_op_1clk_cmp), // OMAN
     //  part #3: information required for create enable for
     //           for external (timer/ethernet/uart/etc) interrupts
     .dcod_op_lsu_store_i        (dcod_op_lsu_store), // OMAN
@@ -1100,8 +1129,6 @@ module mor1kx_cpu_marocchino
     .grant_wb_to_mul_o          (grant_wb_to_mul), // OMAN
     .grant_wb_to_fp32_arith_o   (grant_wb_to_fp32_arith), // OMAN
     .grant_wb_to_lsu_o          (grant_wb_to_lsu), // OMAN
-    // common flag signaling that WB ir required
-    .do_rf_wb_o                 (do_rf_wb), // OMAN
 
     // Support IBUS error handling in CTRL
     .exec_jump_or_branch_o      (exec_jump_or_branch), // OMAN

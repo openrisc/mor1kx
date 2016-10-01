@@ -325,3 +325,221 @@ module mor1kx_ocb_marocchino
   );
 
 endmodule // mor1kx_ocb_marocchino
+
+
+
+//---------------------------------//
+// Reservation Station with 2 Taps //
+//---------------------------------//
+
+module mor1kx_rsrvs_marocchino
+#(
+  parameter OPTION_OPERAND_WIDTH = 32,
+  parameter OPC_WIDTH            =  1 // width of OPC - additional attributes for command
+)
+(
+  // clocks and resets
+  input                                 clk,
+  input                                 rst,
+
+  // pipeline control signals in
+  input                                 pipeline_flush_i,
+  input                                 padv_decode_i,
+  input                                 take_op_i,         // a unit takes input for execution
+
+  // input data
+  //   from DECODE
+  input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfa_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb_i,
+  //   forwarding from WB
+  input                                 exe2dec_hazard_a_i,
+  input                                 exe2dec_hazard_b_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] wb_result_i,
+
+  // command and its additional attributes
+  input                                 dcod_op_i,    // request the unit command
+  input                 [OPC_WIDTH-1:0] dcod_opc_i,   // additional attributes for command
+
+  // outputs
+  //   command attributes from busy stage
+  output                [OPC_WIDTH-1:0] busy_opc_o,
+  //   command and its additional attributes
+  output                                exec_op_o,    // request the unit command
+  output                [OPC_WIDTH-1:0] exec_opc_o,   // additional attributes for command
+  //   operands
+  output     [OPTION_OPERAND_WIDTH-1:0] exec_rfa_o,
+  output     [OPTION_OPERAND_WIDTH-1:0] exec_rfb_o,
+  //   unit-is-busy flag
+  output                                unit_busy_o
+);
+
+  /**** BUSY stage latches ****/
+
+  // busy command and its additional attributes
+  reg                                 busy_op_r;
+  reg                 [OPC_WIDTH-1:0] busy_opc_r;
+  // busy operands
+  //   ## registers
+  reg      [OPTION_OPERAND_WIDTH-1:0] busy_rfa_r;
+  reg      [OPTION_OPERAND_WIDTH-1:0] busy_rfb_r;
+  //   ## multiplexed with forwarded value from WB
+  wire     [OPTION_OPERAND_WIDTH-1:0] busy_rfa;
+  wire     [OPTION_OPERAND_WIDTH-1:0] busy_rfb;
+  // busy hazard flags
+  reg                                 busy_hazard_a_r;
+  reg                                 busy_hazard_b_r;
+
+  // busy stage advance enable
+  wire busy_padv = (padv_decode_i & dcod_op_i & exec_op_o) | take_op_i;
+
+  // busy stage latches decode output
+  wire busy_latches_dcod = exec_op_o & (~take_op_i);
+
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+      busy_op_r  <= 1'b0;
+      busy_opc_r <= {OPC_WIDTH{1'b0}};
+    end
+    else if (pipeline_flush_i) begin
+      busy_op_r  <= 1'b0;
+      busy_opc_r <= {OPC_WIDTH{1'b0}};
+    end
+    else if (busy_padv) begin
+      busy_op_r  <= dcod_op_i  & busy_latches_dcod;
+      busy_opc_r <= dcod_opc_i & {OPC_WIDTH{busy_latches_dcod}};
+    end
+  end // posedge clock
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+      busy_hazard_a_r <= 1'b0;
+      busy_hazard_b_r <= 1'b0;
+    end
+    else if (pipeline_flush_i) begin
+      busy_hazard_a_r <= 1'b0;
+      busy_hazard_b_r <= 1'b0;
+    end
+    else if (busy_padv) begin
+      busy_hazard_a_r <= exe2dec_hazard_a_i & busy_latches_dcod;
+      busy_hazard_b_r <= exe2dec_hazard_b_i & busy_latches_dcod;
+    end
+    else if (busy_hazard_a_r | busy_hazard_b_r) begin // complete forwarding from WB
+      busy_hazard_a_r <= 1'b0;
+      busy_hazard_b_r <= 1'b0;
+    end
+  end // @clock
+  // ---
+  always @(posedge clk) begin
+    if (busy_padv) begin
+      busy_rfa_r <= dcod_rfa_i;
+      busy_rfb_r <= dcod_rfb_i;
+    end
+    else if (busy_hazard_a_r | busy_hazard_b_r) begin // complete forwarding from WB
+      busy_rfa_r <= busy_rfa;
+      busy_rfb_r <= busy_rfb;
+    end
+  end // @clock
+  // last forward (from WB)
+  assign busy_rfa = busy_hazard_a_r ? wb_result_i : busy_rfa_r;
+  assign busy_rfb = busy_hazard_b_r ? wb_result_i : busy_rfb_r;
+
+  // output from busy stage
+  //  ## command attributes from busy stage
+  assign busy_opc_o  = busy_opc_r;
+  //  ## unit-is-busy flag
+  assign unit_busy_o = busy_op_r;
+
+
+  /**** EXECUTE stage latches ****/
+
+  // execute command and its additional attributes
+  reg                                 exec_op_r;
+  reg                 [OPC_WIDTH-1:0] exec_opc_r;
+  // execute operands
+  //   ## registers
+  reg      [OPTION_OPERAND_WIDTH-1:0] exec_rfa_r;
+  reg      [OPTION_OPERAND_WIDTH-1:0] exec_rfb_r;
+  //   ## multiplexed with forwarded value from WB
+  wire     [OPTION_OPERAND_WIDTH-1:0] exec_rfa;
+  wire     [OPTION_OPERAND_WIDTH-1:0] exec_rfb;
+  // execute hazard flags
+  reg                                 exec_hazard_a_r;
+  reg                                 exec_hazard_b_r;
+
+  // execute stage advance enable
+  wire exec_padv = (padv_decode_i & dcod_op_i & (~exec_op_o)) | take_op_i;
+
+  // execute stage latches DECODE output
+  wire exec_latches_dcod = padv_decode_i & dcod_op_i;
+  // execute stage latches BUSY stage output
+  wire exec_latches_busy = take_op_i & busy_op_r;
+
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+      exec_op_r  <= 1'b0;
+      exec_opc_r <= {OPC_WIDTH{1'b0}};
+    end
+    else if (pipeline_flush_i) begin
+      exec_op_r  <= 1'b0;
+      exec_opc_r <= {OPC_WIDTH{1'b0}};
+    end
+    else if (exec_padv) begin
+      exec_op_r  <= exec_latches_dcod ? dcod_op_i :
+                    exec_latches_busy ? busy_op_r :
+                                        1'b0;
+      exec_opc_r <= exec_latches_dcod ? dcod_opc_i :
+                    exec_latches_busy ? busy_opc_r :
+                                        {OPC_WIDTH{1'b0}};
+    end
+  end // posedge clock
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+      exec_hazard_a_r <= 1'b0;
+      exec_hazard_b_r <= 1'b0;
+    end
+    else if (pipeline_flush_i) begin
+      exec_hazard_a_r <= 1'b0;
+      exec_hazard_b_r <= 1'b0;
+    end
+    else if (exec_padv) begin
+      // pay attantion that BUSY output is forwarded already
+      // so, only DECODE stage flags make sense here
+      exec_hazard_a_r <= exe2dec_hazard_a_i & exec_latches_dcod;
+      exec_hazard_b_r <= exe2dec_hazard_b_i & exec_latches_dcod;
+    end
+    else if (exec_hazard_a_r | exec_hazard_b_r) begin // complete forwarding from WB
+      exec_hazard_a_r <= 1'b0;
+      exec_hazard_b_r <= 1'b0;
+    end
+  end // @clock
+  // ---
+  always @(posedge clk) begin
+    if (exec_padv) begin
+      exec_rfa_r <= exec_latches_dcod ? dcod_rfa_i :
+                    exec_latches_busy ? busy_rfa   :
+                                        {OPTION_OPERAND_WIDTH{1'b0}};
+      exec_rfb_r <= exec_latches_dcod ? dcod_rfb_i :
+                    exec_latches_busy ? busy_rfb   :
+                                        {OPTION_OPERAND_WIDTH{1'b0}};
+    end
+    else if (exec_hazard_a_r | exec_hazard_b_r) begin // complete forwarding from WB
+      exec_rfa_r <= exec_rfa;
+      exec_rfb_r <= exec_rfb;
+    end
+  end // @clock
+  // last forward (from WB)
+  assign exec_rfa = exec_hazard_a_r ? wb_result_i : exec_rfa_r;
+  assign exec_rfb = exec_hazard_b_r ? wb_result_i : exec_rfb_r;
+
+  // outputs
+  //   command and its additional attributes
+  assign exec_op_o  = exec_op_r;
+  assign exec_opc_o = exec_opc_r;
+  //   operands
+  assign exec_rfa_o = exec_rfa;
+  assign exec_rfb_o = exec_rfb;
+
+endmodule // mor1kx_rsrvs_marocchino

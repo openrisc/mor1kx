@@ -43,13 +43,19 @@
 
 module pfpu32_rnd_marocchino
 (
-  // clocks, resets and other controls
+  // clocks, resets
   input                             clk,
   input                             rst,
-  input                             flush_i,  // flush pipe
-  input                             adv_i,    // advance pipe
-  input                             padv_wb_i,// advance output latches
+  // pipe controls
+  input                             pipeline_flush_i,
+  output                            rnd_taking_add_o,
+  output                            rnd_taking_mul_o,
+  output                            rnd_taking_i2f_o,
+  output                            rnd_taking_f2i_o,
+  output                            fp32_arith_valid_o,
+  input                             padv_wb_i,
   input                             grant_wb_to_fp32_arith_i,
+  // configuration
   input                       [1:0] rmode_i,  // rounding mode
   input                             except_fpu_enable_i,
   input [`OR1K_FPCSR_ALLF_SIZE-1:0] ctrl_fpu_mask_flags_i,
@@ -101,10 +107,7 @@ module pfpu32_rnd_marocchino
   input  [3:0] f2i_shl_i,       // f2i required shift left value
   input        f2i_ovf_i,       // f2i overflow flag
   input        f2i_snan_i,      // f2i signaling NaN input
-  // outputs
-  // result ready (1-clk ahead to WB latch)
-  output                             fp32_arith_valid_o,
-  //  WB latches
+  // output WB latches
   output reg                      [31:0] wb_fp32_arith_res_o,      // result
   output reg [`OR1K_FPCSR_ALLF_SIZE-1:0] wb_fp32_arith_fpcsr_o,    // fp32 arithmetic flags
   output reg                             wb_fp32_arith_wb_fpcsr_o, // update FPCSR
@@ -127,6 +130,24 @@ module pfpu32_rnd_marocchino
        s??o_name - "S"tage number "??", "O"utput
        s??t_name - "S"tage number "??", "T"emporary (internally)
   */
+
+
+  // rounding pipe controls
+  //  ## resdy flags of stages
+  reg s1o_ready;
+  //  ## per stage busy flags
+  wire s1_busy = s1o_ready & ~(padv_wb_i & grant_wb_to_fp32_arith_i);
+  //  ## per stage advance
+  wire s1_adv  = (add_rdy_i | mul_rdy_i | i2f_rdy_i | f2i_rdy_i) & ~s1_busy;
+  // ## per execution unit reporting
+  assign rnd_taking_add_o = add_rdy_i & ~s1_busy;
+  assign rnd_taking_mul_o = mul_rdy_i & ~s1_busy;
+  assign rnd_taking_i2f_o = i2f_rdy_i & ~s1_busy;
+  assign rnd_taking_f2i_o = f2i_rdy_i & ~s1_busy;
+
+  // output of rounding pipe state
+  assign fp32_arith_valid_o = s1o_ready;
+
 
   /* Stage #1: common align */
 
@@ -253,7 +274,7 @@ module pfpu32_rnd_marocchino
   reg        s1o_f2i_ovf, s1o_f2i;
   // registering
   always @(posedge clk) begin
-    if(adv_i) begin
+    if(s1_adv) begin
       s1o_sign    <= s1t_sign;
       s1o_exp10   <= s1t_exp10;
       s1o_fract32 <= s1t_fract35sh[34:3];
@@ -275,14 +296,15 @@ module pfpu32_rnd_marocchino
   end // posedge clock
 
   // ready is special case
-  reg s1o_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       s1o_ready <= 1'b0;
-    else if(flush_i)
+    else if (pipeline_flush_i)
       s1o_ready <= 1'b0;
-    else if(adv_i)
-      s1o_ready <= (add_rdy_i | mul_rdy_i | f2i_rdy_i | i2f_rdy_i);
+    else if (s1_adv)
+      s1o_ready <= 1'b1;
+    else if (padv_wb_i & grant_wb_to_fp32_arith_i)
+      s1o_ready <= 1'b0;
   end // posedge clock
 
 
@@ -375,10 +397,6 @@ module pfpu32_rnd_marocchino
     {{s1o_sign,s2t_f32_exp10[7:0],s2t_f32_fract24[22:0]},s2t_lost,1'b0,1'b0,1'b0,1'b0};
 
 
-  // one clock ahead ready flag
-  assign fp32_arith_valid_o = s1o_ready;
-
-
   // EXECUTE level FP32 arithmetic flags
   wire [`OR1K_FPCSR_ALLF_SIZE-1:0] exec_fp32_arith_fpcsr =
     {s2t_dbz, s2t_inf, (s1o_inv | (s2t_i32_inv & s1o_f2i) | s1o_snan_i),
@@ -404,7 +422,7 @@ module pfpu32_rnd_marocchino
       wb_fp32_arith_fpcsr_o  <= {`OR1K_FPCSR_ALLF_SIZE{1'b0}};
       wb_except_fp32_arith_o <= 1'b0;
     end
-    else if(flush_i) begin
+    else if(pipeline_flush_i) begin
       wb_fp32_arith_fpcsr_o  <= {`OR1K_FPCSR_ALLF_SIZE{1'b0}};
       wb_except_fp32_arith_o <= 1'b0;
     end
@@ -418,7 +436,7 @@ module pfpu32_rnd_marocchino
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       wb_fp32_arith_wb_fpcsr_o <= 1'b0;
-    else if (flush_i)
+    else if (pipeline_flush_i)
       wb_fp32_arith_wb_fpcsr_o <= 1'b0;
     else if (padv_wb_i)
       wb_fp32_arith_wb_fpcsr_o <= grant_wb_to_fp32_arith_i;

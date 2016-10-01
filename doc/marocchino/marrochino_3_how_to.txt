@@ -11,7 +11,7 @@ logic is removed temporary to reduce number of files for compilation.
 
 mor1kx_marocchino_alone
 #(
-  .FEATURE_DEBUGUNIT("NONE"), // MAROCCHINO_TODO: not implemented
+  .FEATURE_DEBUGUNIT("NONE"), // MAROCCHINO_TODO: not tested
   // insn cache
   .OPTION_ICACHE_BLOCK_WIDTH(5),
   .OPTION_ICACHE_SET_WIDTH(8),
@@ -90,15 +90,17 @@ u_mor1kx_marocchino
 
   The following files must be included into project:
 
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_addsub.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_cmp_marocchino.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_f2i.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_i2f.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_muldiv.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_rnd_marocchino.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_top_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_spram_en_w1st.v
  your_path/mor1kx/rtl/verilog/mor1kx_dpram_en_w1st_sclk.v
+ your_path/mor1kx/rtl/verilog/mor1kx_ocb_marocchino.v
+ your_path/mor1kx/rtl/verilog/mor1kx_oman_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_addsub_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_cmp_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_f2i_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_i2f_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_muldiv_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_rnd_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_top_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_bus_if_wb32.v
  your_path/mor1kx/rtl/verilog/mor1kx_cache_lru.v
  your_path/mor1kx/rtl/verilog/mor1kx_immu_marocchino.v
@@ -115,8 +117,6 @@ u_mor1kx_marocchino
  your_path/mor1kx/rtl/verilog/mor1kx_decode_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_execute_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_rf_marocchino.v
- your_path/mor1kx/rtl/verilog/mor1kx_ocb_marocchino.v
- your_path/mor1kx/rtl/verilog/mor1kx_oman_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_cpu_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_marocchino_alone.v
 

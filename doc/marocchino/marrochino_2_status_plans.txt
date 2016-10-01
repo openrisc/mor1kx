@@ -55,7 +55,7 @@ pipelined module.
  (b) Remove last stage of FETCH to improve performance
  (c) Branch prediction is replaced by branch forwarding from EXECUTE
 (in fact most of instructions those affect flag are 1-clock length, so
-flag is usually computed by EXECUTED while FETCH is fetching delay slot)
+flag is usually computed by EXECUTE while FETCH is fetching delay slot)
  (d) CoreMark 109 Iterations/sec, i.e. 109/50 = 2.18 CoreMark/MHz
 
 
@@ -71,6 +71,12 @@ flag is usually computed by EXECUTED while FETCH is fetching delay slot)
      mor1kx_exec_1clk_marocchino
  (f) WB- registers in all execution modules were re-designed to make
      exception processing more straight
+
+
+1 October 2016
+ (a) Initial implementation of simple two-stages reservation stations
+ (b) Improvement for FPU-32 stages controls to achieve higher
+     pipelinization
 
 
 Further development ideas:
@@ -92,12 +98,19 @@ execution module. So, the obvious next steps are:
 
 
 Primary TODOs:
-  - Implement two stages reservation stations at input of each
-    execution unit
+  - Implement full functional two stages reservation stations
+    for Tomasulo algorithm
   - Implement destination register re-naming, use the extended addresses
     for forwarding in reservation stations and remove data hazard
     detection from pipe control. Use just "unit busy" flags from
-    reservation stations instead.
-  - Improvement control of FPU-32 pipelines
+    reservation stations instead
+  - Implement SRT-4 integer division
+  - Implement FPU-64
+    (http://opencores.org/or1k/Architecture_Specification#ORFPX64A32)
   - Verify DU
-
+  - Verify Multi-Core operations
+  
+Secondary TODOs:
+  - Continue improvement FPU-32 controls for more pipelinization (see
+    MAROCCHINO_TODO comments in pfpu32_muldiv_marocchino.v)
+  - Implement write-back data cache

@@ -81,9 +81,12 @@ module mor1kx_decode_marocchino
   output                                dcod_do_branch_o,
   output     [OPTION_OPERAND_WIDTH-1:0] dcod_do_branch_target_o,
 
-  // Delay conditional fetching till flag computation completion (see OMAN for details)
-  output                                dcod_flag_await_o, // wait till flag ready & WB
-  output                                dcod_op_brcond_o,  // l.bf or l.bnf
+  // Signals to stall FETCH if we are waiting flag
+  //  # flag is going to be written by multi-cycle instruction
+  //  # like 64-bit FPU comparison or l.swa
+  output                                dcod_flag_wb_mcycle_o,
+  //  # conditional branch: l.bf or l.bnf
+  output                                dcod_op_brcond_o,
 
   // LSU related
   output          [`OR1K_IMM_WIDTH-1:0] dcod_imm16_o,
@@ -117,7 +120,8 @@ module mor1kx_decode_marocchino
   output     [OPTION_OPERAND_WIDTH-1:0] dcod_jal_result_o,
   // Set flag related
   output                                dcod_op_setflag_o,
-  output        [`OR1K_FPUOP_WIDTH-1:0] dcod_op_fp32_cmp_o,
+  output                                dcod_op_fp32_cmp_o,
+  output                          [2:0] dcod_opc_fp32_cmp_o,
 
   // Multiplier related
   output                                dcod_op_mul_o,
@@ -127,8 +131,14 @@ module mor1kx_decode_marocchino
   output                                dcod_op_div_signed_o,
   output                                dcod_op_div_unsigned_o,
 
-  // FPU related
-  output        [`OR1K_FPUOP_WIDTH-1:0] dcod_op_fp32_arith_o,
+  // FPU arithmetic part related
+  output                                dcod_op_fp32_arith_o,
+  output                                dcod_op_fp32_add_o,
+  output                                dcod_op_fp32_sub_o,
+  output                                dcod_op_fp32_mul_o,
+  output                                dcod_op_fp32_div_o,
+  output                                dcod_op_fp32_i2f_o,
+  output                                dcod_op_fp32_f2i_o,
 
   // MTSPR / MFSPR
   output                                dcod_op_mfspr_o,
@@ -262,14 +272,34 @@ module mor1kx_decode_marocchino
 
 
   // --- FPU-32 arithmetic part ---
-  assign dcod_op_fp32_arith_o =
-    {(FEATURE_FPU != "NONE") & (opc_insn == `OR1K_OPCODE_FPU) & ~dcod_insn_i[3],
-     dcod_insn_i[`OR1K_FPUOP_WIDTH-2:0]};
+  assign dcod_op_fp32_arith_o = (FEATURE_FPU != "NONE") & (opc_insn == `OR1K_OPCODE_FPU) & (~dcod_insn_i[3]);
+  // fpu arithmetic opc:
+  // ===================
+  // 0000 = add
+  // 0001 = substract
+  // 0010 = multiply
+  // 0011 = divide
+  // 0100 = i2f
+  // 0101 = f2i
+  assign dcod_op_fp32_add_o = dcod_op_fp32_arith_o & (dcod_insn_i[2:0] == 3'd0);
+  assign dcod_op_fp32_sub_o = dcod_op_fp32_arith_o & (dcod_insn_i[2:0] == 3'd1);
+  assign dcod_op_fp32_mul_o = dcod_op_fp32_arith_o & (dcod_insn_i[2:0] == 3'd2);
+  assign dcod_op_fp32_div_o = dcod_op_fp32_arith_o & (dcod_insn_i[2:0] == 3'd3);
+  assign dcod_op_fp32_i2f_o = dcod_op_fp32_arith_o & (dcod_insn_i[2:0] == 3'd4);
+  assign dcod_op_fp32_f2i_o = dcod_op_fp32_arith_o & (dcod_insn_i[2:0] == 3'd5);
 
   // --- FPU-32 comparison part ---
-  assign dcod_op_fp32_cmp_o =
-    {(FEATURE_FPU != "NONE") & (opc_insn == `OR1K_OPCODE_FPU) & dcod_insn_i[3],
-      dcod_insn_i[`OR1K_FPUOP_WIDTH-2:0]};
+  assign dcod_op_fp32_cmp_o = (FEATURE_FPU != "NONE") & (opc_insn == `OR1K_OPCODE_FPU) & dcod_insn_i[3];
+  // fpu comparison opc:
+  // ===================
+  // 1000 = EQ
+  // 1001 = NE
+  // 1010 = GT
+  // 1011 = GE
+  // 1100 = LT
+  // 1101 = LE
+  assign dcod_opc_fp32_cmp_o = dcod_insn_i[2:0];
+
 
 
   // Immediate in l.mtspr is broken up, reassemble
@@ -687,19 +717,19 @@ module mor1kx_decode_marocchino
 
 
   // Which instructions writes comparison flag?
-  assign dcod_flag_wb_o = dcod_op_setflag_o |
-                          dcod_op_fp32_cmp_o[(`OR1K_FPUOP_WIDTH-1)] |
+  assign dcod_flag_wb_o = dcod_op_setflag_o  |
+                          dcod_op_fp32_cmp_o |
                           (opc_insn == `OR1K_OPCODE_SWA);
   // Which instructions require comparison flag?
   //  # l.cmov
   assign dcod_flag_req_o = dcod_op_cmov_o;
 
 
-  //  Multicycle instructions which cause stall branch taking in FETCH
-  //  They are multicycle "set flag" like l.swa or float64 comparison,
-  // so they couldn't be forwarded into FETCH immediately from EXECUTE.
-  assign dcod_flag_await_o = (opc_insn == `OR1K_OPCODE_SWA);
-  //  Conditional branches to stall FETCH if we are waiting flag
+  // Signals to stall FETCH if we are waiting flag
+  //  # flag is going to be written by multi-cycle instruction
+  //  # like 64-bit FPU comparison or l.swa
+  assign dcod_flag_wb_mcycle_o = (opc_insn == `OR1K_OPCODE_SWA);
+  //  # conditional branch
   assign dcod_op_brcond_o  = dcod_op_bf | dcod_op_bnf;
 
 
