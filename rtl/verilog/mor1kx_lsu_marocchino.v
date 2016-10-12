@@ -30,8 +30,9 @@
 
 module mor1kx_lsu_marocchino
 #(
-  // data cache
   parameter OPTION_OPERAND_WIDTH        = 32,
+  parameter DEST_REG_ADDR_WIDTH         =  8, // OPTION_RF_ADDR_WIDTH + log2(Re-Ordering buffer width)
+  // data cache
   parameter OPTION_DCACHE_BLOCK_WIDTH   = 5,
   parameter OPTION_DCACHE_SET_WIDTH     = 9,
   parameter OPTION_DCACHE_WAYS          = 2,
@@ -72,9 +73,27 @@ module mor1kx_lsu_marocchino
   input                           [1:0] dcod_lsu_length_i,
   input                                 dcod_lsu_zext_i,
   input                                 dcod_op_msync_i,
-  //   forwarding from WB
+  // OMAN-to-DECODE hazards
+  //  combined flag
+  input                                 omn2dec_hazards_i,
+  //  by operands
+  input                                 busy_hazard_a_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_a_adr_i,
+  input                                 busy_hazard_b_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_b_adr_i,
+  // EXEC-to-DECODE hazards
+  //  combined flag
+  input                                 exe2dec_hazards_i,
+  //  by operands
   input                                 exe2dec_hazard_a_i,
   input                                 exe2dec_hazard_b_i,
+  // Data for hazards resolving
+  //  hazard could be passed from DECODE to EXECUTE
+  input                                 exec_rf_wb_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] exec_rfd_adr_i,
+  //  hazard could be resolving
+  input                                 wb_rf_wb_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] wb_rfd_adr_i,
   input      [OPTION_OPERAND_WIDTH-1:0] wb_result_i,
   // SPR interface
   input                          [15:0] spr_bus_addr_i,
@@ -362,42 +381,75 @@ module mor1kx_lsu_marocchino
   // reservation station insrtance
   mor1kx_rsrvs_marocchino
   #(
-    .OPTION_OPERAND_WIDTH (OPTION_OPERAND_WIDTH), // LSU_RSVRS
-    .OPC_WIDTH            (LSU_ATTR_WIDTH) // LSU_RSVRS
+    .OPTION_OPERAND_WIDTH     (OPTION_OPERAND_WIDTH), // LSU_RSVRS
+    .USE_OPC                  (1), // LSU_RSVRS
+    .OPC_WIDTH                (LSU_ATTR_WIDTH), // LSU_RSVRS
+    .DEST_REG_ADDR_WIDTH      (DEST_REG_ADDR_WIDTH), // LSU_RSVRS
+    .USE_RSVRS_FLAG_CARRY     (0), // LSU_RSVRS
+    .DEST_FLAG_ADDR_WIDTH     (1) // LSU_RSVRS
   )
   u_lsu_rsrvs
   (
     // clocks and resets
-    .clk                  (clk),
-    .rst                  (rst),
+    .clk                      (clk),
+    .rst                      (rst),
     // pipeline control signals in
-    .pipeline_flush_i     (excepts_any | pipeline_flush_i), // LSU_RSVRS
-    .padv_decode_i        (padv_decode_i), // LSU_RSVRS
-    .take_op_i            (lsu_takes_ls), // LSU_RSVRS
-    // input data
-    //   from DECODE
-    .dcod_rfa_i           (dcod_rfa_i), // LSU_RSVRS
-    .dcod_rfb_i           (dcod_rfb_i), // LSU_RSVRS
-    //   forwarding from WB
-    .exe2dec_hazard_a_i   (exe2dec_hazard_a_i), // LSU_RSVRS
-    .exe2dec_hazard_b_i   (exe2dec_hazard_b_i), // LSU_RSVRS
-    .wb_result_i          (wb_result_i), // LSU_RSVRS
+    .pipeline_flush_i         (excepts_any | pipeline_flush_i), // LSU_RSVRS
+    .padv_decode_i            (padv_decode_i), // LSU_RSVRS
+    .taking_op_i              (lsu_takes_ls), // LSU_RSVRS
+    // input data from DECODE
+    .dcod_rfa_i               (dcod_rfa_i), // LSU_RSVRS
+    .dcod_rfb_i               (dcod_rfb_i), // LSU_RSVRS
+    // OMAN-to-DECODE hazards
+    //  combined flag
+    .omn2dec_hazards_i        (omn2dec_hazards_i), // LSU_RSVRS
+    //  by FLAG and CARRY
+    .busy_hazard_f_i          (1'b0), // LSU_RSVRS
+    .busy_hazard_f_adr_i      (1'b0), // LSU_RSVRS
+    .busy_hazard_c_i          (1'b0), // LSU_RSVRS
+    .busy_hazard_c_adr_i      (1'b0), // LSU_RSVRS
+    //  by operands
+    .busy_hazard_a_i          (busy_hazard_a_i), // LSU_RSVRS
+    .busy_hazard_a_adr_i      (busy_hazard_a_adr_i), // LSU_RSVRS
+    .busy_hazard_b_i          (busy_hazard_b_i), // LSU_RSVRS
+    .busy_hazard_b_adr_i      (busy_hazard_b_adr_i), // LSU_RSVRS
+    // EXEC-to-DECODE hazards
+    //  combined flag
+    .exe2dec_hazards_i        (exe2dec_hazards_i), // LSU_RSVRS
+    //  by operands
+    .exe2dec_hazard_a_i       (exe2dec_hazard_a_i), // LSU_RSVRS
+    .exe2dec_hazard_b_i       (exe2dec_hazard_b_i), // LSU_RSVRS
+    // Data for hazards resolving
+    //  hazard could be passed from DECODE to EXECUTE
+    .exec_flag_wb_i           (1'b0), // LSU_RSVRS
+    .exec_carry_wb_i          (1'b0), // LSU_RSVRS
+    .exec_flag_carry_adr_i    (1'b0), // LSU_RSVRS
+    .exec_rf_wb_i             (exec_rf_wb_i), // LSU_RSVRS
+    .exec_rfd_adr_i           (exec_rfd_adr_i), // LSU_RSVRS
+    .padv_wb_i                (padv_wb_i), // LSU_RSVRS
+    //  hazard could be resolving
+    .wb_flag_wb_i             (1'b0), // LSU_RSVRS
+    .wb_carry_wb_i            (1'b0), // LSU_RSVRS
+    .wb_flag_carry_adr_i      (1'b0), // LSU_RSVRS
+    .wb_rf_wb_i               (wb_rf_wb_i), // LSU_RSVRS
+    .wb_rfd_adr_i             (wb_rfd_adr_i), // LSU_RSVRS
+    .wb_result_i              (wb_result_i), // LSU_RSVRS
     // command and its additional attributes
-    .dcod_op_i            (dcod_op_lsu_load_i | dcod_op_lsu_store_i), // LSU_RSVRS
-    .dcod_opc_i           ({dcod_op_lsu_load_i,dcod_op_lsu_store_i,dcod_op_lsu_atomic_i, // LSU_RSVRS
-                            dcod_lsu_length_i,dcod_lsu_zext_i,dcod_imm16_i,pc_decode_ds}), // LSU_RSVRS
+    .dcod_op_i                (dcod_op_lsu_load_i | dcod_op_lsu_store_i), // LSU_RSVRS
+    .dcod_opc_i               ({dcod_op_lsu_load_i,dcod_op_lsu_store_i,dcod_op_lsu_atomic_i, // LSU_RSVRS
+                                dcod_lsu_length_i,dcod_lsu_zext_i,dcod_imm16_i,pc_decode_ds}), // LSU_RSVRS
     // outputs
     //   command attributes from busy stage
-    .busy_opc_o           (), // LSU_RSVRS
+    .busy_opc_o               (), // LSU_RSVRS
     //   command and its additional attributes
-    .exec_op_o            (), // LSU_RSVRS
-    .exec_opc_o           ({lsu_load_w,lsu_store_w,lsu_atomic_w, // LSU_RSVRS
-                            lsu_length_w,lsu_zext_w,lsu_imm16_w,pc_decode_w}), // LSU_RSVRS
+    .exec_op_o                (), // LSU_RSVRS
+    .exec_opc_o               ({lsu_load_w,lsu_store_w,lsu_atomic_w, // LSU_RSVRS
+                                lsu_length_w,lsu_zext_w,lsu_imm16_w,pc_decode_w}), // LSU_RSVRS
     //   operands
-    .exec_rfa_o           (lsu_a), // LSU_RSVRS
-    .exec_rfb_o           (lsu_b), // LSU_RSVRS
+    .exec_rfa_o               (lsu_a), // LSU_RSVRS
+    .exec_rfb_o               (lsu_b), // LSU_RSVRS
     //   unit-is-busy flag
-    .unit_busy_o          (lsu_busy_rsrvs) // LSU_RSVRS
+    .unit_busy_o              (lsu_busy_rsrvs) // LSU_RSVRS
   );
 
   // compute address
@@ -768,43 +820,32 @@ module mor1kx_lsu_marocchino
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst) begin
       // DBUS controls
-      dbus_req_o  <= 1'b0; // reset
-      dbus_we     <= 1'b0; // reset
-      dbus_bsel_o <= 4'hf; // reset
-      dbus_adr_o  <= {LSUOOW{1'b0}}; // reset
-      dbus_dat_o  <= {LSUOOW{1'b0}}; // reset
-      dbus_atomic <= 1'b0; // reset
-      sbuf_odata  <= 1'b0; // reset
+      dbus_req_o  <= 1'b0;            // DBUS reset
+      dbus_we     <= 1'b0;            // DBUS reset
+      dbus_bsel_o <= 4'hf;            // DBUS reset
+      dbus_adr_o  <= {LSUOOW{1'b0}};  // DBUS reset
+      dbus_dat_o  <= {LSUOOW{1'b0}};  // DBUS reset
+      dbus_atomic <= 1'b0;            // DBUS reset
+      sbuf_odata  <= 1'b0;            // DBUS reset
       // DBUS FSM state
-      dbus_state  <= DBUS_IDLE; // reset
+      dbus_state  <= DBUS_IDLE;       // DBUS reset
     end
     else if (dbus_err_instant) begin // in DBUS FSM: highest priority
       // DBUS controls
-      dbus_req_o  <= 1'b0; // bus error
-      dbus_we     <= 1'b0; // bus error
-      dbus_bsel_o <= 4'hf; // bus error
-      dbus_adr_o  <= {LSUOOW{1'b0}}; // bus error
-      dbus_dat_o  <= {LSUOOW{1'b0}}; // bus error
-      dbus_atomic <= 1'b0; // bus error
-      sbuf_odata  <= 1'b0; // bus error; MAROCCHINO_TODO: force buffer empty by DBUS error ?
+      dbus_req_o  <= 1'b0;            // DBUS error
+      dbus_we     <= 1'b0;            // DBUS error
+      dbus_bsel_o <= 4'hf;            // DBUS error
+      dbus_adr_o  <= {LSUOOW{1'b0}};  // DBUS error
+      dbus_dat_o  <= {LSUOOW{1'b0}};  // DBUS error
+      dbus_atomic <= 1'b0;            // DBUS error
+      sbuf_odata  <= 1'b0;            // DBUS error; MAROCCHINO_TODO: force buffer empty by DBUS error ?
       // DBUS FSM state
-      dbus_state  <= DBUS_IDLE; // bus error
+      dbus_state  <= DBUS_IDLE;       // DBUS error
     end
     else begin
       // process
       case (dbus_state)
         DBUS_IDLE: begin
-          // DBUS controls
-          dbus_req_o  <= 1'b0; // idle default
-          dbus_we     <= 1'b0; // idle default
-          dbus_bsel_o <= 4'hf; // idle default
-          dbus_adr_o  <= {LSUOOW{1'b0}}; // idle default
-          dbus_dat_o  <= {LSUOOW{1'b0}}; // idle default
-          dbus_atomic <= 1'b0; // idle default
-          sbuf_odata  <= sbuf_odata; // idle default
-          // DBUS FSM state
-          dbus_state  <= DBUS_IDLE; // idle default
-          // ---
           if (excepts_any_r | spr_bus_stb_i| pipeline_flush_i) // DBUS FSM keep idling
             dbus_state <= DBUS_IDLE;
           else if (lsu_takes_ls | sbuf_odata) // idle -> dmem req
@@ -812,17 +853,6 @@ module mor1kx_lsu_marocchino
         end
 
         DMEM_REQ: begin
-          // DBUS controls
-          dbus_req_o  <= 1'b0; // dmem req default
-          dbus_we     <= 1'b0; // dmem req default
-          dbus_bsel_o <= 4'hf; // dmem req default
-          dbus_adr_o  <= {LSUOOW{1'b0}}; // dmem req default
-          dbus_dat_o  <= {LSUOOW{1'b0}}; // dmem req default
-          dbus_atomic <= 1'b0;        // dmem req default
-          sbuf_odata  <= sbuf_odata;  // dmem req default
-          // DBUS FSM state
-          dbus_state  <= DMEM_REQ;    // dmem req default
-          // ---
           if (lsu_excepts_addr | pipeline_flush_i) begin // dmem req
             dbus_state  <= DBUS_IDLE; // dmem req -> exceptions or pipe flush
           end
@@ -836,20 +866,18 @@ module mor1kx_lsu_marocchino
               dbus_adr_o  <= sbuf_odata ? sbuf_phys_addr : phys_addr_cmd;
               dbus_dat_o  <= sbuf_odata ? sbuf_dat       : lsu_sdat;
               dbus_atomic <= sbuf_odata ? 1'b0           : cmd_swa_r; // we execute store conditional around store buffer
+              sbuf_odata  <= 1'b0; // DBUS: dmem-req - > write
               // DBUS FSM state
               dbus_state  <= DBUS_WRITE;
             end
           end
           else if (dc_refill_req) begin // it automatically means (l.load & dc-access)
             dbus_req_o  <= 1'b1;
-            dbus_we     <= 1'b0;
             dbus_adr_o  <= phys_addr_cmd;
-            dbus_bsel_o <= 4'hf;
             dbus_state  <= DBUS_DC_REFILL;
           end
           else if (cmd_load_r & ~dc_access) begin
             dbus_req_o  <= 1'b1;
-            dbus_we     <= 1'b0;
             dbus_adr_o  <= phys_addr_cmd;
             dbus_bsel_o <= dbus_bsel;
             dbus_state  <= DBUS_READ;
@@ -860,82 +888,62 @@ module mor1kx_lsu_marocchino
         end // idle
 
         DBUS_DC_REFILL: begin
-          // DBUS controls
-          dbus_req_o  <= 1'b1;            // re-fill default
-          dbus_adr_o  <= dbus_adr_o;      // re-fill default
-          // DBUS FSM state
-          dbus_state  <= DBUS_DC_REFILL;  // re-fill default
-          // ---
-          if (dbus_ack_i) begin
-            dbus_adr_o <= next_refill_adr;
-            if (dc_refill_last) begin
-              // DBUS controls
-              dbus_req_o  <= 1'b0;
-              dbus_adr_o  <= {LSUOOW{1'b0}};
-              // DBUS FSM state
-              dbus_state  <= DBUS_IDLE; // re-fill complete
-            end
-          end
-          // TODO: only abort on snoop-hits to refill address
           if (snoop_hit) begin
-            // DBUS controls
-            dbus_req_o  <= 1'b0;
-            dbus_adr_o  <= {LSUOOW{1'b0}};
-            // DBUS FSM state
-            dbus_state  <= flush_by_ctrl ? DBUS_IDLE : DMEM_REQ; // snoop-hit on re-fill
+            dbus_req_o  <= 1'b0;                                  // DC-REFILL: snoop-hit
+            dbus_adr_o  <= {LSUOOW{1'b0}};                        // DC-REFILL: snoop-hit
+            dbus_state  <= flush_by_ctrl ? DBUS_IDLE : DMEM_REQ;  // DC-REFILL: snoop-hit
+          end
+          else if (dbus_ack_i) begin
+            dbus_adr_o <= next_refill_adr;    // DC-REFILL: DBUS-ack
+            if (dc_refill_last) begin
+              dbus_req_o  <= 1'b0;            // DC-REFILL: DBUS-last-ack
+              dbus_adr_o  <= {LSUOOW{1'b0}};  // DC-REFILL: DBUS-last-ack
+              dbus_state  <= DBUS_IDLE;       // DC-REFILL: DBUS-last-ack
+            end
           end
         end // dc-refill
 
         DBUS_READ: begin
-          // DBUS controls
-          dbus_req_o  <= 1'b1;        // read default
-          dbus_bsel_o <= dbus_bsel_o; // read default
-          dbus_adr_o  <= dbus_adr_o;  // read default
-          // DBUS FSM state
-          dbus_state  <= DBUS_READ;   // read default
-          // ---
           if (dbus_ack_i) begin
-            // DBUS controls
-            dbus_req_o  <= 1'b0;
-            dbus_bsel_o <= 4'hf;
-            dbus_adr_o  <= {LSUOOW{1'b0}};
-            // DBUS FSM next state
-            dbus_state  <= flush_by_ctrl ? DBUS_IDLE : DMEM_REQ; // read complete
+            dbus_req_o  <= 1'b0;                                 // DBUS: read complete
+            dbus_bsel_o <= 4'hf;                                 // DBUS: read complete
+            dbus_adr_o  <= {LSUOOW{1'b0}};                       // DBUS: read complete                       
+            dbus_state  <= flush_by_ctrl ? DBUS_IDLE : DMEM_REQ; // DBUS: read complete
           end
         end // read
 
         DBUS_WRITE: begin
-          // DBUS controls
-          dbus_req_o  <= 1'b1;        // write default
-          dbus_we     <= 1'b1;        // write default
-          dbus_bsel_o <= dbus_bsel_o; // write default
-          dbus_adr_o  <= dbus_adr_o;  // write default
-          dbus_dat_o  <= dbus_dat_o;  // write default
-          dbus_atomic <= dbus_atomic; // write default
-          sbuf_odata  <= 1'b0;        // write default
-          // DBUS FSM state
-          dbus_state  <= DBUS_WRITE;  // write default
-          //---
-          if (dbus_ack_i) begin
+           if (dbus_ack_i) begin
             // DBUS controls
-            dbus_req_o  <= 1'b0;
-            dbus_we     <= 1'b0;
-            dbus_bsel_o <= 4'hf;
-            dbus_adr_o  <= {LSUOOW{1'b0}};
-            dbus_dat_o  <= {LSUOOW{1'b0}};
+            dbus_req_o  <= 1'b0;           // DBUS: write complete
+            dbus_we     <= 1'b0;           // DBUS: write complete
+            dbus_bsel_o <= 4'hf;           // DBUS: write complete
+            dbus_adr_o  <= {LSUOOW{1'b0}}; // DBUS: write complete
+            dbus_dat_o  <= {LSUOOW{1'b0}}; // DBUS: write complete
             dbus_atomic <= 1'b0;
             // pending data for write (see also sbuf_re)
-            if ((~sbuf_empty) | (sbuf_rdwr_empty & ~(lsu_excepts_addr | pipeline_flush_i))) // write complete
-              sbuf_odata  <= 1'b1;  // write complete
+            if ((~sbuf_empty) | (sbuf_rdwr_empty & ~(lsu_excepts_addr | pipeline_flush_i))) // DBUS: write complete
+              sbuf_odata  <= 1'b1;  // DBUS: write complete
             // DBUS FSM next state
             if (lsu_excepts_addr | flush_by_ctrl)
-              dbus_state <= DBUS_IDLE; // write complete, exceptions or flushing
+              dbus_state <= DBUS_IDLE; // DBUS: write complete, exceptions or flushing
             else
-              dbus_state <= DMEM_REQ;  // write complete, no exceptions, no flushing
+              dbus_state <= DMEM_REQ;  // DBUS: write complete, no exceptions, no flushing
           end
         end // write-state
 
-        default:;
+        default: begin
+          // DBUS controls
+          dbus_req_o  <= 1'b0;            // DBUS deault
+          dbus_we     <= 1'b0;            // DBUS deault
+          dbus_bsel_o <= 4'hf;            // DBUS deault
+          dbus_adr_o  <= {LSUOOW{1'b0}};  // DBUS deault
+          dbus_dat_o  <= {LSUOOW{1'b0}};  // DBUS deault
+          dbus_atomic <= 1'b0;            // DBUS deault
+          sbuf_odata  <= 1'b0;            // DBUS deault
+          // DBUS FSM state
+          dbus_state  <= DBUS_IDLE;       // DBUS deault
+        end
       endcase
     end
   end // @ clock state machine

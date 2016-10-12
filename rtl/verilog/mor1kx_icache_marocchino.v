@@ -321,27 +321,27 @@ module mor1kx_icache_marocchino
             ic_state <= IC_IDLE;
         end
 
-        IC_REFILL: begin
-          refill_hit_r <= 1'b0;
+        IC_REFILL: begin          
           // In according with WISHBONE-B3 rule 3.45:
           // "SLAVE MUST NOT assert more than one of ACK, ERR or RTY"
-          if (ibus_ack_i) begin
+          if (ibus_err_i) begin // during re-fill
+            refill_done <= 0;
+            lru_way_r   <= {OPTION_ICACHE_WAYS{1'b0}}; // IBUS error during re-fill
+            ic_state    <= IC_IDLE;
+          end
+          else if (ibus_ack_i) begin
             if (refill_last_o) begin
               refill_done <= 0;
               lru_way_r   <= {OPTION_ICACHE_WAYS{1'b0}}; // last re-fill
               ic_state    <= IC_IDLE;
             end
             else begin
-              refill_hit_r <= (refill_done == 0); // 1st re-fill is requested insn
               refill_done[curr_refill_adr[OPTION_ICACHE_BLOCK_WIDTH-1:2]] <= 1'b1;
               curr_refill_adr <= next_refill_adr_o;
             end // last or regulat
           end // IBUS ACK
-          else if (ibus_err_i) begin // during re-fill
-            refill_done <= 0;
-            lru_way_r   <= {OPTION_ICACHE_WAYS{1'b0}}; // IBUS error during re-fill
-            ic_state    <= IC_IDLE;
-          end
+          // ---
+          refill_hit_r <= ibus_ack_i & (refill_done == 0); // 1st re-fill is requested insn
         end // RE-FILL
 
         IC_INVALIDATE: begin

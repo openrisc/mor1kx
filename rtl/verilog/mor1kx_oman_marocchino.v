@@ -26,7 +26,9 @@
 module mor1kx_oman_marocchino
 #(
   parameter OPTION_OPERAND_WIDTH = 32,
-  parameter OPTION_RF_ADDR_WIDTH =  5
+  parameter OPTION_RF_ADDR_WIDTH =  5,
+  parameter DEST_REG_ADDR_WIDTH  =  8, // OPTION_RF_ADDR_WIDTH + log2(Re-Ordering buffer width)
+  parameter DEST_FLAG_ADDR_WIDTH =  3  // log2(Re-Ordering buffer width)
 )
 (
   // clock & reset
@@ -47,7 +49,6 @@ module mor1kx_oman_marocchino
   input                                 dcod_op_mul_i,
   input                                 dcod_op_fp32_arith_i,
   input                                 dcod_op_ls_i,     // load / store (we need store for pushing LSU exceptions)
-  input                                 dcod_op_lsu_atomic_i,
   input                                 dcod_op_rfe_i,    // l.rfe
 
   // DECODE non-latched additional information related instruction
@@ -99,10 +100,39 @@ module mor1kx_oman_marocchino
   input                                 dcod_except_syscall_i,
   input                                 dcod_except_trap_i,
 
-  // EXECUTE-to-DECODE hazards
-  output                                stall_fetch_o,
+  // OMAN-to-DECODE hazards
+  //  combined flag
+  output                                omn2dec_hazards_o,
+  output                                omn2dec_hazards_1clk_o,
+  //  by FLAG and CARRY
+  output                                busy_hazard_f_o,
+  output     [DEST_FLAG_ADDR_WIDTH-1:0] busy_hazard_f_adr_o,
+  output                                busy_hazard_c_o,
+  output     [DEST_FLAG_ADDR_WIDTH-1:0] busy_hazard_c_adr_o,
+  //  by operands
+  output                                busy_hazard_a_o,
+  output      [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_a_adr_o,
+  output                                busy_hazard_b_o,
+  output      [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_b_adr_o,
+
+  // EXEC-to-DECODE hazards
+  //  combined flag
+  output                                exe2dec_hazards_o,
+  output                                exe2dec_hazards_1clk_o,
+  //  by operands
   output                                exe2dec_hazard_a_o,
   output                                exe2dec_hazard_b_o,
+  // Data for resolving hazards by passing from DECODE to EXECUTE
+  output                                exec_flag_wb_o,
+  output                                exec_carry_wb_o,
+  output     [DEST_FLAG_ADDR_WIDTH-1:0] exec_flag_carry_adr_o,
+  output                                exec_rf_wb_o,
+  output      [DEST_REG_ADDR_WIDTH-1:0] exec_rfd_adr_o,
+
+  // Stall fetch by specific type of hazards
+  output                                stall_fetch_o,
+  // Signal to FETCH that target address or flag isn't ready
+  output                                fetch_waiting_target_o,
 
   // DECODE result could be processed by EXECUTE
   output                                dcod_valid_o,
@@ -129,8 +159,11 @@ module mor1kx_oman_marocchino
   //  ## instruction related information
   output reg [OPTION_OPERAND_WIDTH-1:0] pc_wb_o,
   output reg                            wb_delay_slot_o,
-  output reg [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd_adr_o,
+  output reg  [DEST_REG_ADDR_WIDTH-1:0] wb_rfd_adr_o,
   output reg                            wb_rf_wb_o,
+  output reg                            wb_flag_wb_o,
+  output reg                            wb_carry_wb_o,
+  output reg [DEST_FLAG_ADDR_WIDTH-1:0] wb_flag_carry_adr_o,
   //  ## RFE processing
   output reg                            wb_op_rfe_o,
   //  ## output exceptions: IFETCH
@@ -162,26 +195,40 @@ module mor1kx_oman_marocchino
   localparam  OCBT_OP_MUL_POS         = OCBT_OP_DIV_POS         + 1;
   localparam  OCBT_OP_FP32_POS        = OCBT_OP_MUL_POS         + 1; // arithmetic part only, FP comparison is 1-clock
   localparam  OCBT_OP_LS_POS          = OCBT_OP_FP32_POS        + 1; // load / store (we need it for pushing LSU exceptions)
-  localparam  OCBT_OP_LSU_SWA_POS     = OCBT_OP_LS_POS          + 1;
-  localparam  OCBT_OP_RFE_POS         = OCBT_OP_LSU_SWA_POS     + 1; // l.rfe
+  localparam  OCBT_OP_RFE_POS         = OCBT_OP_LS_POS          + 1; // l.rfe
   //  Instruction is in delay slot
   localparam  OCBT_DELAY_SLOT_POS     = OCBT_OP_RFE_POS         + 1;
-  //  Any instruction wich affects comparison flag
-  localparam  OCBT_FLAG_WB_POS        = OCBT_DELAY_SLOT_POS     + 1;
-  //  The multi-cycle instruction affects comparison flag
-  localparam  OCBT_FLAG_WB_MCYCLE_POS = OCBT_FLAG_WB_POS        + 1;
-  //  Instruction affect carry flag
+  //  Instruction writting comparison flag
+  localparam  OCBT_FLAG_WB_POS        = OCBT_DELAY_SLOT_POS     + 1; // any such instruction
+  localparam  OCBT_FLAG_WB_MCYCLE_POS = OCBT_FLAG_WB_POS        + 1; // such istruction is multi-cycle (l.swa, lf.sf*.d)
+  //  Instruction writting carry flag
   localparam  OCBT_CARRY_WB_POS       = OCBT_FLAG_WB_MCYCLE_POS + 1;
   //  Instruction generates WB
   localparam  OCBT_RF_WB_POS          = OCBT_CARRY_WB_POS       + 1;
   localparam  OCBT_RFD_ADR_LSB        = OCBT_RF_WB_POS          + 1;
   localparam  OCBT_RFD_ADR_MSB        = OCBT_RF_WB_POS          + OPTION_RF_ADDR_WIDTH;
+  //  Extention to address of RFD, FLAG and CARRY
+  localparam  OCBT_EXT_ADR_LSB        = OCBT_RFD_ADR_MSB        + 1;
+  localparam  OCBT_EXT_ADR_MSB        = OCBT_RFD_ADR_MSB        + DEST_FLAG_ADDR_WIDTH;
   //  Program counter
-  localparam  OCBT_PC_LSB             = OCBT_RFD_ADR_MSB        + 1;
-  localparam  OCBT_PC_MSB             = OCBT_RFD_ADR_MSB        + OPTION_OPERAND_WIDTH;
+  localparam  OCBT_PC_LSB             = OCBT_EXT_ADR_MSB        + 1;
+  localparam  OCBT_PC_MSB             = OCBT_EXT_ADR_MSB        + OPTION_OPERAND_WIDTH;
   //  value of MSB of order control buffer tap
   localparam  OCBT_MSB                = OCBT_PC_MSB;
   localparam  OCBT_WIDTH              = OCBT_MSB                + 1;
+
+
+  // Generator of extension bits for register renaming
+  reg [DEST_FLAG_ADDR_WIDTH-1:0] ext_bits_r;
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      ext_bits_r <= {DEST_FLAG_ADDR_WIDTH{1'b0}};
+    else if (pipeline_flush_i)
+      ext_bits_r <= {DEST_FLAG_ADDR_WIDTH{1'b0}};
+    else if (padv_decode_i)
+      ext_bits_r <= ext_bits_r + 1'b1;
+  end // @clock
 
 
   // Flag that istruction is restrartable.
@@ -215,6 +262,7 @@ module mor1kx_oman_marocchino
   wire  [OCBT_MSB:0] ocbi;
   assign ocbi = { // various instruction related information
                   pc_decode_i,            // instruction virtual address
+                  ext_bits_r,             // extension to RFD, FLAG or CARRY
                   dcod_rfd_adr_i,         // WB address
                   dcod_rf_wb_i,           // instruction generates WB
                   dcod_carry_wb_i,        // istruction affects carry flag
@@ -223,7 +271,6 @@ module mor1kx_oman_marocchino
                   dcod_delay_slot_i,      // istruction is in delay slot
                   // unit that must be granted for WB
                   dcod_op_rfe_i,     // l.rfe
-                  (dcod_op_lsu_store_i & dcod_op_lsu_atomic_i), // l.swa affects flag
                   dcod_op_ls_i,      // load / store (we need it for pushing LSU exceptions)
                   dcod_op_fp32_arith_i,
                   dcod_op_mul_i,
@@ -296,14 +343,118 @@ module mor1kx_oman_marocchino
   assign grant_wb_to_fp32_arith_o  = ocbo00[OCBT_OP_FP32_POS];
   assign grant_wb_to_lsu_o         = ocbo00[OCBT_OP_LS_POS];
 
-  // EXECUTE-to-DECODE hazards
-  //  # WB address and flag
-  wire [OPTION_RF_ADDR_WIDTH-1:0] exec_rfd_adr = ocbo00[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB];
-  wire                            exec_rf_wb   = ocbo00[OCBT_RF_WB_POS];
-  //  # Hazard by operand A
-  assign exe2dec_hazard_a_o = exec_rf_wb & dcod_rfa_req_i & (exec_rfd_adr == dcod_rfa_adr_i);
-  //  # Hazard by operand B
-  assign exe2dec_hazard_b_o = exec_rf_wb & dcod_rfb_req_i & (exec_rfd_adr == dcod_rfb_adr_i);
+
+  // OMAN-to-DECODE hazards
+  //  by FLAG
+  wire omn2dec_hazard_f = dcod_flag_req_i &
+                          (ocbo07[OCBT_FLAG_WB_POS] | ocbo06[OCBT_FLAG_WB_POS] | ocbo05[OCBT_FLAG_WB_POS] |
+                           ocbo04[OCBT_FLAG_WB_POS] | ocbo03[OCBT_FLAG_WB_POS] | ocbo02[OCBT_FLAG_WB_POS] |
+                           ocbo01[OCBT_FLAG_WB_POS]);
+  //  by CARRY
+  wire omn2dec_hazard_c = dcod_carry_req_i &
+                          (ocbo07[OCBT_CARRY_WB_POS] | ocbo06[OCBT_CARRY_WB_POS] | ocbo05[OCBT_CARRY_WB_POS] |
+                           ocbo04[OCBT_CARRY_WB_POS] | ocbo03[OCBT_CARRY_WB_POS] | ocbo02[OCBT_CARRY_WB_POS] |
+                           ocbo01[OCBT_CARRY_WB_POS]);
+  //  by operand A
+  wire ocbo07_hazard_a = ocbo07[OCBT_RF_WB_POS] & (ocbo07[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i);
+  wire ocbo06_hazard_a = ocbo06[OCBT_RF_WB_POS] & (ocbo06[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i);
+  wire ocbo05_hazard_a = ocbo05[OCBT_RF_WB_POS] & (ocbo05[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i);
+  wire ocbo04_hazard_a = ocbo04[OCBT_RF_WB_POS] & (ocbo04[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i);
+  wire ocbo03_hazard_a = ocbo03[OCBT_RF_WB_POS] & (ocbo03[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i);
+  wire ocbo02_hazard_a = ocbo02[OCBT_RF_WB_POS] & (ocbo02[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i);
+  wire ocbo01_hazard_a = ocbo01[OCBT_RF_WB_POS] & (ocbo01[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i);
+  // ---
+  wire omn2dec_hazard_a = dcod_rfa_req_i &
+                    (ocbo07_hazard_a | ocbo06_hazard_a | ocbo05_hazard_a |
+                     ocbo04_hazard_a | ocbo03_hazard_a | ocbo02_hazard_a |
+                     ocbo01_hazard_a);
+  //  by operand B
+  wire ocbo07_hazard_b = ocbo07[OCBT_RF_WB_POS] & (ocbo07[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i);
+  wire ocbo06_hazard_b = ocbo06[OCBT_RF_WB_POS] & (ocbo06[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i);
+  wire ocbo05_hazard_b = ocbo05[OCBT_RF_WB_POS] & (ocbo05[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i);
+  wire ocbo04_hazard_b = ocbo04[OCBT_RF_WB_POS] & (ocbo04[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i);
+  wire ocbo03_hazard_b = ocbo03[OCBT_RF_WB_POS] & (ocbo03[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i);
+  wire ocbo02_hazard_b = ocbo02[OCBT_RF_WB_POS] & (ocbo02[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i);
+  wire ocbo01_hazard_b = ocbo01[OCBT_RF_WB_POS] & (ocbo01[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i);
+  // ---
+  wire omn2dec_hazard_b = dcod_rfb_req_i &
+                    (ocbo07_hazard_b | ocbo06_hazard_b | ocbo05_hazard_b |
+                     ocbo04_hazard_b | ocbo03_hazard_b | ocbo02_hazard_b |
+                     ocbo01_hazard_b);
+  //  combined flags
+  assign omn2dec_hazards_o      = omn2dec_hazard_a | omn2dec_hazard_b;
+  assign omn2dec_hazards_1clk_o = omn2dec_hazard_a | omn2dec_hazard_b | omn2dec_hazard_f | omn2dec_hazard_c;
+
+
+  // EXEC-to-DECODE hazards
+  //  by FLAG and CARRY
+  wire exe2dec_hazard_f = dcod_flag_req_i  & ocbo00[OCBT_FLAG_WB_POS];
+  wire exe2dec_hazard_c = dcod_carry_req_i & ocbo00[OCBT_CARRY_WB_POS];
+  //  by operands
+  assign exe2dec_hazard_a_o = dcod_rfa_req_i &
+                              ocbo00[OCBT_RF_WB_POS] & (ocbo00[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i);
+  assign exe2dec_hazard_b_o = dcod_rfb_req_i &
+                              ocbo00[OCBT_RF_WB_POS] & (ocbo00[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i);
+  //  combined flag
+  assign exe2dec_hazards_o      = exe2dec_hazard_a_o | exe2dec_hazard_b_o;
+  assign exe2dec_hazards_1clk_o = exe2dec_hazard_a_o | exe2dec_hazard_b_o | exe2dec_hazard_f | exe2dec_hazard_c;
+
+
+  // Signals for BUSY stage of Reservation Stations
+  //   Hazards by operand A
+  wire [DEST_FLAG_ADDR_WIDTH-1:0] hazard_a_ext;
+  assign hazard_a_ext        = ocbo07_hazard_a ? ocbo07[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo06_hazard_a ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo05_hazard_a ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo04_hazard_a ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo03_hazard_a ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo02_hazard_a ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo01_hazard_a ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                                                 ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB];
+  assign busy_hazard_a_o     = omn2dec_hazard_a | exe2dec_hazard_a_o;
+  assign busy_hazard_a_adr_o = {hazard_a_ext, dcod_rfa_adr_i};
+  //   Hazards by operand B
+  wire [DEST_FLAG_ADDR_WIDTH-1:0] hazard_b_ext;
+  assign hazard_b_ext        = ocbo07_hazard_b ? ocbo07[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo06_hazard_b ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo05_hazard_b ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo04_hazard_b ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo03_hazard_b ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo02_hazard_b ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo01_hazard_b ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                                                 ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB];
+  assign busy_hazard_b_o     = omn2dec_hazard_b | exe2dec_hazard_b_o;
+  assign busy_hazard_b_adr_o = {hazard_b_ext, dcod_rfb_adr_i};
+  //   Hazards by FLAG
+  assign busy_hazard_f_o     = omn2dec_hazard_f | exe2dec_hazard_f;
+  assign busy_hazard_f_adr_o = ocbo07[OCBT_FLAG_WB_POS] ? ocbo07[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo06[OCBT_FLAG_WB_POS] ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo05[OCBT_FLAG_WB_POS] ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo04[OCBT_FLAG_WB_POS] ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo03[OCBT_FLAG_WB_POS] ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo02[OCBT_FLAG_WB_POS] ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo01[OCBT_FLAG_WB_POS] ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                                                          ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB];
+  //   Hazards by CARRY
+  assign busy_hazard_c_o     = omn2dec_hazard_c | exe2dec_hazard_c;
+  assign busy_hazard_c_adr_o = ocbo07[OCBT_CARRY_WB_POS] ? ocbo07[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo06[OCBT_CARRY_WB_POS] ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo05[OCBT_CARRY_WB_POS] ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo04[OCBT_CARRY_WB_POS] ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo03[OCBT_CARRY_WB_POS] ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo02[OCBT_CARRY_WB_POS] ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                               ocbo01[OCBT_CARRY_WB_POS] ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
+                                                           ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB];
+
+
+  // Data for resolving hazards by passing from DECODE to EXECUTE
+  //  for FLAG and CARRY
+  assign exec_flag_wb_o        = ocbo00[OCBT_FLAG_WB_POS];
+  assign exec_carry_wb_o       = ocbo00[OCBT_CARRY_WB_POS];
+  assign exec_flag_carry_adr_o = ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB];
+  //  for RFD
+  assign exec_rf_wb_o   = ocbo00[OCBT_RF_WB_POS];
+  assign exec_rfd_adr_o = {ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB],ocbo00[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB]};
 
 
   //   An execute module is ready and granted access to WB
@@ -322,13 +473,6 @@ module mor1kx_oman_marocchino
                         ocbo00[OCBT_OP_PASS_EXEC_POS] | // also includes l.rfe in the sense
                         ocbo00[OCBT_FD_AN_EXCEPT_POS];
 
-
-  // waiting EXECUTE result (only multicycle instructions make sense)
-  wire exec_waiting = (~div_valid_i & ocbo00[OCBT_OP_DIV_POS]) |
-                      (~mul_valid_i & ocbo00[OCBT_OP_MUL_POS]) |
-                      (~fp32_arith_valid_i & ocbo00[OCBT_OP_FP32_POS]) |
-                      (~lsu_valid_i & ocbo00[OCBT_OP_LS_POS]);
-
   // DECODE stall components
   //  stall by unit usage hazard
   //     (unit could be either busy or waiting for WB access)
@@ -339,77 +483,11 @@ module mor1kx_oman_marocchino
     (dcod_op_fp32_arith_i & fp32_arith_busy_i) |
     ((dcod_op_ls_i | dcod_op_msync_i) & lsu_busy_i);
 
-  //  stall by operand A hazard
-  //    hazard has occured inside OCB
-  wire ocb_hazard_a = dcod_rfa_req_i &
-    ((ocbo07[OCBT_RF_WB_POS] & (ocbo07[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i)) |
-     (ocbo06[OCBT_RF_WB_POS] & (ocbo06[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i)) |
-     (ocbo05[OCBT_RF_WB_POS] & (ocbo05[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i)) |
-     (ocbo04[OCBT_RF_WB_POS] & (ocbo04[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i)) |
-     (ocbo03[OCBT_RF_WB_POS] & (ocbo03[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i)) |
-     (ocbo02[OCBT_RF_WB_POS] & (ocbo02[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i)) |
-     (ocbo01[OCBT_RF_WB_POS] & (ocbo01[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfa_adr_i)));
-  //    combine with DECODE-to-EXECUTE hazard
-  wire stall_by_hazard_a = ocb_hazard_a | (exe2dec_hazard_a_o & exec_waiting);
+  //  stall by l.jr/l.jalr : MAROCCHINO_TODO
+  wire stall_by_jr = dcod_op_jr_i & (omn2dec_hazard_b | exe2dec_hazard_b_o);
 
-  //  stall by operand B hazard
-  //    hazard has occured inside OCB
-  wire ocb_hazard_b = dcod_rfb_req_i &
-    ((ocbo07[OCBT_RF_WB_POS] & (ocbo07[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i)) |
-     (ocbo06[OCBT_RF_WB_POS] & (ocbo06[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i)) |
-     (ocbo05[OCBT_RF_WB_POS] & (ocbo05[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i)) |
-     (ocbo04[OCBT_RF_WB_POS] & (ocbo04[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i)) |
-     (ocbo03[OCBT_RF_WB_POS] & (ocbo03[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i)) |
-     (ocbo02[OCBT_RF_WB_POS] & (ocbo02[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i)) |
-     (ocbo01[OCBT_RF_WB_POS] & (ocbo01[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB] == dcod_rfb_adr_i)));
-  //    combine with DECODE-to-EXECUTE hazard
-  wire stall_by_hazard_b = ocb_hazard_b | (exe2dec_hazard_b_o & (exec_waiting | dcod_op_jr_i));
-
-  //  stall by comparison flag hazard
-  //    hazard has occured inside OCB
-  wire ocb_flag = ocbo07[OCBT_FLAG_WB_POS] | ocbo06[OCBT_FLAG_WB_POS] | ocbo05[OCBT_FLAG_WB_POS] |
-                  ocbo04[OCBT_FLAG_WB_POS] | ocbo03[OCBT_FLAG_WB_POS] | ocbo02[OCBT_FLAG_WB_POS] |
-                  ocbo01[OCBT_FLAG_WB_POS];
-  //    waiting completion of atomic instruction (others WB-flag instructions are 1-clk)
-  wire dcod_waiting_flag = ~lsu_valid_i & ocbo00[OCBT_OP_LSU_SWA_POS];
-  //                     MAROCCHINO_TODO: ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  //                                      performance improvement is possible with
-  //                                      forwarding of result of multi-cycle instructions
-  //                                      like l.swa of float64 comparison.
-  //    combine with DECODE-to-EXECUTE hazard
-  wire stall_by_flag = dcod_flag_req_i & (ocb_flag | dcod_waiting_flag);
-
-  //  stall by carry flag hazard
-  //    hazard has occured inside OCB
-  wire ocb_carry = ocbo07[OCBT_CARRY_WB_POS] | ocbo06[OCBT_CARRY_WB_POS] | ocbo05[OCBT_CARRY_WB_POS] |
-                   ocbo04[OCBT_CARRY_WB_POS] | ocbo03[OCBT_CARRY_WB_POS] | ocbo02[OCBT_CARRY_WB_POS] |
-                   ocbo01[OCBT_CARRY_WB_POS];
-  //    waiting completion of DIV instruction (others WB-carry instructions are 1-clk)
-  wire carry_waiting = ~div_valid_i & ocbo00[OCBT_OP_DIV_POS];
-  //    combine with DECODE-to-EXECUTE hazard
-  wire stall_by_carry = dcod_carry_req_i & (ocb_carry | carry_waiting);
-
-  //  stall by:
-  //    a) MF(T)SPR in decode till and OCB become empty (see here)
-  //    b) till completion MF(T)SPR (see CTRL)
-  //       this completion generates padv-wb,
-  //       in next turn padv-wb cleans up OCB and restores
-  //       instructions issue
-  wire stall_by_mXspr = (dcod_op_mtspr_i | dcod_op_mfspr_i) & ~ocb_empty;
-
-  // combine stalls to decode-valid flag
-  assign dcod_valid_o = ~stall_by_hazard_u & ~ocb_full          &
-                        ~stall_by_hazard_a & ~stall_by_hazard_b &
-                        ~stall_by_flag     & ~stall_by_carry    &
-                        ~stall_by_mXspr;
-
-
-  // Stall FETCH advance (CTRL).
-  //  (a) Detect the situation where l.jr is in decode
-  // stage and an instruction in execute stage that will write to that
-  // register.
-  //  (b) l.bf/l.bnf waiting computation of
-  //      either multi-cycle flag or pending 1-clk flag
+  // stall by l.bf/l.bnf
+  // waiting computation of either multi-cycle flag or pending 1-clk flag
   //
   wire ocb_flag_mcycle = ocbo07[OCBT_FLAG_WB_MCYCLE_POS] | ocbo06[OCBT_FLAG_WB_MCYCLE_POS] |
                          ocbo05[OCBT_FLAG_WB_MCYCLE_POS] | ocbo04[OCBT_FLAG_WB_MCYCLE_POS] |
@@ -420,19 +498,35 @@ module mor1kx_oman_marocchino
   //                     performance improvement is possible with
   //                     forwarding of result of multi-cycle instructions
   //                     like l.swa of float64 comparison.
-  //
-  //  (c) When an l.rfe/ecxeptions are in decode stage.
+  wire stall_by_brcond = dcod_op_brcond_i & (busy_op_1clk_cmp_i | ocb_flag_mcycle);
+
+  //  stall by:
+  //    a) MF(T)SPR in decode till and OCB become empty (see here)
+  //    b) till completion MF(T)SPR (see CTRL)
+  //       this completion generates padv-wb,
+  //       in next turn padv-wb cleans up OCB and restores
+  //       instructions issue
+  wire stall_by_mXspr = (dcod_op_mtspr_i | dcod_op_mfspr_i) & ~ocb_empty;
+
+  // combine stalls to decode-valid flag
+  assign dcod_valid_o = ~stall_by_hazard_u & ~ocb_full        &
+                        ~stall_by_jr       & ~stall_by_brcond &
+                        ~stall_by_mXspr;
+
+
+  // Stall FETCH advancing (see also CTRL) when an l.rfe/ecxeptions are in decode stage.
   // The main purpose of this is waiting till l.rfe/exceptions propagate
   // up to WB stage.
-  //
-  assign stall_fetch_o = ((ocb_hazard_b | exe2dec_hazard_b_o) & dcod_op_jr_i)        | // stall FETCH
-                         ((busy_op_1clk_cmp_i | ocb_flag_mcycle) & dcod_op_brcond_i) | // stall FETCH
-                         dcod_op_rfe_i | dcod_an_except;                               // stall FETCH
+  assign stall_fetch_o = dcod_op_rfe_i | dcod_an_except;
+
+  // Signal to FETCH that target address or flag isn't ready
+  assign fetch_waiting_target_o = stall_by_jr | stall_by_brcond;
 
 
   // Support IBUS error handling in CTRL
   assign exec_jump_or_branch_o = ocbo00[OCBT_JUMP_OR_BRANCH_POS];
   assign pc_exec_o             = ocbo00[OCBT_PC_MSB:OCBT_PC_LSB];
+
 
   //   Flag to enabel/disable exterlal interrupts processing
   // depending on the fact is instructions restartable or not
@@ -441,14 +535,26 @@ module mor1kx_oman_marocchino
 
   // WB-request (1-clock to prevent extra writes in RF)
   always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      wb_rf_wb_o <= 1'b0;
-    else if (pipeline_flush_i)
-      wb_rf_wb_o <= 1'b0;
-    else if (padv_wb_i)
-      wb_rf_wb_o <= exec_rf_wb;
-    else
-      wb_rf_wb_o <= 1'b0;
+    if (rst) begin
+      wb_rf_wb_o    <= 1'b0;
+      wb_flag_wb_o  <= 1'b0;
+      wb_carry_wb_o <= 1'b0;
+    end
+    else if (pipeline_flush_i) begin
+      wb_rf_wb_o    <= 1'b0;
+      wb_flag_wb_o  <= 1'b0;
+      wb_carry_wb_o <= 1'b0;
+    end
+    else if (padv_wb_i) begin
+      wb_rf_wb_o    <= ocbo00[OCBT_RF_WB_POS];
+      wb_flag_wb_o  <= ocbo00[OCBT_FLAG_WB_POS];
+      wb_carry_wb_o <= ocbo00[OCBT_CARRY_WB_POS];
+    end
+    else begin
+      wb_rf_wb_o    <= 1'b0;
+      wb_flag_wb_o  <= 1'b0;
+      wb_carry_wb_o <= 1'b0;
+    end
   end // @clock
 
 
@@ -466,8 +572,9 @@ module mor1kx_oman_marocchino
   // address of destination register & PC
   always @(posedge clk) begin
     if (padv_wb_i & ~pipeline_flush_i) begin
-      wb_rfd_adr_o <= exec_rfd_adr;
-      pc_wb_o      <= ocbo00[OCBT_PC_MSB:OCBT_PC_LSB];
+      wb_flag_carry_adr_o <=  ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB];
+      wb_rfd_adr_o        <= {ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB],ocbo00[OCBT_RFD_ADR_MSB:OCBT_RFD_ADR_LSB]};
+      pc_wb_o             <= ocbo00[OCBT_PC_MSB:OCBT_PC_LSB];
     end
   end // @clock
 

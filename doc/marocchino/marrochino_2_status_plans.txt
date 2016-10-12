@@ -78,32 +78,12 @@ flag is usually computed by EXECUTE while FETCH is fetching delay slot)
  (b) Improvement for FPU-32 stages controls to achieve higher
      pipelinization
 
-
-Further development ideas:
-  Design is moving toward Tomasulo algorithm by natural reasons.
-For example, to simplify logic that detects "unit busy" it would be
-useful to add one extra input latches in each execution unit. If these
-latches is filled, than unit is busy. The logic would be better
-localized than analysis off all stages of long pipelines like FPU's
-ones. Coupling them with already implemented input latches we get
-a kind of two stages "reservation stations" at the input of each
-execution module. So, the obvious next steps are:
- (a) implement register re-naming logic to mark destination
-     register with extra bits
- (b) use the extended addresses in the reservation stations
-     for forwarding
- (c) remove data hazard detection in OMAN (order manager)
-     from pipeline control, because just "unit busy" flags from each
-     execution unit should be enough to push pipe
+12 October 2016
+  Tomasulo algorithm has been implemented. Simple 2-stages reservation
+stations are used.
 
 
 Primary TODOs:
-  - Implement full functional two stages reservation stations
-    for Tomasulo algorithm
-  - Implement destination register re-naming, use the extended addresses
-    for forwarding in reservation stations and remove data hazard
-    detection from pipe control. Use just "unit busy" flags from
-    reservation stations instead
   - Implement SRT-4 integer division
   - Implement FPU-64
     (http://opencores.org/or1k/Architecture_Specification#ORFPX64A32)

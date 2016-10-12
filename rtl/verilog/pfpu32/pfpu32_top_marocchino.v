@@ -241,6 +241,9 @@ endmodule // pfpu32_ocb_marocchino
 
 
 module pfpu32_top_marocchino
+#(
+  parameter DEST_REG_ADDR_WIDTH  =  8 // OPTION_RF_ADDR_WIDTH + log2(Re-Ordering buffer width)
+)
 (
   // clock & reset
   input                             clk,
@@ -272,9 +275,30 @@ module pfpu32_top_marocchino
   //   from DECODE
   input                      [31:0] dcod_rfa_i,
   input                      [31:0] dcod_rfb_i,
-  //   forwarding from WB
+
+  // OMAN-to-DECODE hazards
+  //  combined flag
+  input                             omn2dec_hazards_i,
+  //  by operands
+  input                             busy_hazard_a_i,
+  input   [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_a_adr_i,
+  input                             busy_hazard_b_i,
+  input   [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_b_adr_i,
+
+  // EXEC-to-DECODE hazards
+  //  combined flag
+  input                             exe2dec_hazards_i,
+  //  by operands
   input                             exe2dec_hazard_a_i,
   input                             exe2dec_hazard_b_i,
+
+  // Data for hazards resolving
+  //  hazard could be passed from DECODE to EXECUTE
+  input                             exec_rf_wb_i,
+  input   [DEST_REG_ADDR_WIDTH-1:0] exec_rfd_adr_i,
+  //  hazard could be resolving
+  input                             wb_rf_wb_i,
+  input   [DEST_REG_ADDR_WIDTH-1:0] wb_rfd_adr_i,
   input                      [31:0] wb_result_i,
 
   // FPU-32 arithmetic part
@@ -299,42 +323,75 @@ wire [31:0] fp32_arith_b;
 // reservation station insrtance
 mor1kx_rsrvs_marocchino
 #(
-  .OPTION_OPERAND_WIDTH (32), // FP32_ARITH_RSVRS
-  .OPC_WIDTH            (6) // FP32_ARITH_RSVRS
+  .OPTION_OPERAND_WIDTH     (32), // FP32_ARITH_RSVRS
+  .USE_OPC                  (1), // FP32_ARITH_RSVRS
+  .OPC_WIDTH                (6), // FP32_ARITH_RSVRS
+  .DEST_REG_ADDR_WIDTH      (DEST_REG_ADDR_WIDTH), // FP32_ARITH_RSVRS
+  .USE_RSVRS_FLAG_CARRY     (0), // FP32_ARITH_RSVRS
+  .DEST_FLAG_ADDR_WIDTH     (1) // FP32_ARITH_RSVRS
 )
 u_fp32_arith_rsrvs
 (
   // clocks and resets
-  .clk                  (clk),
-  .rst                  (rst),
+  .clk                      (clk),
+  .rst                      (rst),
   // pipeline control signals in
-  .pipeline_flush_i     (pipeline_flush_i), // FP32_ARITH_RSVRS
-  .padv_decode_i        (padv_decode_i), // FP32_ARITH_RSVRS
-  .take_op_i            (take_op_fp32_arith), // FP32_ARITH_RSVRS
-  // input data
-  //   from DECODE
-  .dcod_rfa_i           (dcod_rfa_i), // FP32_ARITH_RSVRS
-  .dcod_rfb_i           (dcod_rfb_i), // FP32_ARITH_RSVRS
-  //   forwarding from WB
-  .exe2dec_hazard_a_i   (exe2dec_hazard_a_i), // FP32_ARITH_RSVRS
-  .exe2dec_hazard_b_i   (exe2dec_hazard_b_i), // FP32_ARITH_RSVRS
-  .wb_result_i          (wb_result_i), // FP32_ARITH_RSVRS
+  .pipeline_flush_i         (pipeline_flush_i), // FP32_ARITH_RSVRS
+  .padv_decode_i            (padv_decode_i), // FP32_ARITH_RSVRS
+  .taking_op_i              (take_op_fp32_arith), // FP32_ARITH_RSVRS
+  // input data from DECODE
+  .dcod_rfa_i               (dcod_rfa_i), // FP32_ARITH_RSVRS
+  .dcod_rfb_i               (dcod_rfb_i), // FP32_ARITH_RSVRS
+  // OMAN-to-DECODE hazards
+  //  combined flag
+  .omn2dec_hazards_i        (omn2dec_hazards_i), // FP32_ARITH_RSVRS
+  //  by FLAG and CARRY
+  .busy_hazard_f_i          (1'b0), // FP32_ARITH_RSVRS
+  .busy_hazard_f_adr_i      (1'b0), // FP32_ARITH_RSVRS
+  .busy_hazard_c_i          (1'b0), // FP32_ARITH_RSVRS
+  .busy_hazard_c_adr_i      (1'b0), // FP32_ARITH_RSVRS
+  //  by operands
+  .busy_hazard_a_i          (busy_hazard_a_i), // FP32_ARITH_RSVRS
+  .busy_hazard_a_adr_i      (busy_hazard_a_adr_i), // FP32_ARITH_RSVRS
+  .busy_hazard_b_i          (busy_hazard_b_i), // FP32_ARITH_RSVRS
+  .busy_hazard_b_adr_i      (busy_hazard_b_adr_i), // FP32_ARITH_RSVRS
+  // EXEC-to-DECODE hazards
+  //  combined flag
+  .exe2dec_hazards_i        (exe2dec_hazards_i), // FP32_ARITH_RSVRS
+  //  by operands
+  .exe2dec_hazard_a_i       (exe2dec_hazard_a_i), // FP32_ARITH_RSVRS
+  .exe2dec_hazard_b_i       (exe2dec_hazard_b_i), // FP32_ARITH_RSVRS
+  // Data for hazards resolving
+  //  hazard could be passed from DECODE to EXECUTE
+  .exec_flag_wb_i           (1'b0), // FP32_ARITH_RSVRS
+  .exec_carry_wb_i          (1'b0), // FP32_ARITH_RSVRS
+  .exec_flag_carry_adr_i    (1'b0), // FP32_ARITH_RSVRS
+  .exec_rf_wb_i             (exec_rf_wb_i), // FP32_ARITH_RSVRS
+  .exec_rfd_adr_i           (exec_rfd_adr_i), // FP32_ARITH_RSVRS
+  .padv_wb_i                (padv_wb_i), // FP32_ARITH_RSVRS
+  //  hazard could be resolving
+  .wb_flag_wb_i             (1'b0), // FP32_ARITH_RSVRS
+  .wb_carry_wb_i            (1'b0), // FP32_ARITH_RSVRS
+  .wb_flag_carry_adr_i      (1'b0), // FP32_ARITH_RSVRS
+  .wb_rf_wb_i               (wb_rf_wb_i), // FP32_ARITH_RSVRS
+  .wb_rfd_adr_i             (wb_rfd_adr_i), // FP32_ARITH_RSVRS
+  .wb_result_i              (wb_result_i), // FP32_ARITH_RSVRS
   // command and its additional attributes
-  .dcod_op_i            (dcod_op_fp32_arith_i), // FP32_ARITH_RSVRS
-  .dcod_opc_i           ({dcod_op_fp32_add_i, dcod_op_fp32_sub_i, dcod_op_fp32_mul_i, // FP32_ARITH_RSVRS
-                          dcod_op_fp32_div_i, dcod_op_fp32_i2f_i, dcod_op_fp32_f2i_i}), // FP32_ARITH_RSVRS
+  .dcod_op_i                (dcod_op_fp32_arith_i), // FP32_ARITH_RSVRS
+  .dcod_opc_i               ({dcod_op_fp32_add_i, dcod_op_fp32_sub_i, dcod_op_fp32_mul_i, // FP32_ARITH_RSVRS
+                              dcod_op_fp32_div_i, dcod_op_fp32_i2f_i, dcod_op_fp32_f2i_i}), // FP32_ARITH_RSVRS
   // outputs
   //   command attributes from busy stage
-  .busy_opc_o           (), // FP32_ARITH_RSVRS
+  .busy_opc_o               (), // FP32_ARITH_RSVRS
   //   command and its additional attributes
-  .exec_op_o            (), // FP32_ARITH_RSVRS
-  .exec_opc_o           ({exec_op_fp32_add, exec_op_fp32_sub, exec_op_fp32_mul, // FP32_ARITH_RSVRS
-                          exec_op_fp32_div, exec_op_fp32_i2f, exec_op_fp32_f2i}), // FP32_ARITH_RSVRS
+  .exec_op_o                (), // FP32_ARITH_RSVRS
+  .exec_opc_o               ({exec_op_fp32_add, exec_op_fp32_sub, exec_op_fp32_mul, // FP32_ARITH_RSVRS
+                              exec_op_fp32_div, exec_op_fp32_i2f, exec_op_fp32_f2i}), // FP32_ARITH_RSVRS
   //   operands
-  .exec_rfa_o           (fp32_arith_a), // FP32_ARITH_RSVRS
-  .exec_rfb_o           (fp32_arith_b), // FP32_ARITH_RSVRS
+  .exec_rfa_o               (fp32_arith_a), // FP32_ARITH_RSVRS
+  .exec_rfb_o               (fp32_arith_b), // FP32_ARITH_RSVRS
   //   unit-is-busy flag
-  .unit_busy_o          (fp32_arith_busy_o) // FP32_ARITH_RSVRS
+  .unit_busy_o              (fp32_arith_busy_o) // FP32_ARITH_RSVRS
 );
 
 // analysis of input values

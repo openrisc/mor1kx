@@ -33,7 +33,8 @@
 
 module mor1kx_multiplier_marocchino
 #(
-  parameter OPTION_OPERAND_WIDTH = 32
+  parameter OPTION_OPERAND_WIDTH = 32,
+  parameter DEST_REG_ADDR_WIDTH  =  8 // OPTION_RF_ADDR_WIDTH + log2(Re-Ordering buffer width)
 )
 (
   // clocks and resets
@@ -46,13 +47,33 @@ module mor1kx_multiplier_marocchino
   input                                 padv_wb_i,
   input                                 grant_wb_to_mul_i,
 
-  // input data
-  //   from DECODE
+  // input data from DECODE
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfa_i,
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb_i,
-  //   forwarding from WB
+
+  // OMAN-to-DECODE hazards
+  //  combined flag
+  input                                 omn2dec_hazards_i,
+  //  by operands
+  input                                 busy_hazard_a_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_a_adr_i,
+  input                                 busy_hazard_b_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_b_adr_i,
+
+  // EXEC-to-DECODE hazards
+  //  combined flag
+  input                                 exe2dec_hazards_i,
+  //  by operands
   input                                 exe2dec_hazard_a_i,
   input                                 exe2dec_hazard_b_i,
+
+  // Data for hazards resolving
+  //  hazard could be passed from DECODE to EXECUTE
+  input                                 exec_rf_wb_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] exec_rfd_adr_i,
+  //  hazard could be resolving
+  input                                 wb_rf_wb_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] wb_rfd_adr_i,
   input      [OPTION_OPERAND_WIDTH-1:0] wb_result_i,
 
   //  other inputs/outputs
@@ -95,39 +116,73 @@ module mor1kx_multiplier_marocchino
   // reservation station insrtance
   mor1kx_rsrvs_marocchino
   #(
-    .OPTION_OPERAND_WIDTH (OPTION_OPERAND_WIDTH)
+    .OPTION_OPERAND_WIDTH (OPTION_OPERAND_WIDTH), // MUL_RSVRS
+    .USE_OPC              (0), // MUL_RSVRS
+    .OPC_WIDTH            (1), // MUL_RSVRS
+    .DEST_REG_ADDR_WIDTH  (DEST_REG_ADDR_WIDTH), // MUL_RSVRS
+    .USE_RSVRS_FLAG_CARRY (0), // MUL_RSVRS
+    .DEST_FLAG_ADDR_WIDTH (1) // MUL_RSVRS
   )
   u_mul_rsrvs
   (
     // clocks and resets
-    .clk                  (clk),
-    .rst                  (rst),
+    .clk                      (clk), // MUL_RSVRS
+    .rst                      (rst), // MUL_RSVRS
     // pipeline control signals in
-    .pipeline_flush_i     (pipeline_flush_i), // MUL_RSVRS
-    .padv_decode_i        (padv_decode_i), // MUL_RSVRS
-    .take_op_i            (mul_adv_s1), // MUL_RSVRS
-    // input data
-    //   from DECODE
-    .dcod_rfa_i           (dcod_rfa_i), // MUL_RSVRS
-    .dcod_rfb_i           (dcod_rfb_i), // MUL_RSVRS
-    //   forwarding from WB
-    .exe2dec_hazard_a_i   (exe2dec_hazard_a_i), // MUL_RSVRS
-    .exe2dec_hazard_b_i   (exe2dec_hazard_b_i), // MUL_RSVRS
-    .wb_result_i          (wb_result_i), // MUL_RSVRS
+    .pipeline_flush_i         (pipeline_flush_i), // MUL_RSVRS
+    .padv_decode_i            (padv_decode_i), // MUL_RSVRS
+    .taking_op_i              (mul_adv_s1), // MUL_RSVRS
+    // input data from DECODE
+    .dcod_rfa_i               (dcod_rfa_i), // MUL_RSVRS
+    .dcod_rfb_i               (dcod_rfb_i), // MUL_RSVRS
+    // OMAN-to-DECODE hazards
+    //  combined flag
+    .omn2dec_hazards_i        (omn2dec_hazards_i), // MUL_RSVRS
+    //  by FLAG and CARRY
+    .busy_hazard_f_i          (1'b0), // MUL_RSVRS
+    .busy_hazard_f_adr_i      (1'b0), // MUL_RSVRS
+    .busy_hazard_c_i          (1'b0), // MUL_RSVRS
+    .busy_hazard_c_adr_i      (1'b0), // MUL_RSVRS
+    //  by operands
+    .busy_hazard_a_i          (busy_hazard_a_i), // MUL_RSVRS
+    .busy_hazard_a_adr_i      (busy_hazard_a_adr_i), // MUL_RSVRS
+    .busy_hazard_b_i          (busy_hazard_b_i), // MUL_RSVRS
+    .busy_hazard_b_adr_i      (busy_hazard_b_adr_i), // MUL_RSVRS
+    // EXEC-to-DECODE hazards
+    //  combined flag
+    .exe2dec_hazards_i        (exe2dec_hazards_i), // MUL_RSVRS
+    //  by operands
+    .exe2dec_hazard_a_i       (exe2dec_hazard_a_i), // MUL_RSVRS
+    .exe2dec_hazard_b_i       (exe2dec_hazard_b_i), // MUL_RSVRS
+    // Data for hazards resolving
+    //  hazard could be passed from DECODE to EXECUTE
+    .exec_flag_wb_i           (1'b0), // MUL_RSVRS
+    .exec_carry_wb_i          (1'b0), // MUL_RSVRS
+    .exec_flag_carry_adr_i    (1'b0), // MUL_RSVRS
+    .exec_rf_wb_i             (exec_rf_wb_i), // MUL_RSVRS
+    .exec_rfd_adr_i           (exec_rfd_adr_i), // MUL_RSVRS
+    .padv_wb_i                (padv_wb_i), // MUL_RSVRS
+    //  hazard could be resolving
+    .wb_flag_wb_i             (1'b0), // MUL_RSVRS
+    .wb_carry_wb_i            (1'b0), // MUL_RSVRS
+    .wb_flag_carry_adr_i      (1'b0), // MUL_RSVRS
+    .wb_rf_wb_i               (wb_rf_wb_i), // MUL_RSVRS
+    .wb_rfd_adr_i             (wb_rfd_adr_i), // MUL_RSVRS
+    .wb_result_i              (wb_result_i), // MUL_RSVRS
     // command and its additional attributes
-    .dcod_op_i            (dcod_op_mul_i), // MUL_RSVRS
-    .dcod_opc_i           (1'b0), // MUL_RSVRS
+    .dcod_op_i                (dcod_op_mul_i), // MUL_RSVRS
+    .dcod_opc_i               (1'b0), // MUL_RSVRS
     // outputs
     //   command attributes from busy stage
-    .busy_opc_o           (), // MUL_RSVRS
+    .busy_opc_o               (), // MUL_RSVRS
     //   command and its additional attributes
-    .exec_op_o            (exec_op_mul), // MUL_RSVRS
-    .exec_opc_o           (),
+    .exec_op_o                (exec_op_mul), // MUL_RSVRS
+    .exec_opc_o               (),
     //   operands
-    .exec_rfa_o           (mul_a), // MUL_RSVRS
-    .exec_rfb_o           (mul_b), // MUL_RSVRS
+    .exec_rfa_o               (mul_a), // MUL_RSVRS
+    .exec_rfb_o               (mul_b), // MUL_RSVRS
     //   unit-is-busy flag
-    .unit_busy_o          (mul_busy_o) // MUL_RSVRS
+    .unit_busy_o              (mul_busy_o) // MUL_RSVRS
   );
 
   // stage #1: register inputs & split them on halfed parts
@@ -203,7 +258,8 @@ endmodule // mor1kx_multiplier_marocchino
 
 module mor1kx_divider_marocchino
 #(
-  parameter OPTION_OPERAND_WIDTH = 32
+  parameter OPTION_OPERAND_WIDTH = 32,
+  parameter DEST_REG_ADDR_WIDTH  =  8 // OPTION_RF_ADDR_WIDTH + log2(Re-Ordering buffer width)
 )
 (
   // clocks and resets
@@ -216,13 +272,33 @@ module mor1kx_divider_marocchino
   input                                 padv_wb_i,
   input                                 grant_wb_to_div_i,
 
-  // input data
-  //   from DECODE
+  // input data from DECODE
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfa_i,
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb_i,
-  //   forwarding from WB
+
+  // OMAN-to-DECODE hazards
+  //  combined flag
+  input                                 omn2dec_hazards_i,
+  //  by operands
+  input                                 busy_hazard_a_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_a_adr_i,
+  input                                 busy_hazard_b_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_b_adr_i,
+
+  // EXEC-to-DECODE hazards
+  //  combined flag
+  input                                 exe2dec_hazards_i,
+  //  by operands
   input                                 exe2dec_hazard_a_i,
   input                                 exe2dec_hazard_b_i,
+
+  // Data for hazards resolving
+  //  hazard could be passed from DECODE to EXECUTE
+  input                                 exec_rf_wb_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] exec_rfd_adr_i,
+  //  hazard could be resolving
+  input                                 wb_rf_wb_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] wb_rfd_adr_i,
   input      [OPTION_OPERAND_WIDTH-1:0] wb_result_i,
 
   // division command
@@ -270,39 +346,72 @@ module mor1kx_divider_marocchino
   mor1kx_rsrvs_marocchino
   #(
     .OPTION_OPERAND_WIDTH (OPTION_OPERAND_WIDTH), // DIV_RSVRS
-    .OPC_WIDTH            (2) // DIV_RSVRS
+    .USE_OPC              (1), // DIV_RSVRS
+    .OPC_WIDTH            (2), // DIV_RSVRS
+    .DEST_REG_ADDR_WIDTH  (DEST_REG_ADDR_WIDTH), // DIV_RSVRS
+    .USE_RSVRS_FLAG_CARRY (0), // DIV_RSVRS
+    .DEST_FLAG_ADDR_WIDTH (1) // DIV_RSVRS
   )
   u_div_rsrvs
   (
     // clocks and resets
-    .clk                  (clk),
-    .rst                  (rst),
+    .clk                      (clk), // DIV_RSVRS
+    .rst                      (rst), // DIV_RSVRS
     // pipeline control signals in
-    .pipeline_flush_i     (pipeline_flush_i), // DIV_RSVRS
-    .padv_decode_i        (padv_decode_i), // DIV_RSVRS
-    .take_op_i            (take_op_div), // DIV_RSVRS
-    // input data
-    //   from DECODE
-    .dcod_rfa_i           (dcod_rfa_i), // DIV_RSVRS
-    .dcod_rfb_i           (dcod_rfb_i), // DIV_RSVRS
-    //   forwarding from WB
-    .exe2dec_hazard_a_i   (exe2dec_hazard_a_i), // DIV_RSVRS
-    .exe2dec_hazard_b_i   (exe2dec_hazard_b_i), // DIV_RSVRS
-    .wb_result_i          (wb_result_i), // DIV_RSVRS
+    .pipeline_flush_i         (pipeline_flush_i), // DIV_RSVRS
+    .padv_decode_i            (padv_decode_i), // DIV_RSVRS
+    .taking_op_i              (take_op_div), // DIV_RSVRS
+    // input data from DECODE
+    .dcod_rfa_i               (dcod_rfa_i), // DIV_RSVRS
+    .dcod_rfb_i               (dcod_rfb_i), // DIV_RSVRS
+    // OMAN-to-DECODE hazards
+    //  combined flag
+    .omn2dec_hazards_i        (omn2dec_hazards_i), // DIV_RSVRS
+    //  by FLAG and CARRY
+    .busy_hazard_f_i          (1'b0), // DIV_RSVRS
+    .busy_hazard_f_adr_i      (1'b0), // DIV_RSVRS
+    .busy_hazard_c_i          (1'b0), // DIV_RSVRS
+    .busy_hazard_c_adr_i      (1'b0), // DIV_RSVRS
+    //  by operands
+    .busy_hazard_a_i          (busy_hazard_a_i), // DIV_RSVRS
+    .busy_hazard_a_adr_i      (busy_hazard_a_adr_i), // DIV_RSVRS
+    .busy_hazard_b_i          (busy_hazard_b_i), // DIV_RSVRS
+    .busy_hazard_b_adr_i      (busy_hazard_b_adr_i), // DIV_RSVRS
+    // EXEC-to-DECODE hazards
+    //  combined flag
+    .exe2dec_hazards_i        (exe2dec_hazards_i), // DIV_RSVRS
+    //  by operands
+    .exe2dec_hazard_a_i       (exe2dec_hazard_a_i), // DIV_RSVRS
+    .exe2dec_hazard_b_i       (exe2dec_hazard_b_i), // DIV_RSVRS
+    // Data for hazards resolving
+    //  hazard could be passed from DECODE to EXECUTE
+    .exec_flag_wb_i           (1'b0), // DIV_RSVRS
+    .exec_carry_wb_i          (1'b0), // DIV_RSVRS
+    .exec_flag_carry_adr_i    (1'b0), // DIV_RSVRS
+    .exec_rf_wb_i             (exec_rf_wb_i), // DIV_RSVRS
+    .exec_rfd_adr_i           (exec_rfd_adr_i), // DIV_RSVRS
+    .padv_wb_i                (padv_wb_i), // DIV_RSVRS
+    //  hazard could be resolving
+    .wb_flag_wb_i             (1'b0), // DIV_RSVRS
+    .wb_carry_wb_i            (1'b0), // DIV_RSVRS
+    .wb_flag_carry_adr_i      (1'b0), // DIV_RSVRS
+    .wb_rf_wb_i               (wb_rf_wb_i), // DIV_RSVRS
+    .wb_rfd_adr_i             (wb_rfd_adr_i), // DIV_RSVRS
+    .wb_result_i              (wb_result_i), // DIV_RSVRS
     // command and its additional attributes
-    .dcod_op_i            (dcod_op_div_i), // DIV_RSVRS
-    .dcod_opc_i           ({dcod_op_div_signed_i, dcod_op_div_unsigned_i}), // DIV_RSVRS
+    .dcod_op_i                (dcod_op_div_i), // DIV_RSVRS
+    .dcod_opc_i               ({dcod_op_div_signed_i, dcod_op_div_unsigned_i}), // DIV_RSVRS
     // outputs
     //   command attributes from busy stage
-    .busy_opc_o           (), // DIV_RSVRS
+    .busy_opc_o               (), // DIV_RSVRS
     //   command and its additional attributes
-    .exec_op_o            (exec_op_div), // DIV_RSVRS
-    .exec_opc_o           ({exec_op_div_signed, exec_op_div_unsigned}),
+    .exec_op_o                (exec_op_div), // DIV_RSVRS
+    .exec_opc_o               ({exec_op_div_signed, exec_op_div_unsigned}),
     //   operands
-    .exec_rfa_o           (div_a), // DIV_RSVRS
-    .exec_rfb_o           (div_b), // DIV_RSVRS
+    .exec_rfa_o               (div_a), // DIV_RSVRS
+    .exec_rfb_o               (div_b), // DIV_RSVRS
     //   unit-is-busy flag
-    .unit_busy_o          (div_busy_o) // DIV_RSVRS
+    .unit_busy_o              (div_busy_o) // DIV_RSVRS
   );
 
   // division controller
@@ -446,7 +555,8 @@ module mor1kx_exec_1clk_marocchino
 #(
   parameter OPTION_OPERAND_WIDTH = 32,
   parameter OPTION_RF_ADDR_WIDTH =  5,
-  parameter FEATURE_EXT          = "NONE",
+  parameter DEST_REG_ADDR_WIDTH  =  8, // OPTION_RF_ADDR_WIDTH + log2(Re-Ordering buffer width)
+  parameter DEST_FLAG_ADDR_WIDTH =  3, // log2(Re-Ordering buffer width)
   parameter FEATURE_FPU          = "NONE" // ENABLED|NONE
 )
 (
@@ -460,13 +570,43 @@ module mor1kx_exec_1clk_marocchino
   input                                 padv_wb_i,
   input                                 grant_wb_to_1clk_i,
 
-  // input data
-  //   from DECODE
+  // input data from DECODE
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfa_i,
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb_i,
-  //   forwarding from WB
+
+  // OMAN-to-DECODE hazards
+  //  combined flag
+  input                                 omn2dec_hazards_i,
+  //  by FLAG and CARRY
+  input                                 busy_hazard_f_i,
+  input      [DEST_FLAG_ADDR_WIDTH-1:0] busy_hazard_f_adr_i,
+  input                                 busy_hazard_c_i,
+  input      [DEST_FLAG_ADDR_WIDTH-1:0] busy_hazard_c_adr_i,
+  //  by operands
+  input                                 busy_hazard_a_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_a_adr_i,
+  input                                 busy_hazard_b_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_b_adr_i,
+  // EXEC-to-DECODE hazards
+  //  combined flag
+  input                                 exe2dec_hazards_i,
+  //  by operands
   input                                 exe2dec_hazard_a_i,
   input                                 exe2dec_hazard_b_i,
+  // Data for hazards resolving
+  //  hazard could be passed from DECODE to EXECUTE
+  input                                 exec_flag_wb_i,
+  input                                 exec_carry_wb_i,
+  input      [DEST_FLAG_ADDR_WIDTH-1:0] exec_flag_carry_adr_i,
+  input                                 exec_rf_wb_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] exec_rfd_adr_i,
+  //   forwarding from WB
+  //  hazard could be resolving
+  input                                 wb_flag_wb_i,
+  input                                 wb_carry_wb_i,
+  input      [DEST_FLAG_ADDR_WIDTH-1:0] wb_flag_carry_adr_i,
+  input                                 wb_rf_wb_i,
+  input       [DEST_REG_ADDR_WIDTH-1:0] wb_rfd_adr_i,
   input      [OPTION_OPERAND_WIDTH-1:0] wb_result_i,
 
   // 1-clock instruction auxiliaries
@@ -570,52 +710,86 @@ module mor1kx_exec_1clk_marocchino
   // reservation station insrtance
   mor1kx_rsrvs_marocchino
   #(
-    .OPTION_OPERAND_WIDTH (OPTION_OPERAND_WIDTH), // 1CLK_RSVRS
-    .OPC_WIDTH            (ONE_CLK_ATTR_WIDTH) // 1CLK_RSVRS
+    .OPTION_OPERAND_WIDTH     (OPTION_OPERAND_WIDTH), // 1CLK_RSVRS
+    .USE_OPC                  (1), // 1CLK_RSVRS
+    .OPC_WIDTH                (ONE_CLK_ATTR_WIDTH), // 1CLK_RSVRS
+    .DEST_REG_ADDR_WIDTH      (DEST_REG_ADDR_WIDTH), // 1CLK_RSVRS
+    .USE_RSVRS_FLAG_CARRY     (1), // 1CLK_RSVRS
+    .DEST_FLAG_ADDR_WIDTH     (DEST_FLAG_ADDR_WIDTH) // 1CLK_RSVRS
   )
   u_1clk_rsrvs
   (
     // clocks and resets
-    .clk                  (clk),
-    .rst                  (rst),
+    .clk                      (clk), // 1CLK_RSVRS
+    .rst                      (rst), // 1CLK_RSVRS
     // pipeline control signals in
-    .pipeline_flush_i     (pipeline_flush_i), // 1CLK_RSVRS
-    .padv_decode_i        (padv_decode_i), // 1CLK_RSVRS
-    .take_op_i            (padv_wb_i & grant_wb_to_1clk_i), // 1CLK_RSVRS
-    // input data
-    //   from DECODE
-    .dcod_rfa_i           (dcod_rfa_i), // 1CLK_RSVRS
-    .dcod_rfb_i           (dcod_rfb_i), // 1CLK_RSVRS
+    .pipeline_flush_i         (pipeline_flush_i), // 1CLK_RSVRS
+    .padv_decode_i            (padv_decode_i), // 1CLK_RSVRS
+    .taking_op_i              (padv_wb_i & grant_wb_to_1clk_i), // 1CLK_RSVRS
+    // input data from DECODE
+    .dcod_rfa_i               (dcod_rfa_i), // 1CLK_RSVRS
+    .dcod_rfb_i               (dcod_rfb_i), // 1CLK_RSVRS
+    // OMAN-to-DECODE hazards
+    //  combined flag
+    .omn2dec_hazards_i        (omn2dec_hazards_i), // 1CLK_RSVRS
+    //  by FLAG and CARRY
+    .busy_hazard_f_i          (busy_hazard_f_i), // 1CLK_RSVRS
+    .busy_hazard_f_adr_i      (busy_hazard_f_adr_i), // 1CLK_RSVRS
+    .busy_hazard_c_i          (busy_hazard_c_i), // 1CLK_RSVRS
+    .busy_hazard_c_adr_i      (busy_hazard_c_adr_i), // 1CLK_RSVRS
+    //  by operands
+    .busy_hazard_a_i          (busy_hazard_a_i), // 1CLK_RSVRS
+    .busy_hazard_a_adr_i      (busy_hazard_a_adr_i), // 1CLK_RSVRS
+    .busy_hazard_b_i          (busy_hazard_b_i), // 1CLK_RSVRS
+    .busy_hazard_b_adr_i      (busy_hazard_b_adr_i), // 1CLK_RSVRS
+    // EXEC-to-DECODE hazards
+    //  combined flag
+    .exe2dec_hazards_i        (exe2dec_hazards_i), // 1CLK_RSVRS
+    //  by operands
+    .exe2dec_hazard_a_i       (exe2dec_hazard_a_i), // 1CLK_RSVRS
+    .exe2dec_hazard_b_i       (exe2dec_hazard_b_i), // 1CLK_RSVRS
+    // Data for hazards resolving
+    //  hazard could be passed from DECODE to EXECUTE
+    .exec_flag_wb_i           (exec_flag_wb_i), // 1CLK_RSVRS
+    .exec_carry_wb_i          (exec_carry_wb_i), // 1CLK_RSVRS
+    .exec_flag_carry_adr_i    (exec_flag_carry_adr_i), // 1CLK_RSVRS
+    .exec_rf_wb_i             (exec_rf_wb_i), // 1CLK_RSVRS
+    .exec_rfd_adr_i           (exec_rfd_adr_i), // 1CLK_RSVRS
+    .padv_wb_i                (padv_wb_i), // 1CLK_RSVRS
     //   forwarding from WB
-    .exe2dec_hazard_a_i   (exe2dec_hazard_a_i), // 1CLK_RSVRS
-    .exe2dec_hazard_b_i   (exe2dec_hazard_b_i), // 1CLK_RSVRS
-    .wb_result_i          (wb_result_i), // 1CLK_RSVRS
-    //   command attributes from busy stage
-    .busy_opc_o           (busy_opc), // 1CLK_RSVRS
+    //  hazard could be resolving
+    .wb_flag_wb_i             (wb_flag_wb_i), // 1CLK_RSVRS
+    .wb_carry_wb_i            (wb_carry_wb_i), // 1CLK_RSVRS
+    .wb_flag_carry_adr_i      (wb_flag_carry_adr_i), // 1CLK_RSVRS
+    .wb_rf_wb_i               (wb_rf_wb_i), // 1CLK_RSVRS
+    .wb_rfd_adr_i             (wb_rfd_adr_i), // 1CLK_RSVRS
+    .wb_result_i              (wb_result_i), // 1CLK_RSVRS
     // command and its additional attributes
-    .dcod_op_i            (dcod_op_1clk_i), // 1CLK_RSVRS
-    .dcod_opc_i           ({dcod_opc_alu_secondary_i, // 1CLK_RSVRS
-                            dcod_op_add_i, dcod_adder_do_sub_i, dcod_adder_do_carry_i, // 1CLK_RSVRS
-                            dcod_op_shift_i, dcod_op_ffl1_i, dcod_op_movhi_i, dcod_op_cmov_i, // 1CLK_RSVRS
-                            (|dcod_opc_logic_i), dcod_opc_logic_i, // 1CLK_RSVRS
-                            dcod_op_jal_i, dcod_jal_result_i, // 1CLK_RSVRS
-                            dcod_op_setflag_i, dcod_op_fp32_cmp_i, dcod_opc_fp32_cmp_i, // 1CLK_RSVRS
-                            (dcod_op_setflag_i | dcod_op_fp32_cmp_i)}), // 1CLK_RSVRS
+    .dcod_op_i                (dcod_op_1clk_i), // 1CLK_RSVRS
+    .dcod_opc_i               ({dcod_opc_alu_secondary_i, // 1CLK_RSVRS
+                                dcod_op_add_i, dcod_adder_do_sub_i, dcod_adder_do_carry_i, // 1CLK_RSVRS
+                                dcod_op_shift_i, dcod_op_ffl1_i, dcod_op_movhi_i, dcod_op_cmov_i, // 1CLK_RSVRS
+                                (|dcod_opc_logic_i), dcod_opc_logic_i, // 1CLK_RSVRS
+                                dcod_op_jal_i, dcod_jal_result_i, // 1CLK_RSVRS
+                                dcod_op_setflag_i, dcod_op_fp32_cmp_i, dcod_opc_fp32_cmp_i, // 1CLK_RSVRS
+                                (dcod_op_setflag_i | dcod_op_fp32_cmp_i)}), // 1CLK_RSVRS
+    //   command attributes from busy stage
+    .busy_opc_o               (busy_opc), // 1CLK_RSVRS
     // outputs
     //   command and its additional attributes
-    .exec_op_o            (), // 1CLK_RSVRS
-    .exec_opc_o           ({opc_alu_secondary_w, // 1CLK_RSVRS
-                            op_add_w, adder_do_sub_w, adder_do_carry_w, // 1CLK_RSVRS
-                            op_shift_w, op_ffl1_w, op_movhi_w, op_cmov_w, // 1CLK_RSVRS
-                            op_logic_w, opc_logic_w, // 1CLK_RSVRS
-                            op_jal_w, jal_result_w, // 1CLK_RSVRS
-                            op_setflag_w, op_fp32_cmp_w, opc_fp32_cmp_w, // 1CLK_RSVRS
-                            op_1clk_cmp_w}), // 1CLK_RSVRS
+    .exec_op_o                (), // 1CLK_RSVRS
+    .exec_opc_o               ({opc_alu_secondary_w, // 1CLK_RSVRS
+                                op_add_w, adder_do_sub_w, adder_do_carry_w, // 1CLK_RSVRS
+                                op_shift_w, op_ffl1_w, op_movhi_w, op_cmov_w, // 1CLK_RSVRS
+                                op_logic_w, opc_logic_w, // 1CLK_RSVRS
+                                op_jal_w, jal_result_w, // 1CLK_RSVRS
+                                op_setflag_w, op_fp32_cmp_w, opc_fp32_cmp_w, // 1CLK_RSVRS
+                                op_1clk_cmp_w}), // 1CLK_RSVRS
     //   operands
-    .exec_rfa_o           (alu_1clk_a), // 1CLK_RSVRS
-    .exec_rfb_o           (alu_1clk_b), // 1CLK_RSVRS
+    .exec_rfa_o               (alu_1clk_a), // 1CLK_RSVRS
+    .exec_rfb_o               (alu_1clk_b), // 1CLK_RSVRS
     //   unit-is-busy flag
-    .unit_busy_o          (op_1clk_busy_o) // 1CLK_RSVRS
+    .unit_busy_o              (op_1clk_busy_o) // 1CLK_RSVRS
   );
 
 

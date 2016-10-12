@@ -130,6 +130,10 @@ module mor1kx_cpu_marocchino
   input                             snoop_en_i
 );
 
+  localparam DEST_REG_ADDR_WIDTH  = OPTION_RF_ADDR_WIDTH + 3; // +log2(Re-Ordering buffer width)
+  localparam DEST_FLAG_ADDR_WIDTH = 3; // log2(Re-Ordering buffer width)
+
+
   wire     [`OR1K_INSN_WIDTH-1:0] dcod_insn;
   wire                            dcod_insn_valid;
 
@@ -182,15 +186,46 @@ module mor1kx_cpu_marocchino
 
   wire [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd_adr;
   wire                            dcod_rf_wb;
-  wire [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd_adr;
-  wire                            wb_rf_wb;
 
-  // from OMAN (EXECUTE-to-DECODE hazards)
+
+  // OMAN-to-DECODE hazards
+  //  combined flag
+  wire                            omn2dec_hazards;
+  wire                            omn2dec_hazards_1clk;
+  //  by FLAG and CARRY
+  wire                            busy_hazard_f;
+  wire [DEST_FLAG_ADDR_WIDTH-1:0] busy_hazard_f_adr;
+  wire                            busy_hazard_c;
+  wire [DEST_FLAG_ADDR_WIDTH-1:0] busy_hazard_c_adr;
+  //  by operands
+  wire                            busy_hazard_a;
+  wire  [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_a_adr;
+  wire                            busy_hazard_b;
+  wire  [DEST_REG_ADDR_WIDTH-1:0] busy_hazard_b_adr;
+  // EXEC-to-DECODE hazards
+  //  combined flag
+  wire                            exe2dec_hazards;
+  wire                            exe2dec_hazards_1clk;
+  //  by operands
   wire                            exe2dec_hazard_a;
   wire                            exe2dec_hazard_b;
+  // Data for hazards resolving
+  //  hazard could be passed from DECODE to EXECUTE
+  wire                            exec_flag_wb;
+  wire                            exec_carry_wb;
+  wire [DEST_FLAG_ADDR_WIDTH-1:0] exec_flag_carry_adr;
+  wire                            exec_rf_wb;
+  wire  [DEST_REG_ADDR_WIDTH-1:0] exec_rfd_adr;
+  //  hazard could be resolving
+  wire                            wb_flag_wb;
+  wire                            wb_carry_wb;
+  wire [DEST_FLAG_ADDR_WIDTH-1:0] wb_flag_carry_adr;
+  wire  [DEST_REG_ADDR_WIDTH-1:0] wb_rfd_adr;
+  wire                            wb_rf_wb;
 
   wire                            dcod_op_jr;
   wire                            stall_fetch;
+  wire                            fetch_waiting_target;
 
   wire                            dcod_delay_slot;
   wire                            wb_delay_slot;
@@ -431,12 +466,12 @@ module mor1kx_cpu_marocchino
   u_fetch
   (
     // clocks & resets
-    .clk                              (clk),
-    .rst                              (rst),
+    .clk                              (clk), // FETCH
+    .rst                              (rst), // FETCH
 
     // pipeline control
     .padv_fetch_i                     (padv_fetch), // FETCH
-    .stall_fetch_i                    (stall_fetch), // FETCH
+    .fetch_waiting_target_i           (fetch_waiting_target), // FETCH
     .pipeline_flush_i                 (pipeline_flush), // FETCH
 
     // configuration
@@ -612,7 +647,8 @@ module mor1kx_cpu_marocchino
 
   mor1kx_multiplier_marocchino
   #(
-    .OPTION_OPERAND_WIDTH            (OPTION_OPERAND_WIDTH) // MUL
+    .OPTION_OPERAND_WIDTH             (OPTION_OPERAND_WIDTH), // MUL
+    .DEST_REG_ADDR_WIDTH              (DEST_REG_ADDR_WIDTH) // MUL
   )
   u_multiplier
   (
@@ -624,13 +660,30 @@ module mor1kx_cpu_marocchino
     .padv_decode_i                    (padv_decode), // MUL
     .padv_wb_i                        (padv_wb), // MUL
     .grant_wb_to_mul_i                (grant_wb_to_mul), // MUL
-    // input data
-    //   ## from DECODE
+    // input data from DECODE
     .dcod_rfa_i                       (dcod_rfa), // MUL
     .dcod_rfb_i                       (dcod_rfb), // MUL
-    //   ## forwarding from WB
+    // OMAN-to-DECODE hazards
+    //  combined flag
+    .omn2dec_hazards_i                (omn2dec_hazards), // MUL
+    //  by operands
+    .busy_hazard_a_i                  (busy_hazard_a), // MUL
+    .busy_hazard_a_adr_i              (busy_hazard_a_adr), // MUL
+    .busy_hazard_b_i                  (busy_hazard_b), // MUL
+    .busy_hazard_b_adr_i              (busy_hazard_b_adr), // MUL
+    // EXEC-to-DECODE hazards
+    //  combined flag
+    .exe2dec_hazards_i                (exe2dec_hazards), // MUL
+    //  by operands
     .exe2dec_hazard_a_i               (exe2dec_hazard_a), // MUL
     .exe2dec_hazard_b_i               (exe2dec_hazard_b), // MUL
+    // Data for hazards resolving
+    //  hazard could be passed from DECODE to EXECUTE
+    .exec_rf_wb_i                     (exec_rf_wb), // MUL
+    .exec_rfd_adr_i                   (exec_rfd_adr), // MUL
+    //  hazard could be resolving
+    .wb_rf_wb_i                       (wb_rf_wb), // MUL
+    .wb_rfd_adr_i                     (wb_rfd_adr[DEST_REG_ADDR_WIDTH-1:0]), // MUL
     .wb_result_i                      (wb_result), // MUL
     //  other inputs/outputs
     .dcod_op_mul_i                    (dcod_op_mul), // MUL
@@ -655,7 +708,8 @@ module mor1kx_cpu_marocchino
   // divisor instance
   mor1kx_divider_marocchino
   #(
-    .OPTION_OPERAND_WIDTH             (OPTION_OPERAND_WIDTH) // DIV
+    .OPTION_OPERAND_WIDTH             (OPTION_OPERAND_WIDTH), // DIV
+    .DEST_REG_ADDR_WIDTH              (DEST_REG_ADDR_WIDTH) // DIV
   )
   u_divider
   (
@@ -667,13 +721,30 @@ module mor1kx_cpu_marocchino
     .padv_decode_i                    (padv_decode), // DIV
     .padv_wb_i                        (padv_wb), // DIV
     .grant_wb_to_div_i                (grant_wb_to_div), // DIV
-    // input data
-    //   ## from DECODE
+    // input data from DECODE
     .dcod_rfa_i                       (dcod_rfa), // DIV
     .dcod_rfb_i                       (dcod_rfb), // DIV
-    //   ## forwarding from WB
+    // OMAN-to-DECODE hazards
+    //  combined flag
+    .omn2dec_hazards_i                (omn2dec_hazards), // DIV
+    //  by operands
+    .busy_hazard_a_i                  (busy_hazard_a), // DIV
+    .busy_hazard_a_adr_i              (busy_hazard_a_adr), // DIV
+    .busy_hazard_b_i                  (busy_hazard_b), // DIV
+    .busy_hazard_b_adr_i              (busy_hazard_b_adr), // DIV
+    // EXEC-to-DECODE hazards
+    //  combined flag
+    .exe2dec_hazards_i                (exe2dec_hazards), // DIV
+    //  by operands
     .exe2dec_hazard_a_i               (exe2dec_hazard_a), // DIV
     .exe2dec_hazard_b_i               (exe2dec_hazard_b), // DIV
+    // Data for hazards resolving
+    //  hazard could be passed from DECODE to EXECUTE
+    .exec_rf_wb_i                     (exec_rf_wb), // DIV
+    .exec_rfd_adr_i                   (exec_rfd_adr), // DIV
+    //  hazard could be resolving
+    .wb_rf_wb_i                       (wb_rf_wb), // DIV
+    .wb_rfd_adr_i                     (wb_rfd_adr[DEST_REG_ADDR_WIDTH-1:0]), // DIV
     .wb_result_i                      (wb_result), // DIV
     // division command
     .dcod_op_div_i                    (dcod_op_div), // DIV
@@ -714,13 +785,15 @@ module mor1kx_cpu_marocchino
   #(
     .OPTION_OPERAND_WIDTH             (OPTION_OPERAND_WIDTH), // 1CLK
     .OPTION_RF_ADDR_WIDTH             (OPTION_RF_ADDR_WIDTH), // 1CLK
+    .DEST_REG_ADDR_WIDTH              (DEST_REG_ADDR_WIDTH), // 1CLK
+    .DEST_FLAG_ADDR_WIDTH             (DEST_FLAG_ADDR_WIDTH), // 1CLK
     .FEATURE_FPU                      (FEATURE_FPU) // 1CLK
   )
   u_exec_1clk
   (
     // clocks & resets
-    .clk                              (clk),
-    .rst                              (rst),
+    .clk                              (clk), // 1CLK
+    .rst                              (rst), // 1CLK
 
     // pipeline controls
     .pipeline_flush_i                 (pipeline_flush), // 1CLK
@@ -728,13 +801,42 @@ module mor1kx_cpu_marocchino
     .padv_wb_i                        (padv_wb), // 1CLK
     .grant_wb_to_1clk_i               (grant_wb_to_1clk), // 1CLK
 
-    // input data
-    //   from DECODE
+    // input data from DECODE
     .dcod_rfa_i                       (dcod_rfa), // 1CLK
     .dcod_rfb_i                       (dcod_rfb), // 1CLK
-    //   forwarding from WB
+
+    // OMAN-to-DECODE hazards
+    //  combined flag
+    .omn2dec_hazards_i                (omn2dec_hazards_1clk), // 1CLK
+    //  by FLAG and CARRY
+    .busy_hazard_f_i                  (busy_hazard_f), // 1CLK
+    .busy_hazard_f_adr_i              (busy_hazard_f_adr), // 1CLK
+    .busy_hazard_c_i                  (busy_hazard_c), // 1CLK
+    .busy_hazard_c_adr_i              (busy_hazard_c_adr), // 1CLK
+    //  by operands
+    .busy_hazard_a_i                  (busy_hazard_a), // 1CLK
+    .busy_hazard_a_adr_i              (busy_hazard_a_adr), // 1CLK
+    .busy_hazard_b_i                  (busy_hazard_b), // 1CLK
+    .busy_hazard_b_adr_i              (busy_hazard_b_adr), // 1CLK
+    // EXEC-to-DECODE hazards
+    //  combined flag
+    .exe2dec_hazards_i                (exe2dec_hazards_1clk), // 1CLK
+    //  by operands
     .exe2dec_hazard_a_i               (exe2dec_hazard_a), // 1CLK
     .exe2dec_hazard_b_i               (exe2dec_hazard_b), // 1CLK
+    // Data for hazards resolving
+    //  hazard could be passed from DECODE to EXECUTE
+    .exec_flag_wb_i                   (exec_flag_wb), // 1CLK
+    .exec_carry_wb_i                  (exec_carry_wb), // 1CLK
+    .exec_flag_carry_adr_i            (exec_flag_carry_adr), // 1CLK
+    .exec_rf_wb_i                     (exec_rf_wb), // 1CLK
+    .exec_rfd_adr_i                   (exec_rfd_adr), // 1CLK
+    //  hazard could be resolving
+    .wb_flag_wb_i                     (wb_flag_wb), // 1CLK
+    .wb_carry_wb_i                    (wb_carry_wb), // 1CLK
+    .wb_flag_carry_adr_i              (wb_flag_carry_adr), // 1CLK
+    .wb_rf_wb_i                       (wb_rf_wb), // 1CLK
+    .wb_rfd_adr_i                     (wb_rfd_adr[DEST_REG_ADDR_WIDTH-1:0]), // 1CLK
     .wb_result_i                      (wb_result), // 1CLK
 
     // 1-clock instruction auxiliaries
@@ -805,7 +907,11 @@ module mor1kx_cpu_marocchino
   if (FEATURE_FPU != "NONE") begin :  alu_fp32_arith_ena
   /* verilator lint_on WIDTH */
     // fp32 arithmetic instance
-    pfpu32_top_marocchino  u_pfpu32
+    pfpu32_top_marocchino
+    #(
+      .DEST_REG_ADDR_WIDTH      (DEST_REG_ADDR_WIDTH) // FPU32_ARITH
+    )
+    u_pfpu32
     (
       // clock & reset
       .clk                      (clk), // FPU32_ARITH
@@ -837,9 +943,27 @@ module mor1kx_cpu_marocchino
       //   from DECODE
       .dcod_rfa_i               (dcod_rfa), // FPU32_ARITH
       .dcod_rfb_i               (dcod_rfb), // FPU32_ARITH
-      //   forwarding from WB
-      .exe2dec_hazard_a_i       (exe2dec_hazard_a), // FPU32_ARITH
-      .exe2dec_hazard_b_i       (exe2dec_hazard_b), // FPU32_ARITH
+      // OMAN-to-DECODE hazards
+      //  combined flag
+      .omn2dec_hazards_i                (omn2dec_hazards), // FPU32_ARITH
+      //  by operands
+      .busy_hazard_a_i                  (busy_hazard_a), // FPU32_ARITH
+      .busy_hazard_a_adr_i              (busy_hazard_a_adr), // FPU32_ARITH
+      .busy_hazard_b_i                  (busy_hazard_b), // FPU32_ARITH
+      .busy_hazard_b_adr_i              (busy_hazard_b_adr), // FPU32_ARITH
+      // EXEC-to-DECODE hazards
+      //  combined flag
+      .exe2dec_hazards_i                (exe2dec_hazards), // FPU32_ARITH
+      //  by operands
+      .exe2dec_hazard_a_i               (exe2dec_hazard_a), // FPU32_ARITH
+      .exe2dec_hazard_b_i               (exe2dec_hazard_b), // FPU32_ARITH
+      // Data for hazards resolving
+      //  hazard could be passed from DECODE to EXECUTE
+      .exec_rf_wb_i                     (exec_rf_wb), // FPU32_ARITH
+      .exec_rfd_adr_i                   (exec_rfd_adr), // FPU32_ARITH
+      //  hazard could be resolving
+      .wb_rf_wb_i                       (wb_rf_wb), // FPU32_ARITH
+      .wb_rfd_adr_i                     (wb_rfd_adr[DEST_REG_ADDR_WIDTH-1:0]), // FPU32_ARITH
       .wb_result_i              (wb_result), // FPU32_ARITH
 
       // FPU-32 arithmetic part
@@ -866,25 +990,26 @@ module mor1kx_cpu_marocchino
 
   mor1kx_lsu_marocchino
   #(
-    .OPTION_OPERAND_WIDTH               (OPTION_OPERAND_WIDTH),
-    .OPTION_DCACHE_BLOCK_WIDTH          (OPTION_DCACHE_BLOCK_WIDTH),
-    .OPTION_DCACHE_SET_WIDTH            (OPTION_DCACHE_SET_WIDTH),
-    .OPTION_DCACHE_WAYS                 (OPTION_DCACHE_WAYS),
-    .OPTION_DCACHE_LIMIT_WIDTH          (OPTION_DCACHE_LIMIT_WIDTH),
-    .OPTION_DCACHE_SNOOP                (OPTION_DCACHE_SNOOP),
-    .OPTION_DCACHE_CLEAR_ON_INIT        (OPTION_DCACHE_CLEAR_ON_INIT),
-    .FEATURE_DMMU_HW_TLB_RELOAD         (FEATURE_DMMU_HW_TLB_RELOAD),
-    .OPTION_DMMU_SET_WIDTH              (OPTION_DMMU_SET_WIDTH),
-    .OPTION_DMMU_WAYS                   (OPTION_DMMU_WAYS),
-    .OPTION_DMMU_CLEAR_ON_INIT          (OPTION_DMMU_CLEAR_ON_INIT),
-    .OPTION_STORE_BUFFER_DEPTH_WIDTH    (OPTION_STORE_BUFFER_DEPTH_WIDTH),
-    .OPTION_STORE_BUFFER_CLEAR_ON_INIT  (OPTION_STORE_BUFFER_CLEAR_ON_INIT)
+    .OPTION_OPERAND_WIDTH               (OPTION_OPERAND_WIDTH), // LSU
+    .DEST_REG_ADDR_WIDTH                (DEST_REG_ADDR_WIDTH), // LSU
+    .OPTION_DCACHE_BLOCK_WIDTH          (OPTION_DCACHE_BLOCK_WIDTH), // LSU
+    .OPTION_DCACHE_SET_WIDTH            (OPTION_DCACHE_SET_WIDTH), // LSU
+    .OPTION_DCACHE_WAYS                 (OPTION_DCACHE_WAYS), // LSU
+    .OPTION_DCACHE_LIMIT_WIDTH          (OPTION_DCACHE_LIMIT_WIDTH), // LSU
+    .OPTION_DCACHE_SNOOP                (OPTION_DCACHE_SNOOP), // LSU
+    .OPTION_DCACHE_CLEAR_ON_INIT        (OPTION_DCACHE_CLEAR_ON_INIT), // LSU
+    .FEATURE_DMMU_HW_TLB_RELOAD         (FEATURE_DMMU_HW_TLB_RELOAD), // LSU
+    .OPTION_DMMU_SET_WIDTH              (OPTION_DMMU_SET_WIDTH), // LSU
+    .OPTION_DMMU_WAYS                   (OPTION_DMMU_WAYS), // LSU
+    .OPTION_DMMU_CLEAR_ON_INIT          (OPTION_DMMU_CLEAR_ON_INIT), // LSU
+    .OPTION_STORE_BUFFER_DEPTH_WIDTH    (OPTION_STORE_BUFFER_DEPTH_WIDTH), // LSU
+    .OPTION_STORE_BUFFER_CLEAR_ON_INIT  (OPTION_STORE_BUFFER_CLEAR_ON_INIT) // LSU
   )
   u_lsu
   (
     // clocks & resets
-    .clk                              (clk),
-    .rst                              (rst),
+    .clk                              (clk), // LSU
+    .rst                              (rst), // LSU
     // Pipeline controls
     .pipeline_flush_i                 (pipeline_flush), // LSU
     .padv_decode_i                    (padv_decode), // LSU
@@ -906,9 +1031,27 @@ module mor1kx_cpu_marocchino
     .dcod_lsu_length_i                (dcod_lsu_length), // LSU
     .dcod_lsu_zext_i                  (dcod_lsu_zext), // LSU
     .dcod_op_msync_i                  (dcod_op_msync), // LSU
-    //   forwarding from WB
+    // OMAN-to-DECODE hazards
+    //  combined flag
+    .omn2dec_hazards_i                (omn2dec_hazards), // LSU
+    //  by operands
+    .busy_hazard_a_i                  (busy_hazard_a), // LSU
+    .busy_hazard_a_adr_i              (busy_hazard_a_adr), // LSU
+    .busy_hazard_b_i                  (busy_hazard_b), // LSU
+    .busy_hazard_b_adr_i              (busy_hazard_b_adr), // LSU
+    // EXEC-to-DECODE hazards
+    //  combined flag
+    .exe2dec_hazards_i                (exe2dec_hazards), // LSU
+    //  by operands
     .exe2dec_hazard_a_i               (exe2dec_hazard_a), // LSU
     .exe2dec_hazard_b_i               (exe2dec_hazard_b), // LSU
+    // Data for hazards resolving
+    //  hazard could be passed from DECODE to EXECUTE
+    .exec_rf_wb_i                     (exec_rf_wb), // LSU
+    .exec_rfd_adr_i                   (exec_rfd_adr), // LSU
+    //  hazard could be resolving
+    .wb_rf_wb_i                       (wb_rf_wb), // LSU
+    .wb_rfd_adr_i                     (wb_rfd_adr[DEST_REG_ADDR_WIDTH-1:0]), // LSU
     .wb_result_i                      (wb_result), // LSU
     // inter-module interface
     .spr_bus_addr_i                   (spr_bus_addr_o), // LSU
@@ -995,16 +1138,16 @@ module mor1kx_cpu_marocchino
 
   mor1kx_rf_marocchino
   #(
-    .OPTION_OPERAND_WIDTH     (OPTION_OPERAND_WIDTH), // RF
-    .OPTION_RF_CLEAR_ON_INIT  (OPTION_RF_CLEAR_ON_INIT), // RF
-    .OPTION_RF_ADDR_WIDTH     (OPTION_RF_ADDR_WIDTH), // RF
-    .FEATURE_DEBUGUNIT        (FEATURE_DEBUGUNIT) // RF
+    .OPTION_OPERAND_WIDTH           (OPTION_OPERAND_WIDTH), // RF
+    .OPTION_RF_CLEAR_ON_INIT        (OPTION_RF_CLEAR_ON_INIT), // RF
+    .OPTION_RF_ADDR_WIDTH           (OPTION_RF_ADDR_WIDTH), // RF
+    .FEATURE_DEBUGUNIT              (FEATURE_DEBUGUNIT) // RF
   )
   u_rf
   (
     // clocks & resets
-    .clk                              (clk),
-    .rst                              (rst),
+    .clk                              (clk), // RF
+    .rst                              (rst), // RF
     // pipeline control signals
     .pipeline_flush_i                 (pipeline_flush), // RF
     // SPR bus
@@ -1027,7 +1170,7 @@ module mor1kx_cpu_marocchino
     .dcod_immediate_sel_i             (dcod_immediate_sel), // RF
     // from WB
     .wb_rf_wb_i                       (wb_rf_wb), // RF
-    .wb_rfd_adr_i                     (wb_rfd_adr), // RF
+    .wb_rfd_adr_i                     (wb_rfd_adr[OPTION_RF_ADDR_WIDTH-1:0]), // RF
     .wb_result_i                      (wb_result), // RF
     // Outputs
     .dcod_rfa_o                       (dcod_rfa), // RF
@@ -1037,14 +1180,16 @@ module mor1kx_cpu_marocchino
 
   mor1kx_oman_marocchino
   #(
-    .OPTION_OPERAND_WIDTH (OPTION_OPERAND_WIDTH),
-    .OPTION_RF_ADDR_WIDTH (OPTION_RF_ADDR_WIDTH)
+    .OPTION_OPERAND_WIDTH       (OPTION_OPERAND_WIDTH), // OMAN
+    .OPTION_RF_ADDR_WIDTH       (OPTION_RF_ADDR_WIDTH), // OMAN
+    .DEST_REG_ADDR_WIDTH        (DEST_REG_ADDR_WIDTH), // OMAN
+    .DEST_FLAG_ADDR_WIDTH       (DEST_FLAG_ADDR_WIDTH) // OMAN
   )
   u_oman
   (
     // clock & reset
-    .clk                        (clk),
-    .rst                        (rst),
+    .clk                        (clk), // OMAN
+    .rst                        (rst), // OMAN
 
     // pipeline control
     .padv_decode_i              (padv_decode), // OMAN
@@ -1060,7 +1205,6 @@ module mor1kx_cpu_marocchino
     .dcod_op_mul_i              (dcod_op_mul), // OMAN
     .dcod_op_fp32_arith_i       (dcod_op_fp32_arith), // OMAN
     .dcod_op_ls_i               (dcod_op_lsu_load | dcod_op_lsu_store), // OMAN
-    .dcod_op_lsu_atomic_i       (dcod_op_lsu_atomic), // OMAN
     .dcod_op_rfe_i              (dcod_op_rfe), // OMAN
 
     // DECODE non-latched additional information related instruction
@@ -1112,10 +1256,39 @@ module mor1kx_cpu_marocchino
     .dcod_except_syscall_i      (dcod_except_syscall), // OMAN
     .dcod_except_trap_i         (dcod_except_trap), // OMAN
 
-    // EXECUTE-to-DECODE hazards
-    .stall_fetch_o              (stall_fetch), // OMAN
+    // OMAN-to-DECODE hazards
+    //  combined flag
+    .omn2dec_hazards_o          (omn2dec_hazards), // OMAN
+    .omn2dec_hazards_1clk_o     (omn2dec_hazards_1clk), // OMAN
+    //  by FLAG and CARRY
+    .busy_hazard_f_o            (busy_hazard_f), // OMAN
+    .busy_hazard_f_adr_o        (busy_hazard_f_adr), // OMAN
+    .busy_hazard_c_o            (busy_hazard_c), // OMAN
+    .busy_hazard_c_adr_o        (busy_hazard_c_adr), // OMAN
+    //  by operands
+    .busy_hazard_a_o            (busy_hazard_a), // OMAN
+    .busy_hazard_a_adr_o        (busy_hazard_a_adr), // OMAN
+    .busy_hazard_b_o            (busy_hazard_b), // OMAN
+    .busy_hazard_b_adr_o        (busy_hazard_b_adr), // OMAN
+
+    // EXEC-to-DECODE hazards
+    //  combined flag
+    .exe2dec_hazards_o          (exe2dec_hazards), // OMAN
+    .exe2dec_hazards_1clk_o     (exe2dec_hazards_1clk), // OMAN
+    //  by operands
     .exe2dec_hazard_a_o         (exe2dec_hazard_a), // OMAN
     .exe2dec_hazard_b_o         (exe2dec_hazard_b), // OMAN
+    // Data for resolving hazards by passing from DECODE to EXECUTE
+    .exec_flag_wb_o             (exec_flag_wb), // OMAN
+    .exec_carry_wb_o            (exec_carry_wb), // OMAN
+    .exec_flag_carry_adr_o      (exec_flag_carry_adr), // OMAN
+    .exec_rf_wb_o               (exec_rf_wb), // OMAN
+    .exec_rfd_adr_o             (exec_rfd_adr), // OMAN
+
+    // Stall fetch by specific type of hazards
+    .stall_fetch_o              (stall_fetch), // OMAN
+    // Signal to FETCH that target address or flag isn't ready
+    .fetch_waiting_target_o     (fetch_waiting_target), // OMAN
 
     // DECODE result could be processed by EXECUTE
     .dcod_valid_o               (dcod_valid), // OMAN
@@ -1142,8 +1315,11 @@ module mor1kx_cpu_marocchino
     //  ## instruction related information
     .pc_wb_o                    (pc_wb), // OMAN
     .wb_delay_slot_o            (wb_delay_slot), // OMAN
-    .wb_rfd_adr_o               (wb_rfd_adr), // OMAN
+    .wb_rfd_adr_o               (wb_rfd_adr[DEST_REG_ADDR_WIDTH-1:0]), // OMAN
     .wb_rf_wb_o                 (wb_rf_wb), // OMAN
+    .wb_flag_wb_o               (wb_flag_wb), // OMAN
+    .wb_carry_wb_o              (wb_carry_wb), // OMAN
+    .wb_flag_carry_adr_o        (wb_flag_carry_adr), // OMAN
     //  ## RFE processing
     .wb_op_rfe_o                (wb_op_rfe), // OMAN
     //  ## IFETCH exceptions
@@ -1251,8 +1427,8 @@ module mor1kx_cpu_marocchino
   u_ctrl
   (
     // clocks & resets
-    .clk (clk),
-    .rst (rst),
+    .clk                              (clk), // CTRL
+    .rst                              (rst), // CTRL
 
     // Inputs / Outputs for pipeline control signals
     .dcod_insn_valid_i                (dcod_insn_valid), // CTRL
