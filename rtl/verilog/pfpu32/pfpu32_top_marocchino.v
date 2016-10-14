@@ -320,7 +320,7 @@ wire        take_op_fp32_arith;
 wire [31:0] fp32_arith_a;
 wire [31:0] fp32_arith_b;
 
-// reservation station insrtance
+// reservation station instance
 mor1kx_rsrvs_marocchino
 #(
   .OPTION_OPERAND_WIDTH     (32), // FP32_ARITH_RSVRS

@@ -78,13 +78,20 @@ flag is usually computed by EXECUTE while FETCH is fetching delay slot)
  (b) Improvement for FPU-32 stages controls to achieve higher
      pipelinization
 
+
 12 October 2016
   Tomasulo algorithm has been implemented. Simple 2-stages reservation
 stations are used.
 
 
+14 October 2016
+  SRT-4 for integer operands is implemented. Even so it doesn't improve
+CoreMark digits, I'm personally interested in faster variants of integer
+division. Further I'm going to re-use the srt4_kernel module in FPU64
+divider.
+
+
 Primary TODOs:
-  - Implement SRT-4 integer division
   - Implement FPU-64
     (http://opencores.org/or1k/Architecture_Specification#ORFPX64A32)
   - Verify DU

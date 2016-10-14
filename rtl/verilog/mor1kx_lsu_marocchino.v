@@ -378,7 +378,7 @@ module mor1kx_lsu_marocchino
   //  ## PC address width: 32
   localparam LSU_ATTR_WIDTH = 6 + `OR1K_IMM_WIDTH + OPTION_OPERAND_WIDTH;
 
-  // reservation station insrtance
+  // reservation station instance
   mor1kx_rsrvs_marocchino
   #(
     .OPTION_OPERAND_WIDTH     (OPTION_OPERAND_WIDTH), // LSU_RSVRS
