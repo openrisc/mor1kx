@@ -283,6 +283,7 @@ module mor1kx_icache_marocchino
     end
     else begin
       // states
+      // synthesis parallel_case full_case
       case (ic_state)
         IC_IDLE: begin
           if (fetch_excepts_i | flush_by_ctrl_i) // ICACHE FSM keeps idle
@@ -442,6 +443,7 @@ module mor1kx_icache_marocchino
 
     access_lru_history = {(OPTION_ICACHE_WAYS){1'b0}};
 
+    // synthesis parallel_case full_case
     case (ic_state)
       IC_READ: begin
         if (ic_access & hit & ~(fetch_excepts_i | flush_by_ctrl_i)) begin

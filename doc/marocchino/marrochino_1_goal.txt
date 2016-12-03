@@ -68,9 +68,6 @@ Currently, the following options are made NOT CONFIGURABLE:
  FEATURE_PIC              == "ENABLED"
  FEATURE_TIMER            == "ENABLED"
 
-  There is a plan to make NOT CONFIGURABLE at least the following
-options:
-
  FEATURE_FPU              == "ENABLED"
 
 

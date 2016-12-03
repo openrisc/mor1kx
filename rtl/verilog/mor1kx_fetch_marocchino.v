@@ -95,14 +95,25 @@ module mor1kx_fetch_marocchino
   input      [OPTION_OPERAND_WIDTH-1:0] ctrl_branch_except_pc_i,
 
   // to RF
-  output     [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa_adr_o,
-  output     [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_o,
   output                                fetch_rf_adr_valid_o,
+  output     [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa1_adr_o,
+  output     [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb1_adr_o,
+  // for FPU64
+  output     [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa2_adr_o,
+  output     [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb2_adr_o,
+
   // to DECODE
+  output reg                            dcod_insn_valid_o,
   output reg [OPTION_OPERAND_WIDTH-1:0] pc_decode_o,
   output reg     [`OR1K_INSN_WIDTH-1:0] dcod_insn_o,
   output reg                            dcod_delay_slot_o,
-  output reg                            dcod_insn_valid_o,
+  output     [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa1_adr_o,
+  output     [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb1_adr_o,
+  // for FPU64
+  output     [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa2_adr_o,
+  output     [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb2_adr_o,
+  output     [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd2_adr_o,
+
   // exceptions
   output reg                            fetch_except_ibus_err_o,
   output reg                            fetch_except_itlb_miss_o,
@@ -432,9 +443,41 @@ module mor1kx_fetch_marocchino
   end // @ clock
 
   // to RF
-  assign fetch_rfa_adr_o      = s2t_insn_mux[`OR1K_RA_SELECT];
-  assign fetch_rfb_adr_o      = s2t_insn_mux[`OR1K_RB_SELECT];
   assign fetch_rf_adr_valid_o = padv_fetch_i & s2t_ack & ~(flush_by_branch | flush_by_ctrl);
+  assign fetch_rfa1_adr_o     = s2t_insn_mux[`OR1K_RA_SELECT];
+  assign fetch_rfb1_adr_o     = s2t_insn_mux[`OR1K_RB_SELECT];
+
+  // to DECODE
+  assign dcod_rfa1_adr_o = dcod_insn_o[`OR1K_RA_SELECT];
+  assign dcod_rfb1_adr_o = dcod_insn_o[`OR1K_RB_SELECT];
+
+  // to FPU64
+  assign fetch_rfa2_adr_o = s2t_insn_mux[`OR1K_RA_SELECT] + 1'b1;
+  assign fetch_rfb2_adr_o = s2t_insn_mux[`OR1K_RB_SELECT] + 1'b1;
+  // ---
+  reg [(OPTION_RF_ADDR_WIDTH-1):0] dcod_rfa2_adr_r, dcod_rfb2_adr_r, dcod_rfd2_adr_r;
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+      dcod_rfa2_adr_r <= {OPTION_RF_ADDR_WIDTH{1'b0}};
+      dcod_rfb2_adr_r <= {OPTION_RF_ADDR_WIDTH{1'b0}};
+      dcod_rfd2_adr_r <= {OPTION_RF_ADDR_WIDTH{1'b0}};
+    end
+    else if (flush_by_ctrl) begin
+      dcod_rfa2_adr_r <= {OPTION_RF_ADDR_WIDTH{1'b0}};
+      dcod_rfb2_adr_r <= {OPTION_RF_ADDR_WIDTH{1'b0}};
+      dcod_rfd2_adr_r <= {OPTION_RF_ADDR_WIDTH{1'b0}};
+    end
+    else if (padv_fetch_i) begin
+      dcod_rfa2_adr_r <= fetch_rfa2_adr_o;
+      dcod_rfb2_adr_r <= fetch_rfb2_adr_o;
+      dcod_rfd2_adr_r <= s2t_insn_mux[`OR1K_RD_SELECT] + 1'b1;
+    end
+  end // @ clock
+  // ---
+  assign dcod_rfa2_adr_o = dcod_rfa2_adr_r;
+  assign dcod_rfb2_adr_o = dcod_rfb2_adr_r;
+  assign dcod_rfd2_adr_o = dcod_rfd2_adr_r;
 
 
   /********** End of FETCH pipe. Start other logics. **********/
@@ -480,6 +523,7 @@ module mor1kx_fetch_marocchino
   //     so we don't use them here
   always @(*) begin
     ic_refill_allowed = 1'b0;
+    // synthesis parallel_case full_case
     case (ibus_state)
       IMEM_REQ: begin
         if (padv_fetch_i & flush_by_branch) // re-fill isn't allowed due to flushing by branch or mispredict (eq. padv_s1)
@@ -505,12 +549,13 @@ module mor1kx_fetch_marocchino
       ibus_state <= IBUS_IDLE;       // by IBUS error
     end
     else begin
+      // synthesis parallel_case full_case
       case (ibus_state)
         IBUS_IDLE: begin
           if (padv_fetch_i & ~flush_by_ctrl) // eq. padv_s1 (in IDLE state of IBUS FSM)
             ibus_state <= IMEM_REQ;  // idling -> memory system request
         end
-      
+
         IMEM_REQ: begin
           if (fetch_excepts | flush_by_ctrl) begin
             ibus_state <= IBUS_IDLE;  // memory system request -> idling (exceptions or flushing)
@@ -531,7 +576,7 @@ module mor1kx_fetch_marocchino
           else
             ibus_state <= IBUS_IDLE;
         end
-  
+
         IBUS_IC_REFILL: begin
           if (ibus_ack_i) begin
             ibus_adr_o <= next_refill_adr;  // ICACHE refill: next address
@@ -542,7 +587,7 @@ module mor1kx_fetch_marocchino
             end
           end
         end // ic-refill
-  
+
         IBUS_READ: begin
           if (ibus_ack_i) begin
             ibus_req_o <= 1'b0;                 // IBUS read: complete
@@ -553,7 +598,7 @@ module mor1kx_fetch_marocchino
               ibus_state <= IBUS_IDLE;          // IBUS READ -> IDLE
           end
         end // read
-  
+
         default: begin
           ibus_req_o <= 1'b0;           // default
           ibus_adr_o <= {IFOOW{1'b0}};  // default

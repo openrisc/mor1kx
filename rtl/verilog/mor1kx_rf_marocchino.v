@@ -15,8 +15,8 @@
 //   Copyright (C) 2012-2014 Stefan Kristiansson                    //
 //                           stefan.kristiansson@saunalahti.fi      //
 //                                                                  //
-//   Copyright (C) 2015 Andrey Bacherov                             //
-//                      avbacherov@opencores.org                    //
+//   Copyright (C) 2015-2016 Andrey Bacherov                        //
+//                           avbacherov@opencores.org               //
 //                                                                  //
 //      This Source Code Form is subject to the terms of the        //
 //      Open Hardware Description License, v. 1.0. If a copy        //
@@ -47,142 +47,254 @@ module mor1kx_rf_marocchino
   input                                 spr_bus_we_i,
   input      [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_i,
   output reg                            spr_bus_ack_gpr_o,
-  output reg [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_gpr_o,
+  output     [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_gpr_o,
 
   // from FETCH
   input                             fetch_rf_adr_valid_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa_adr_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb_adr_i,
+  input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa1_adr_i,
+  input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb1_adr_i,
+  // for FPU64
+  input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa2_adr_i,
+  input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb2_adr_i,
 
   // from DECODE
-  input                             dcod_rfa_req_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa_adr_i,
-  input                             dcod_rfb_req_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb_adr_i,
+  input                             dcod_rfa1_req_i,
+  input  [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa1_adr_i,
+  input                             dcod_rfb1_req_i,
+  input  [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb1_adr_i,
   input  [OPTION_OPERAND_WIDTH-1:0] dcod_immediate_i,
   input                             dcod_immediate_sel_i,
+  // for FPU64
+  input                             dcod_rfa2_req_i,
+  input  [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa2_adr_i,
+  input                             dcod_rfb2_req_i,
+  input  [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb2_adr_i,
 
   // from WB
-  input                             wb_rf_wb_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd_adr_i,
-  input  [OPTION_OPERAND_WIDTH-1:0] wb_result_i,
+  input                             wb_rfd1_wb_i,
+  input  [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd1_adr_i,
+  input  [OPTION_OPERAND_WIDTH-1:0] wb_result1_i,
+  // for FPU64
+  input                             wb_rfd2_wb_i,
+  input  [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd2_adr_i,
+  input  [OPTION_OPERAND_WIDTH-1:0] wb_result2_i,
 
   // outputs
-  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfa_o,
-  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb_o
+  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfa1_o,
+  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_o,
+  // for FPU64
+  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfa2_o,
+  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb2_o
 );
+
+  // short names
+  localparam RF_AW = OPTION_RF_ADDR_WIDTH;
+  localparam RF_DW = OPTION_OPERAND_WIDTH;
+
 
   //-----------//
   // FETCH->RF //
   //-----------//
 
-  // ram blocks controls
-  wire [OPTION_OPERAND_WIDTH-1:0] rfa_dout;
-  wire [OPTION_OPERAND_WIDTH-1:0] rfb_dout;
+  // ram blocks outputs
+  wire [(RF_DW-1):0] rfa_even_dout;
+  wire [(RF_DW-1):0] rfa_odd_dout;
+  wire [(RF_DW-1):0] rfb_even_dout;
+  wire [(RF_DW-1):0] rfb_odd_dout;
 
   // SPR/GPR access from bus signals
-  reg  spr_gpr_we_r;
+  wire spr_gpr_we;
   wire spr_gpr_cs;
 
 
-  // 1-clock strobe for GPR write
+  // short name for read request
+  wire read_req = fetch_rf_adr_valid_i;
+
+
+  // 1-clock witting strobes for GPR write
   //  - writting act could be blocked by exceptions processing
   //    because the istruction isn't completed and
   //    will be restarted by l.rfe
-  wire wb_rf_we = wb_rf_wb_i & ~pipeline_flush_i;
+
+  //  write in even
+  wire write_even_req = (wb_rfd1_wb_i & ~wb_rfd1_adr_i[0]) | (wb_rfd2_wb_i & ~wb_rfd2_adr_i[0]) | (spr_gpr_we & ~spr_bus_addr_i[0]);
+  // write in odd
+  wire write_odd_req = (wb_rfd1_wb_i & wb_rfd1_adr_i[0]) | (wb_rfd2_wb_i & wb_rfd2_adr_i[0]) | (spr_gpr_we & spr_bus_addr_i[0]);
 
 
-  // operand A read/write request attributes
-  //  # read request attributes
-  wire                            opa_read_req  = fetch_rf_adr_valid_i;
-  wire [OPTION_RF_ADDR_WIDTH-1:0] opa_read_addr = fetch_rfa_adr_i;
-  //  # read request attributes
-  wire                            opa_write_req  = wb_rf_we | spr_gpr_we_r;
-  wire [OPTION_RF_ADDR_WIDTH-1:0] opa_write_addr = wb_rf_we ? wb_rfd_adr_i : spr_bus_addr_i;
-  wire [OPTION_OPERAND_WIDTH-1:0] opa_write_data = wb_rf_we ? wb_result_i  : spr_bus_dat_i;
+  // even/odd multiplexing of input addresses and data
+  //  if A(B)'s address is odd than A2(B2)=A(B)+1 is even and vise verse
 
-  // operand A read/write conflict
-  wire opa_rw_hazard = (opa_write_req &  opa_read_req & (opa_write_addr == opa_read_addr)) |
-                       (wb_rf_we      & ~opa_read_req & (wb_rfd_adr_i == dcod_rfa_adr_i));
+  //    operand A-even address
+  wire [(RF_AW-1):0] fetch_rfa_even_addr = fetch_rfa1_adr_i[0] ? fetch_rfa2_adr_i : fetch_rfa1_adr_i;
+  //    operand A-odd address
+  wire [(RF_AW-1):0] fetch_rfa_odd_addr  = fetch_rfa1_adr_i[0] ? fetch_rfa1_adr_i : fetch_rfa2_adr_i;
 
-  // operand A form control signals for Read/Write port rwp_*
-  wire                            opa_rwp_en    = opa_read_req | opa_rw_hazard;
-  wire                            opa_rwp_write = opa_rw_hazard;
-  wire [OPTION_RF_ADDR_WIDTH-1:0] opa_rwp_addr  = opa_rw_hazard ? opa_write_addr : opa_read_addr;
+  //    operand B-even address
+  wire [(RF_AW-1):0] fetch_rfb_even_addr = fetch_rfb1_adr_i[0] ? fetch_rfb2_adr_i : fetch_rfb1_adr_i;
+  //    operand B-odd address
+  wire [(RF_AW-1):0] fetch_rfb_odd_addr  = fetch_rfb1_adr_i[0] ? fetch_rfb1_adr_i : fetch_rfb2_adr_i;
 
-  // operand A form control signals for Write port wp_*
-  wire opa_wp_en    = opa_write_req & ~opa_rw_hazard;
+  //    Write Back even address & data
+  wire [(RF_AW-1):0] wb_even_addr = wb_rfd1_adr_i[0] ? wb_rfd2_adr_i : wb_rfd1_adr_i;
+  wire [(RF_DW-1):0] wb_even_data = wb_rfd1_adr_i[0] ? wb_result2_i  : wb_result1_i;
+  //    Write Back odd address & data
+  wire [(RF_AW-1):0] wb_odd_addr = wb_rfd1_adr_i[0] ? wb_rfd1_adr_i : wb_rfd2_adr_i;
+  wire [(RF_DW-1):0] wb_odd_data = wb_rfd1_adr_i[0] ? wb_result1_i  : wb_result2_i;
 
-  // instance RF-A
+  //  write even address & data
+  wire [(RF_AW-1):0] write_even_addr = spr_gpr_we ? spr_bus_addr_i[(RF_AW-1):0] : wb_even_addr;
+  wire [(RF_DW-1):0] write_even_data = spr_gpr_we ? spr_bus_dat_i               : wb_even_data;
+  //  write odd address & data
+  wire [(RF_AW-1):0] write_odd_addr = spr_gpr_we ? spr_bus_addr_i[(RF_AW-1):0] : wb_odd_addr;
+  wire [(RF_DW-1):0] write_odd_data = spr_gpr_we ? spr_bus_dat_i               : wb_odd_data;
+
+
+  // Controls for A-even RAM block
+  //  # read/write conflict
+  wire rfa_even_hazard = (write_even_req &  read_req &  (write_even_addr == fetch_rfa_even_addr)) |
+                         (write_even_req & ~read_req & ((write_even_addr == dcod_rfa1_adr_i) |
+                                                        (write_even_addr == dcod_rfa2_adr_i)));
+  //  # signals for Read/Write port *_rwp_*
+  wire               rfa_even_rwp_en   = rfa_even_hazard | read_req;
+  wire               rfa_even_rwp_we   = rfa_even_hazard;
+  wire [(RF_AW-2):0] rfa_even_rwp_addr = rfa_even_hazard ? write_even_addr[(RF_AW-1):1] : fetch_rfa_even_addr[(RF_AW-1):1];
+  //  # signals for Write port *_wp_*
+  wire rfa_even_wp_en = write_even_req & ~rfa_even_hazard;
+  //  # RFA-even RAM-block instance
   mor1kx_dpram_en_w1st_sclk
   #(
-    .ADDR_WIDTH     (OPTION_RF_ADDR_WIDTH),
-    .DATA_WIDTH     (OPTION_OPERAND_WIDTH),
+    .ADDR_WIDTH     (RF_AW-1),
+    .DATA_WIDTH     (RF_DW),
     .CLEAR_ON_INIT  (OPTION_RF_CLEAR_ON_INIT)
   )
-  rfa
+  rfa_even
   (
     // common clock
-    .clk (clk),
+    .clk    (clk),
     // port "a": Read / Write (for RW-conflict case)
-    .en_a   (opa_rwp_en),     // enable port "a"
-    .we_a   (opa_rwp_write),  // operation is "write"
-    .addr_a (opa_rwp_addr),
-    .din_a  (opa_write_data),
-    .dout_a (rfa_dout),
+    .en_a   (rfa_even_rwp_en & ~pipeline_flush_i),
+    .we_a   (rfa_even_rwp_we),
+    .addr_a (rfa_even_rwp_addr),
+    .din_a  (write_even_data),
+    .dout_a (rfa_even_dout),
     // port "b": Write if no RW-conflict
-    .en_b   (opa_wp_en),      // enable port "b"
-    .we_b   (opa_wp_en),      // operation is "write"
-    .addr_b (opa_write_addr),
-    .din_b  (opa_write_data),
-    .dout_b ()                // not used
+    .en_b   (rfa_even_wp_en & ~pipeline_flush_i),
+    .we_b   (write_even_req),
+    .addr_b (write_even_addr[(RF_AW-1):1]),
+    .din_b  (write_even_data),
+    .dout_b ()
   );
 
 
-  // operand B read/write request attributes
-  //  # read request attributes
-  wire                            opb_read_req  = fetch_rf_adr_valid_i;
-  wire [OPTION_RF_ADDR_WIDTH-1:0] opb_read_addr = fetch_rfb_adr_i;
-  //  # read request attributes
-  wire                            opb_write_req  = wb_rf_we | spr_gpr_we_r;
-  wire [OPTION_RF_ADDR_WIDTH-1:0] opb_write_addr = wb_rf_we ? wb_rfd_adr_i : spr_bus_addr_i;
-  wire [OPTION_OPERAND_WIDTH-1:0] opb_write_data = wb_rf_we ? wb_result_i  : spr_bus_dat_i;
-
-  // operand B read/write conflict
-  wire opb_rw_hazard = (opb_write_req &  opb_read_req & (opb_read_addr == opb_write_addr)) |
-                       (wb_rf_we      & ~opb_read_req & (wb_rfd_adr_i == dcod_rfb_adr_i));
-
-  // operand B form control signals for Read/Write port rwp_*
-  wire                            opb_rwp_en    = opb_read_req | opb_rw_hazard;
-  wire                            opb_rwp_write = opb_rw_hazard;
-  wire [OPTION_RF_ADDR_WIDTH-1:0] opb_rwp_addr  = opb_rw_hazard ? opb_write_addr : opb_read_addr;
-
-  // operand B form control signals for Write port wp_*
-  wire opb_wp_en    = opb_write_req & ~opb_rw_hazard;
-
-  // instance RF-B
+  // Controls for A-odd RAM block
+  //  # read/write conflict
+  wire rfa_odd_hazard = (write_odd_req &  read_req &  (write_odd_addr == fetch_rfa_odd_addr)) |
+                        (write_odd_req & ~read_req & ((write_odd_addr == dcod_rfa1_adr_i) |
+                                                      (write_odd_addr == dcod_rfa2_adr_i)));
+  //  # signals for Read/Write port *_rwp_*
+  wire               rfa_odd_rwp_en   = rfa_odd_hazard | read_req;
+  wire               rfa_odd_rwp_we   = rfa_odd_hazard;
+  wire [(RF_AW-2):0] rfa_odd_rwp_addr = rfa_odd_hazard ? write_odd_addr[(RF_AW-1):1] : fetch_rfa_odd_addr[(RF_AW-1):1];
+  //  # signals for Write port *_wp_*
+  wire rfa_odd_wp_en = write_odd_req & ~rfa_odd_hazard;
+  //  # RFA-odd RAM-block instance
   mor1kx_dpram_en_w1st_sclk
   #(
-    .ADDR_WIDTH     (OPTION_RF_ADDR_WIDTH),
-    .DATA_WIDTH     (OPTION_OPERAND_WIDTH),
+    .ADDR_WIDTH     (RF_AW-1),
+    .DATA_WIDTH     (RF_DW),
     .CLEAR_ON_INIT  (OPTION_RF_CLEAR_ON_INIT)
   )
-  rfb
+  rfa_odd
   (
     // common clock
-    .clk (clk),
+    .clk    (clk),
     // port "a": Read / Write (for RW-conflict case)
-    .en_a   (opb_rwp_en),     // enable port "a"
-    .we_a   (opb_rwp_write),  // operation is "write"
-    .addr_a (opb_rwp_addr),
-    .din_a  (opb_write_data),
-    .dout_a (rfb_dout),
+    .en_a   (rfa_odd_rwp_en & ~pipeline_flush_i),
+    .we_a   (rfa_odd_rwp_we),
+    .addr_a (rfa_odd_rwp_addr),
+    .din_a  (write_odd_data),
+    .dout_a (rfa_odd_dout),
     // port "b": Write if no RW-conflict
-    .en_b   (opb_wp_en),      // enable port "b"
-    .we_b   (opb_wp_en),      // operation is "write"
-    .addr_b (opb_write_addr),
-    .din_b  (opb_write_data),
-    .dout_b ()                // not used
+    .en_b   (rfa_odd_wp_en & ~pipeline_flush_i),
+    .we_b   (write_odd_req),
+    .addr_b (write_odd_addr[(RF_AW-1):1]),
+    .din_b  (write_odd_data),
+    .dout_b ()
+  );
+
+
+  // Controls for B-even RAM block
+  //  # read/write conflict
+  wire rfb_even_hazard = (write_even_req &  read_req &  (write_even_addr == fetch_rfb_even_addr)) |
+                         (write_even_req & ~read_req & ((write_even_addr == dcod_rfb1_adr_i) |
+                                                        (write_even_addr == dcod_rfb2_adr_i)));
+  //  # signals for Read/Write port *_rwp_*
+  wire               rfb_even_rwp_en   = rfb_even_hazard | read_req;
+  wire               rfb_even_rwp_we   = rfb_even_hazard;
+  wire [(RF_AW-2):0] rfb_even_rwp_addr = rfb_even_hazard ? write_even_addr[(RF_AW-1):1] : fetch_rfb_even_addr[(RF_AW-1):1];
+  //  # signals for Write port *_wp_*
+  wire rfb_even_wp_en = write_even_req & ~rfb_even_hazard;
+  //  # RFA-even RAM-block instance
+  mor1kx_dpram_en_w1st_sclk
+  #(
+    .ADDR_WIDTH     (RF_AW-1),
+    .DATA_WIDTH     (RF_DW),
+    .CLEAR_ON_INIT  (OPTION_RF_CLEAR_ON_INIT)
+  )
+  rfb_even
+  (
+    // common clock
+    .clk    (clk),
+    // port "a": Read / Write (for RW-conflict case)
+    .en_a   (rfb_even_rwp_en & ~pipeline_flush_i),
+    .we_a   (rfb_even_rwp_we),
+    .addr_a (rfb_even_rwp_addr),
+    .din_a  (write_even_data),
+    .dout_a (rfb_even_dout),
+    // port "b": Write if no RW-conflict
+    .en_b   (rfb_even_wp_en & ~pipeline_flush_i),
+    .we_b   (write_even_req),
+    .addr_b (write_even_addr[(RF_AW-1):1]),
+    .din_b  (write_even_data),
+    .dout_b ()
+  );
+
+
+  // Controls for B-odd RAM block
+  //  # read/write conflict
+  wire rfb_odd_hazard = (write_odd_req &  read_req &  (write_odd_addr == fetch_rfb_odd_addr)) |
+                        (write_odd_req & ~read_req & ((write_odd_addr == dcod_rfb1_adr_i) |
+                                                      (write_odd_addr == dcod_rfb2_adr_i)));
+  //  # signals for Read/Write port *_rwp_*
+  wire               rfb_odd_rwp_en   = rfb_odd_hazard | read_req;
+  wire               rfb_odd_rwp_we   = rfb_odd_hazard;
+  wire [(RF_AW-2):0] rfb_odd_rwp_addr = rfb_odd_hazard ? write_odd_addr[(RF_AW-1):1] : fetch_rfb_odd_addr[(RF_AW-1):1];
+  //  # signals for Write port *_wp_*
+  wire rfb_odd_wp_en = write_odd_req & ~rfb_odd_hazard;
+  //  # RFA-odd RAM-block instance
+  mor1kx_dpram_en_w1st_sclk
+  #(
+    .ADDR_WIDTH     (RF_AW-1),
+    .DATA_WIDTH     (RF_DW),
+    .CLEAR_ON_INIT  (OPTION_RF_CLEAR_ON_INIT)
+  )
+  rfb_odd
+  (
+    // common clock
+    .clk    (clk),
+    // port "a": Read / Write (for RW-conflict case)
+    .en_a   (rfb_odd_rwp_en & ~pipeline_flush_i),
+    .we_a   (rfb_odd_rwp_we),
+    .addr_a (rfb_odd_rwp_addr),
+    .din_a  (write_odd_data),
+    .dout_a (rfb_odd_dout),
+    // port "b": Write if no RW-conflict
+    .en_b   (rfb_odd_wp_en & ~pipeline_flush_i),
+    .we_b   (write_odd_req),
+    .addr_b (write_odd_addr[(RF_AW-1):1]),
+    .din_b  (write_odd_data),
+    .dout_b ()
   );
 
 
@@ -191,22 +303,25 @@ module mor1kx_rf_marocchino
   //---------------//
 
   // detect GPR access
-  assign spr_gpr_cs = spr_bus_stb_i & (spr_bus_addr_i == `OR1K_SPR_GPR0_ADDR);
+  //  !!! low bits of SPR-address are used for addressing RF !!!
+  assign spr_gpr_cs = spr_bus_stb_i & (spr_bus_addr_i[15:10] == 6'b000001); // see OR1K_SPR_GPR0_ADDR
 
   generate
   /* verilator lint_off WIDTH */
-  if (FEATURE_DEBUGUNIT != "NONE") begin : rfspr_gen
+  if (FEATURE_DEBUGUNIT != "NONE") begin : rfspr_enabled
   /* verilator lint_on WIDTH */
 
-    wire [OPTION_OPERAND_WIDTH-1:0] rfspr_dout;
+    wire [(RF_DW-1):0] rfspr_dout;
 
-    //  we don't expect R/W-collisions for SPRbus vs WB cycles since 
+    //  we don't expect R/W-collisions for SPRbus vs WB cycles since
     //    SPRbus access start 1-clock later than WB
     //    thanks to MT(F)SPR processing logic (see OMAN)
 
-    reg spr_gpr_re_r;
-    reg spr_gpr_mux_r;
-  
+    reg               spr_gpr_we_r;
+    reg               spr_gpr_re_r;
+    reg               spr_gpr_mux_r;
+    reg [(RF_DW-1):0] spr_bus_dat_gpr_r;
+
     // SPR processing cycle
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst) begin
@@ -214,62 +329,73 @@ module mor1kx_rf_marocchino
         spr_gpr_re_r      <= 1'b0;
         spr_gpr_mux_r     <= 1'b0;
         spr_bus_ack_gpr_o <= 1'b0;
-        spr_bus_dat_gpr_o <= {OPTION_OPERAND_WIDTH{1'b0}};
+        spr_bus_dat_gpr_r <= {RF_DW{1'b0}};
       end
       else if (spr_bus_ack_gpr_o) begin
         spr_gpr_we_r      <= 1'b0;
         spr_gpr_re_r      <= 1'b0;
         spr_gpr_mux_r     <= 1'b0;
         spr_bus_ack_gpr_o <= 1'b0;
-        spr_bus_dat_gpr_o <= {OPTION_OPERAND_WIDTH{1'b0}};
+        spr_bus_dat_gpr_r <= {RF_DW{1'b0}};
       end
       else if (spr_gpr_mux_r) begin
         spr_gpr_we_r      <= 1'b0;
         spr_gpr_re_r      <= 1'b0;
         spr_gpr_mux_r     <= 1'b0;
         spr_bus_ack_gpr_o <= 1'b1;
-        spr_bus_dat_gpr_o <= rfspr_dout;
+        spr_bus_dat_gpr_r <= rfspr_dout;
       end
       else if (spr_gpr_re_r) begin
         spr_gpr_we_r      <= 1'b0;
         spr_gpr_re_r      <= 1'b0;
         spr_gpr_mux_r     <= 1'b1;
         spr_bus_ack_gpr_o <= 1'b0;
-        spr_bus_dat_gpr_o <= {OPTION_OPERAND_WIDTH{1'b0}};
+        spr_bus_dat_gpr_r <= {RF_DW{1'b0}};
       end
       else if (spr_gpr_cs) begin
         spr_gpr_we_r      <= spr_bus_we_i;
         spr_gpr_re_r      <= ~spr_bus_we_i;
         spr_gpr_mux_r     <= 1'b0;
         spr_bus_ack_gpr_o <= spr_bus_we_i; // write on next posedge of clock and finish
-        spr_bus_dat_gpr_o <= {OPTION_OPERAND_WIDTH{1'b0}};
+        spr_bus_dat_gpr_r <= {RF_DW{1'b0}};
       end
     end // @ clock
-  
-    wire                            rfspr_wren = wb_rf_we | spr_gpr_we_r;
-    wire [OPTION_RF_ADDR_WIDTH-1:0] rfspr_addr = wb_rf_we ? wb_rfd_adr_i : spr_bus_addr_i;
-    wire [OPTION_OPERAND_WIDTH-1:0] rfspr_din  = wb_rf_we ? wb_result_i  : spr_bus_dat_i;
-  
-    mor1kx_spram_en_w1st
+
+    assign spr_gpr_we        = spr_gpr_we_r;
+    assign spr_bus_dat_gpr_o = spr_bus_dat_gpr_r;
+
+    // for port #1 we write result #1 and read by debug unit
+    wire               rfspr_p1_we    = wb_rfd1_wb_i | spr_gpr_we;
+    wire [(RF_AW-1):0] rfspr_p1_addr  = wb_rfd1_wb_i ? wb_rfd1_adr_i : spr_bus_addr_i[(RF_AW-1):0];
+    wire [(RF_DW-1):0] rfspr_p1_data  = wb_rfd1_wb_i ? wb_result1_i  : spr_bus_dat_i;
+
+    // ---
+    mor1kx_dpram_en_w1st_sclk
     #(
-       .ADDR_WIDTH    (OPTION_RF_ADDR_WIDTH),
-       .DATA_WIDTH    (OPTION_OPERAND_WIDTH),
-       .CLEAR_ON_INIT (OPTION_RF_CLEAR_ON_INIT)
+      .ADDR_WIDTH     (RF_AW),
+      .DATA_WIDTH     (RF_DW),
+      .CLEAR_ON_INIT  (OPTION_RF_CLEAR_ON_INIT)
     )
     rfspr
     (
-      // clock
-      .clk  (clk),
-      // port
-      .en   (rfspr_wren | spr_gpr_re_r), // enable port
-      .we   (rfspr_wren),
-      .addr (rfspr_addr),
-      .din  (rfspr_din),
-      .dout (rfspr_dout)
+      // common clock
+      .clk    (clk),
+      // port "a"
+      .en_a   ((rfspr_p1_we | spr_gpr_re_r) & ~pipeline_flush_i),
+      .we_a   (rfspr_p1_we),
+      .addr_a (rfspr_p1_addr),
+      .din_a  (rfspr_p1_data),
+      .dout_a (rfspr_dout),
+      // port "b": just write result #2
+      .en_b   (wb_rfd2_wb_i & ~pipeline_flush_i),
+      .we_b   (wb_rfd2_wb_i),
+      .addr_b (wb_rfd2_adr_i),
+      .din_b  (wb_result2_i),
+      .dout_b ()
     );
 
   end
-  else begin
+  else begin : rfspr_disabled
 
     // make ACK
     always @(posedge clk `OR_ASYNC_RST) begin
@@ -281,11 +407,11 @@ module mor1kx_rf_marocchino
         spr_bus_ack_gpr_o <= 1'b1;
     end
 
-    // data to output
-    always @(posedge clk) begin
-      spr_gpr_we_r      <= 1'b0;
-      spr_bus_dat_gpr_o <= {OPTION_OPERAND_WIDTH{1'b0}};
-    end
+    // SPR data output
+    assign spr_bus_dat_gpr_o = {RF_DW{1'b0}};
+
+    // Write by SPR-bus command
+    assign spr_gpr_we = 1'b0;
 
   end
   endgenerate
@@ -295,15 +421,45 @@ module mor1kx_rf_marocchino
   // DECODE stage (dcod_*) //
   //-----------------------//
 
-  //  WB-to-DECODE hazard
-  wire dcod_wb2dec_hazard_a = wb_rf_we & dcod_rfa_req_i & (wb_rfd_adr_i == dcod_rfa_adr_i);
-  wire dcod_wb2dec_hazard_b = wb_rf_we & dcod_rfb_req_i & (wb_rfd_adr_i == dcod_rfb_adr_i);
+  // RFA-output
+  //  # WB-to-DECODE hazard
+  wire dcod_wb2dec_hazard_d1a1 = wb_rfd1_wb_i & dcod_rfa1_req_i & (wb_rfd1_adr_i == dcod_rfa1_adr_i);
+  wire dcod_wb2dec_hazard_d2a1 = wb_rfd2_wb_i & dcod_rfa1_req_i & (wb_rfd2_adr_i == dcod_rfa1_adr_i);
+  //  # muxing and forwarding
+  assign dcod_rfa1_o = dcod_wb2dec_hazard_d1a1 ? wb_result1_i :
+                       dcod_wb2dec_hazard_d2a1 ? wb_result2_i :
+                       dcod_rfa1_adr_i[0]      ? rfa_odd_dout :
+                                                 rfa_even_dout;
 
-  assign dcod_rfa_o = dcod_wb2dec_hazard_a ? wb_result_i :
-                                             rfa_dout;
+  // RFB-output
+  //  # WB-to-DECODE hazard
+  wire dcod_wb2dec_hazard_d1b1 = wb_rfd1_wb_i & dcod_rfb1_req_i & (wb_rfd1_adr_i == dcod_rfb1_adr_i);
+  wire dcod_wb2dec_hazard_d2b1 = wb_rfd2_wb_i & dcod_rfb1_req_i & (wb_rfd2_adr_i == dcod_rfb1_adr_i);
+  //  # muxing and forwarding
+  assign dcod_rfb1_o = dcod_immediate_sel_i    ? dcod_immediate_i :
+                       dcod_wb2dec_hazard_d1b1 ? wb_result1_i     :
+                       dcod_wb2dec_hazard_d2b1 ? wb_result2_i     :
+                       dcod_rfb1_adr_i[0]      ? rfb_odd_dout     :
+                                                 rfb_even_dout;
 
-  assign dcod_rfb_o = dcod_immediate_sel_i ? dcod_immediate_i :
-                      dcod_wb2dec_hazard_b ? wb_result_i      :
-                                             rfb_dout;
+  // RFA2-output
+  //  # WB-to-DECODE hazard
+  wire dcod_wb2dec_hazard_d2a2 = wb_rfd2_wb_i & dcod_rfa2_req_i & (wb_rfd2_adr_i == dcod_rfa2_adr_i);
+  wire dcod_wb2dec_hazard_d1a2 = wb_rfd1_wb_i & dcod_rfa2_req_i & (wb_rfd1_adr_i == dcod_rfa2_adr_i);
+  //  # muxing and forwarding
+  assign dcod_rfa2_o = dcod_wb2dec_hazard_d2a2 ? wb_result2_i :
+                       dcod_wb2dec_hazard_d1a2 ? wb_result1_i :
+                       dcod_rfa2_adr_i[0]      ? rfa_odd_dout :
+                                                 rfa_even_dout;
+
+  // RFB2-output
+  //  # WB-to-DECODE hazard
+  wire dcod_wb2dec_hazard_d2b2 = wb_rfd2_wb_i & dcod_rfb2_req_i & (wb_rfd2_adr_i == dcod_rfb2_adr_i);
+  wire dcod_wb2dec_hazard_d1b2 = wb_rfd1_wb_i & dcod_rfb2_req_i & (wb_rfd1_adr_i == dcod_rfb2_adr_i);
+  //  # muxing and forwarding
+  assign dcod_rfb2_o = dcod_wb2dec_hazard_d2b2 ? wb_result2_i :
+                       dcod_wb2dec_hazard_d1b2 ? wb_result1_i :
+                       dcod_rfb2_adr_i[0]      ? rfb_odd_dout :
+                                                 rfb_even_dout;
 
 endmodule // mor1kx_rf_marocchino

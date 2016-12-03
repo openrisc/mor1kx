@@ -48,6 +48,7 @@ module mor1kx_cfgrs
     parameter FEATURE_PMU                = "NONE",
     parameter FEATURE_MAC                = "NONE",
     parameter FEATURE_FPU                = "NONE",
+    parameter FEATURE_FPU64              = "NONE",
 
     parameter OPTION_PIC_TRIGGER         = "LEVEL",
 
@@ -100,7 +101,7 @@ module mor1kx_cfgrs
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OB32S] = 1;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OB64S] = 0;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OF32S] = (FEATURE_FPU!="NONE");
-   assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OF64S] = 0;
+   assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OF64S] = (FEATURE_FPU64!="NONE");
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_OV64S] = 0;
    assign spr_cpucfgr[`OR1K_SPR_CPUCFGR_ND] = (FEATURE_DELAYSLOT=="NONE");
    /* AVR will always be present in mor1kx */
@@ -145,10 +146,10 @@ module mor1kx_cfgrs
    assign spr_dmmucfgr[`OR1K_SPR_DMMUFGR_NAE] = 0;
    /* Number of TLB sets */
    assign spr_dmmucfgr[`OR1K_SPR_DMMUFGR_NTS] = (FEATURE_DMMU!="NONE") ?
-						OPTION_DMMU_SET_WIDTH : 0;
+                  OPTION_DMMU_SET_WIDTH : 0;
    /* Number of TLB ways */
    assign spr_dmmucfgr[`OR1K_SPR_DMMUFGR_NTW] = (FEATURE_DMMU!="NONE") ?
-						OPTION_DMMU_WAYS-1 : 0;
+                  OPTION_DMMU_WAYS-1 : 0;
 
    /* Instruction MMU Configuration Register */
    /* Reserved */
@@ -165,10 +166,10 @@ module mor1kx_cfgrs
    assign spr_immucfgr[`OR1K_SPR_IMMUFGR_NAE] = 0;
    /* Number of TLB sets */
    assign spr_immucfgr[`OR1K_SPR_IMMUFGR_NTS] = (FEATURE_IMMU!="NONE") ?
-						OPTION_IMMU_SET_WIDTH : 0;
+                  OPTION_IMMU_SET_WIDTH : 0;
    /* Number of TLB ways */
    assign spr_immucfgr[`OR1K_SPR_IMMUFGR_NTW] = (FEATURE_IMMU!="NONE") ?
-						OPTION_IMMU_WAYS-1 : 0;
+                  OPTION_IMMU_WAYS-1 : 0;
 
    /* Data Cache Configuration register */
    /* Reserved */
@@ -190,7 +191,7 @@ module mor1kx_cfgrs
    /* Cache Block Size (0 = 16 bytes, 1 = 32 bytes) */
    assign spr_dccfgr[`OR1K_SPR_DCCFGR_CBS] = (FEATURE_DATACACHE!="NONE") ?
                                              (OPTION_DCACHE_BLOCK_WIDTH == 5 ?
-					      1 : 0) :  0;
+                     1 : 0) :  0;
   /* Number of Cache Sets */
    assign spr_dccfgr[`OR1K_SPR_DCCFGR_NCS] = (FEATURE_DATACACHE!="NONE") ?
                                              OPTION_DCACHE_SET_WIDTH : 0;
@@ -219,7 +220,7 @@ module mor1kx_cfgrs
    /* Cache Block Size (0 = 16 bytes, 1 = 32 bytes) */
    assign spr_iccfgr[`OR1K_SPR_ICCFGR_CBS] = (FEATURE_INSTRUCTIONCACHE!="NONE") ?
                                              (OPTION_ICACHE_BLOCK_WIDTH == 5 ?
-					      1 : 0) :  0;
+                     1 : 0) :  0;
   /* Number of Cache Sets */
    assign spr_iccfgr[`OR1K_SPR_ICCFGR_NCS] = (FEATURE_INSTRUCTIONCACHE!="NONE") ?
                                              OPTION_ICACHE_SET_WIDTH : 0;

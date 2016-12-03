@@ -385,6 +385,7 @@ module mor1kx_dcache_marocchino
       end
 
       // states switching
+      // synthesis parallel_case full_case
       case (dc_state)
         DC_IDLE: begin
           spr_bus_ack_o <= 1'b0; // idling
@@ -543,6 +544,7 @@ module mor1kx_dcache_marocchino
       end
     end
     else begin
+      // synthesis parallel_case full_case
       case (dc_state)
         DC_READ: begin
           if (dc_access & dc_hit & ~dc_force_idle) begin // on read-hit

@@ -406,6 +406,7 @@ module mor1kx_dmmu_marocchino
       dtlb_match_reload_we  <= 1'b0;
       dtlb_match_reload_din <= {OPTION_OPERAND_WIDTH{1'b0}};
 
+      // synthesis parallel_case full_case
       case (tlb_reload_state)
         TLB_IDLE: begin
           tlb_reload_huge   <= 1'b0;

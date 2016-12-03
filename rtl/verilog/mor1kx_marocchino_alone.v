@@ -81,8 +81,6 @@ module mor1kx_marocchino_alone
   parameter FEATURE_PSYNC              = "NONE",
   parameter FEATURE_CSYNC              = "NONE",
 
-  parameter FEATURE_FPU                = "NONE", // ENABLED|NONE: actual for cappuccino pipeline only
-
   parameter FEATURE_MULTICORE          = "NONE",
 
   parameter FEATURE_TRACEPORT_EXEC     = "NONE",
@@ -298,8 +296,7 @@ module mor1kx_marocchino_alone
     .OPTION_RESET_PC                  (OPTION_RESET_PC),
      // arithmetic modules
     .FEATURE_PSYNC                    (FEATURE_PSYNC),
-    .FEATURE_CSYNC                    (FEATURE_CSYNC),
-    .FEATURE_FPU                      (FEATURE_FPU)
+    .FEATURE_CSYNC                    (FEATURE_CSYNC)
   )
   u_cpu_marocchino
   (

@@ -1,55 +1,56 @@
 /////////////////////////////////////////////////////////////////////
-////                                                             ////
-////  pfpu32_cmp_marocchino                                      ////
-////  32-bit floating point comparision                          ////
-////                                                             ////
-////  Author: Rudolf Usselmann                                   ////
-////          rudi@asics.ws                                      ////
-////                                                             ////
-////  Modified by Julius Baxter, July, 2010                      ////
-////              julius.baxter@orsoc.se                         ////
-////                                                             ////
-////  Update for mor1kx, bug fixing and further development      ////
-////  Update for MAROCCHINO pipeline                             ////
-////    (a) latch comparision result separately from arithmetic  ////
-////              Andrey Bacherov, 2014, 2015                    ////
-////              avbacherov@opencores.org                       ////
-////                                                             ////
+//                                                                 //
+//    pfpu32_cmp_marocchino                                        //
+//    32-bit floating point comparision                            //
+//                                                                 //
+//    Author: Rudolf Usselmann                                     //
+//            rudi@asics.ws                                        //
+//                                                                 //
+//    Modified by Julius Baxter, July, 2010                        //
+//                julius.baxter@orsoc.se                           //
+//                                                                 //
+//    Update for mor1kx, bug fixing and further development        //
+//    Update for MAROCCHINO pipeline                               //
+//      (a) latch comparision result separately from arithmetic    //
+//                Andrey Bacherov, 2014, 2015                      //
+//                avbacherov@opencores.org                         //
+//                                                                 //
 /////////////////////////////////////////////////////////////////////
-////                                                             ////
-//// Copyright (C) 2000 Rudolf Usselmann                         ////
-////                    rudi@asics.ws                            ////
-////                                                             ////
-//// This source file may be used and distributed without        ////
-//// restriction provided that this copyright statement is not   ////
-//// removed from the file and that any derivative work contains ////
-//// the original copyright notice and the associated disclaimer.////
-////                                                             ////
-////     THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY     ////
-//// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED   ////
-//// TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS   ////
-//// FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL THE AUTHOR      ////
-//// OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,         ////
-//// INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES    ////
-//// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE   ////
-//// GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR        ////
-//// BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF  ////
-//// LIABILITY, WHETHER IN  CONTRACT, STRICT LIABILITY, OR TORT  ////
-//// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT  ////
-//// OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE         ////
-//// POSSIBILITY OF SUCH DAMAGE.                                 ////
-////                                                             ////
+//                                                                 //
+//   Copyright (C) 2000 Rudolf Usselmann                           //
+//                      rudi@asics.ws                              //
+//                                                                 //
+//   This source file may be used and distributed without          //
+//   restriction provided that this copyright statement is not     //
+//   removed from the file and that any derivative work contains   //
+//   the original copyright notice and the associated disclaimer.  //
+//                                                                 //
+//       THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY       //
+//   EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     //
+//   TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS     //
+//   FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL THE AUTHOR        //
+//   OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,           //
+//   INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES      //
+//   (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE     //
+//   GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR          //
+//   BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF    //
+//   LIABILITY, WHETHER IN  CONTRACT, STRICT LIABILITY, OR TORT    //
+//   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    //
+//   OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE           //
+//   POSSIBILITY OF SUCH DAMAGE.                                   //
+//                                                                 //
 /////////////////////////////////////////////////////////////////////
 
 `include "mor1kx-defines.v"
 
 module pfpu32_fcmp_marocchino
 (
-  // clocks, resets and other controls
+  // clock and reset
   input                               clk,
   input                               rst,
-  input                               flush_i,  // flush pipe
-  input                               padv_wb_i,// advance output latches
+  // pipeline controls
+  input                               pipeline_flush_i,     // flush pipe
+  input                               padv_wb_i,            // advance output latches
   input                               grant_wb_to_1clk_i,
   // command
   input                               op_fp32_cmp_i,
@@ -115,8 +116,8 @@ wire in_opb_0  = ~(|rfb_i[30:0]);
 wire in_opb_dn = (~(|in_expb)) & (|in_fractb);
 
 // restored exponents
-wire [9:0] in_exp10a = {2'd0,in_expa[7:1],(in_expa[0] | in_opa_dn)};
-wire [9:0] in_exp10b = {2'd0,in_expb[7:1],(in_expb[0] | in_opb_dn)};
+wire  [7:0] in_exp8a = {in_expa[7:1],(in_expa[0] | in_opa_dn)};
+wire  [7:0] in_exp8b = {in_expb[7:1],(in_expb[0] | in_opb_dn)};
 // restored fractionals
 wire [23:0] in_fract24a = {((~in_opa_dn) & (~in_opa_0)),in_fracta};
 wire [23:0] in_fract24b = {((~in_opb_dn) & (~in_opb_0)),in_fractb};
@@ -135,9 +136,9 @@ wire inv_cmp = (snan & (opc_fp32_cmp_i == FP_OPC_SFEQ)) |
 
 ////////////////////////////////////////////////////////////////////////
 // Comparison Logic
-wire exp_gt = in_exp10a  > in_exp10b;
-wire exp_eq = in_exp10a == in_exp10b;
-wire exp_lt = (~exp_gt) & (~exp_eq); // in_exp10a  < in_exp10b;
+wire exp_gt = in_exp8a  > in_exp8b;
+wire exp_eq = in_exp8a == in_exp8b;
+wire exp_lt = (~exp_gt) & (~exp_eq); // in_exp8a  < in_exp8b;
 
 wire fract_gt = in_fract24a  > in_fract24b;
 wire fract_eq = in_fract24a == in_fract24b;
@@ -150,10 +151,13 @@ reg altb, blta, aeqb;
 always @( qnan or snan or in_infa or in_infb or in_signa or in_signb or
           exp_eq or exp_gt or exp_lt or
           fract_eq or fract_gt or fract_lt or all_zero) begin
-
-  casez( {qnan, snan, in_infa, in_infb, in_signa, in_signb,
-          exp_eq, exp_gt, exp_lt,
-          fract_eq, fract_gt, fract_lt, all_zero})
+  // synthesis parallel_case full_case
+  casez( {qnan,     snan,
+          in_infa,  in_infb,
+          in_signa, in_signb,
+          exp_eq,   exp_gt,   exp_lt,
+          fract_eq, fract_gt, fract_lt,
+          all_zero})
     13'b1?_??_??_???_???_?: {blta, altb, aeqb} = 3'b000; // qnan
     13'b?1_??_??_???_???_?: {blta, altb, aeqb} = 3'b000; // snan
 
@@ -199,6 +203,7 @@ end // @ clock
 // Comparison cmp_flag generation
 reg cmp_flag;
 always @(altb or blta or aeqb or opc_fp32_cmp_i) begin
+  // synthesis parallel_case full_case
   case(opc_fp32_cmp_i)
     FP_OPC_SFEQ: cmp_flag = aeqb;
     FP_OPC_SFNE: cmp_flag = ~aeqb;
@@ -243,7 +248,7 @@ always @(posedge clk `OR_ASYNC_RST) begin
     // comparison exception
     wb_except_fp32_cmp_o <= 1'b0;
   end
-  else if(flush_i) begin
+  else if(pipeline_flush_i) begin
     // comparison results
     wb_fp32_flag_set_o   <= 1'b0;
     wb_fp32_flag_clear_o <= 1'b0;
@@ -270,7 +275,7 @@ end // posedge clock
 always @(posedge clk `OR_ASYNC_RST) begin
   if (rst)
     wb_fp32_cmp_wb_fpcsr_o <= 1'b0;
-  else if (flush_i)
+  else if (pipeline_flush_i)
     wb_fp32_cmp_wb_fpcsr_o <= 1'b0;
   else if (padv_wb_i)
     wb_fp32_cmp_wb_fpcsr_o <= grant_wb_to_fp32_cmp;

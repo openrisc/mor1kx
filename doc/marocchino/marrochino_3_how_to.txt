@@ -34,8 +34,6 @@ mor1kx_marocchino_alone
   .IBUS_WB_TYPE("B3_REGISTERED_FEEDBACK"),
   .DBUS_WB_TYPE("B3_REGISTERED_FEEDBACK"),
 
-  .FEATURE_FPU("ENABLED"), // ENABLED | NONE
-
   .OPTION_RESET_PC(32'hf0000100)
 )
 u_mor1kx_marocchino
@@ -94,13 +92,16 @@ u_mor1kx_marocchino
  your_path/mor1kx/rtl/verilog/mor1kx_dpram_en_w1st_sclk.v
  your_path/mor1kx/rtl/verilog/mor1kx_ocb_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_oman_marocchino.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_addsub_marocchino.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_cmp_marocchino.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_f2i_marocchino.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_i2f_marocchino.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_muldiv_marocchino.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_rnd_marocchino.v
- your_path/mor1kx/rtl/verilog/pfpu32/pfpu32_top_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu32_cmp_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu64_cmp_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_addsub_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_f2i_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_i2f_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_mul_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_div_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_muldiv_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_rnd_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_top_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_bus_if_wb32.v
  your_path/mor1kx/rtl/verilog/mor1kx_cache_lru.v
  your_path/mor1kx/rtl/verilog/mor1kx_immu_marocchino.v

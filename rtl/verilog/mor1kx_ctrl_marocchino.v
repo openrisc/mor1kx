@@ -56,7 +56,6 @@ module mor1kx_ctrl_marocchino
   parameter FEATURE_PERFCOUNTERS      = "NONE",
   parameter FEATURE_PMU               = "NONE",
   parameter FEATURE_MAC               = "NONE",
-  parameter FEATURE_FPU               = "NONE",
   parameter FEATURE_MULTICORE         = "NONE",
 
   parameter OPTION_PIC_TRIGGER        = "LEVEL",
@@ -80,9 +79,9 @@ module mor1kx_ctrl_marocchino
 
   // MF(T)SPR coomand processing
   //  ## iput data and command from DECODE
-  input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfa_i, // part of addr for MT(F)SPR
+  input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfa1_i, // part of addr for MT(F)SPR
   input           [`OR1K_IMM_WIDTH-1:0] dcod_imm16_i, // part of addr for MT(F)SPR
-  input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb_i, // data for MTSPR
+  input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_i, // data for MTSPR
   input                                 dcod_op_mfspr_i,
   input                                 dcod_op_mtspr_i,
   //  ## result to WB_MUX
@@ -152,6 +151,8 @@ module mor1kx_ctrl_marocchino
   input                                 wb_int_flag_clear_i,
   input                                 wb_fp32_flag_set_i,
   input                                 wb_fp32_flag_clear_i,
+  input                                 wb_fp64_flag_set_i,
+  input                                 wb_fp64_flag_clear_i,
   input                                 wb_atomic_flag_set_i,
   input                                 wb_atomic_flag_clear_i,
 
@@ -168,15 +169,22 @@ module mor1kx_ctrl_marocchino
   input                                 wb_1clk_overflow_clear_i,
 
   //  # FPX32 related flags
-  //    ## arithmetic part
-  input     [`OR1K_FPCSR_ALLF_SIZE-1:0] wb_fp32_arith_fpcsr_i,
-  input                                 wb_fp32_arith_wb_fpcsr_i,
-  input                                 wb_except_fp32_arith_i,
   //    ## comparison part
   input                                 wb_fp32_cmp_inv_i,
   input                                 wb_fp32_cmp_inf_i,
   input                                 wb_fp32_cmp_wb_fpcsr_i,
   input                                 wb_except_fp32_cmp_i,
+
+  //  # FPX3264 arithmetic part
+  input     [`OR1K_FPCSR_ALLF_SIZE-1:0] wb_fpxx_arith_fpcsr_i,
+  input                                 wb_fpxx_arith_wb_fpcsr_i,
+  input                                 wb_except_fpxx_arith_i,
+  //  # FPX64 comparison part
+  input                                 wb_fp64_cmp_inv_i,
+  input                                 wb_fp64_cmp_inf_i,
+  input                                 wb_fp64_cmp_wb_fpcsr_i,
+  input                                 wb_except_fp64_cmp_i,
+
   //  # Excepion processing auxiliaries
   //    ## Exception PC input coming from the store buffer
   input      [OPTION_OPERAND_WIDTH-1:0] sbuf_eear_i,
@@ -300,12 +308,12 @@ module mor1kx_ctrl_marocchino
   wire [31:0]                       spr_iccfgr;
   wire [31:0]                       spr_dcfgr;
   wire [31:0]                       spr_pccfgr;
-  wire [31:0]                       spr_isr [0:7];
+  //wire [31:0]                       spr_isr [0:7];
 
 
   // Flag output
-  wire   ctrl_flag_clear = wb_int_flag_clear_i | wb_fp32_flag_clear_i | wb_atomic_flag_clear_i;
-  wire   ctrl_flag_set   = wb_int_flag_set_i   | wb_fp32_flag_set_i   | wb_atomic_flag_set_i;
+  wire   ctrl_flag_clear = wb_int_flag_clear_i | wb_fp32_flag_clear_i | wb_fp64_flag_clear_i | wb_atomic_flag_clear_i;
+  wire   ctrl_flag_set   = wb_int_flag_set_i   | wb_fp32_flag_set_i   | wb_fp64_flag_set_i   | wb_atomic_flag_set_i;
   // ---
   assign ctrl_flag_o     = (~ctrl_flag_clear) & (ctrl_flag_set | spr_sr[`OR1K_SPR_SR_F]);
 
@@ -335,7 +343,8 @@ module mor1kx_ctrl_marocchino
   // collect exceptions from all units
   wire exception_re = wb_fd_an_except_i        |
                       wb_except_overflow_div_i | wb_except_overflow_1clk_i |
-                      wb_except_fp32_cmp_i     | wb_except_fp32_arith_i    |
+                      wb_except_fp32_cmp_i     | wb_except_fp64_cmp_i      |
+                      wb_except_fpxx_arith_i   |
                       wb_an_except_lsu_i       | sbuf_err_i                |
                       wb_an_interrupt_i;
 
@@ -344,6 +353,7 @@ module mor1kx_ctrl_marocchino
     if (rst)
       exception_pc_addr <= {19'd0,`OR1K_RESET_VECTOR,8'd0};
     else if (exception_re) begin
+      // synthesis parallel_case full_case
       casez({wb_except_itlb_miss_i,
              wb_except_ipagefault_i,
              wb_except_ibus_err_i,
@@ -354,9 +364,9 @@ module mor1kx_ctrl_marocchino
              wb_except_dtlb_miss_i,
              wb_except_dpagefault_i,
              wb_except_trap_i,
-             (wb_except_dbus_err_i     | sbuf_err_i),
+             (wb_except_dbus_err_i | sbuf_err_i),
              (wb_except_overflow_div_i | wb_except_overflow_1clk_i),
-             (wb_except_fp32_cmp_i     | wb_except_fp32_arith_i),
+             (wb_except_fp32_cmp_i | wb_except_fp64_cmp_i | wb_except_fpxx_arith_i),
              wb_pic_interrupt_i,
              wb_tt_interrupt_i
             })
@@ -479,63 +489,48 @@ module mor1kx_ctrl_marocchino
   //-----------------------------------//
 
   assign except_fpu_enable_o = spr_fpcsr[`OR1K_FPCSR_FPEE];
-  
-  generate
-  /* verilator lint_off WIDTH */
-  if (FEATURE_FPU != "NONE") begin : fpu_csr_en
-  /* verilator lint_on WIDTH */
 
-    wire spr_fpcsr_we = spr_sys_group_cs &
-                        (`SPR_OFFSET(spr_bus_addr_o) == `SPR_OFFSET(`OR1K_SPR_FPCSR_ADDR)) &
-                        spr_sys_group_wr_r &  spr_sr[`OR1K_SPR_SR_SM];
+  wire spr_fpcsr_we = spr_sys_group_cs &
+                      (`SPR_OFFSET(spr_bus_addr_o) == `SPR_OFFSET(`OR1K_SPR_FPCSR_ADDR)) &
+                      spr_sys_group_wr_r &  spr_sr[`OR1K_SPR_SR_SM];
 
-   `ifdef OR1K_FPCSR_MASK_FLAGS
-    reg [`OR1K_FPCSR_ALLF_SIZE-1:0] ctrl_fpu_mask_flags_r;
-    // ---
-    always @(posedge clk `OR_ASYNC_RST) begin
-      if (rst)
-        ctrl_fpu_mask_flags_r <= {`OR1K_FPCSR_ALLF_SIZE{1'b1}};
-      else if (spr_fpcsr_we)
-        ctrl_fpu_mask_flags_r <= spr_bus_dat_o[`OR1K_FPCSR_MASK_ALL];
-    end // FPCSR reg's always(@posedge clk)
-    // ---
-    assign ctrl_fpu_mask_flags_o = ctrl_fpu_mask_flags_r;         // FPU-enabled, "masking FPU flags" enabled
-   `else
-    assign ctrl_fpu_mask_flags_o = {`OR1K_FPCSR_ALLF_SIZE{1'b1}}; // FPU-enabled, "masking FPU flags" disabled
-   `endif
+ `ifdef OR1K_FPCSR_MASK_FLAGS
+  reg [`OR1K_FPCSR_ALLF_SIZE-1:0] ctrl_fpu_mask_flags_r;
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      ctrl_fpu_mask_flags_r <= {`OR1K_FPCSR_ALLF_SIZE{1'b1}};
+    else if (spr_fpcsr_we)
+      ctrl_fpu_mask_flags_r <= spr_bus_dat_o[`OR1K_FPCSR_MASK_ALL];
+  end // FPCSR reg's always(@posedge clk)
+  // ---
+  assign ctrl_fpu_mask_flags_o = ctrl_fpu_mask_flags_r;         // FPU-enabled, "masking FPU flags" enabled
+ `else
+  assign ctrl_fpu_mask_flags_o = {`OR1K_FPCSR_ALLF_SIZE{1'b1}}; // FPU-enabled, "masking FPU flags" disabled
+ `endif
 
-    assign ctrl_fpu_round_mode_o = spr_fpcsr[`OR1K_FPCSR_RM];
+  assign ctrl_fpu_round_mode_o = spr_fpcsr[`OR1K_FPCSR_RM];
 
-    // collect FPx flags
-    wire [`OR1K_FPCSR_ALLF_SIZE-1:0] fpx_flags = {1'b0, wb_fp32_cmp_inf_i, wb_fp32_cmp_inv_i, 6'd0} |
-                                                 wb_fp32_arith_fpcsr_i;
+  // collect FPx flags
+  wire [`OR1K_FPCSR_ALLF_SIZE-1:0] fpx_flags = {1'b0, wb_fp32_cmp_inf_i, wb_fp32_cmp_inv_i, 6'd0} |
+                                               {1'b0, wb_fp64_cmp_inf_i, wb_fp64_cmp_inv_i, 6'd0} |
+                                               wb_fpxx_arith_fpcsr_i;
 
-    // FPU Control & Status Register
-    always @(posedge clk `OR_ASYNC_RST) begin
-      if (rst)
-        spr_fpcsr <= `OR1K_FPCSR_RESET_VALUE;
-      else if (spr_fpcsr_we)
-        spr_fpcsr <= spr_bus_dat_o[`OR1K_FPCSR_WIDTH-1:0]; // update all fields
-      else if (wb_fp32_cmp_wb_fpcsr_i | wb_fp32_arith_wb_fpcsr_i)
-        spr_fpcsr <= {fpx_flags, spr_fpcsr[`OR1K_FPCSR_RM], spr_fpcsr[`OR1K_FPCSR_FPEE]};
-    end
-
+  // FPU Control & Status Register
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      spr_fpcsr <= `OR1K_FPCSR_RESET_VALUE;
+    else if (spr_fpcsr_we)
+      spr_fpcsr <= spr_bus_dat_o[`OR1K_FPCSR_WIDTH-1:0]; // update all fields
+    else if (wb_fp32_cmp_wb_fpcsr_i | wb_fp64_cmp_wb_fpcsr_i | wb_fpxx_arith_wb_fpcsr_i)
+      spr_fpcsr <= {fpx_flags, spr_fpcsr[`OR1K_FPCSR_RM], spr_fpcsr[`OR1K_FPCSR_FPEE]};
   end
-  else begin : fpu_csr_none
-
-    assign ctrl_fpu_mask_flags_o = {`OR1K_FPCSR_ALLF_SIZE{1'b0}}; // FPU-disabled
-    assign ctrl_fpu_round_mode_o = {`OR1K_FPCSR_RM_SIZE{1'b0}}; // FPU-disabled
-
-    // FPU Control & status register
-    always @(posedge clk `OR_ASYNC_RST) begin
-      spr_fpcsr <= {`OR1K_FPCSR_WIDTH{1'b0}};
-    end // FPCSR reg's always(@posedge clk)
-
-  end
-  endgenerate // FPU related: FPCSR and exceptions
 
 
-  // Supervision register
+  //----------------------//
+  // Supervision register //
+  //----------------------//
+
   // WB: External Interrupt Collection
   assign  tt_interrupt_enable_o  = spr_sr[`OR1K_SPR_SR_TEE];
   assign  pic_interrupt_enable_o = spr_sr[`OR1K_SPR_SR_IEE];
@@ -699,7 +694,7 @@ module mor1kx_ctrl_marocchino
         spr_npc <= stepped_into_exception  ? exception_pc_addr  :
                    stepped_into_rfe        ? spr_epcr           :
                    stepped_into_delay_slot ? last_branch_target :
-                                             spr_npc;      
+                                             spr_npc;
       end
     end
   end // @ clock
@@ -724,23 +719,24 @@ module mor1kx_ctrl_marocchino
     .OPTION_RF_NUM_SHADOW_GPR        (0), // mor1kx_cfgrs instance: marocchino
     .FEATURE_OVERFLOW                ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .FEATURE_DATACACHE               ("ENABLED"), // mor1kx_cfgrs instance: marocchino
-    .OPTION_DCACHE_BLOCK_WIDTH       (OPTION_DCACHE_BLOCK_WIDTH), // mor1kx_cfgrs instance: 
-    .OPTION_DCACHE_SET_WIDTH         (OPTION_DCACHE_SET_WIDTH), // mor1kx_cfgrs instance: 
-    .OPTION_DCACHE_WAYS              (OPTION_DCACHE_WAYS), // mor1kx_cfgrs instance: 
+    .OPTION_DCACHE_BLOCK_WIDTH       (OPTION_DCACHE_BLOCK_WIDTH), // mor1kx_cfgrs instance:
+    .OPTION_DCACHE_SET_WIDTH         (OPTION_DCACHE_SET_WIDTH), // mor1kx_cfgrs instance:
+    .OPTION_DCACHE_WAYS              (OPTION_DCACHE_WAYS), // mor1kx_cfgrs instance:
     .FEATURE_DMMU                    ("ENABLED"), // mor1kx_cfgrs instance: marocchino
-    .OPTION_DMMU_SET_WIDTH           (OPTION_DMMU_SET_WIDTH), // mor1kx_cfgrs instance: 
-    .OPTION_DMMU_WAYS                (OPTION_DMMU_WAYS), // mor1kx_cfgrs instance: 
+    .OPTION_DMMU_SET_WIDTH           (OPTION_DMMU_SET_WIDTH), // mor1kx_cfgrs instance:
+    .OPTION_DMMU_WAYS                (OPTION_DMMU_WAYS), // mor1kx_cfgrs instance:
     .FEATURE_INSTRUCTIONCACHE        ("ENABLED"), // mor1kx_cfgrs instance: marocchino
-    .OPTION_ICACHE_BLOCK_WIDTH       (OPTION_ICACHE_BLOCK_WIDTH), // mor1kx_cfgrs instance: 
-    .OPTION_ICACHE_SET_WIDTH         (OPTION_ICACHE_SET_WIDTH), // mor1kx_cfgrs instance: 
-    .OPTION_ICACHE_WAYS              (OPTION_ICACHE_WAYS), // mor1kx_cfgrs instance: 
+    .OPTION_ICACHE_BLOCK_WIDTH       (OPTION_ICACHE_BLOCK_WIDTH), // mor1kx_cfgrs instance:
+    .OPTION_ICACHE_SET_WIDTH         (OPTION_ICACHE_SET_WIDTH), // mor1kx_cfgrs instance:
+    .OPTION_ICACHE_WAYS              (OPTION_ICACHE_WAYS), // mor1kx_cfgrs instance:
     .FEATURE_IMMU                    ("ENABLED"), // mor1kx_cfgrs instance: marocchino
-    .OPTION_IMMU_SET_WIDTH           (OPTION_IMMU_SET_WIDTH), // mor1kx_cfgrs instance: 
-    .OPTION_IMMU_WAYS                (OPTION_IMMU_WAYS), // mor1kx_cfgrs instance: 
-    .FEATURE_DEBUGUNIT               (FEATURE_DEBUGUNIT), // mor1kx_cfgrs instance: 
-    .FEATURE_PERFCOUNTERS            (FEATURE_PERFCOUNTERS), // mor1kx_cfgrs instance: 
-    .FEATURE_MAC                     (FEATURE_MAC), // mor1kx_cfgrs instance: 
-    .FEATURE_FPU                     (FEATURE_FPU), // mor1kx_cfgrs instance: marocchino
+    .OPTION_IMMU_SET_WIDTH           (OPTION_IMMU_SET_WIDTH), // mor1kx_cfgrs instance:
+    .OPTION_IMMU_WAYS                (OPTION_IMMU_WAYS), // mor1kx_cfgrs instance:
+    .FEATURE_DEBUGUNIT               (FEATURE_DEBUGUNIT), // mor1kx_cfgrs instance:
+    .FEATURE_PERFCOUNTERS            (FEATURE_PERFCOUNTERS), // mor1kx_cfgrs instance:
+    .FEATURE_MAC                     (FEATURE_MAC), // mor1kx_cfgrs instance:
+    .FEATURE_FPU                     ("ENABLED"), // mor1kx_cfgrs instance: marocchino
+    .FEATURE_FPU64                   ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .FEATURE_SYSCALL                 ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .FEATURE_TRAP                    ("ENABLED"), // mor1kx_cfgrs instance: marocchino
     .FEATURE_RANGE                   ("ENABLED"), // mor1kx_cfgrs instance: marocchino
@@ -764,14 +760,16 @@ module mor1kx_ctrl_marocchino
   );
 
   // Implementation-specific registers
-  assign spr_isr[0] = 0;
-  assign spr_isr[1] = 0;
-  assign spr_isr[2] = 0;
-  assign spr_isr[3] = 0;
-  assign spr_isr[4] = 0;
-  assign spr_isr[5] = 0;
-  assign spr_isr[6] = 0;
-  assign spr_isr[7] = 0;
+  /*
+  assign spr_isr[0] = 32'd0;
+  assign spr_isr[1] = 32'd0;
+  assign spr_isr[2] = 32'd0;
+  assign spr_isr[3] = 32'd0;
+  assign spr_isr[4] = 32'd0;
+  assign spr_isr[5] = 32'd0;
+  assign spr_isr[6] = 32'd0;
+  assign spr_isr[7] = 32'd0;
+  */
 
 
   //---------------------------------------------------------------------------//
@@ -786,7 +784,7 @@ module mor1kx_ctrl_marocchino
   wire take_access_du = (~take_op_mXspr) & (~spr_bus_wait_r) & du_stb_i;
 
   // SPR address for latch
-  wire [15:0] spr_addr_mux = take_op_mXspr ? (dcod_rfa_i[15:0] | dcod_imm16_i) :
+  wire [15:0] spr_addr_mux = take_op_mXspr ? (dcod_rfa1_i[15:0] | dcod_imm16_i) :
                                               du_addr_i;
 
   // Is accessiblr SPR is present
@@ -794,6 +792,7 @@ module mor1kx_ctrl_marocchino
   reg spr_access_valid_reg; // SPR ACK in case of access to not existing modules
   //---
   always @(*) begin
+    // synthesis parallel_case full_case
     case(`SPR_BASE(spr_addr_mux))
       // system registers
       `OR1K_SPR_SYS_BASE:  spr_access_valid_mux = 1'b1;
@@ -808,7 +807,7 @@ module mor1kx_ctrl_marocchino
       `OR1K_SPR_PM_BASE:   spr_access_valid_mux = (FEATURE_PMU          != "NONE");
       `OR1K_SPR_PIC_BASE:  spr_access_valid_mux = 1'b1;
       `OR1K_SPR_TT_BASE:   spr_access_valid_mux = 1'b1;
-      `OR1K_SPR_FPU_BASE:  spr_access_valid_mux = 1'b0; // FEATURE_FPU: actual FPU implementation havn't got control registers
+      `OR1K_SPR_FPU_BASE:  spr_access_valid_mux = 1'b0; // actual FPU implementation havn't got control registers
       // invalid if the group is not present in the design
       default:             spr_access_valid_mux = 1'b0;
     endcase
@@ -850,7 +849,7 @@ module mor1kx_ctrl_marocchino
         spr_bus_addr_o <= spr_addr_mux;
         spr_bus_we_o   <= take_op_mXspr ? dcod_op_mtspr_i : du_we_i;
         spr_bus_stb_o  <= 1'b1;
-        spr_bus_dat_o  <= take_op_mXspr ? dcod_rfb_i : du_dat_i;
+        spr_bus_dat_o  <= take_op_mXspr ? dcod_rfb1_i : du_dat_i;
       end
       // Wait SPR ACK regardless on access validity
       spr_bus_wait_r <= 1'b1;
@@ -866,6 +865,7 @@ module mor1kx_ctrl_marocchino
   reg [OPTION_OPERAND_WIDTH-1:0]    spr_sys_group_dat;
   // ---
   always @(*) begin
+    // synthesis parallel_case full_case
     case(`SPR_OFFSET(spr_bus_addr_o))
       `SPR_OFFSET(`OR1K_SPR_VR_ADDR)      : spr_sys_group_dat = spr_vr;
       `SPR_OFFSET(`OR1K_SPR_UPR_ADDR)     : spr_sys_group_dat = spr_upr;
@@ -890,14 +890,14 @@ module mor1kx_ctrl_marocchino
       `SPR_OFFSET(`OR1K_SPR_FPCSR_ADDR)   : spr_sys_group_dat = {{(OPTION_OPERAND_WIDTH-`OR1K_FPCSR_WIDTH){1'b0}},
                                                                   spr_fpcsr};
      `endif
-      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR)    : spr_sys_group_dat = spr_isr[0];
-      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +1 : spr_sys_group_dat = spr_isr[1];
-      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +2 : spr_sys_group_dat = spr_isr[2];
-      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +3 : spr_sys_group_dat = spr_isr[3];
-      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +4 : spr_sys_group_dat = spr_isr[4];
-      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +5 : spr_sys_group_dat = spr_isr[5];
-      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +6 : spr_sys_group_dat = spr_isr[6];
-      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +7 : spr_sys_group_dat = spr_isr[7];
+      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR)    : spr_sys_group_dat = {OPTION_OPERAND_WIDTH{1'b0}}; // spr_isr[0];
+      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +1 : spr_sys_group_dat = {OPTION_OPERAND_WIDTH{1'b0}}; // spr_isr[1];
+      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +2 : spr_sys_group_dat = {OPTION_OPERAND_WIDTH{1'b0}}; // spr_isr[2];
+      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +3 : spr_sys_group_dat = {OPTION_OPERAND_WIDTH{1'b0}}; // spr_isr[3];
+      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +4 : spr_sys_group_dat = {OPTION_OPERAND_WIDTH{1'b0}}; // spr_isr[4];
+      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +5 : spr_sys_group_dat = {OPTION_OPERAND_WIDTH{1'b0}}; // spr_isr[5];
+      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +6 : spr_sys_group_dat = {OPTION_OPERAND_WIDTH{1'b0}}; // spr_isr[6];
+      `SPR_OFFSET(`OR1K_SPR_ISR0_ADDR) +7 : spr_sys_group_dat = {OPTION_OPERAND_WIDTH{1'b0}}; // spr_isr[7];
       `SPR_OFFSET(`OR1K_SPR_EPCR0_ADDR)   : spr_sys_group_dat = spr_epcr;
       `SPR_OFFSET(`OR1K_SPR_EEAR0_ADDR)   : spr_sys_group_dat = spr_eear;
       `SPR_OFFSET(`OR1K_SPR_ESR0_ADDR)    : spr_sys_group_dat = {{(OPTION_OPERAND_WIDTH-SPR_SR_WIDTH){1'b0}},
@@ -931,8 +931,7 @@ module mor1kx_ctrl_marocchino
       spr_bus_ack_sys_group <=  1'b0;
       spr_bus_dat_sys_group <= 32'd0;
     end
-    else if (spr_sys_group_cs &
-             (`SPR_OFFSET(spr_bus_addr_o) != `SPR_OFFSET(`OR1K_SPR_GPR0_ADDR))) begin
+    else if (spr_sys_group_cs & (spr_bus_addr_o[15:10] != 6'b000001)) begin // and not acceess to GPR (see OR1K_SPR_GPR0_ADDR)
       if (spr_bus_we_o) begin
         spr_sys_group_wr_r    <=  1'b1;
         spr_bus_ack_sys_group <=  1'b1;
@@ -972,10 +971,14 @@ module mor1kx_ctrl_marocchino
 
 
   // MFSPR data and flag for WB_MUX
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      wb_mfspr_dat_o <= {OPTION_OPERAND_WIDTH{1'b0}};
-    else if (padv_wb_o)
+ `ifndef SYNTHESIS
+  // synthesis translate_off
+  initial wb_mfspr_dat_o = {OPTION_OPERAND_WIDTH{1'b0}};
+  // synthesis translate_on
+ `endif // !synth
+  // ---
+  always @(posedge clk) begin
+    if (padv_wb_o)
       wb_mfspr_dat_o <= {OPTION_OPERAND_WIDTH{spr_bus_mXspr_r}} & spr_bus_dat_mux;
   end // @clock
 
