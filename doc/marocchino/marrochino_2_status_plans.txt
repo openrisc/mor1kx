@@ -90,6 +90,7 @@ CoreMark digits, I'm personally interested in faster variants of integer
 division. Further I'm going to re-use the srt4_kernel module in FPU64
 divider.
 
+
 3 December 2016
   FEATURE_FPU has been opened
   Combined single/double precision FPU pipes are implemented to save
@@ -99,7 +100,17 @@ CPU level. Combine reservation stations for multiplier, divider and FPU
 into common M-clk station. Implement all data hazards resolving in
 reservation stations.
   Massive re-naming to achieve more consistent naming system.
-  
+
+
+14 January 2017
+  Speculative write back for LSU has been implemented. The technique
+decrease DCACHE's and DMMU's outputs participation in pipe control logic.
+In next turn it improves timing, so router is able to meet constrains easily.
+  Remove redundancy for hazards resolving in reservation stations.
+In fact extension bits are enough.
+  Corrections in hierarchy of some registers.
+  Corrections in comments to simplify source exploring.
+
 
 
 Primary TODOs:

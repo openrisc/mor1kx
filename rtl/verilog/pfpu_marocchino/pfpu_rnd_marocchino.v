@@ -342,7 +342,7 @@ module pfpu_rnd_marocchino
       s1o_f2i_ovf <= f2i_ovf_i;
       s1o_f2i     <= f2i_rdy_i;
     end // advance
-  end // posedge clock
+  end // @clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -354,7 +354,7 @@ module pfpu_rnd_marocchino
       s1o_ready <= 1'b1;
     else if (padv_wb_i & grant_wb_to_fpxx_arith_i)
       s1o_ready <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 
   /* Stage #2: rounding */
@@ -476,15 +476,6 @@ module pfpu_rnd_marocchino
 
 
   // WB: result
- `ifndef SYNTHESIS
-  // synthesis translate_off
-  initial begin
-    wb_fpxx_arith_res_hi_o = 32'd0;
-    wb_fpxx_arith_res_lo_o = 32'd0;
-  end
-  // synthesis translate_on
- `endif // !synth
-  // ---
   always @(posedge clk) begin
     if(padv_wb_i) begin
       // for WB-result #1
@@ -494,7 +485,7 @@ module pfpu_rnd_marocchino
       wb_fpxx_arith_res_lo_o <= s2t_opc64[31:0] &
                                 {32{grant_wb_to_fpxx_arith_i & s1o_op_fp64_arith}};
     end
-  end // posedge clock
+  end // @clock
 
   // WB: exception
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -510,7 +501,7 @@ module pfpu_rnd_marocchino
       wb_fpxx_arith_fpcsr_o  <= exec_fpxx_arith_fpcsr;
       wb_except_fpxx_arith_o <= exec_except_fpxx_arith;
     end
-  end // posedge clock
+  end // @clock
 
   // WB: update FPCSR (1-clock to prevent extra writes into FPCSR)
   always @(posedge clk `OR_ASYNC_RST) begin

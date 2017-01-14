@@ -135,14 +135,6 @@ module mor1kx_dmmu_marocchino
   genvar                           i;
 
 
-  // Enable for RAM blocks if:
-  //  1) regular LSU advance
-  //     (we don't care about exceptions here, because
-  //      we force local enable-r OFF if an exception is asserted)
-  //  2) SPR access
-  wire ram_re = (lsu_takes_ls_i & enable_i) | spr_dmmu_re_r;
-
-
   // Stored "DMMU enable" and "Supevisor Mode" flags
   // (for masking DMMU output flags, but not for advancing)
   reg enable_r;
@@ -516,6 +508,14 @@ module mor1kx_dmmu_marocchino
     end
   end // HW/SW reload
   endgenerate
+
+
+  // Enable for RAM blocks if:
+  //  1) regular LSU advance
+  //     (we don't care about exceptions here, because
+  //      we force local enable-r OFF if an exception is asserted)
+  //  2) SPR access
+  wire ram_re = (lsu_takes_ls_i & enable_i) | spr_dmmu_re_r;
 
 
   generate

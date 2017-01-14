@@ -132,7 +132,7 @@ module pfpu_ocb_marocchino
       ptr_curr <= (ptr_curr << 1);
     else if(ptr_curr_dec)
       ptr_curr <= (ptr_curr >> 1);
-  end // posedge clock
+  end // @clock
 
   // update pointer on previous tap
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -144,7 +144,7 @@ module pfpu_ocb_marocchino
       ptr_prev <= ptr_curr[NUM_TAPS-1:0];
     else if(ptr_prev_dec)
       ptr_prev <= (ptr_prev >> 1);
-  end // posedge clock
+  end // @clock
 
 
   // enable signals for taps

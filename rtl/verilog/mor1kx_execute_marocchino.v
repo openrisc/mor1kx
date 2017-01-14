@@ -95,7 +95,7 @@ module mor1kx_multiplier_marocchino
       mul_s1_ah <= exec_mul_a1_i[MULDW-1:MULHDW];
       mul_s1_bh <= exec_mul_b1_i[MULDW-1:MULHDW];
     end
-  end // posedge clock
+  end // @clock
   //  ready flag
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
@@ -106,7 +106,7 @@ module mor1kx_multiplier_marocchino
       mul_s1_rdy <= 1'b1;
     else if (mul_adv_s2)
       mul_s1_rdy <= 1'b0;
-  end // posedge clock
+  end // @clock
 
   // stage #2: partial products
   reg [MULDW-1:0] mul_s2_albl;
@@ -119,7 +119,7 @@ module mor1kx_multiplier_marocchino
       mul_s2_ahbl <= mul_s1_ah * mul_s1_bl;
       mul_s2_bhal <= mul_s1_bh * mul_s1_al;
     end
-  end // posedge clock
+  end // @clock
   //  ready flag
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
@@ -130,7 +130,7 @@ module mor1kx_multiplier_marocchino
       mul_s2_rdy <= 1'b1;
     else if (padv_wb_i & grant_wb_to_mul_i)
       mul_s2_rdy <= 1'b0;
-  end // posedge clock
+  end // @clock
 
   // stage #3: result
   wire [MULDW-1:0] mul_s3t_sum;
@@ -138,16 +138,10 @@ module mor1kx_multiplier_marocchino
                        {mul_s2_ahbl[MULHDW-1:0],{MULHDW{1'b0}}} +
                         mul_s2_albl;
   //  registering
- `ifndef SYNTHESIS
-  // synthesis translate_off
-  initial wb_mul_result_o = {MULDW{1'b0}};
-  // synthesis translate_on
- `endif // !synth
- // ---
   always @(posedge clk) begin
     if (padv_wb_i)
       wb_mul_result_o <= {MULDW{grant_wb_to_mul_i}} & mul_s3t_sum;
-  end // posedge clock
+  end // @clock
 
 endmodule // mor1kx_multiplier_marocchino
 
@@ -347,7 +341,7 @@ module srt4_kernel
       div_proc_o  <= 1'b0;
       div_count_r <= {LOG2N2{1'b0}};
     end
-    if (pipeline_flush_i) begin
+    else if (pipeline_flush_i) begin
       div_valid_o <= 1'b0;
       dbz_o       <= 1'b0;
       div_proc_o  <= 1'b0;
@@ -431,7 +425,7 @@ module mor1kx_divider_marocchino
   output reg [OPTION_OPERAND_WIDTH-1:0] wb_div_result_o
 );
 
- `ifndef SYNTHESIS
+ `ifndef SYNTHESIS // DIV: Normalization supports 32-bits operands only
   // synthesis translate_off
   generate
   if (OPTION_OPERAND_WIDTH != 32) begin
@@ -545,7 +539,7 @@ module mor1kx_divider_marocchino
       div_s1_rdy <= 1'b1;
     else if (div_adv_s2)
       div_s1_rdy <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 
   /**** DIV Stage 2 ****/
@@ -577,7 +571,7 @@ module mor1kx_divider_marocchino
       div_s2_rdy <= 1'b1;
     else if (div_adv_s3)
       div_s2_rdy <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 
   /**** DIV Stage 3 ****/
@@ -622,16 +616,10 @@ module mor1kx_divider_marocchino
 
   /**** DIV Write Back result ****/
 
- `ifndef SYNTHESIS
-  // synthesis translate_off
-  initial wb_div_result_o = {DIVDW{1'b0}};
-  // synthesis translate_on
- `endif // !synth
-  // ---
   always @(posedge clk) begin
     if (padv_wb_i)
       wb_div_result_o <= {DIVDW{grant_wb_to_div_i}} & s3t_div_result;
-  end // posedge clock
+  end //  @clock
 
   /****  DIV Write Back flags ****/
 
@@ -895,16 +883,10 @@ module mor1kx_exec_1clk_marocchino
                                          ({EXEDW{exec_op_jal_i}}   & exec_jal_result_i ); // for GPR[9]
 
   //  registering output for 1-clock operations
- `ifndef SYNTHESIS
-  // synthesis translate_off
-  initial wb_alu_1clk_result_o = {EXEDW{1'b0}};
-  // synthesis translate_on
- `endif // !synth
-  // ---
   always @(posedge clk) begin
     if (padv_wb_i)
       wb_alu_1clk_result_o <= {EXEDW{grant_wb_to_1clk_i}} & alu_1clk_result_mux;
-  end // posedge clock
+  end //  @clock
 
   /****  1CLK Write Back flags ****/
 

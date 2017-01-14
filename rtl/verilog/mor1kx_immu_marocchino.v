@@ -40,15 +40,15 @@ module mor1kx_immu_marocchino
   input                                 rst,
 
   // controls
-  input                                 adv_i,        // advance
-  input                                 force_off_i,  // drop stored "IMMU enable"
+  input                                 padv_s1_i,        // advance
+  input                                 flush_by_ctrl_i,  // drop stored "IMMU enable"
 
   // configuration
   input                                 enable_i,
   input                                 supervisor_mode_i,
 
   // address translation
-  input      [OPTION_OPERAND_WIDTH-1:0] virt_addr_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] virt_addr_mux_i,
   input      [OPTION_OPERAND_WIDTH-1:0] virt_addr_fetch_i,
   output     [OPTION_OPERAND_WIDTH-1:0] phys_addr_fetch_o,
 
@@ -137,11 +137,11 @@ module mor1kx_immu_marocchino
       enable_r          <= 1'b0;
       supervisor_mode_r <= 1'b0;
     end
-    else if (force_off_i | spr_immu_cs) begin
+    else if (flush_by_ctrl_i | spr_immu_cs) begin
       enable_r          <= 1'b0;
       supervisor_mode_r <= 1'b0;
     end
-    else if (adv_i) begin
+    else if (padv_s1_i) begin
       if (enable_i) begin
         enable_r          <= 1'b1;
         supervisor_mode_r <= supervisor_mode_i;
@@ -299,9 +299,9 @@ module mor1kx_immu_marocchino
   // match 8KB input address
   assign itlb_match_addr =
     (itlb_match_spr_cs_r & (spr_immu_we_r | spr_immu_re_r)) ? spr_bus_addr_i[OPTION_IMMU_SET_WIDTH-1:0] :
-                                                              virt_addr_i[13+(OPTION_IMMU_SET_WIDTH-1):13];
+                                                              virt_addr_mux_i[13+(OPTION_IMMU_SET_WIDTH-1):13];
   // match huge address and write command
-  assign itlb_match_huge_addr = virt_addr_i[24+(OPTION_IMMU_SET_WIDTH-1):24];
+  assign itlb_match_huge_addr = virt_addr_mux_i[24+(OPTION_IMMU_SET_WIDTH-1):24];
   assign itlb_match_huge_we   = itlb_match_reload_we & tlb_reload_huge;
   // match data in
   assign itlb_match_din = itlb_match_reload_we ? itlb_match_reload_din : spr_bus_dat_i;
@@ -310,9 +310,9 @@ module mor1kx_immu_marocchino
   // translation 8KB input address
   assign itlb_trans_addr =
     (itlb_trans_spr_cs_r & (spr_immu_we_r | spr_immu_re_r)) ? spr_bus_addr_i[OPTION_IMMU_SET_WIDTH-1:0] :
-                                                              virt_addr_i[13+(OPTION_IMMU_SET_WIDTH-1):13];
+                                                              virt_addr_mux_i[13+(OPTION_IMMU_SET_WIDTH-1):13];
   // translation huge address and write command
-  assign itlb_trans_huge_addr = virt_addr_i[24+(OPTION_IMMU_SET_WIDTH-1):24];
+  assign itlb_trans_huge_addr = virt_addr_mux_i[24+(OPTION_IMMU_SET_WIDTH-1):24];
   assign itlb_trans_huge_we   = itlb_trans_reload_we & tlb_reload_huge;
   // translation data in
   assign itlb_trans_din = itlb_trans_reload_we ? itlb_trans_reload_din : spr_bus_dat_i;
@@ -478,7 +478,7 @@ module mor1kx_immu_marocchino
   // Enable for RAM blocks if:
   //  1) regular FETCH advance
   //  2) SPR access
-  wire ram_re = (adv_i & enable_i) | spr_immu_re_r;
+  wire ram_re = (padv_s1_i & enable_i) | spr_immu_re_r;
 
   generate
   for (i = 0; i < OPTION_IMMU_WAYS; i=i+1) begin : itlb

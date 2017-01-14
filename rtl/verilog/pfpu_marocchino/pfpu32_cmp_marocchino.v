@@ -268,7 +268,7 @@ always @(posedge clk `OR_ASYNC_RST) begin
     // comparison exception
     wb_except_fp32_cmp_o <= exec_except_fp32_cmp;
   end // advance WB latches
-end // posedge clock
+end // @clock
 
 ////////////////////////////////////////////////////////////////////////
 // WB latches: update FPCSR (1-clock to prevent extra writes into FPCSR)

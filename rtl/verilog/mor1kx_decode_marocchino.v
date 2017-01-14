@@ -68,6 +68,8 @@ module mor1kx_decode_marocchino
   // for FPU64
   output reg                            dcod_rfa2_req_o, // instruction requires operand A2
   output reg                            dcod_rfb2_req_o, // instruction requires operand B2
+  input      [OPTION_RF_ADDR_WIDTH-1:0] insn_rfd2_adr_i, // D2 address from IFETCH
+  output     [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd2_adr_o, // D2 address corrected
 
   // flag & branches
   output                                dcod_jump_or_branch_o, // detect jump/branch to indicate "delay slot" for next fetched instruction
@@ -76,7 +78,7 @@ module mor1kx_decode_marocchino
   input                                 exec_flag_set_i,    // integer or fp32 comparison result
   input                                 ctrl_flag_i,
   // Do jump/branch and jump/branch target for FETCH
-  input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_jr_i,
   output                                dcod_do_branch_o,
   output     [OPTION_OPERAND_WIDTH-1:0] dcod_do_branch_target_o,
 
@@ -338,14 +340,17 @@ module mor1kx_decode_marocchino
   assign dcod_opc_fp64_cmp_o = dcod_insn_i[2:0];
 
 
-  // Immediate in l.mtspr is broken up, reassemble
+  // Immediate for MF(T)SPR, LOADs and STOREs
   assign dcod_imm16_o = (dcod_op_mtspr_o | dcod_op_lsu_store_o) ?
-                        {dcod_insn_i[25:21],dcod_insn_i[10:0]} :
-                        dcod_insn_i[`OR1K_IMM_SELECT];
+                        {dcod_insn_i[25:21],dcod_insn_i[10:0]} :  // immediate for l.mtspr and l.s* (store)
+                        dcod_insn_i[`OR1K_IMM_SELECT];            // immediate for l.mfspr and l.l* (load)
+
+  // Immediate for arithmetic
+  wire [`OR1K_IMM_WIDTH-1:0] opc_imm16 = dcod_insn_i[`OR1K_IMM_SELECT];
 
   //   Instructions with sign-extended immediate
   // excluding load/store, because LSU performs this extention by itself.
-  assign imm_sext     = {{16{dcod_imm16_o[15]}}, dcod_imm16_o};
+  assign imm_sext     = {{16{opc_imm16[15]}}, opc_imm16};
   assign imm_sext_sel = (opc_insn == `OR1K_OPCODE_ADDI)  |
                         (opc_insn == `OR1K_OPCODE_ADDIC) |
                         (opc_insn == `OR1K_OPCODE_XORI)  |
@@ -354,13 +359,13 @@ module mor1kx_decode_marocchino
 
   //   Instructions with zero-extended immediate
   // excluding MT(F)SPR, because CTRL performs this extention by itself.
-  assign imm_zext     = {16'd0, dcod_imm16_o};
+  assign imm_zext     = {16'd0, opc_imm16};
   assign imm_zext_sel = (opc_insn == `OR1K_OPCODE_ORI)  |
                         (opc_insn == `OR1K_OPCODE_ANDI) |
                         (opc_insn == `OR1K_OPCODE_SHRTI);
 
   // l.movhi
-  assign imm_high     = {dcod_insn_i[`OR1K_IMM_SELECT], 16'd0};
+  assign imm_high     = {opc_imm16, 16'd0};
   assign imm_high_sel = dcod_op_movhi_o;
 
   // Use immediate flag and sign/zero extended Imm16
@@ -392,7 +397,7 @@ module mor1kx_decode_marocchino
   // Illegal instruction decode
   // Instruction executed during 1 clock
   // Instruction which passes EXECUTION through
-  always @* begin
+  always @(*) begin
     // synthesis parallel_case full_case
     case (opc_insn)
       `OR1K_OPCODE_J,     // pc <- pc + exts(Imm26 << 2)
@@ -403,11 +408,11 @@ module mor1kx_decode_marocchino
       `OR1K_OPCODE_BF:    // pc <- pc + exts(Imm26 << 2) if flag
         begin
           dcod_except_illegal_o = 1'b0;
-          dcod_op_1clk_o        = dcod_op_jal_o; // save GPR[9] by l.jal/l.jalr
-          dcod_op_pass_exec_o   = ~dcod_op_jal_o;
+          dcod_op_1clk_o        = dcod_op_jal_o;  // save GPR[9] by l.jal/l.jalr
+          dcod_op_pass_exec_o   = ~dcod_op_jal_o; // l.j/l.jr/l.bf/l.bnf
           dcod_rfa1_req_o       = 1'b0;
-          dcod_rfb1_req_o       = dcod_op_jr_o;  // l.jr/l.jalr
-          dcod_rfd1_wb_o        = dcod_op_jal_o; // save GPR[9] by l.jal/l.jalr
+          dcod_rfb1_req_o       = 1'b0;           // l.jr/l.jalr are processed in OMAN in special way
+          dcod_rfd1_wb_o        = dcod_op_jal_o;  // save GPR[9] by l.jal/l.jalr
           // for FPU64
           dcod_rfa2_req_o       = 1'b0;
           dcod_rfb2_req_o       = 1'b0;
@@ -419,7 +424,7 @@ module mor1kx_decode_marocchino
         begin
           dcod_except_illegal_o = 1'b0;
           dcod_op_1clk_o        = dcod_op_movhi_o;
-          dcod_op_pass_exec_o   = ~dcod_op_movhi_o;
+          dcod_op_pass_exec_o   = ~dcod_op_movhi_o; // l.nop/l.rfe
           dcod_rfa1_req_o       = 1'b0;
           dcod_rfb1_req_o       = 1'b0;
           dcod_rfd1_wb_o        = dcod_op_movhi_o;
@@ -684,30 +689,42 @@ module mor1kx_decode_marocchino
         end // case or1k-opcode-alu
 
       `OR1K_OPCODE_SYSTRAPSYNC: begin
-        if (dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_TRAP) begin
-          dcod_except_illegal_o = 1'b0;
-          dcod_op_pass_exec_o   = ~du_trap_enable_i;
-        end
-        else if ((dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_SYSCALL) |
-                 ((dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_PSYNC) &
-                  (FEATURE_PSYNC != "NONE")) |
-                 ((dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_CSYNC) &
-                  (FEATURE_CSYNC != "NONE")) |
-                 (dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] == `OR1K_SYSTRAPSYNC_OPC_MSYNC)) begin
-          dcod_except_illegal_o = 1'b0;
-          dcod_op_pass_exec_o   = 1'b0;
-        end
-        else begin
-          dcod_except_illegal_o = 1'b1;
-          dcod_op_pass_exec_o   = 1'b0;
-        end
+        // synthesis parallel_case full_case
+        case (dcod_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT])
+          `OR1K_SYSTRAPSYNC_OPC_TRAP,
+          `OR1K_SYSTRAPSYNC_OPC_SYSCALL:
+            begin
+              dcod_except_illegal_o = 1'b0;
+              dcod_op_pass_exec_o   = 1'b0;
+            end
+          `OR1K_SYSTRAPSYNC_OPC_MSYNC:
+            begin
+              dcod_except_illegal_o = 1'b0;
+              dcod_op_pass_exec_o   = 1'b1; // l.msync - locks LSU, but takes slot in OMAN to pushing WB
+            end
+          `OR1K_SYSTRAPSYNC_OPC_PSYNC:
+            begin
+              dcod_except_illegal_o = 1'b1; // (FEATURE_PSYNC == "NONE"); - not implemented
+              dcod_op_pass_exec_o   = 1'b0;
+            end
+          `OR1K_SYSTRAPSYNC_OPC_CSYNC:
+            begin
+              dcod_except_illegal_o = 1'b1; // (FEATURE_CSYNC == "NONE"); - not implemented
+              dcod_op_pass_exec_o   = 1'b0;
+            end
+          default:
+            begin
+              dcod_except_illegal_o = 1'b1;
+              dcod_op_pass_exec_o   = 1'b0;
+            end
+        endcase
         dcod_op_1clk_o      = 1'b0;
         dcod_rfa1_req_o     = 1'b0;
         dcod_rfb1_req_o     = 1'b0;
         dcod_rfd1_wb_o      = 1'b0;
         // for FPU64
-        dcod_rfa2_req_o       = 1'b0;
-        dcod_rfb2_req_o       = 1'b0;
+        dcod_rfa2_req_o     = 1'b0;
+        dcod_rfb2_req_o     = 1'b0;
       end // case sys-trap-sync
 
       default:
@@ -728,7 +745,7 @@ module mor1kx_decode_marocchino
 
   // Calculate the link register result and
   // provide it as GPR[9] content for jump & link
-  assign dcod_jal_result_o = (pc_decode_i + 8); // (FEATURE_DELAY_SLOT == "ENABLED")
+  assign dcod_jal_result_o = (pc_decode_i + 4'd8); // (FEATURE_DELAY_SLOT == "ENABLED")
 
 
   // Branch detection
@@ -744,34 +761,32 @@ module mor1kx_decode_marocchino
   wire dcod_op_bf  = (opc_insn == `OR1K_OPCODE_BF);
   wire dcod_op_bnf = (opc_insn == `OR1K_OPCODE_BNF);
 
-  // do jumps or contitional branches to immediate
-  //  # forwarded flag
-  wire the_flag = exec_op_1clk_cmp_i ? exec_flag_set_i : ctrl_flag_i;
-  //  # ---
-  wire branch_to_imm = (opc_insn == `OR1K_OPCODE_J) | (opc_insn == `OR1K_OPCODE_JAL) |
-                       (dcod_op_bf & the_flag) | (dcod_op_bnf & ~the_flag);
-
-  wire [OPTION_OPERAND_WIDTH-1:0] branch_to_imm_target =
-    pc_decode_i + {{4{dcod_insn_i[25]}},dcod_insn_i[25:16],dcod_imm16_o,2'b00};
-
-
   // detect jump/branch to indicate "delay slot" for next fetched instruction
-  assign dcod_jump_or_branch_o = ((opc_insn < `OR1K_OPCODE_NOP) |   // l.j  | l.jal  | l.bnf | l.bf
+  assign dcod_jump_or_branch_o = ((opc_insn < `OR1K_OPCODE_NOP) |   // l.j, l.jal, l.bnf, l.bf
                                   (opc_insn == `OR1K_OPCODE_JR) |   // l.jr
                                   (opc_insn == `OR1K_OPCODE_JALR)); // l.jalr
-  // take branch flag / target / align exception
+
+  // do jumps or contitional branches
+  //  # forwarded flag
+  wire fwd_flag = exec_op_1clk_cmp_i ? exec_flag_set_i : ctrl_flag_i;
   //  # take branch flag
-  assign dcod_do_branch_o          = branch_to_imm | dcod_op_jr_o;
-  //  # take branch target
-  assign dcod_do_branch_target_o   = branch_to_imm ? branch_to_imm_target : dcod_rfb1_i;
+  assign dcod_do_branch_o = (opc_insn == `OR1K_OPCODE_J) | (opc_insn == `OR1K_OPCODE_JAL) | // do jump to immediate
+                            dcod_op_jr_o |                                                  // do jump to register (B1)
+                            (dcod_op_bf & fwd_flag) | (dcod_op_bnf & ~fwd_flag);            // do conditional branch to immediate
+  //  # pc-relative target
+  wire [OPTION_OPERAND_WIDTH-1:0] branch_to_imm_target = pc_decode_i + {{4{dcod_insn_i[25]}},dcod_insn_i[25:0],2'b00};
+  //  # take branch target: to immediate for l.j, l.jal, l.bnf, l.bf
+  assign dcod_do_branch_target_o   = (opc_insn < `OR1K_OPCODE_NOP) ? branch_to_imm_target : dcod_rfb1_jr_i;
   //  # take branch align exception
-  assign fetch_except_ibus_align_o = branch_to_imm ? (|branch_to_imm_target[1:0]) :
-                                     dcod_op_jr_o  ? ((|dcod_rfb1_i[1:0]) & ~exe2dec_hazard_d1b1_i) :
-                                                     1'b0;
+  assign fetch_except_ibus_align_o = dcod_op_jr_o & ((|dcod_rfb1_jr_i[1:0]) & ~exe2dec_hazard_d1b1_i);
+                                             // MAROCCHINO_TODO: redudancy ^^^^^^^^^^^^^^^^^^^^^^ ?
 
 
-  // Destination addresses
+  // Destination addresses:
+  //  # D1
   assign dcod_rfd1_adr_o = dcod_op_jal_o ? 4'd9 : dcod_insn_i[`OR1K_RD_SELECT];
+  //  # D2 - to be consistent with RF logic
+  assign dcod_rfd2_adr_o = dcod_op_jal_o ? 4'd10 : insn_rfd2_adr_i;
 
 
   // Which instructions writes comparison flag?

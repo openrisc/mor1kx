@@ -115,7 +115,7 @@ module pfpu_f2i_marocchino
       f2i_shl_o   <= s1t_shl;
       f2i_ovf_o   <= s1t_is_shl_ovf;
     end // (reset or flush) / advance
-  end // posedge clock
+  end // @clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -127,6 +127,6 @@ module pfpu_f2i_marocchino
       f2i_rdy_o <= 1'b1;
     else if (rnd_taking_f2i_i)
       f2i_rdy_o <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 endmodule // pfpu_f2i_marocchino

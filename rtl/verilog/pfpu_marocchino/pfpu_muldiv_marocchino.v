@@ -280,7 +280,7 @@ module pfpu_muldiv_marocchino
       s0o_div_ready <= 1'b0;
       s0o_mul_ready <= 1'b0;
     end
-  end // posedge clock
+  end // @clock
 
 
   /**** Stage #1: normalization stage ****/
@@ -322,7 +322,7 @@ module pfpu_muldiv_marocchino
       s1o_dbz           <= s0o_dbz;
       s1o_op_fp64_arith <= s0o_op_fp64_arith;
     end // advance pipe
-  end // posedge clock
+  end // @clock
 
   // ready for MUL instruction
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -342,7 +342,7 @@ module pfpu_muldiv_marocchino
       s1o_mul_ready <= 1'b0;
       s1o_div_ready <= 1'b0;
     end
-  end // posedge clock
+  end // @clock
 
 
   /**** Run Multiplier or Divider ****/

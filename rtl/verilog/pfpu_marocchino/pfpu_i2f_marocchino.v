@@ -192,7 +192,7 @@ module pfpu_i2f_marocchino
       // for rounding engine we re-pack 32-bits integer to LSBs
       i2f_fract64_o  <= exec_op_fp64_arith_i ? (s1t_fract64) : ({32'd0,s1t_fract64[63:32]});
     end // advance
-  end // posedge clock
+  end // @clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -204,6 +204,6 @@ module pfpu_i2f_marocchino
       i2f_rdy_o <= 1'b1;
     else if (rnd_taking_i2f_i)
       i2f_rdy_o <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 endmodule // pfpu_i2f_marocchino

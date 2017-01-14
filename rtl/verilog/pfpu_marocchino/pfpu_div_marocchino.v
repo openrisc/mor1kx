@@ -221,7 +221,7 @@ module srt4_fract58
       div_proc_o  <= 1'b0;
       div_count_r <= {LOG2N2{1'b0}};
     end
-    if (pipeline_flush_i) begin
+    else if (pipeline_flush_i) begin
       div_valid_o <= 1'b0;
       dbz_o       <= 1'b0;
       div_proc_o  <= 1'b0;
@@ -338,7 +338,7 @@ module pfpu_div_marocchino
       s2o_exp13rx       <= s2t_exp13rx_i;
       s2o_op_fp64_arith <= s1o_op_fp64_arith_i;
     end // advance pipe
-  end // posedge clock
+  end // @clock
 
   wire [57:0] s3t_rem58;
   wire [57:0] s3t_qtnt58;
@@ -411,14 +411,14 @@ module pfpu_div_marocchino
       div_exp13sh0_o <= s2o_exp13c;
       div_fract57_o  <= s3t_qtnt57;
     end // advance pipe
-  end // posedge clock
+  end // @clock
   // division by zero flag
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       div_dbz_o <= 1'b0;
     else if (out_adv)
       div_dbz_o <= s2o_dbz;
-  end // posedge clock
+  end // @clock
 
 
   // ready is special case
@@ -431,7 +431,7 @@ module pfpu_div_marocchino
       div_rdy_o <= 1'b1;
     else if (rnd_taking_div_i)
       div_rdy_o <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 endmodule // pfpu_div_marocchino
 

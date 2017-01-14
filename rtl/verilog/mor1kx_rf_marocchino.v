@@ -79,12 +79,20 @@ module mor1kx_rf_marocchino
   input  [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd2_adr_i,
   input  [OPTION_OPERAND_WIDTH-1:0] wb_result2_i,
 
+  // D1 related WB-to-DECODE hazards for LSU WB miss processing
+  output                            dcod_wb2dec_eq_adr_d1a1_o,
+  output                            dcod_wb2dec_eq_adr_d1b1_o,
+  output                            dcod_wb2dec_eq_adr_d1a2_o,
+  output                            dcod_wb2dec_eq_adr_d1b2_o,
+
   // outputs
   output [OPTION_OPERAND_WIDTH-1:0] dcod_rfa1_o,
   output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_o,
-  // for FPU64
   output [OPTION_OPERAND_WIDTH-1:0] dcod_rfa2_o,
-  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb2_o
+  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb2_o,
+
+  // Special case for l.jr/l.jalr
+  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_jr_o
 );
 
   // short names
@@ -119,7 +127,7 @@ module mor1kx_rf_marocchino
   //  write in even
   wire write_even_req = (wb_rfd1_wb_i & ~wb_rfd1_adr_i[0]) | (wb_rfd2_wb_i & ~wb_rfd2_adr_i[0]) | (spr_gpr_we & ~spr_bus_addr_i[0]);
   // write in odd
-  wire write_odd_req = (wb_rfd1_wb_i & wb_rfd1_adr_i[0]) | (wb_rfd2_wb_i & wb_rfd2_adr_i[0]) | (spr_gpr_we & spr_bus_addr_i[0]);
+  wire write_odd_req  = (wb_rfd1_wb_i &  wb_rfd1_adr_i[0]) | (wb_rfd2_wb_i &  wb_rfd2_adr_i[0]) | (spr_gpr_we &  spr_bus_addr_i[0]);
 
 
   // even/odd multiplexing of input addresses and data
@@ -421,45 +429,61 @@ module mor1kx_rf_marocchino
   // DECODE stage (dcod_*) //
   //-----------------------//
 
-  // RFA-output
-  //  # WB-to-DECODE hazard
-  wire dcod_wb2dec_hazard_d1a1 = wb_rfd1_wb_i & dcod_rfa1_req_i & (wb_rfd1_adr_i == dcod_rfa1_adr_i);
-  wire dcod_wb2dec_hazard_d2a1 = wb_rfd2_wb_i & dcod_rfa1_req_i & (wb_rfd2_adr_i == dcod_rfa1_adr_i);
-  //  # muxing and forwarding
+  // Common WB-to-DECODE hazards detection (sorted by detsination)
+  //  # D1 related
+  assign dcod_wb2dec_eq_adr_d1a1_o = (wb_rfd1_adr_i == dcod_rfa1_adr_i);
+  wire   dcod_wb2dec_hazard_d1a1   = dcod_wb2dec_eq_adr_d1a1_o & wb_rfd1_wb_i & dcod_rfa1_req_i;
+  //---
+  assign dcod_wb2dec_eq_adr_d1b1_o = (wb_rfd1_adr_i == dcod_rfb1_adr_i);
+  wire   dcod_wb2dec_hazard_d1b1   = dcod_wb2dec_eq_adr_d1b1_o & wb_rfd1_wb_i & dcod_rfb1_req_i;
+  //---
+  assign dcod_wb2dec_eq_adr_d1a2_o = (wb_rfd1_adr_i == dcod_rfa2_adr_i);
+  wire   dcod_wb2dec_hazard_d1a2   = dcod_wb2dec_eq_adr_d1a2_o & wb_rfd1_wb_i & dcod_rfa2_req_i;
+  //---
+  assign dcod_wb2dec_eq_adr_d1b2_o = (wb_rfd1_adr_i == dcod_rfb2_adr_i);
+  wire   dcod_wb2dec_hazard_d1b2   = dcod_wb2dec_eq_adr_d1b2_o & wb_rfd1_wb_i & dcod_rfb2_req_i;
+  //  # D2 related
+  wire dcod_wb2dec_hazard_d2a1 = (wb_rfd2_adr_i == dcod_rfa1_adr_i) & wb_rfd2_wb_i & dcod_rfa1_req_i;
+  wire dcod_wb2dec_hazard_d2b1 = (wb_rfd2_adr_i == dcod_rfb1_adr_i) & wb_rfd2_wb_i & dcod_rfb1_req_i;
+  wire dcod_wb2dec_hazard_d2a2 = (wb_rfd2_adr_i == dcod_rfa2_adr_i) & wb_rfd2_wb_i & dcod_rfa2_req_i;
+  wire dcod_wb2dec_hazard_d2b2 = (wb_rfd2_adr_i == dcod_rfb2_adr_i) & wb_rfd2_wb_i & dcod_rfb2_req_i;
+
+
+  // Muxing and forwarding RFA1-output
   assign dcod_rfa1_o = dcod_wb2dec_hazard_d1a1 ? wb_result1_i :
                        dcod_wb2dec_hazard_d2a1 ? wb_result2_i :
                        dcod_rfa1_adr_i[0]      ? rfa_odd_dout :
                                                  rfa_even_dout;
 
-  // RFB-output
-  //  # WB-to-DECODE hazard
-  wire dcod_wb2dec_hazard_d1b1 = wb_rfd1_wb_i & dcod_rfb1_req_i & (wb_rfd1_adr_i == dcod_rfb1_adr_i);
-  wire dcod_wb2dec_hazard_d2b1 = wb_rfd2_wb_i & dcod_rfb1_req_i & (wb_rfd2_adr_i == dcod_rfb1_adr_i);
-  //  # muxing and forwarding
+  // Muxing and forwarding RFB1-output
   assign dcod_rfb1_o = dcod_immediate_sel_i    ? dcod_immediate_i :
                        dcod_wb2dec_hazard_d1b1 ? wb_result1_i     :
                        dcod_wb2dec_hazard_d2b1 ? wb_result2_i     :
                        dcod_rfb1_adr_i[0]      ? rfb_odd_dout     :
                                                  rfb_even_dout;
 
-  // RFA2-output
-  //  # WB-to-DECODE hazard
-  wire dcod_wb2dec_hazard_d2a2 = wb_rfd2_wb_i & dcod_rfa2_req_i & (wb_rfd2_adr_i == dcod_rfa2_adr_i);
-  wire dcod_wb2dec_hazard_d1a2 = wb_rfd1_wb_i & dcod_rfa2_req_i & (wb_rfd1_adr_i == dcod_rfa2_adr_i);
-  //  # muxing and forwarding
-  assign dcod_rfa2_o = dcod_wb2dec_hazard_d2a2 ? wb_result2_i :
-                       dcod_wb2dec_hazard_d1a2 ? wb_result1_i :
+  // Muxing and forwarding RFA2-output
+  assign dcod_rfa2_o = dcod_wb2dec_hazard_d1a2 ? wb_result1_i :
+                       dcod_wb2dec_hazard_d2a2 ? wb_result2_i :
                        dcod_rfa2_adr_i[0]      ? rfa_odd_dout :
                                                  rfa_even_dout;
 
-  // RFB2-output
-  //  # WB-to-DECODE hazard
-  wire dcod_wb2dec_hazard_d2b2 = wb_rfd2_wb_i & dcod_rfb2_req_i & (wb_rfd2_adr_i == dcod_rfb2_adr_i);
-  wire dcod_wb2dec_hazard_d1b2 = wb_rfd1_wb_i & dcod_rfb2_req_i & (wb_rfd1_adr_i == dcod_rfb2_adr_i);
-  //  # muxing and forwarding
-  assign dcod_rfb2_o = dcod_wb2dec_hazard_d2b2 ? wb_result2_i :
-                       dcod_wb2dec_hazard_d1b2 ? wb_result1_i :
+  // Muxing and forwarding RFB2-output
+  assign dcod_rfb2_o = dcod_wb2dec_hazard_d1b2 ? wb_result1_i :
+                       dcod_wb2dec_hazard_d2b2 ? wb_result2_i :
                        dcod_rfb2_adr_i[0]      ? rfb_odd_dout :
                                                  rfb_even_dout;
+
+
+  // Special case for l.jr/l.jalr
+  //   (a) by default these instructions require B1 operand, so we implemented
+  //       simlified multiplexor here.
+  //   (b) the output is used next time in DECODE to form final branch target
+  //   (c) in OMAN pipeline is stalled till B1 completion
+  wire   dcod_wb2dec_hazard_d1b1_jr = dcod_wb2dec_eq_adr_d1b1_o & wb_rfd1_wb_i;
+  // ---
+  assign dcod_rfb1_jr_o = dcod_wb2dec_hazard_d1b1_jr ? wb_result1_i :
+                          dcod_rfb1_adr_i[0]         ? rfb_odd_dout :
+                                                       rfb_even_dout;
 
 endmodule // mor1kx_rf_marocchino

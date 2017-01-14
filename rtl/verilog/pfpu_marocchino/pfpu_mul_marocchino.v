@@ -145,7 +145,7 @@ module pfpu_mul_marocchino
       s2o_a1b0 <= s2t_a1 * s2t_b0;
       s2o_a1b1 <= s2t_a1 * s2t_b1;
     end // advance pipe
-  end // posedge clock
+  end // @clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -157,7 +157,7 @@ module pfpu_mul_marocchino
       s2o_mul_ready <= 1'b1;
     else if (s3_adv | out_adv_s)
       s2o_mul_ready <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 
   /* Stage #3: 2nd part of multiplier */
@@ -216,7 +216,7 @@ module pfpu_mul_marocchino
       s3o_psum26 <= s3t_psum39[38:13];
       s3o_sticky <= s3t_sticky;
     end // advance pipe
-  end // posedge clock
+  end // @clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -228,7 +228,7 @@ module pfpu_mul_marocchino
       s3o_mul_ready <= 1'b1;
     else if (s4_adv)
       s3o_mul_ready <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 
   /* Stage #4: 3rd part of multiplier */
@@ -280,7 +280,7 @@ module pfpu_mul_marocchino
       s4o_psum28 <= s4t_psum41[40:13];
       s4o_sticky <= s4t_sticky;
     end // advance pipe
-  end // posedge clock
+  end // @clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -292,7 +292,7 @@ module pfpu_mul_marocchino
       s4o_mul_ready <= 1'b1;
     else if (s5_adv)
       s4o_mul_ready <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 
   /* Stage #5: 4th part of multiplier */
@@ -337,7 +337,7 @@ module pfpu_mul_marocchino
       s5o_psum28 <= s5t_psum41[40:13];
       s5o_qrs    <= s5t_qrs;
     end // advance pipe
-  end // posedge clock
+  end // @clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -349,7 +349,7 @@ module pfpu_mul_marocchino
       s5o_mul_ready <= 1'b1;
     else if (out_adv_d)
       s5o_mul_ready <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 
   /* Stage #5: 5th (last) part of multiplier and latching output */
@@ -371,7 +371,7 @@ module pfpu_mul_marocchino
       mul_exp13sh0_o <= (s5o_mul_ready ? s5o_exp13c  : s2o_exp13c);
       mul_fract57_o  <= (s5o_mul_ready ? {s6t_psum54_d,s5o_qrs} : {s3t_psum54_s,s3t_qrs});
     end // advance pipe
-  end // posedge clock
+  end // @clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -383,7 +383,7 @@ module pfpu_mul_marocchino
       mul_rdy_o <= 1'b1;
     else if (rnd_taking_mul_i)
       mul_rdy_o <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 endmodule // pfpu_mul_marocchino
 

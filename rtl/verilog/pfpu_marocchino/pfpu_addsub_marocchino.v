@@ -147,7 +147,7 @@ module pfpu_addsub_marocchino
       s1o_fract53_fsh   <= s1t_fract53_fsh & {53{~opc_0_i}};
       s1o_op_fp64_arith <= exec_op_fp64_arith_i;
     end // advance
-  end // posedge clock
+  end // @clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -159,7 +159,7 @@ module pfpu_addsub_marocchino
       s1o_ready <= 1'b1;
     else if (s2_adv)
       s1o_ready <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 
   /* Stage 2: multiplex and shift */
@@ -254,7 +254,7 @@ module pfpu_addsub_marocchino
       s2o_sticky        <= s2t_sticky;
       s2o_op_fp64_arith <= s1o_op_fp64_arith;
     end // advance
-  end // posedge clock
+  end // @clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -266,7 +266,7 @@ module pfpu_addsub_marocchino
       s2o_ready <= 1'b1;
     else if (s3_adv)
       s2o_ready <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 
   /* Stage 4: add/sum and update exponent */
@@ -380,7 +380,7 @@ module pfpu_addsub_marocchino
       add_exp13sh0_o  <= s2o_exp13c;
       add_fract57_o   <= {s3t_fract56,s3t_sticky};
     end // advance
-  end // posedge clock
+  end // @clock
 
   // ready is special case
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -392,6 +392,6 @@ module pfpu_addsub_marocchino
       add_rdy_o <= 1'b1;
     else if (rnd_taking_add_i)
       add_rdy_o <= 1'b0;
-  end // posedge clock
+  end // @clock
 
 endmodule // pfpu_addsub_marocchino
