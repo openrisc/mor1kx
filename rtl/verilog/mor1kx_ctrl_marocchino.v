@@ -91,7 +91,6 @@ module mor1kx_ctrl_marocchino
   // Track branch address for exception processing support
   input                                 dcod_do_branch_i,
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_do_branch_target_i,
-  //input                                 dcod_jump_or_branch_i,
   // Support IBUS error handling in CTRL
   input                                 exec_jump_or_branch_i,
   input      [OPTION_OPERAND_WIDTH-1:0] pc_exec_i,
@@ -101,7 +100,7 @@ module mor1kx_ctrl_marocchino
   input                                 du_stb_i,
   input      [OPTION_OPERAND_WIDTH-1:0] du_dat_i,
   input                                 du_we_i,
-  output reg [OPTION_OPERAND_WIDTH-1:0] du_dat_o,
+  output     [OPTION_OPERAND_WIDTH-1:0] du_dat_o,
   output reg                            du_ack_o,
   // Stall control from debug interface
   input                                 du_stall_i,
@@ -272,27 +271,27 @@ module mor1kx_ctrl_marocchino
   /* DU internal control signals */
   // SPR BUS acceess to DU's control registers
   wire                              spr_bus_cs_du;  // "chip select" for DU
-  reg                               spr_bus_ack_du;
-  reg                        [31:0] spr_bus_dat_du;
+  reg                               spr_bus_ack_du_r;
+  wire                       [31:0] spr_bus_dat_du;
   // Access to NextPC SPR from Debug System through SPR BUS
   wire                              du_npc_we;
-  reg                               du_npc_hold; // till restart command from Debug System
+  wire                              du_npc_hold; // till restart command from Debug System
   // stall / unstall
-  reg                               du_cpu_flush_r;
-  reg                               du_cpu_stall_r;
-  reg                               du_cpu_unstall_r;
+  wire                              du_cpu_flush;
+  wire                              du_cpu_stall;
+  wire                              du_cpu_unstall;
   // step-by-step execution
   wire                              stepping;
-  reg                         [2:0] pstep;
+  wire                        [3:0] pstep;
   wire                              stepped_into_delay_slot;
-  reg                               stepped_into_exception;
-  reg                               stepped_into_rfe;
+  wire                              stepped_into_exception;
+  wire                              stepped_into_rfe;
 
 
   /* For SPR BUS transactions */
   reg                               spr_bus_wait_r;  // wait SPR ACK regardless on access validity
   reg                               spr_bus_mXspr_r; // access by l.mf(t)spr command indicator (for write back push)
-  reg                               spr_bus_access_du_r; // access from Debug System
+  wire                              spr_bus_mXdbg;   // "move to/from Debug System"
   //  # instant ACK and data
   wire                              spr_bus_ack;
   wire   [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_mux;
@@ -406,7 +405,7 @@ module mor1kx_ctrl_marocchino
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       doing_rfe_r <= 1'b0;
-    else if ((doing_rfe_r | du_cpu_unstall_r) & fetch_exception_taken_i)
+    else if ((doing_rfe_r | du_cpu_unstall) & fetch_exception_taken_i)
       doing_rfe_r <= 1'b0;
     else if (wb_op_rfe_i)
       doing_rfe_r <= 1'b1;
@@ -418,7 +417,7 @@ module mor1kx_ctrl_marocchino
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       doing_exception_r <= 1'b0;
-    else if ((doing_exception_r | du_cpu_unstall_r) & fetch_exception_taken_i)
+    else if ((doing_exception_r | du_cpu_unstall) & fetch_exception_taken_i)
       doing_exception_r <= 1'b0;
     else if (exception_re)
       doing_exception_r <= 1'b1;
@@ -426,9 +425,9 @@ module mor1kx_ctrl_marocchino
 
   // To FETCH:
   //   Flag to use DU/exceptions/rfe provided address
-  assign ctrl_branch_exception_o = du_cpu_unstall_r | doing_exception_r | doing_rfe_r;
+  assign ctrl_branch_exception_o = du_cpu_unstall | doing_exception_r | doing_rfe_r;
   //   DU/exceptions/rfe provided address itself
-  assign ctrl_branch_except_pc_o = du_cpu_unstall_r  ? spr_npc           :
+  assign ctrl_branch_except_pc_o = du_cpu_unstall    ? spr_npc           :
                                    doing_exception_r ? exception_pc_addr :
                                                        spr_epcr;
 
@@ -436,22 +435,6 @@ module mor1kx_ctrl_marocchino
   //--------------------------------//
   // special flag that WB is active //
   //--------------------------------//
-
-  // 1-clock delayed padv-wb-o
-  reg  doing_wb_r;  // just for doing-wb
-  wire doing_wb = doing_wb_r & (~wb_lsu_valid_miss_i);
-  // MAROCCHINO_TODO: stepped_into* for DU in exception case?
-  // ---
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      doing_wb_r <= 1'b0;
-    else if (pipeline_flush_o)
-      doing_wb_r <= 1'b0;
-    else if (padv_wb_o)
-      doing_wb_r <= 1'b1;
-    else if (doing_wb)
-      doing_wb_r <= 1'b0;
-  end // @ clock
 
   // 1-clock length 1-clock delayed padv-wb-o for updating SPRs
   reg  ctrl_spr_wb_r;
@@ -473,47 +456,28 @@ module mor1kx_ctrl_marocchino
   //------------------------//
 
   // Pipeline flush by DU/exceptions/rfe
-  assign pipeline_flush_o = du_cpu_flush_r | exception_re | wb_op_rfe_i;
+  assign pipeline_flush_o = du_cpu_flush | exception_re | wb_op_rfe_i;
+
 
   // Advance IFETCH
-  //  (a) without DU control
-  wire   padv_fetch   = (dcod_valid_i | (~dcod_insn_valid_i)) & (~spr_bus_wait_r) & (~fetch_an_except_i) & (~exec_an_except_i);
-  //  (b) for step-by-step execution
-  //        - pay attention that "*_an_except" doesn't make sense here
-  //      because of step-by-step execution
-  //        - but we block execution if SPR BUS is active, because it
-  //      could be request from Debug System
-  wire   padv_fetch_s = pstep[0] & (~dcod_insn_valid_i) & (~spr_bus_wait_r);
-  //  (!) signal to pass step from IFETCH to DECODE
-  wire   pass_step_to_decode = pstep[0] & dcod_insn_valid_i & (~spr_bus_wait_r); // for DU
-  //  (c) with DU control (and output)
-  assign padv_fetch_o = du_cpu_stall_r ? 1'b0         :
-                        stepping       ? padv_fetch_s :
-                                         padv_fetch;
+  assign padv_fetch_o = (dcod_valid_i | (~dcod_insn_valid_i)) & (~spr_bus_wait_r) & (~fetch_an_except_i) & (~exec_an_except_i) &
+                        (~du_cpu_stall) & ((~stepping) | pstep[0]); // DU enabling/disabling IFETCH
+  // Pass step from IFETCH to DECODE
+  wire   pass_step_to_decode = dcod_insn_valid_i & pstep[0]; // for DU
+
 
   // Advance DECODE->EXECUTE latches
-  //  (a) without DU control
-  wire   padv_decode   = dcod_valid_i & dcod_insn_valid_i & (~spr_bus_wait_r) & (~exec_an_except_i);
-  //  (b) for step-by-step execution
-  wire   padv_decode_s = pstep[1] & padv_decode;
-  //  (!) signal to pass step from DECODE to WB
-  wire   pass_step_to_wb = padv_decode_s; // for DU
-  //  (c) with DU control (and output)
-  assign padv_decode_o = du_cpu_stall_r ? 1'b0          :
-                         stepping       ? padv_decode_s :
-                                          padv_decode;
+  assign padv_decode_o = dcod_valid_i & dcod_insn_valid_i & (~spr_bus_wait_r) & (~exec_an_except_i) &
+                         (~du_cpu_stall) & ((~stepping) | pstep[1]); // DU enabling/disabling DECODE
+  // Pass step from DECODE to WB
+  wire   pass_step_to_wb = pstep[1]; // for DU
+
 
   // Advance Write Back latches
-  //  (a) without DU control
-  wire   padv_wb   = (exec_valid_i & (~spr_bus_wait_r) & (~wb_lsu_valid_miss_i)) | (spr_bus_ack_r & spr_bus_mXspr_r);
-  //  (b) for step-by-step execution
-  wire   padv_wb_s = pstep[2] & padv_wb;
-  //  (!) complete the step
-  wire   pass_step_to_stall = padv_wb_s; // for DU
-  //  (b) with DU control (and output)
-  assign padv_wb_o = du_cpu_stall_r ? 1'b0      :
-                     stepping       ? padv_wb_s :
-                                      padv_wb;
+  assign padv_wb_o = ((exec_valid_i & (~spr_bus_wait_r) & (~wb_lsu_valid_miss_i)) | (spr_bus_ack_r & spr_bus_mXspr_r)) &
+                     (~du_cpu_stall) & ((~stepping) | pstep[2]); // DU enabling/disabling WRITE-BACK
+  // Complete the step
+  wire   pass_step_to_stall = (exec_valid_i | (spr_bus_ack_r & spr_bus_mXspr_r)) & pstep[2]; // for DU
 
 
   //-----------------------------------//
@@ -716,7 +680,7 @@ module mor1kx_ctrl_marocchino
 
   // NPC for SPR (write accesses implemented for Debug System only)
   assign du_npc_we = (spr_sys_group_cs & (`SPR_OFFSET(spr_bus_addr_o) == `SPR_OFFSET(`OR1K_SPR_NPC_ADDR)) &
-                      spr_sys_group_wr_r & spr_bus_access_du_r);
+                      spr_sys_group_wr_r & spr_bus_mXdbg);
   // --- Actually it is used just to restart CPU after salling by DU
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
@@ -1008,7 +972,7 @@ module mor1kx_ctrl_marocchino
   assign spr_bus_ack = spr_bus_ack_sys_group | spr_bus_ack_gpr_i  |
                        spr_bus_ack_dmmu_i    | spr_bus_ack_immu_i |
                        spr_bus_ack_dc_i      | spr_bus_ack_ic_i   |
-                       spr_bus_ack_mac_i     | spr_bus_ack_du     |
+                       spr_bus_ack_mac_i     | spr_bus_ack_du_r   |
                        spr_bus_ack_pcu_i     | spr_bus_ack_pmu_i  |
                        spr_bus_ack_pic_i     | spr_bus_ack_tt_i   |
                        spr_bus_ack_fpu_i     | (~spr_access_valid_reg);
@@ -1050,34 +1014,44 @@ module mor1kx_ctrl_marocchino
 
     /* Generate answers to Debug System */
 
+    // "move to/from Debbug System"
+    reg spr_bus_mXdbg_r;
     // Generate ack back to the debug interface bus
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst) begin
-        spr_bus_access_du_r <= 1'b0;
-        du_ack_o            <= 1'b0;
+        spr_bus_mXdbg_r <= 1'b0;
+        du_ack_o        <= 1'b0;
       end
       else if (du_ack_o) begin
-        spr_bus_access_du_r <= 1'b0;
-        du_ack_o            <= 1'b0;
+        spr_bus_mXdbg_r <= 1'b0;
+        du_ack_o        <= 1'b0;
       end
-      else if (spr_bus_access_du_r) begin
+      else if (spr_bus_mXdbg_r) begin
         if (spr_bus_ack) begin // DU uses non-registered SPR BUS sources
-          spr_bus_access_du_r <= 1'b0;
-          du_ack_o            <= 1'b1;
+          spr_bus_mXdbg_r <= 1'b0;
+          du_ack_o        <= 1'b1;
         end
       end
       else if (take_access_du) begin
-        spr_bus_access_du_r <= 1'b1;
-        du_ack_o            <= 1'b0;
+        spr_bus_mXdbg_r <= 1'b1;
+        du_ack_o        <= 1'b0;
       end
     end // @ clock
+    // ---
+    assign spr_bus_mXdbg = spr_bus_mXdbg_r;
+
 
     // Data back to the debug bus
-    always @(posedge clk) begin
-      if (spr_bus_ack & spr_bus_access_du_r & (~spr_bus_we_o)) // DU uses non-registered SPR BUS sources
-        du_dat_o <= spr_bus_dat_mux; // DU uses non-registered SPR BUS sources
+    reg [OPTION_OPERAND_WIDTH-1:0] du_dat_r;
+    // ---
+    always @(posedge clk `OR_ASYNC_RST) begin
+      if (rst)
+        du_dat_r <= {OPTION_OPERAND_WIDTH{1'b0}};
+      else if (spr_bus_ack & spr_bus_mXdbg & (~spr_bus_we_o)) // DU uses non-registered SPR BUS sources
+        du_dat_r <= spr_bus_dat_mux; // DU uses non-registered SPR BUS sources
     end
-
+    // ---
+    assign du_dat_o = du_dat_r; // DU enabled
 
     /* DU's Control registers and SPR BUS access cycle */
 
@@ -1091,35 +1065,38 @@ module mor1kx_ctrl_marocchino
     wire spr_bus_cs_du_dsr  = (`SPR_OFFSET(spr_bus_addr_o) == `SPR_OFFSET(`OR1K_SPR_DSR_ADDR));
     wire spr_bus_cs_du_drr  = (`SPR_OFFSET(spr_bus_addr_o) == `SPR_OFFSET(`OR1K_SPR_DRR_ADDR));
 
-    reg spr_du_wr_r;
+    reg        spr_du_wr_r;
+    reg [31:0] spr_bus_dat_du_r;
 
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst) begin
-        spr_du_wr_r    <=  1'b0;
-        spr_bus_ack_du <=  1'b0;
-        spr_bus_dat_du <= 32'd0;
+        spr_du_wr_r      <=  1'b0;
+        spr_bus_ack_du_r <=  1'b0;
+        spr_bus_dat_du_r <= 32'd0;
       end
-      else if (spr_bus_ack_du) begin // end of cycle
-        spr_du_wr_r    <=  1'b0;
-        spr_bus_ack_du <=  1'b0;
-        spr_bus_dat_du <= 32'd0;
+      else if (spr_bus_ack_du_r) begin // end of cycle
+        spr_du_wr_r      <=  1'b0;
+        spr_bus_ack_du_r <=  1'b0;
+        spr_bus_dat_du_r <= 32'd0;
       end
       else if (spr_bus_cs_du) begin
-        spr_bus_ack_du <= 1'b1;
-        spr_du_wr_r    <= spr_bus_we_o;
+        spr_bus_ack_du_r <= 1'b1;
+        spr_du_wr_r      <= spr_bus_we_o;
         // data
         if (spr_bus_we_o) begin
-          spr_bus_dat_du <= 32'd0;
+          spr_bus_dat_du_r <= 32'd0;
         end
         else begin
-          spr_bus_dat_du <= spr_bus_cs_du_dmr1 ? spr_dmr1 :
-                            spr_bus_cs_du_dmr2 ? spr_dmr2 :
-                            spr_bus_cs_du_dsr  ? spr_dsr  :
-                            spr_bus_cs_du_drr  ? spr_drr  :
-                                                 32'd0;
+          spr_bus_dat_du_r <= spr_bus_cs_du_dmr1 ? spr_dmr1 :
+                              spr_bus_cs_du_dmr2 ? spr_dmr2 :
+                              spr_bus_cs_du_dsr  ? spr_dsr  :
+                              spr_bus_cs_du_drr  ? spr_drr  :
+                                                   32'd0;
         end
       end
     end // at clock
+
+    assign spr_bus_dat_du = spr_bus_dat_du_r; // DU enabled
 
 
     /* DMR1 */
@@ -1164,12 +1141,12 @@ module mor1kx_ctrl_marocchino
     //   (!) When we perform transition to stall caused by external
     //       command or current step completion we generate pipe flushing
     //       AFTER the last instuction completes write back.
-    //       For step completion it means that "doing_wb" is equal
-    //       to hypotetic pstep[3]
+    //
+    wire doing_wb = pstep[3] & (~wb_lsu_valid_miss_i);
     //
     wire du_cpu_stall_by_cmd      = doing_wb & du_stall_i;
     wire du_cpu_stall_by_stepping = doing_wb & stepping;
-    wire du_spu_stall_by_trap     = wb_except_trap_i;
+    wire du_cpu_stall_by_trap     = wb_except_trap_i;
 
     //
     // Generate 1-clok length pipe flusing signal from DU
@@ -1181,22 +1158,30 @@ module mor1kx_ctrl_marocchino
     //   (c) If cpu already stalled we prevent manipulation with the register
     //       because pipes were flushed previously
     //
+    reg du_cpu_flush_r;
+    // ---
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst)
         du_cpu_flush_r <= 1'b0;
-      else if (du_cpu_stall_r) // pipes were flushed previously
+      else if (du_cpu_stall)   // pipes were flushed previously
         du_cpu_flush_r <= 1'b0;
       else if (du_cpu_flush_r) // 1-clock lenght (eq. to exceptions/rfe pocessing)
         du_cpu_flush_r <= 1'b0;
       else if (du_cpu_stall_by_cmd | du_cpu_stall_by_stepping)
         du_cpu_flush_r <= 1'b1;
     end // @ clock
+    // ---
+    assign du_cpu_flush = du_cpu_flush_r;
 
 
-    /* goes out to the debug interface and comes back 1 cycle later
-       via du_stall_i */
-    assign du_stall_o = du_cpu_stall_by_stepping | du_spu_stall_by_trap; // DU
-
+    //
+    // goes out to the debug interface and
+    // comes back 1 cycle later via  du_stall_i
+    //
+    assign du_stall_o = du_cpu_stall_by_stepping | du_cpu_stall_by_trap; // DU
+    // ---
+    reg du_cpu_stall_r, du_cpu_unstall_r;
+    // ---
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst) begin
         du_cpu_stall_r   <= 1'b0;
@@ -1214,35 +1199,53 @@ module mor1kx_ctrl_marocchino
           du_cpu_unstall_r <= 1'b1;
         end
       end
-      else if (du_cpu_stall_by_cmd | du_cpu_stall_by_stepping | du_spu_stall_by_trap) begin
+      else if (du_cpu_stall_by_cmd | du_cpu_stall_by_stepping | du_cpu_stall_by_trap) begin
         du_cpu_stall_r   <= 1'b1;
         du_cpu_unstall_r <= 1'b0;
       end
     end // @ clock
+    // ---
+    assign du_cpu_stall   = du_cpu_stall_r;
+    assign du_cpu_unstall = du_cpu_unstall_r;
 
-    /* record if NPC was written while we were stalled.
-       If so, we will use this value for restarting */
+    //
+    // Record if NPC was written while we were stalled.
+    // If so, we will use this value for restarting
+    //
+    reg du_npc_hold_r;
+    // ---
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst)
-        du_npc_hold <= 1'b0;
-      else if (du_cpu_unstall_r & fetch_exception_taken_i)
-        du_npc_hold <= 1'b0;
+        du_npc_hold_r <= 1'b0;
+      else if (du_cpu_unstall & fetch_exception_taken_i)
+        du_npc_hold_r <= 1'b0;
       else if (du_npc_we)
-        du_npc_hold <= 1'b1;
+        du_npc_hold_r <= 1'b1;
     end // @ clock
-
+    // ---
+    assign du_npc_hold = du_npc_hold_r;
 
     /* Indicate step-by-step execution */
     assign stepping = spr_dmr1[`OR1K_SPR_DMR1_ST] & spr_dsr[`OR1K_SPR_DSR_TE];
 
+    reg [3:0] pstep_r;
+    assign    pstep = pstep_r; // DU enabled
+
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst)
-        pstep <= 3'h0;
-      else if (stepping & du_cpu_stall_r & (~du_stall_i))
-        // (!) ^^^ the condition is equal to stall->unstall one
-        pstep <= 3'h1;
-      else if (pass_step_to_decode | pass_step_to_wb | pass_step_to_stall)
-        pstep <= {pstep[1:0],1'b0};
+        pstep_r <= 4'b0000;
+      else if (stepping) begin
+        if (du_cpu_stall & (~du_stall_i)) // the condition is equal to stall->unstall one
+          pstep_r <= 4'b0001;
+        else if (pass_step_to_decode | pass_step_to_wb | pass_step_to_stall | doing_wb)
+          pstep_r <= {pstep_r[2:0],1'b0};
+      end
+      else begin
+        if (padv_wb_o)
+          pstep_r <= 4'b1000; // 1-clock delayed padv-wb on regular pipe advancing
+        else if (~wb_lsu_valid_miss_i)
+          pstep_r <= 4'b0000; // 1-clock delayed padv-wb on regular pipe advancing
+      end
     end // @ clock
 
     //
@@ -1250,24 +1253,32 @@ module mor1kx_ctrl_marocchino
     // (for correct tracking "Next PC")
     // 1-clock length
     //
+    reg stepped_into_exception_r;
+    // ---
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst)
-        stepped_into_exception <= 1'b0;
+        stepped_into_exception_r <= 1'b0;
       else
-        stepped_into_exception <= stepping & exception_re;
+        stepped_into_exception_r <= stepping & exception_re;
     end // @ clock
+    // ---
+    assign stepped_into_exception = stepped_into_exception_r; // DU enabled
 
     //
     // Indicate when we have stepped into l.rfe processing
     // (for correct tracking "Next PC")
     // 1-clock length
     //
+    reg stepped_into_rfe_r;
+    // ---
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst)
-        stepped_into_rfe <= 1'b0;
+        stepped_into_rfe_r <= 1'b0;
       else
-        stepped_into_rfe <= stepping & wb_op_rfe_i;
+        stepped_into_rfe_r <= stepping & wb_op_rfe_i;
     end // @ clock
+    // ---
+    assign stepped_into_rfe = stepped_into_rfe_r; // DU enabled
 
     //
     // Indicate when we have stepped into delay slot processing
@@ -1288,10 +1299,10 @@ module mor1kx_ctrl_marocchino
         if (branch_step[2])
           branch_step <= 3'd0;
         else if (|branch_step[1:0]) begin
-          if(du_cpu_stall_by_stepping)
+          if(doing_wb)
             branch_step <= {branch_step[1:0],1'b0};
         end
-        else if (padv_decode_s & dcod_do_branch_i)
+        else if (pass_step_to_decode & dcod_do_branch_i) // store "branch during the step"
           branch_step <= 3'd1;
       end
     end // @ clock
@@ -1304,52 +1315,50 @@ module mor1kx_ctrl_marocchino
     // make ACK to SPR BUS
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst)
-        spr_bus_ack_du <= 1'b0;
-      else if (spr_bus_ack_du)
-        spr_bus_ack_du <= 1'b0;
+        spr_bus_ack_du_r <= 1'b0; // DU disabled
+      else if (spr_bus_ack_du_r)
+        spr_bus_ack_du_r <= 1'b0; // DU disabled
       else if (spr_bus_cs_du)
-        spr_bus_ack_du <= 1'b1;
+        spr_bus_ack_du_r <= 1'b1; // DU disabled
     end
+    // data to SPR BUS
+    assign spr_bus_dat_du = 32'd0; // DU disabled
+    // "move to/from Debug System"
+    assign spr_bus_mXdbg  = 1'b0; // DU disabled
+
 
     // make ACK to Debug System
     always @(posedge clk `OR_ASYNC_RST) begin
       if (rst)
-        du_ack_o <= 1'b0;
+        du_ack_o <= 1'b0; // DU disabled
       else if (du_ack_o)
-        du_ack_o <= 1'b0;
+        du_ack_o <= 1'b0; // DU disabled
       else if (du_stb_i)
-        du_ack_o <= 1'b1;
-    end
+        du_ack_o <= 1'b1; // DU disabled
+    end // @ clock
+    // data to Debug System
+    assign du_dat_o = {OPTION_OPERAND_WIDTH{1'b0}}; // DU disabled
 
-    // data to output to SPR BUS and to Debug System
-    always @(posedge clk) begin
-      spr_bus_access_du_r <=  1'b0;
-      spr_bus_dat_du      <= 32'd0;
-      du_dat_o            <= {OPTION_OPERAND_WIDTH{1'b0}};
-    end
 
     // stall / unstall
-    assign du_stall_o       = 1'b0;
-    assign du_trap_enable_o = 1'b0;
+    assign du_stall_o       = 1'b0; // DU disabled
+    assign du_trap_enable_o = 1'b0; // DU disabled
     // ---
-    always @(posedge clk) begin
-      du_npc_hold      <= 1'b0;
-      du_cpu_flush_r   <= 1'b0;
-      du_cpu_stall_r   <= 1'b0;
-      du_cpu_unstall_r <= 1'b0;
-    end // @ clock
+    assign du_npc_hold    = 1'b0; // DU disabled
+    assign du_cpu_flush   = 1'b0; // DU disabled
+    assign du_cpu_stall   = 1'b0; // DU disabled
+    assign du_cpu_unstall = 1'b0; // DU disabled
 
     // step-by-step
-    assign stepping = 1'b0;
-    assign stepped_into_delay_slot = 1'b0;
     // ---
-    always @(posedge clk) begin
-      pstep                  <= 3'd0;
-      stepped_into_exception <= 1'b0;
-      stepped_into_rfe       <= 1'b0;
-    end // @ clock
+    assign stepping = 1'b0; // DU disabled
+    assign pstep    = 4'd0; // DU disabled
+    // ---
+    assign stepped_into_delay_slot = 1'b0; // DU disabled
+    assign stepped_into_exception  = 1'b0; // DU disabled
+    assign stepped_into_rfe        = 1'b0; // DU disabled
 
-  end // DU enabled/none
+  end // DU enabled/disabled
 
   endgenerate
 

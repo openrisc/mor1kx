@@ -420,7 +420,7 @@ module mor1kx_fetch_marocchino
   end // @ clock
 
   // read operands from RF
-  assign fetch_rf_adr_valid_o = padv_fetch_i;// & s2t_ack & ~flush_by_ctrl; // MAROCCHINO_TODO: remove extra logic?
+  assign fetch_rf_adr_valid_o = padv_fetch_i;
 
   // to RF
   assign fetch_rfa1_adr_o = s2t_insn_mux[`OR1K_RA_SELECT];

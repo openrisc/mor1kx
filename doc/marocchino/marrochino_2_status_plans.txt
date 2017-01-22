@@ -112,9 +112,14 @@ In fact extension bits are enough.
   Corrections in comments to simplify source exploring.
 
 
+22 January 2017
+  DU re-factored. Tested with OpenOCD: halt, resume, load image, reg, mdw.
+The "hello" and "vmlinux" were successfully loaded and executed with Mohor's
+JTAG-TAP and Advance Debug System. Step-by-step execution not tested yet.
+
 
 Primary TODOs:
-  - Verify DU
+  - Verify step by step execution with DU
   - Verify Multi-Core operations
   
 Secondary TODOs:

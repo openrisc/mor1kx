@@ -1909,7 +1909,6 @@ module mor1kx_cpu_marocchino
     // Track branch address for exception processing support
     .dcod_do_branch_i                 (dcod_do_branch), // CTRL
     .dcod_do_branch_target_i          (dcod_do_branch_target), // CTRL
-    //.dcod_jump_or_branch_i            (dcod_jump_or_branch), // CTRL
     // Support IBUS error handling in CTRL
     .exec_jump_or_branch_i            (exec_jump_or_branch), // CTRL
     .pc_exec_i                        (pc_exec), // CTRL

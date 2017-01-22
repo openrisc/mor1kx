@@ -284,8 +284,8 @@ module mor1kx_lsu_marocchino
   wire grant_wb_to_lsu = (padv_wb_i & grant_wb_to_lsu_i) | wb_lsu_valid_miss_o;
 
   // l.load completion / waiting / WB-miss
-  wire   dbus_ack_load  = (dbus_read_state | (dc_refill_state & dc_refill_first)) & dbus_ack_i;
-  // ---                     MAROCCHINO_TODO: ^^^^^^^^^^^^^^^ redundancy ?
+  wire   dbus_ack_load  = (dbus_read_state | dc_refill_first) & dbus_ack_i;
+  // ---
   assign lsu_ack_load   = (cmd_load_r & dc_ack) | dbus_ack_load;
   // ---
   assign lsu_free_load  = ((~cmd_load_r) & (~lsu_ack_load_p)) | // LSU free of l.load

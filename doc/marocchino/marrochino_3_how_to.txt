@@ -11,7 +11,7 @@ logic is removed temporary to reduce number of files for compilation.
 
 mor1kx_marocchino_alone
 #(
-  .FEATURE_DEBUGUNIT("NONE"), // MAROCCHINO_TODO: not tested
+  .FEATURE_DEBUGUNIT("ENABLED"), // ENABLED | NONE
   // insn cache
   .OPTION_ICACHE_BLOCK_WIDTH(5),
   .OPTION_ICACHE_SET_WIDTH(8),
