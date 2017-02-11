@@ -88,8 +88,8 @@ module mor1kx_pcu
       for(pcu_num = 0; pcu_num < OPTION_PERFCOUNTERS_NUM + 1; pcu_num = pcu_num + 1) begin: pcu_generate
          always @(posedge clk `OR_ASYNC_RST) begin
             if (rst) begin
-               pcu_pccr[pcu_num] = 32'd0;
-               pcu_pcmr[pcu_num] = 32'd0 | 1 << `OR1K_PCMR_CP;
+               pcu_pccr[pcu_num] <= 32'd0;
+               pcu_pcmr[pcu_num] <= 32'd0 | 1 << `OR1K_PCMR_CP;
             // we could write pcu registers only in system mode
             end else if (spr_we_i && spr_sys_mode_i) begin
                if (pcu_pccr_access)
