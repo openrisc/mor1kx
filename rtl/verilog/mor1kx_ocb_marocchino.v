@@ -30,8 +30,7 @@
 
 module ocb_tap
 #(
-  parameter DATA_SIZE   = 2,
-  parameter RESET_VALUE = {DATA_SIZE{1'b0}}
+  parameter DATA_SIZE = 2
 )
 (
   // clocks, resets and other controls
@@ -39,6 +38,8 @@ module ocb_tap
   input                      rst,
   input                      flush_i,  // flush pipe
   input                      push_i,
+  // value at reset/flush
+  input      [DATA_SIZE-1:0] default_value_i,
   // data inputs
   input      [DATA_SIZE-1:0] prev_tap_out_i,
   input      [DATA_SIZE-1:0] forwarded_value_i,
@@ -49,9 +50,9 @@ module ocb_tap
 
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
-      out_o <= RESET_VALUE;
+      out_o <= default_value_i;
     else if(flush_i)
-      out_o <= RESET_VALUE;
+      out_o <= default_value_i;
     else if(push_i)
       out_o <= use_forwarded_value_i ? forwarded_value_i :
                                        prev_tap_out_i;
@@ -69,8 +70,9 @@ endmodule // ocb_tap
 
 module mor1kx_ocb_marocchino
 #(
-  parameter DATA_SIZE   = 2,
-  parameter RESET_VALUE = {DATA_SIZE{1'b0}}
+  parameter NUM_TAPS    = 7, // 8-th is in Write-Back stage
+  parameter NUM_OUTS    = 7, // must be at least 1
+  parameter DATA_SIZE   = 2
 )
 (
   // clocks, resets and other input controls
@@ -79,6 +81,8 @@ module mor1kx_ocb_marocchino
   input                  pipeline_flush_i, // flush pipe
   input                  padv_decode_i,    // write: advance DECODE
   input                  padv_wb_i,        // read:  advance WB
+  // value at reset/flush
+  input  [DATA_SIZE-1:0] default_value_i,
   // data input
   input  [DATA_SIZE-1:0] ocbi_i,
   // "OCB is empty" flag
@@ -89,17 +93,12 @@ module mor1kx_ocb_marocchino
   //   (b) however, the "writing + reading" is possible
   //       because it just pushes OCB and keeps it full
   output                 full_o,
-  // data ouputs
-  output [DATA_SIZE-1:0] ocbo00_o, // OCB output
-  output [DATA_SIZE-1:0] ocbo01_o, // ...
-  output [DATA_SIZE-1:0] ocbo02_o, // ...
-  output [DATA_SIZE-1:0] ocbo03_o, // ...
-  output [DATA_SIZE-1:0] ocbo04_o, // ...
-  output [DATA_SIZE-1:0] ocbo05_o, // ...
-  output [DATA_SIZE-1:0] ocbo06_o  // OCB entrance
+  // ouput layout
+  // { out[n-1], out[n-2], ... out[0] } : DECODE (entrance) -> EXECUTE (exit)
+  output [DATA_SIZE*NUM_OUTS-1:0] ocbo_o
 );
 
-  localparam NUM_TAPS = 7; // 8-th is in Write-Back stage
+  genvar k, m;
 
   // "pointers"
   reg   [NUM_TAPS:0] ptr_curr; // on current active tap
@@ -178,132 +177,40 @@ module mor1kx_ocb_marocchino
     ({NUM_TAPS{wr_rd}} & ptr_prev); // tap[ptr_prev] <= ocbi_i;
 
 
-  // taps
-  //   tap #00
-  ocb_tap
-  #(
-    .DATA_SIZE    (DATA_SIZE),
-    .RESET_VALUE  (RESET_VALUE)
-  )
-  u_tap_00
-  (
-    .clk                    (clk),
-    .rst                    (rst),
-    .flush_i                (pipeline_flush_i),
-    .push_i                 (push_taps[0]),
-    .prev_tap_out_i         (ocbo01_o),
-    .forwarded_value_i      (ocbi_i),
-    .use_forwarded_value_i  (use_forwarded_value[0]),
-    .out_o                  (ocbo00_o)
-  );
+  // declare interconnection (one extra than taps number for input)
+  wire [DATA_SIZE-1:0] ocb_bus[0:NUM_TAPS];
 
-  //   tap #01
-  ocb_tap
-  #(
-    .DATA_SIZE    (DATA_SIZE),
-    .RESET_VALUE  (RESET_VALUE)
-  )
-  u_tap_01
-  (
-    .clk                    (clk),
-    .rst                    (rst),
-    .flush_i                (pipeline_flush_i),
-    .push_i                 (push_taps[1]),
-    .prev_tap_out_i         (ocbo02_o),
-    .forwarded_value_i      (ocbi_i),
-    .use_forwarded_value_i  (use_forwarded_value[1]),
-    .out_o                  (ocbo01_o)
-  );
+  // taps placement
+  generate
+  for (k = 0; k < NUM_TAPS; k = k + 1) begin : tap_k
+    ocb_tap
+    #(
+      .DATA_SIZE              (DATA_SIZE)
+    )
+    u_tap_k
+    (
+      .clk                    (clk),
+      .rst                    (rst),
+      .flush_i                (pipeline_flush_i),
+      .push_i                 (push_taps[k]),
+      .default_value_i        (default_value_i),
+      .prev_tap_out_i         (ocb_bus[k+1]),
+      .forwarded_value_i      (ocbi_i),
+      .use_forwarded_value_i  (use_forwarded_value[k]),
+      .out_o                  (ocb_bus[k])
+    );
+  end
+  endgenerate
 
-  //   tap #02
-  ocb_tap
-  #(
-    .DATA_SIZE    (DATA_SIZE),
-    .RESET_VALUE  (RESET_VALUE)
-  )
-  u_tap_02
-  (
-    .clk                    (clk),
-    .rst                    (rst),
-    .flush_i                (pipeline_flush_i),
-    .push_i                 (push_taps[2]),
-    .prev_tap_out_i         (ocbo03_o),
-    .forwarded_value_i      (ocbi_i),
-    .use_forwarded_value_i  (use_forwarded_value[2]),
-    .out_o                  (ocbo02_o)
-  );
+  // outputs assignement
+  generate
+  for (m = 0; m < NUM_OUTS; m = m + 1) begin : out_m
+    assign ocbo_o [(DATA_SIZE*(m+1)-1):(DATA_SIZE*m)] = ocb_bus[m];
+  end
+  endgenerate
 
-  //   tap #03
-  ocb_tap
-  #(
-    .DATA_SIZE    (DATA_SIZE),
-    .RESET_VALUE  (RESET_VALUE)
-  )
-  u_tap_03
-  (
-    .clk                    (clk),
-    .rst                    (rst),
-    .flush_i                (pipeline_flush_i),
-    .push_i                 (push_taps[3]),
-    .prev_tap_out_i         (ocbo04_o),
-    .forwarded_value_i      (ocbi_i),
-    .use_forwarded_value_i  (use_forwarded_value[3]),
-    .out_o                  (ocbo03_o)
-  );
-
-  //   tap #04
-  ocb_tap
-  #(
-    .DATA_SIZE    (DATA_SIZE),
-    .RESET_VALUE  (RESET_VALUE)
-  )
-  u_tap_04
-  (
-    .clk                    (clk),
-    .rst                    (rst),
-    .flush_i                (pipeline_flush_i),
-    .push_i                 (push_taps[4]),
-    .prev_tap_out_i         (ocbo05_o),
-    .forwarded_value_i      (ocbi_i),
-    .use_forwarded_value_i  (use_forwarded_value[4]),
-    .out_o                  (ocbo04_o)
-  );
-
-  //   tap #05
-  ocb_tap
-  #(
-    .DATA_SIZE    (DATA_SIZE),
-    .RESET_VALUE  (RESET_VALUE)
-  )
-  u_tap_05
-  (
-    .clk                    (clk),
-    .rst                    (rst),
-    .flush_i                (pipeline_flush_i),
-    .push_i                 (push_taps[5]),
-    .prev_tap_out_i         (ocbo06_o),
-    .forwarded_value_i      (ocbi_i),
-    .use_forwarded_value_i  (use_forwarded_value[5]),
-    .out_o                  (ocbo05_o)
-  );
-
-  //   tap #06 (entrance)
-  ocb_tap
-  #(
-    .DATA_SIZE    (DATA_SIZE),
-    .RESET_VALUE  (RESET_VALUE)
-  )
-  u_tap_06
-  (
-    .clk                    (clk),
-    .rst                    (rst),
-    .flush_i                (pipeline_flush_i),
-    .push_i                 (push_taps[6]),
-    .prev_tap_out_i         (RESET_VALUE),
-    .forwarded_value_i      (ocbi_i),
-    .use_forwarded_value_i  (use_forwarded_value[6]),
-    .out_o                  (ocbo06_o)
-  );
+  // and assign input of all queue:
+  assign ocb_bus[NUM_TAPS] = default_value_i;
 
 endmodule // mor1kx_ocb_marocchino
 
@@ -331,16 +238,16 @@ module mor1kx_rsrvs_marocchino
   parameter DCOD_RFXX_WIDTH      = 64, // (2 * OPTION_OPERAND_WIDTH) for LSU; etc...
   // OMAN-to-DECODE hazards layout for various reservation stations:
   //  # LSU : {   x,    x,    x,    x, d2b1, d2a1, d1b1, d1a1 }
-  //  # 1CLK: {   x,    x, carr, flag, d2b1, d2a1, d1b1, d1a1 }
+  //  # 1CLK: {   x,    x,    x,    x, d2b1, d2a1, d1b1, d1a1 }
   //  # MCLK: {d2b2, d2a2, d1b2, d1a2, d2b1, d2a1, d1b1, d1a1 }
-  parameter BUSY_HAZARDS_FLAGS_WIDTH =  4, //: for LSU;  6: for 1CLK;  8: for MCLK
+  parameter BUSY_HAZARDS_FLAGS_WIDTH =  4, //: for LSU and 1CLK;  8: for MCLK
   parameter BUSY_HAZARDS_ADDRS_WIDTH = 12, // (4 * DEST_EXT_ADDR_WIDTH) for LSU; etc...
   // BUSY-to-EXECUTE pass hazards data layout for various reservation stations:
   // (it is also layout for WB-resolving hazards)
-  //  # LSU : {    x,     x, d2_wr, d1_wr, ext_bits }
-  //  # 1CLK: { carr,  flag, d2_wr, d1_wr, ext_bits }
-  //  # MCLK: {    x,     x, d2_wr, d1_wr, ext_bits }
-  parameter BUSY2EXEC_PASS_DATA_WIDTH = 5, //: for LSU;  7: for 1CLK;  5: for MCLK
+  //  # LSU : { d2_wr, d1_wr, ext_bits }
+  //  # 1CLK: { d2_wr, d1_wr, ext_bits }
+  //  # MCLK: { d2_wr, d1_wr, ext_bits }
+  parameter BUSY2EXEC_PASS_DATA_WIDTH = 5,
   // EXEC-to-DECODE hazards layout for various reservation stations:
   //  # LSU : {   x,    x,    x,    x, d2b1, d2a1, d1b1, d1a1 }
   //  # 1CLK: {   x,    x,    x,    x, d2b1, d2a1, d1b1, d1a1 }
@@ -386,7 +293,7 @@ module mor1kx_rsrvs_marocchino
   //  ## forwarding results
   input        [(OPTION_OPERAND_WIDTH-1):0] wb_result1_i,
   input        [(OPTION_OPERAND_WIDTH-1):0] wb_result2_i,
-  
+
 
   // Processing of LSU's WB-miss
   input                                     wb_rfd1_wb_lsu_miss_i,
@@ -434,7 +341,7 @@ module mor1kx_rsrvs_marocchino
 
   //  # hazards layouts for various reservation stations:
   //  # LSU : {   x,    x,    x,    x, d2b1, d2a1, d1b1, d1a1 }
-  //  # 1CLK: {   x,    x, carr, flag, d2b1, d2a1, d1b1, d1a1 }
+  //  # 1CLK: {   x,    x,    x,    x, d2b1, d2a1, d1b1, d1a1 }
   //  # MCLK: {d2b2, d2a2, d1b2, d1a2, d2b1, d2a1, d1b1, d1a1 }
 
   // d1a1 related
@@ -469,20 +376,12 @@ module mor1kx_rsrvs_marocchino
   localparam  HAZARD_D2B2_FLG_POS = 7;
   localparam  HAZARD_D2B2_ADR_LSB = 7 * DEST_EXT_ADDR_WIDTH;
   localparam  HAZARD_D2B2_ADR_MSB = 8 * DEST_EXT_ADDR_WIDTH - 1;
-  // FLAG related
-  localparam  HAZARD_FLAG_FLG_POS = HAZARD_D1A2_FLG_POS; // for 1-CLOCK reservations station
-  localparam  HAZARD_FLAG_ADR_LSB = HAZARD_D1A2_ADR_LSB; // for 1-CLOCK reservations station
-  localparam  HAZARD_FLAG_ADR_MSB = HAZARD_D1A2_ADR_MSB; // for 1-CLOCK reservations station
-  // CARRY related
-  localparam  HAZARD_CARR_FLG_POS = HAZARD_D1B2_FLG_POS; // for 1-CLOCK reservations station
-  localparam  HAZARD_CARR_ADR_LSB = HAZARD_D1B2_ADR_LSB; // for 1-CLOCK reservations station
-  localparam  HAZARD_CARR_ADR_MSB = HAZARD_D1B2_ADR_MSB; // for 1-CLOCK reservations station
 
 
   // BUSY-to-EXECUTE pass hazards data layout for various reservation stations:
-  //  # LSU : {    x,     x, d2_wr, d1_wr, ext_bits }
-  //  # 1CLK: { carr,  flag, d2_wr, d1_wr, ext_bits }
-  //  # MCLK: {    x,     x, d2_wr, d1_wr, ext_bits }
+  //  # LSU : { d2_wr, d1_wr, ext_bits }
+  //  # 1CLK: { d2_wr, d1_wr, ext_bits }
+  //  # MCLK: { d2_wr, d1_wr, ext_bits }
   //    ## extention bits
   localparam  BUSY2EXEC_PASS_EXT_LSB      = 0;
   localparam  BUSY2EXEC_PASS_EXT_MSB      = DEST_EXT_ADDR_WIDTH - 1;
@@ -490,10 +389,6 @@ module mor1kx_rsrvs_marocchino
   localparam  BUSY2EXEC_PASS_RFD1_WB_POS  = BUSY2EXEC_PASS_EXT_MSB     + 1;
   //    ## write to D2 request
   localparam  BUSY2EXEC_PASS_RFD2_WB_POS  = BUSY2EXEC_PASS_RFD1_WB_POS + 1;
-  //    ## FLAG
-  localparam  BUSY2EXEC_PASS_FLAG_WB_POS  = BUSY2EXEC_PASS_RFD2_WB_POS + 1;
-  //    ## CARRY
-  localparam  BUSY2EXEC_PASS_CARRY_WB_POS = BUSY2EXEC_PASS_FLAG_WB_POS + 1;
 
 
   // unpack data common for all resevation stations
@@ -596,13 +491,6 @@ module mor1kx_rsrvs_marocchino
   wire                                busy_hazard_d2b2_w;
   wire                                busy_d2b2_pass2exec;
   wire                                busy_d2b2_muxing_wb;
-  // # exclusively for 1CLK reservation station
-  //  ## FLAG related
-  wire                                busy_hazard_f_w;
-  wire                                busy_hazard_f_done;
-  //  ## CARRY related
-  wire                                busy_hazard_c_w;
-  wire                                busy_hazard_c_done;
 
   // busy: operands
   //   ## registers for operands A & B
@@ -870,83 +758,6 @@ module mor1kx_rsrvs_marocchino
   end
   endgenerate // BUSY-MCLK
 
-  // FLAG and CARRY processing exclusively for 1CLK reservation station
-  generate
-  /* verilator lint_off WIDTH */
-  if (RSRVS_1CLK == 1) begin : carry_flag_enabled
-  /* verilator lint_on WIDTH */
-    //  unpack BUSY-to-EXECUTE pass data
-    wire exec_flag_wb  = busy2exec_pass_data_i[BUSY2EXEC_PASS_FLAG_WB_POS];
-    wire exec_carry_wb = busy2exec_pass_data_i[BUSY2EXEC_PASS_CARRY_WB_POS];
-    // ---
-    wire wb_flag_wb  = wb2exe_hazards_data_i[BUSY2EXEC_PASS_FLAG_WB_POS];
-    wire wb_carry_wb = wb2exe_hazards_data_i[BUSY2EXEC_PASS_CARRY_WB_POS];
-    // FLAG
-    reg                           busy_hazard_f_r;
-    reg [DEST_EXT_ADDR_WIDTH-1:0] busy_hazard_f_adr_r;
-    // CARRY
-    reg                           busy_hazard_c_r;
-    reg [DEST_EXT_ADDR_WIDTH-1:0] busy_hazard_c_adr_r;
-    // ---
-    always @(posedge clk `OR_ASYNC_RST) begin
-      if (rst) begin
-        // FLAG
-        busy_hazard_f_r     <= 1'b0;
-        busy_hazard_f_adr_r <= {DEST_EXT_ADDR_WIDTH{1'b0}};
-        // CARRY
-        busy_hazard_c_r     <= 1'b0;
-        busy_hazard_c_adr_r <= {DEST_EXT_ADDR_WIDTH{1'b0}};
-      end
-      else if (pipeline_flush_i) begin
-        // FLAG
-        busy_hazard_f_r     <= 1'b0;
-        busy_hazard_f_adr_r <= {DEST_EXT_ADDR_WIDTH{1'b0}};
-        // CARRY
-        busy_hazard_c_r     <= 1'b0;
-        busy_hazard_c_adr_r <= {DEST_EXT_ADDR_WIDTH{1'b0}};
-      end
-      else if (dcod_pushing_busy) begin
-        // FLAG
-        busy_hazard_f_r     <= busy_hazards_flags_i[HAZARD_FLAG_FLG_POS];
-        busy_hazard_f_adr_r <= busy_hazards_addrs_i[HAZARD_FLAG_ADR_MSB:HAZARD_FLAG_ADR_LSB];
-        // CARRY
-        busy_hazard_c_r     <= busy_hazards_flags_i[HAZARD_CARR_FLG_POS];
-        busy_hazard_c_adr_r <= busy_hazards_addrs_i[HAZARD_CARR_ADR_MSB:HAZARD_CARR_ADR_LSB];
-      end
-      else begin
-        // FLAG
-        if (busy_hazard_f_done) begin
-          busy_hazard_f_r     <= 1'b0;
-          busy_hazard_f_adr_r <= {DEST_EXT_ADDR_WIDTH{1'b0}};
-        end
-        // CARRY
-        if (busy_hazard_c_done) begin
-          busy_hazard_c_r     <= 1'b0;
-          busy_hazard_c_adr_r <= {DEST_EXT_ADDR_WIDTH{1'b0}};
-        end
-      end
-    end // @clock
-    // ---
-    // FLAG
-    assign busy_hazard_f_w    = busy_hazard_f_r;
-    assign busy_hazard_f_done = busy_hazard_f_r &
-                                ((exec_flag_wb & (busy_hazard_f_adr_r == exec_ext_adr) & padv_wb_i) |
-                                 (wb_flag_wb   & (busy_hazard_f_adr_r == wb_ext_adr)));
-    // CARRY
-    assign busy_hazard_c_w    = busy_hazard_c_r;
-    assign busy_hazard_c_done = busy_hazard_c_r &
-                                ((exec_carry_wb & (busy_hazard_c_adr_r == exec_ext_adr) & padv_wb_i) |
-                                 (wb_carry_wb   & (busy_hazard_c_adr_r == wb_ext_adr)));
-  end
-  else begin : carry_flag_disabled
-    // FLAG
-    assign busy_hazard_f_w    = 1'b0; // not 1CLK
-    assign busy_hazard_f_done = 1'b0; // not 1CLK
-    // CARRY
-    assign busy_hazard_c_w    = 1'b0; // not 1CLK
-    assign busy_hazard_c_done = 1'b0; // not 1CLK
-  end
-  endgenerate
 
   // busy pushing execute: no more hazards in BUSY
   wire busy_free_of_hazards = ((~busy_hazard_d1a1_r) | busy_d1a1_muxing_wb | busy_d1a1_pass2exec) &
@@ -956,9 +767,7 @@ module mor1kx_rsrvs_marocchino
                               ((~busy_hazard_d1a2_w) | busy_d1a2_muxing_wb | busy_d1a2_pass2exec) &
                               ((~busy_hazard_d1b2_w) | busy_d1b2_muxing_wb | busy_d1b2_pass2exec) &
                               ((~busy_hazard_d2a2_w) | busy_d2a2_muxing_wb | busy_d2a2_pass2exec) &
-                              ((~busy_hazard_d2b2_w) | busy_d2b2_muxing_wb | busy_d2b2_pass2exec) &
-                              ((~busy_hazard_f_w)    | busy_hazard_f_done)                        &
-                              ((~busy_hazard_c_w)    | busy_hazard_c_done);
+                              ((~busy_hazard_d2b2_w) | busy_d2b2_muxing_wb | busy_d2b2_pass2exec);
 
 
   /**** EXECUTE stage latches ****/

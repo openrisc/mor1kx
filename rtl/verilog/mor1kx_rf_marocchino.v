@@ -40,6 +40,7 @@ module mor1kx_rf_marocchino
 
   // pipeline control signals
   input                             pipeline_flush_i,
+  input                             padv_fetch_i,
 
   // SPR bus
   input                          [15:0] spr_bus_addr_i,
@@ -50,7 +51,6 @@ module mor1kx_rf_marocchino
   output     [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_gpr_o,
 
   // from FETCH
-  input                             fetch_rf_adr_valid_i,
   input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa1_adr_i,
   input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb1_adr_i,
   // for FPU64
@@ -91,6 +91,10 @@ module mor1kx_rf_marocchino
   output [OPTION_OPERAND_WIDTH-1:0] dcod_rfa2_o,
   output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb2_o,
 
+  // we use adder for l.jl/l.jalr to compute return address: (pc+8)
+  input                             dcod_op_jal_i,
+  input  [OPTION_OPERAND_WIDTH-1:0] pc_decode_i,
+
   // Special case for l.jr/l.jalr
   output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_jr_o
 );
@@ -116,7 +120,7 @@ module mor1kx_rf_marocchino
 
 
   // short name for read request
-  wire read_req = fetch_rf_adr_valid_i;
+  wire read_req = padv_fetch_i;
 
 
   // 1-clock witting strobes for GPR write
@@ -450,13 +454,15 @@ module mor1kx_rf_marocchino
 
 
   // Muxing and forwarding RFA1-output
-  assign dcod_rfa1_o = dcod_wb2dec_hazard_d1a1 ? wb_result1_i :
+  assign dcod_rfa1_o = dcod_op_jal_i           ? pc_decode_i  :
+                       dcod_wb2dec_hazard_d1a1 ? wb_result1_i :
                        dcod_wb2dec_hazard_d2a1 ? wb_result2_i :
                        dcod_rfa1_adr_i[0]      ? rfa_odd_dout :
                                                  rfa_even_dout;
 
   // Muxing and forwarding RFB1-output
-  assign dcod_rfb1_o = dcod_immediate_sel_i    ? dcod_immediate_i :
+  assign dcod_rfb1_o = dcod_op_jal_i           ? 4'd8             : // (FEATURE_DELAY_SLOT == "ENABLED")
+                       dcod_immediate_sel_i    ? dcod_immediate_i :
                        dcod_wb2dec_hazard_d1b1 ? wb_result1_i     :
                        dcod_wb2dec_hazard_d2b1 ? wb_result2_i     :
                        dcod_rfb1_adr_i[0]      ? rfb_odd_dout     :

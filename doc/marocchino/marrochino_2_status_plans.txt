@@ -118,6 +118,26 @@ The "hello" and "vmlinux" were successfully loaded and executed with Mohor's
 JTAG-TAP and Advance Debug System. Step-by-step execution not tested yet.
 
 
+05 March 2017
+  (1) pipeline_flush is register now.
+  (2) Collapse store buffer if a DBUS error occurs during write.
+  (3) Move link address computation for l.jal and l.jalr fro DECODE to ALU
+  (4) Remove FLAG and CARRY related hazards detection in DECODE and resolving
+them in 1-CLK reservation station. They were used in 1-CLK execution unit only.
+However, when 1-CLK execution unit receives access to WB it means all hazards
+are resolved. So, FLAG and CARRY related hazards  were redundant.
+  (5) Parameterization of Order Control Buffer.
+  (6) More accurate EPCR update in according with exception hierarchy
+  (7) Quasi speculative jump/branch taking. There were quite complex logic
+contributing to padv_decode and stalled IFETCH if jump or branch related data
+were not available to jump or branch execution. The modification remove the
+logic from control paths (pdv_decode) and add quasi branch miss indicator in
+IFETCH's stage #1. By miss IFETCH continue jump/branch fetching attempts till
+jump/branch target/flag become ready
+  (8) More accurate tracking for NPC thanks to previous
+  (9) Remove redundant bits from SPR EVBAR, exception_pc_addr and DU SPRs
+
+
 Primary TODOs:
   - Verify step by step execution with DU
   - Verify Multi-Core operations

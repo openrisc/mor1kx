@@ -77,6 +77,8 @@ module pfpu64_fcmp_marocchino
   input              ctrl_fpu_mask_flags_inv_i,
   input              ctrl_fpu_mask_flags_inf_i,
   // Outputs
+  //  # pre WB
+  output             exec_except_fp64_cmp_o, // exception by FP32-comparison
   //  # WB-latched
   output reg         wb_fp64_flag_set_o,      // comparison result
   output reg         wb_fp64_flag_clear_o,    // comparison result
@@ -184,15 +186,15 @@ end // always@ *
 ////////////////////////////////////////////////////////////////////////
 // Just before latching
 //  # access to WB
-wire exec_fp64_cmp_wb     = grant_wb_to_fp64_cmp_i;
+wire exec_fp64_cmp_wb         = grant_wb_to_fp64_cmp_i;
 //  # set/slear commands
-wire exec_fp64_flag_set   = exec_fp64_cmp_wb &   cmp_flag;
-wire exec_fp64_flag_clear = exec_fp64_cmp_wb & (~cmp_flag);
+wire exec_fp64_flag_set       = exec_fp64_cmp_wb &   cmp_flag;
+wire exec_fp64_flag_clear     = exec_fp64_cmp_wb & (~cmp_flag);
 //  # FP32 comparison flags
-wire exec_fp64_cmp_inv    = exec_fp64_cmp_wb & ctrl_fpu_mask_flags_inv_i & inv_cmp;
-wire exec_fp64_cmp_inf    = exec_fp64_cmp_wb & ctrl_fpu_mask_flags_inf_i & (infa_i | infb_i);
+wire exec_fp64_cmp_inv        = exec_fp64_cmp_wb & ctrl_fpu_mask_flags_inv_i & inv_cmp;
+wire exec_fp64_cmp_inf        = exec_fp64_cmp_wb & ctrl_fpu_mask_flags_inf_i & (infa_i | infb_i);
 //  # FP32 comparison exception
-wire exec_except_fp64_cmp = except_fpu_enable_i & (exec_fp64_cmp_inv | exec_fp64_cmp_inf);
+assign exec_except_fp64_cmp_o = except_fpu_enable_i & (exec_fp64_cmp_inv | exec_fp64_cmp_inf);
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -226,7 +228,7 @@ always @(posedge clk `OR_ASYNC_RST) begin
     wb_fp64_cmp_inv_o    <= exec_fp64_cmp_inv;
     wb_fp64_cmp_inf_o    <= exec_fp64_cmp_inf;
     // comparison exception
-    wb_except_fp64_cmp_o <= exec_except_fp64_cmp;
+    wb_except_fp64_cmp_o <= exec_except_fp64_cmp_o;
   end // advance WB latches
 end // @clock
 

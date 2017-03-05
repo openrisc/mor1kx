@@ -33,6 +33,8 @@ module mor1kx_store_buffer_marocchino
 (
   input                               clk,
   input                               rst,
+  // DBUS error during write data from store buffer (force empty)
+  input                               sbuf_err_i,
   // entry port
   input    [OPTION_OPERAND_WIDTH-1:0] sbuf_epcr_i,
   input    [OPTION_OPERAND_WIDTH-1:0] virt_addr_i,
@@ -66,20 +68,24 @@ module mor1kx_store_buffer_marocchino
   wire        [DEPTH_WIDTH:0] read_pointer_next;
 
   // write pointer update
-  assign write_pointer_next = write_pointer + {{DEPTH_WIDTH{1'b0}},1'b1};
+  assign write_pointer_next = write_pointer + 1'b1;
   // ---
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
+      write_pointer <= {(DEPTH_WIDTH+1){1'b0}};
+    else if (sbuf_err_i)
       write_pointer <= {(DEPTH_WIDTH+1){1'b0}};
     else if (write_i)
       write_pointer <= write_pointer_next;
   end
 
   // read pointer update
-  assign read_pointer_next = read_pointer + {{DEPTH_WIDTH{1'b0}},1'b1};
+  assign read_pointer_next = read_pointer + 1'b1;
   // ---
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
+      read_pointer <= {(DEPTH_WIDTH+1){1'b0}};
+    else if (sbuf_err_i)
       read_pointer <= {(DEPTH_WIDTH+1){1'b0}};
     else if (read_i)
       read_pointer <= read_pointer_next;

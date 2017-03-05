@@ -46,9 +46,6 @@ module mor1kx_decode_marocchino
   // INSN
   input          [`OR1K_INSN_WIDTH-1:0] dcod_insn_i,
 
-  // Data dependancy detection
-  output                                dcod_op_jr_o,
-  input                                 exe2dec_hazard_d1b1_i,
 
   // PC
   input      [OPTION_OPERAND_WIDTH-1:0] pc_decode_i,
@@ -63,31 +60,26 @@ module mor1kx_decode_marocchino
   output     [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd1_adr_o, // address of WB
   output                                dcod_flag_wb_o,   // instruction writes comparison flag
   output                                dcod_carry_wb_o,  // instruction writes carry flag
-  output                                dcod_flag_req_o,  // instruction requires comparison flag
-  output                                dcod_carry_req_o, // instruction requires carry flag
   // for FPU64
   output reg                            dcod_rfa2_req_o, // instruction requires operand A2
   output reg                            dcod_rfb2_req_o, // instruction requires operand B2
   input      [OPTION_RF_ADDR_WIDTH-1:0] insn_rfd2_adr_i, // D2 address from IFETCH
   output     [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd2_adr_o, // D2 address corrected
 
+  // Logic to support Jump / Branch taking
+  output                                dcod_op_jr_o,
+  output                                dcod_op_jimm_o,
+  output                                dcod_op_bf_o,
+  output                                dcod_op_bnf_o,
+  // pc-relative target
+  output     [OPTION_OPERAND_WIDTH-1:0] dcod_to_imm_target_o,
   // flag & branches
   output                                dcod_jump_or_branch_o, // detect jump/branch to indicate "delay slot" for next fetched instruction
-  // Forwarding comparision flag
-  input                                 exec_op_1clk_cmp_i, // integer or fp32
-  input                                 exec_flag_set_i,    // integer or fp32 comparison result
-  input                                 ctrl_flag_i,
-  // Do jump/branch and jump/branch target for FETCH
-  input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_jr_i,
-  output                                dcod_do_branch_o,
-  output     [OPTION_OPERAND_WIDTH-1:0] dcod_do_branch_target_o,
-
   // Signals to stall FETCH if we are waiting flag
   //  # flag is going to be written by multi-cycle instruction
   //  # like 64-bit FPU comparison or l.swa
   output                                dcod_flag_wb_mcycle_o,
-  //  # conditional branch: l.bf or l.bnf
-  output                                dcod_op_brcond_o,
+
 
   // LSU related
   output          [`OR1K_IMM_WIDTH-1:0] dcod_imm16_o,
@@ -118,7 +110,6 @@ module mor1kx_decode_marocchino
   output      [`OR1K_ALU_OPC_WIDTH-1:0] dcod_opc_logic_o,
   // Jump & Link
   output                                dcod_op_jal_o,
-  output     [OPTION_OPERAND_WIDTH-1:0] dcod_jal_result_o,
   // Set flag related
   output                                dcod_op_setflag_o,
   output                                dcod_op_fp32_cmp_o,
@@ -154,7 +145,6 @@ module mor1kx_decode_marocchino
   //  ## enable l.trap exception
   input                                 du_trap_enable_i,
   //  ## outcome exception flags
-  output                                fetch_except_ibus_align_o,
   output reg                            dcod_except_illegal_o,
   output                                dcod_except_syscall_o,
   output                                dcod_except_trap_o,
@@ -229,10 +219,11 @@ module mor1kx_decode_marocchino
   // --- adder ---
   assign dcod_op_add_o = (dcod_op_alu &
                           ((opc_alu == `OR1K_ALU_OPC_ADDC) |
-                          (opc_alu == `OR1K_ALU_OPC_ADD) |
-                          (opc_alu == `OR1K_ALU_OPC_SUB))) |
-                         (opc_insn == `OR1K_OPCODE_ADDIC) |
-                         (opc_insn == `OR1K_OPCODE_ADDI);
+                           (opc_alu == `OR1K_ALU_OPC_ADD)  |
+                           (opc_alu == `OR1K_ALU_OPC_SUB))) |
+                         (opc_insn == `OR1K_OPCODE_ADDIC)   |
+                         (opc_insn == `OR1K_OPCODE_ADDI)    |
+                         dcod_op_jal_o; // we use adder for l.jl/l.jalr to compute return address: (pc+8) 
   // Adder control logic
   // Subtract when comparing to check if equal
   assign dcod_adder_do_sub_o = (dcod_op_alu & (opc_alu == `OR1K_ALU_OPC_SUB)) |
@@ -408,8 +399,8 @@ module mor1kx_decode_marocchino
       `OR1K_OPCODE_BF:    // pc <- pc + exts(Imm26 << 2) if flag
         begin
           dcod_except_illegal_o = 1'b0;
-          dcod_op_1clk_o        = dcod_op_jal_o;  // save GPR[9] by l.jal/l.jalr
-          dcod_op_pass_exec_o   = ~dcod_op_jal_o; // l.j/l.jr/l.bf/l.bnf
+          dcod_op_1clk_o        = dcod_op_jal_o;  // compute GPR[9] by adder in 1CLK_EXEC
+          dcod_op_pass_exec_o   = 1'b0;           // wait jump/branch attributes order control buffer
           dcod_rfa1_req_o       = 1'b0;
           dcod_rfb1_req_o       = 1'b0;           // l.jr/l.jalr are processed in OMAN in special way
           dcod_rfd1_wb_o        = dcod_op_jal_o;  // save GPR[9] by l.jal/l.jalr
@@ -743,43 +734,28 @@ module mor1kx_decode_marocchino
   end // always
 
 
-  // Calculate the link register result and
-  // provide it as GPR[9] content for jump & link
-  assign dcod_jal_result_o = (pc_decode_i + 4'd8); // (FEATURE_DELAY_SLOT == "ENABLED")
-
 
   // Branch detection
 
   // jumps to register
-  assign dcod_op_jr_o = (opc_insn == `OR1K_OPCODE_JR) |
-                        (opc_insn == `OR1K_OPCODE_JALR);
-  // jumps with link
-  assign dcod_op_jal_o = (opc_insn == `OR1K_OPCODE_JALR) |
-                         (opc_insn == `OR1K_OPCODE_JAL);
+  assign dcod_op_jr_o = (opc_insn == `OR1K_OPCODE_JR) | (opc_insn == `OR1K_OPCODE_JALR);
+
+  // jump to immediate
+  assign dcod_op_jimm_o = (opc_insn == `OR1K_OPCODE_J) | (opc_insn == `OR1K_OPCODE_JAL);
 
   // conditional branches
-  wire dcod_op_bf  = (opc_insn == `OR1K_OPCODE_BF);
-  wire dcod_op_bnf = (opc_insn == `OR1K_OPCODE_BNF);
+  assign dcod_op_bf_o  = (opc_insn == `OR1K_OPCODE_BF);
+  assign dcod_op_bnf_o = (opc_insn == `OR1K_OPCODE_BNF);
 
   // detect jump/branch to indicate "delay slot" for next fetched instruction
-  assign dcod_jump_or_branch_o = ((opc_insn < `OR1K_OPCODE_NOP) |   // l.j, l.jal, l.bnf, l.bf
-                                  (opc_insn == `OR1K_OPCODE_JR) |   // l.jr
-                                  (opc_insn == `OR1K_OPCODE_JALR)); // l.jalr
+  assign dcod_jump_or_branch_o = dcod_op_jr_o | dcod_op_jimm_o | dcod_op_bf_o | dcod_op_bnf_o;
 
-  // do jumps or contitional branches
-  //  # forwarded flag
-  wire fwd_flag = exec_op_1clk_cmp_i ? exec_flag_set_i : ctrl_flag_i;
-  //  # take branch flag
-  assign dcod_do_branch_o = (opc_insn == `OR1K_OPCODE_J) | (opc_insn == `OR1K_OPCODE_JAL) | // do jump to immediate
-                            dcod_op_jr_o |                                                  // do jump to register (B1)
-                            (dcod_op_bf & fwd_flag) | (dcod_op_bnf & ~fwd_flag);            // do conditional branch to immediate
-  //  # pc-relative target
-  wire [OPTION_OPERAND_WIDTH-1:0] branch_to_imm_target = pc_decode_i + {{4{dcod_insn_i[25]}},dcod_insn_i[25:0],2'b00};
-  //  # take branch target: to immediate for l.j, l.jal, l.bnf, l.bf
-  assign dcod_do_branch_target_o   = (opc_insn < `OR1K_OPCODE_NOP) ? branch_to_imm_target : dcod_rfb1_jr_i;
-  //  # take branch align exception
-  assign fetch_except_ibus_align_o = dcod_op_jr_o & ((|dcod_rfb1_jr_i[1:0]) & ~exe2dec_hazard_d1b1_i);
-                                             // MAROCCHINO_TODO: redudancy ^^^^^^^^^^^^^^^^^^^^^^ ?
+  // pc-relative target
+  assign dcod_to_imm_target_o = pc_decode_i + {{4{dcod_insn_i[25]}},dcod_insn_i[25:0],2'b00};
+
+
+  // jumps with link to 1-CLCK reservaton station for save GR[9]
+  assign dcod_op_jal_o = (opc_insn == `OR1K_OPCODE_JALR) | (opc_insn == `OR1K_OPCODE_JAL);
 
 
   // Destination addresses:
@@ -794,22 +770,14 @@ module mor1kx_decode_marocchino
                           dcod_op_fp32_cmp_o |
                           dcod_op_fp64_cmp_o |
                           (opc_insn == `OR1K_OPCODE_SWA);
-  // Which instructions require comparison flag?
-  //  # l.cmov
-  assign dcod_flag_req_o = dcod_op_cmov_o;
-
 
   // Signals to stall FETCH if we are waiting flag
   //  # flag is going to be written by multi-cycle instruction
   //  # like 64-bit FPU comparison or l.swa
   assign dcod_flag_wb_mcycle_o = dcod_op_fp64_cmp_o | (opc_insn == `OR1K_OPCODE_SWA);
-  //  # conditional branch
-  assign dcod_op_brcond_o  = dcod_op_bf | dcod_op_bnf;
 
 
   // Which instruction writes carry flag?
   assign dcod_carry_wb_o = dcod_op_add_o | dcod_op_div_o;
-  // Which instructions require carry flag?
-  assign dcod_carry_req_o = dcod_adder_do_carry_o;
 
 endmodule // mor1kx_decode_marocchino

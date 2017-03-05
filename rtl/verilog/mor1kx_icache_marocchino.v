@@ -49,19 +49,21 @@ module mor1kx_icache_marocchino
   input                                 ibus_err_i,
 
   // configuration
-  input                                 enable_i,
+  input                                 ic_enable_i,
 
   // regular requests in/out
   input      [OPTION_OPERAND_WIDTH-1:0] virt_addr_mux_i,
   input      [OPTION_OPERAND_WIDTH-1:0] phys_addr_fetch_i,
+  input                                 fetch_req_hit_i,
   input                                 immu_cache_inhibit_i,
-  output                                ic_access_o,
   output                                ic_ack_o,
   output reg     [`OR1K_INSN_WIDTH-1:0] ic_dat_o,
 
+  // IBUS access request
+  output                                ibus_access_req_o,
+
   // re-fill
   output                                refill_req_o,
-  input                                 ic_refill_allowed_i,
   output     [OPTION_OPERAND_WIDTH-1:0] next_refill_adr_o,
   output                                ic_refill_first_o,
   output                                ic_refill_last_o,
@@ -186,10 +188,22 @@ module mor1kx_icache_marocchino
 
 
   // FETCH reads ICACHE (doesn't include exceptions or flushing control)
-  assign ic_fsm_adv = padv_s1_i & enable_i;
+  assign ic_fsm_adv = padv_s1_i & ic_enable_i;
 
   // RAM block read access
-  assign ic_ram_re  = padv_s1_i & enable_i;
+  assign ic_ram_re  = padv_s1_i & ic_enable_i;
+
+  // Stored "ICACHE enable" flag for ibus_access_req_o
+  reg ic_enable_r;
+  // ---
+  always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst)
+      ic_enable_r <= 1'b0;
+    else if (flush_by_ctrl_i)
+      ic_enable_r <= 1'b0;
+    else if (padv_s1_i)
+      ic_enable_r <= ic_enable_i;
+  end // @ clock
 
 
   generate
@@ -230,16 +244,14 @@ module mor1kx_icache_marocchino
   //   If ICACHE is in state read/refill it automatically means that
   // ICACHE is enabled (see ic_fsm_adv).
   //
-  //   So, locally we use short variant of ic-access
-  wire   ic_access   = ic_check_limit_width & ~immu_cache_inhibit_i;
-  //   While for output the full variant is used
-  assign ic_access_o = ic_read & ic_access;
-
+  wire   is_cacheble  = ic_check_limit_width & ~immu_cache_inhibit_i;
   // ICACHE ACK
-  assign ic_ack_o = ic_access_o & hit;
-
+  assign ic_ack_o     = ic_read & is_cacheble & fetch_req_hit_i &  hit;
   // RE-FILL request
-  assign refill_req_o = ic_access_o & ~hit;
+  assign refill_req_o = ic_read & is_cacheble & fetch_req_hit_i & ~hit;
+
+  // IBUS access request
+  assign ibus_access_req_o  = ((~ic_enable_r) | (~is_cacheble)) & fetch_req_hit_i;
 
 
   // read result if success
@@ -297,30 +309,26 @@ module mor1kx_icache_marocchino
             ic_state <= IC_READ;
         end
 
-        IC_READ: begin
-          if (immu_an_except_i | flush_by_ctrl_i) // ICACHE FSM: read -> idle
-            ic_state <= IC_IDLE;
-          else if (ic_access) begin
-            if (~hit) begin
-              if (ic_refill_allowed_i) begin
-                // Store the LRU information for correct replacement
-                // on refill. Always one when only one way.
-                lru_way_r <= (OPTION_ICACHE_WAYS == 1) | lru_way; // to re-fill
-                // store tag state
-                for (w1 = 0; w1 < OPTION_ICACHE_WAYS; w1 = w1 + 1) begin
-                  tag_way_save[w1] <= tag_way_out[w1];
-                end
-                // 1st re-fill addrress
-                curr_refill_adr <= phys_addr_fetch_i; // to re-fill
-                refill_done     <= {{(NUM_WORDS_PER_BLOCK-1){1'b0}},1'b1}; // to re-fill
-                // to re-fill
-                ic_state <= IC_REFILL;
-              end
+        IC_READ: begin // same to IMEM_REQ for IBUS
+          if (immu_an_except_i | flush_by_ctrl_i)               // FSM: READ: read -> idle
+            ic_state <= IC_IDLE;                                // FSM: READ: idle by IMMU exceptions or flushing
+          else if (is_cacheble & fetch_req_hit_i & ~hit) begin  // FSM: READ: refill_req_o
+            // Store the LRU information for correct replacement
+            // on refill. Always one when only one way.
+            lru_way_r <= (OPTION_ICACHE_WAYS == 1) | lru_way; // to re-fill
+            // store tag state
+            for (w1 = 0; w1 < OPTION_ICACHE_WAYS; w1 = w1 + 1) begin
+              tag_way_save[w1] <= tag_way_out[w1];
             end
-            else if (~ic_fsm_adv) // ICACHE hit
-              ic_state <= IC_IDLE;
+            // 1st re-fill addrress
+            curr_refill_adr <= phys_addr_fetch_i; // to re-fill
+            refill_done     <= {{(NUM_WORDS_PER_BLOCK-1){1'b0}},1'b1}; // to re-fill
+            // to re-fill
+            ic_state <= IC_REFILL;
           end
-          else if (~ic_fsm_adv) // not ICACHE access
+          else if (ic_fsm_adv)                                                   // FSM: READ: ibus_access_req_o ? idle : read
+            ic_state <= ((~is_cacheble) & fetch_req_hit_i) ? IC_IDLE : IC_READ;  // FSM: READ: 
+          else // no advancing
             ic_state <= IC_IDLE;
         end
 
@@ -453,8 +461,8 @@ module mor1kx_icache_marocchino
         // potentially we should update LRU counters ...
         access_lru_history = way_hit;
         tag_lru_in = next_lru_history;
-        // ... and we do it by read-hit only 
-        if (ic_access & hit & ~(immu_an_except_i | flush_by_ctrl_i)) begin // on read-hit
+        // ... and we do it by read-hit only
+        if (is_cacheble & fetch_req_hit_i & hit & ~(immu_an_except_i | flush_by_ctrl_i)) begin // on read-hit
           tag_we = 1'b1; // on read-hit
         end
       end

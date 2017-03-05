@@ -65,6 +65,8 @@ module pfpu32_fcmp_marocchino
   // Outputs
   //  # not WB-latched for flag forwarding
   output                              fp32_flag_set_o,
+  //  # not latched pre-WB
+  output                              exec_except_fp32_cmp_o,
   //  # WB-latched
   output reg                          wb_fp32_flag_set_o,   // comparison result
   output reg                          wb_fp32_flag_clear_o, // comparison result
@@ -224,15 +226,15 @@ assign fp32_flag_set_o = cmp_flag;
 ////////////////////////////////////////////////////////////////////////
 // Just before latching
 //  # access to WB
-wire grant_wb_to_fp32_cmp = op_fp32_cmp_i & grant_wb_to_1clk_i;
+wire grant_wb_to_fp32_cmp     = op_fp32_cmp_i & grant_wb_to_1clk_i;
 //  # set/slear commands
-wire exec_fp32_flag_set   = grant_wb_to_fp32_cmp &   cmp_flag;
-wire exec_fp32_flag_clear = grant_wb_to_fp32_cmp & (~cmp_flag);
+wire exec_fp32_flag_set       = grant_wb_to_fp32_cmp &   cmp_flag;
+wire exec_fp32_flag_clear     = grant_wb_to_fp32_cmp & (~cmp_flag);
 //  # FP32 comparison flags
-wire exec_fp32_cmp_inv    = grant_wb_to_fp32_cmp & ctrl_fpu_mask_flags_inv_i & inv_cmp;
-wire exec_fp32_cmp_inf    = grant_wb_to_fp32_cmp & ctrl_fpu_mask_flags_inf_i & (in_infa | in_infb);
+wire exec_fp32_cmp_inv        = grant_wb_to_fp32_cmp & ctrl_fpu_mask_flags_inv_i & inv_cmp;
+wire exec_fp32_cmp_inf        = grant_wb_to_fp32_cmp & ctrl_fpu_mask_flags_inf_i & (in_infa | in_infb);
 //  # FP32 comparison exception
-wire exec_except_fp32_cmp = except_fpu_enable_i & (exec_fp32_cmp_inv | exec_fp32_cmp_inf);
+assign exec_except_fp32_cmp_o = except_fpu_enable_i & (exec_fp32_cmp_inv | exec_fp32_cmp_inf);
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -266,7 +268,7 @@ always @(posedge clk `OR_ASYNC_RST) begin
     wb_fp32_cmp_inv_o    <= exec_fp32_cmp_inv;
     wb_fp32_cmp_inf_o    <= exec_fp32_cmp_inf;
     // comparison exception
-    wb_except_fp32_cmp_o <= exec_except_fp32_cmp;
+    wb_except_fp32_cmp_o <= exec_except_fp32_cmp_o;
   end // advance WB latches
 end // @clock
 

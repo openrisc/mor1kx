@@ -106,6 +106,8 @@ module pfpu_rnd_marocchino
   input        ocb_snan_i,
   input        ocb_qnan_i,
   input        ocb_anan_sign_i,
+  // pre-WB output
+  output                                 exec_except_fpxx_arith_o, // generate exception
   // output WB latches
   output reg                      [31:0] wb_fpxx_arith_res_hi_o,   // result
   output reg                      [31:0] wb_fpxx_arith_res_lo_o,   // result
@@ -472,7 +474,7 @@ module pfpu_rnd_marocchino
     ctrl_fpu_mask_flags_i & {`OR1K_FPCSR_ALLF_SIZE{grant_wb_to_fpxx_arith_i}};
 
   // EXECUTE level FP32 arithmetic exception
-  wire exec_except_fpxx_arith = except_fpu_enable_i & (|exec_fpxx_arith_fpcsr);
+  assign exec_except_fpxx_arith_o = except_fpu_enable_i & (|exec_fpxx_arith_fpcsr);
 
 
   // WB: result
@@ -499,7 +501,7 @@ module pfpu_rnd_marocchino
     end
     else if(padv_wb_i) begin
       wb_fpxx_arith_fpcsr_o  <= exec_fpxx_arith_fpcsr;
-      wb_except_fpxx_arith_o <= exec_except_fpxx_arith;
+      wb_except_fpxx_arith_o <= exec_except_fpxx_arith_o;
     end
   end // @clock
 

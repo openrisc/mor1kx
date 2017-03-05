@@ -34,217 +34,6 @@
 
 `include "mor1kx-defines.v"
 
-//---------------------------------------------------------------//
-// Order Control Buffer for FPU64                                //
-//   simplified version of mor1kx_ocb_marocchino                 //
-//   it also contents only 4 order taps and only last tap's      //
-//   output is required here                                     //
-//---------------------------------------------------------------//
-
-module pfpu_ocb_marocchino
-(
-  // clocks and resets
-  input   clk,
-  input   rst,
-  // pipe controls
-  input   pipeline_flush_i,
-  input   taking_op_fpxx_arith_i,  // write: an FPU pipe is taking operands
-  input   rnd_taking_op_i,       // read:  rounding engine is taking result
-  // data input
-  input   exec_op_fp64_arith_i,
-  input   add_start_i,
-  input   mul_start_i,
-  input   div_start_i,
-  input   i2f_start_i,
-  input   f2i_start_i,
-  input   res_inv_i,
-  input   res_inf_i,
-  input   res_snan_i,
-  input   res_qnan_i,
-  input   res_anan_sign_i,
-  // data ouputs
-  output  rnd_op_fp64_arith_o,
-  output  grant_rnd_to_add_o,
-  output  grant_rnd_to_mul_o,
-  output  grant_rnd_to_div_o,
-  output  grant_rnd_to_i2f_o,
-  output  grant_rnd_to_f2i_o,
-  output  ocb_inv_o,
-  output  ocb_inf_o,
-  output  ocb_snan_o,
-  output  ocb_qnan_o,
-  output  ocb_anan_sign_o,
-  // "OCB is full" flag
-  //   (a) external control logic must stop the "writing without reading"
-  //       operation if OCB is full
-  //   (b) however, the "writing + reading" is possible
-  //       because it just pushes OCB and keeps it full
-  output  pfpu_ocb_full_o
-);
-
-  localparam NUM_TAPS =  4;
-  localparam TAP_DW   = 11;
-
-  // "pointers"
-  reg   [NUM_TAPS:0] ptr_curr; // on current active tap
-  reg [NUM_TAPS-1:0] ptr_prev; // on previous active tap
-
-  // pointers are zero: tap #0 (output) is active
-  wire ptr_curr_0 = ptr_curr[0];
-  wire ptr_prev_0 = ptr_prev[0];
-
-  // "OCB is full" flag
-  //  # no more availaible taps, pointer is out of range
-  assign pfpu_ocb_full_o = ptr_curr[NUM_TAPS];
-
-  // control to increment/decrement pointers
-  wire rd_only = ~taking_op_fpxx_arith_i &  rnd_taking_op_i;
-  wire wr_only =  taking_op_fpxx_arith_i & ~rnd_taking_op_i;
-  wire wr_rd   =  taking_op_fpxx_arith_i &  rnd_taking_op_i;
-
-
-  // operation algorithm:
-  //-----------------------------------------------------------------------------
-  // read only    | push: tap[k-1] <= tap[k], tap[num_taps-1] <= reset_value;
-  //              | update pointers: if(~ptr_prev_0) ptr_prev <= (ptr_prev >> 1);
-  //              |                  if(~ptr_curr_0) ptr_curr <= (ptr_curr >> 1);
-  //-----------------------------------------------------------------------------
-  // write only   | tap[ptr_curr] <= ocbi_i
-  //              | ptr_prev <= ptr_curr;
-  //              | ptr_curr <= (ptr_curr << 1);
-  //-----------------------------------------------------------------------------
-  // read & write | push: tap[k-1] <= tap[k]
-  //              |       tap[ptr_prev] <= ocbi_i;
-  //-----------------------------------------------------------------------------
-
-
-  wire ptr_curr_inc = wr_only; // increment pointer on current tap
-  wire ptr_curr_dec = rd_only & ~ptr_curr_0; // decrement ...
-  wire ptr_prev_dec = rd_only & ~ptr_prev_0; // decrement ... previous ...
-
-  // update pointer on current tap
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      ptr_curr <= {{NUM_TAPS{1'b0}},1'b1};
-    else if(pipeline_flush_i)
-      ptr_curr <= {{NUM_TAPS{1'b0}},1'b1};
-    else if(ptr_curr_inc)
-      ptr_curr <= (ptr_curr << 1);
-    else if(ptr_curr_dec)
-      ptr_curr <= (ptr_curr >> 1);
-  end // @clock
-
-  // update pointer on previous tap
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      ptr_prev <= {{(NUM_TAPS-1){1'b0}},1'b1};
-    else if(pipeline_flush_i)
-      ptr_prev <= {{(NUM_TAPS-1){1'b0}},1'b1};
-    else if(ptr_curr_inc)
-      ptr_prev <= ptr_curr[NUM_TAPS-1:0];
-    else if(ptr_prev_dec)
-      ptr_prev <= (ptr_prev >> 1);
-  end // @clock
-
-
-  // enable signals for taps
-  wire [NUM_TAPS-1:0] en_curr_tap = {NUM_TAPS{wr_only}} & ptr_curr[NUM_TAPS-1:0];
-  wire [NUM_TAPS-1:0] push_taps =
-    en_curr_tap |                // tap[ptr_curr] <= ocbi_i (note: by wr_only)
-    {NUM_TAPS{rnd_taking_op_i}}; // tap[k-1] <= tap[k]
-
-  // control for forwarding multiplexors
-  wire [NUM_TAPS-1:0] use_forwarded_value =
-    en_curr_tap |                   // tap[ptr_curr] <= ocbi_i (note: by wr_only)
-    ({NUM_TAPS{wr_rd}} & ptr_prev); // tap[ptr_prev] <= ocbi_i;
-
-
-  // order input
-  wire [(TAP_DW-1):0] ocbi = {exec_op_fp64_arith_i,
-                              add_start_i, mul_start_i, div_start_i, i2f_start_i, f2i_start_i,
-                              res_inv_i, res_inf_i, res_snan_i, res_qnan_i, res_anan_sign_i};
-
-  // taps ouputs
-  wire [(TAP_DW-1):0] ocbo00; // OCB output
-  wire [(TAP_DW-1):0] ocbo01; // ...
-  wire [(TAP_DW-1):0] ocbo02; // ...
-  wire [(TAP_DW-1):0] ocbo03; // OCB entrance
-
-  // granting flags output
-  assign {rnd_op_fp64_arith_o,
-          grant_rnd_to_add_o, grant_rnd_to_mul_o, grant_rnd_to_div_o, grant_rnd_to_i2f_o, grant_rnd_to_f2i_o,
-          ocb_inv_o, ocb_inf_o, ocb_snan_o, ocb_qnan_o, ocb_anan_sign_o} = ocbo00;
-
-  // taps
-  //   tap #00
-  ocb_tap
-  #(
-    .DATA_SIZE (TAP_DW)
-  )
-  u_tap_00
-  (
-    .clk                    (clk),
-    .rst                    (rst),
-    .flush_i                (pipeline_flush_i),
-    .push_i                 (push_taps[0]),
-    .prev_tap_out_i         (ocbo01),
-    .forwarded_value_i      (ocbi),
-    .use_forwarded_value_i  (use_forwarded_value[0]),
-    .out_o                  (ocbo00)
-  );
-
-  //   tap #01
-  ocb_tap
-  #(
-    .DATA_SIZE (TAP_DW)
-  )
-  u_tap_01
-  (
-    .clk                    (clk),
-    .rst                    (rst),
-    .flush_i                (pipeline_flush_i),
-    .push_i                 (push_taps[1]),
-    .prev_tap_out_i         (ocbo02),
-    .forwarded_value_i      (ocbi),
-    .use_forwarded_value_i  (use_forwarded_value[1]),
-    .out_o                  (ocbo01)
-  );
-
-  //   tap #02
-  ocb_tap
-  #(
-    .DATA_SIZE (TAP_DW)
-  )
-  u_tap_02
-  (
-    .clk                    (clk),
-    .rst                    (rst),
-    .flush_i                (pipeline_flush_i),
-    .push_i                 (push_taps[2]),
-    .prev_tap_out_i         (ocbo03),
-    .forwarded_value_i      (ocbi),
-    .use_forwarded_value_i  (use_forwarded_value[2]),
-    .out_o                  (ocbo02)
-  );
-
-  //   tap #03 (entrance)
-  ocb_tap
-  #(
-    .DATA_SIZE (TAP_DW)
-  )
-  u_tap_03
-  (
-    .clk                    (clk),
-    .rst                    (rst),
-    .flush_i                (pipeline_flush_i),
-    .push_i                 (push_taps[3]),
-    .prev_tap_out_i         ({TAP_DW{1'b0}}),
-    .forwarded_value_i      (ocbi),
-    .use_forwarded_value_i  (use_forwarded_value[3]),
-    .out_o                  (ocbo03)
-  );
-endmodule // pfpu_ocb_marocchino
-
 
 // fpu operations:
 // ===================
@@ -297,6 +86,10 @@ module pfpu_top_marocchino
   input                        [31:0] exec_fpxx_b1_i,
   input                        [31:0] exec_fpxx_a2_i,
   input                        [31:0] exec_fpxx_b2_i,
+
+  // pre WB outputs
+  output                              exec_except_fpxx_arith_o, // exception by FP3264-arithmetic
+  output                              exec_except_fp64_cmp_o,   // exception by FP64-comparison
 
   // FPU-64 arithmetic part
   output                       [31:0] wb_fpxx_arith_res_hi_o,   // arithmetic result
@@ -480,41 +273,35 @@ wire rnd_op_fp64_arith;
 
 
 // PFPU [O]rder [C]ontrol [B]uffer instance
-pfpu_ocb_marocchino  u_pfpu_ocb
+mor1kx_ocb_marocchino
+#(
+  .NUM_TAPS   (4),
+  .NUM_OUTS   (1),
+  .DATA_SIZE (11)
+)
+u_pfpu_ocb
 (
   // clocks and resets
-  .clk                    (clk), // PFPU_OCB
-  .rst                    (rst), // PFPU_OCB
+  .clk                (clk), // PFPU_OCB
+  .rst                (rst), // PFPU_OCB
   // pipe controls
-  .pipeline_flush_i       (pipeline_flush_i), // PFPU_OCB
-  .taking_op_fpxx_arith_i (taking_op_fpxx_arith), // PFPU_OCB
-  .rnd_taking_op_i        (rnd_taking_op), // PFPU_OCB
+  .pipeline_flush_i   (pipeline_flush_i), // PFPU_OCB
+  .padv_decode_i      (taking_op_fpxx_arith), // PFPU_OCB
+  .padv_wb_i          (rnd_taking_op), // PFPU_OCB
+  // value at reset/flush
+  .default_value_i    (11'd0),
   // data input
-  .exec_op_fp64_arith_i   (exec_op_fp64_arith_i), // PFPU_OCB
-  .add_start_i            (add_start), // PFPU_OCB
-  .mul_start_i            (mul_start), // PFPU_OCB
-  .div_start_i            (div_start), // PFPU_OCB
-  .i2f_start_i            (i2f_start), // PFPU_OCB
-  .f2i_start_i            (f2i_start), // PFPU_OCB
-  .res_inv_i              (res_inv), // PFPU_OCB
-  .res_inf_i              (res_inf), // PFPU_OCB
-  .res_snan_i             (res_snan), // PFPU_OCB
-  .res_qnan_i             (res_qnan), // PFPU_OCB
-  .res_anan_sign_i        (res_anan_sign), // PFPU_OCB
-  // data ouputs
-  .rnd_op_fp64_arith_o    (rnd_op_fp64_arith), // PFPU_OCB
-  .grant_rnd_to_add_o     (grant_rnd_to_add), // PFPU_OCB
-  .grant_rnd_to_mul_o     (grant_rnd_to_mul), // PFPU_OCB
-  .grant_rnd_to_div_o     (grant_rnd_to_div), // PFPU_OCB
-  .grant_rnd_to_i2f_o     (grant_rnd_to_i2f), // PFPU_OCB
-  .grant_rnd_to_f2i_o     (grant_rnd_to_f2i), // PFPU_OCB
-  .ocb_inv_o              (ocb_inv), // PFPU_OCB
-  .ocb_inf_o              (ocb_inf), // PFPU_OCB
-  .ocb_snan_o             (ocb_snan), // PFPU_OCB
-  .ocb_qnan_o             (ocb_qnan), // PFPU_OCB
-  .ocb_anan_sign_o        (ocb_anan_sign), // PFPU_OCB
+  .ocbi_i             ({exec_op_fp64_arith_i, // PFPU_OCB
+                        add_start, mul_start, div_start, i2f_start, f2i_start, // PFPU_OCB
+                        res_inv, res_inf, res_snan, res_qnan, res_anan_sign}), // PFPU_OCB
+  // "OCB is empty" flag
+  .empty_o            (), // PFPU_OCB
   // "OCB is full" flag
-  .pfpu_ocb_full_o        (pfpu_ocb_full) // PFPU_OCB
+  .full_o             (pfpu_ocb_full), // PFPU_OCB
+  // data ouputs
+  .ocbo_o             ({rnd_op_fp64_arith, // PFPU_OCB
+                        grant_rnd_to_add, grant_rnd_to_mul, grant_rnd_to_div, grant_rnd_to_i2f, grant_rnd_to_f2i, // PFPU_OCB
+                        ocb_inv, ocb_inf, ocb_snan, ocb_qnan, ocb_anan_sign}) // PFPU_OCB
 );
 
 
@@ -760,6 +547,8 @@ pfpu_rnd_marocchino u_pfpu_rnd
   .ocb_snan_i               (ocb_snan), // PFPU_RND
   .ocb_qnan_i               (ocb_qnan), // PFPU_RND
   .ocb_anan_sign_i          (ocb_anan_sign), // PFPU_RND
+  // pre-WB outputs
+  .exec_except_fpxx_arith_o (exec_except_fpxx_arith_o), // PFPU_RND
   // output WB latches
   .wb_fpxx_arith_res_hi_o   (wb_fpxx_arith_res_hi_o), // PFPU_RND
   .wb_fpxx_arith_res_lo_o   (wb_fpxx_arith_res_lo_o), // PFPU_RND
@@ -801,6 +590,8 @@ pfpu64_fcmp_marocchino u_fp64_cmp
   .ctrl_fpu_mask_flags_inv_i  (ctrl_fpu_mask_flags_i[`OR1K_FPCSR_IVF - `OR1K_FPCSR_OVF]), // FP64_CMP
   .ctrl_fpu_mask_flags_inf_i  (ctrl_fpu_mask_flags_i[`OR1K_FPCSR_INF - `OR1K_FPCSR_OVF]), // FP64_CMP
   // Outputs
+  //  # pre WB
+  .exec_except_fp64_cmp_o     (exec_except_fp64_cmp_o), // FP64_CMP
   //  # WB-latched
   .wb_fp64_flag_set_o         (wb_fp64_flag_set_o), // FP64_CMP
   .wb_fp64_flag_clear_o       (wb_fp64_flag_clear_o), // FP64_CMP

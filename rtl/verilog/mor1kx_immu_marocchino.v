@@ -50,6 +50,7 @@ module mor1kx_immu_marocchino
   // address translation
   input      [OPTION_OPERAND_WIDTH-1:0] virt_addr_mux_i,
   input      [OPTION_OPERAND_WIDTH-1:0] virt_addr_fetch_i,
+  input                                 fetch_req_hit_i,    // enables IMMU's exceptions
   output     [OPTION_OPERAND_WIDTH-1:0] phys_addr_fetch_o,
 
   // flags
@@ -254,7 +255,7 @@ module mor1kx_immu_marocchino
   reg [OPTION_OPERAND_WIDTH-1:0] phys_addr;
 
   always @(*) begin
-    tlb_miss_o        = ~tlb_reload_pagefault & enable_r;
+    tlb_miss_o        = ~tlb_reload_pagefault & enable_r & fetch_req_hit_i;
     phys_addr         = virt_addr_fetch_i;
     sxe               = 1'b0;
     uxe               = 1'b0;
@@ -291,7 +292,7 @@ module mor1kx_immu_marocchino
     end
   end // loop by ways
 
-  assign pagefault_o = (supervisor_mode_r ? ~sxe : ~uxe) & ~tlb_reload_busy_o & enable_r;
+  assign pagefault_o = (supervisor_mode_r ? ~sxe : ~uxe) & ~tlb_reload_busy_o & enable_r & fetch_req_hit_i;
 
   assign phys_addr_fetch_o = phys_addr;
 
@@ -354,7 +355,7 @@ module mor1kx_immu_marocchino
     reg [3:0] tlb_reload_state = TLB_IDLE;
     wire      do_reload;
 
-    assign do_reload              = enable_r & tlb_miss_o & (immucr[31:10] != 22'd0);
+    assign do_reload              = tlb_miss_o & (immucr[31:10] != 22'd0);
     assign tlb_reload_busy_o      = (tlb_reload_state != TLB_IDLE) | do_reload;
     assign tlb_reload_pagefault_o = tlb_reload_pagefault & ~tlb_reload_pagefault_clear_i;
 

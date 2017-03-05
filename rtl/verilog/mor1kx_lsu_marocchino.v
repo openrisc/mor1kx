@@ -100,6 +100,8 @@ module mor1kx_lsu_marocchino
   output reg                            wb_rfd1_wb_lsu_miss_o,
   output reg                            wb_flag_wb_lsu_miss_o,
   // Exceprions & errors
+  //  # pre-WB
+  output                                exec_an_except_lsu_o,
   //  # Indicator of dbus exception came via the store buffer
   //    and appropriate PC
   output reg [OPTION_OPERAND_WIDTH-1:0] sbuf_eear_o,
@@ -112,8 +114,6 @@ module mor1kx_lsu_marocchino
   output reg                            wb_except_dtlb_miss_o,
   output reg                            wb_except_dbus_align_o,
   output reg [OPTION_OPERAND_WIDTH-1:0] wb_lsu_except_addr_o,
-  //  # combined LSU exceptions flag
-  output reg                            wb_an_except_lsu_o,
   // Atomic operation flag set/clear logic
   output reg                            wb_atomic_flag_set_o,
   output reg                            wb_atomic_flag_clear_o
@@ -499,15 +499,13 @@ module mor1kx_lsu_marocchino
     end
   end // @clock
 
-  // l.msync cause LSU busy
-  wire cmd_msync_deassert = cmd_msync_r & (dbus_idle_state & sbuf_empty | dbus_err_instant); // deassert busy by l.msync
-  // ---
+  // LSU dosen't take next commad till completion all previous ones
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       cmd_msync_r <= 1'b0;
-    else if (exec_op_msync_i)
+    else if (exec_op_msync_i) // assert busy by l.msync
       cmd_msync_r <= 1'b1;
-    else if (cmd_msync_deassert)
+    else if (dbus_idle_state & sbuf_empty) // deassert busy by l.msync
       cmd_msync_r <= 1'b0;
   end // @clock
 
@@ -523,12 +521,14 @@ module mor1kx_lsu_marocchino
   //  ## pay attention that l.swa is executed around of
   //     store buffer, so we don't take into accaunt
   //     atomic store here.
+  wire sbuf_err = dbus_err_instant & dbus_we & ~dbus_atomic;
+  // ---
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
       sbuf_err_o  <= 1'b0;
     else if (flush_by_ctrl) // prevent store buffer DBUS error report
       sbuf_err_o  <= 1'b0;
-    else if (dbus_err_instant & dbus_we & ~dbus_atomic)
+    else if (sbuf_err)      // rise store buffer DBUS error
       sbuf_err_o  <= 1'b1;
   end // @ clock
 
@@ -601,6 +601,9 @@ module mor1kx_lsu_marocchino
       lsu_excepts_any_p <= 1'b1;
   end // @clock
 
+  // pre-WB to generate pipeline-flush
+  // MAROCCHINO_TODO: need more accurate processing for store buffer bus error
+  assign exec_an_except_lsu_o = (lsu_excepts_any_p | lsu_excepts_any) & (grant_wb_to_lsu_i | wb_lsu_valid_miss_o);
 
   // WB latches for LSU exceptions
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -610,8 +613,6 @@ module mor1kx_lsu_marocchino
       wb_except_dpagefault_o <= 1'b0;
       wb_except_dtlb_miss_o  <= 1'b0;
       wb_except_dbus_align_o <= 1'b0;
-      //  # combined LSU exceptions flag
-      wb_an_except_lsu_o     <= 1'b0;
     end
     else if (flush_by_ctrl) begin  // drop WB-reported exceptions
       //  # particular LSU exception flags
@@ -619,8 +620,6 @@ module mor1kx_lsu_marocchino
       wb_except_dpagefault_o <= 1'b0;
       wb_except_dtlb_miss_o  <= 1'b0;
       wb_except_dbus_align_o <= 1'b0;
-      //  # combined LSU exceptions flag
-      wb_an_except_lsu_o     <= 1'b0;
     end
     else if (grant_wb_to_lsu) begin // rise WB-reported exceptions
       //  # particular LSU exception flags
@@ -628,8 +627,6 @@ module mor1kx_lsu_marocchino
       wb_except_dpagefault_o <= except_dpagefault_p | except_dpagefault;
       wb_except_dtlb_miss_o  <= except_dtlb_miss_p  | except_dtlb_miss;
       wb_except_dbus_align_o <= except_align_p      | except_align;
-      //  # combined LSU exceptions flag
-      wb_an_except_lsu_o     <= lsu_excepts_any_p   | lsu_excepts_any;
     end
   end // @clock
 
@@ -994,6 +991,8 @@ module mor1kx_lsu_marocchino
   (
     .clk          (clk), // STORE_BUFFER
     .rst          (rst), // STORE_BUFFER
+    // DBUS error during write data from store buffer (force empty)
+    .sbuf_err_i   (sbuf_err), // STORE_BUFFER
     // entry port
     .sbuf_epcr_i  (cmd_epcr), // STORE_BUFFER
     .virt_addr_i  (virt_addr_cmd), // STORE_BUFFER
