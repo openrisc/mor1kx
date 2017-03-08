@@ -34,7 +34,8 @@ mor1kx_marocchino_alone
   .IBUS_WB_TYPE("B3_REGISTERED_FEEDBACK"),
   .DBUS_WB_TYPE("B3_REGISTERED_FEEDBACK"),
 
-  .OPTION_RESET_PC(32'hf0000100)
+  .OPTION_RESET_PC(32'hf0000100),
+  .FEATURE_DIVIDER("SERIAL") // SERIAL (restoring, radix-2) / SRT4
 )
 u_mor1kx_marocchino
 (

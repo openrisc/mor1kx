@@ -78,6 +78,8 @@ module mor1kx_marocchino_alone
   parameter OPTION_RESET_PC            = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
                                           `OR1K_RESET_VECTOR,8'd0},
 
+  parameter FEATURE_DIVIDER            = "SERIAL",
+
   parameter FEATURE_PSYNC              = "NONE",
   parameter FEATURE_CSYNC              = "NONE",
 
@@ -295,6 +297,8 @@ module mor1kx_marocchino_alone
     //.OPTION_RF_WORDS(OPTION_RF_WORDS), // MAROCCHINO_TODO
     .OPTION_RESET_PC                  (OPTION_RESET_PC),
      // arithmetic modules
+    .FEATURE_DIVIDER                  (FEATURE_DIVIDER),
+     // special instructions
     .FEATURE_PSYNC                    (FEATURE_PSYNC),
     .FEATURE_CSYNC                    (FEATURE_CSYNC)
   )

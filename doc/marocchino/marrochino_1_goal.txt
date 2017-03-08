@@ -25,7 +25,6 @@ Currently, the following options are made NOT CONFIGURABLE:
  FEATURE_EXT              == "NONE"
  FEATURE_MAC              == "NONE"
  FEATURE_MULTIPLIER       == "PIPELINED"
- FEATURE_DIVIDER          == "SERIAL"
  OPTION_SHIFTER           == "BARREL"
  FEATURE_ADDC             == "ENABLED"
  FEATURE_SRA              == "ENABLED"

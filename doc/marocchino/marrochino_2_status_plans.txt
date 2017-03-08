@@ -137,6 +137,14 @@ jump/branch target/flag become ready
   (8) More accurate tracking for NPC thanks to previous
   (9) Remove redundant bits from SPR EVBAR, exception_pc_addr and DU SPRs
 
+08 March 2017
+  Restore ability to select divisor type (FEATURE_DIVIDER). The two options are
+available. "SERIAL" is equal to CAPPUCCINO's one and means
+"restoring radix-2 divisor". Any other value means "SRT radix-4 divisor".
+For clarity "SRT4" is recommended. By default "SERIAL" is selected. In fact,
+there is no difference in benchmarks (and most of applications) for both types
+of divisor.  On the other hand, "restoring radix-2 divisor" much smaller than
+"SRT radix-4 divisor".
 
 Primary TODOs:
   - Verify step by step execution with DU

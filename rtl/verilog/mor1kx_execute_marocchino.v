@@ -386,7 +386,8 @@ endmodule // srt4_kernel
 
 module mor1kx_divider_marocchino
 #(
-  parameter OPTION_OPERAND_WIDTH = 32
+  parameter OPTION_OPERAND_WIDTH = 32,
+  parameter FEATURE_DIVIDER      = "SERIAL" // SERIAL (restoring, radix-2) / SRT4
 )
 (
   // clocks and resets
@@ -426,194 +427,289 @@ module mor1kx_divider_marocchino
   output reg [OPTION_OPERAND_WIDTH-1:0] wb_div_result_o
 );
 
- `ifndef SYNTHESIS // DIV: Normalization supports 32-bits operands only
-  // synthesis translate_off
-  generate
-  if (OPTION_OPERAND_WIDTH != 32) begin
-    initial begin
-      $display("INT DIV ERROR: Normalization supports 32-bits operands only");
-      $finish();
-    end
-  end
-  endgenerate
-  // synthesis translate_on
- `endif // !synth
-
   localparam DIVDW        = OPTION_OPERAND_WIDTH; // short name
   localparam LOG2_DIVDW_2 = 4; // ceil(log2(DIVDW/2)): size of iteration counter
 
-  // divider controls
-  //  ## Write Back taking DIV result
-  wire wb_taking_div = padv_wb_i & grant_wb_to_div_i;
-  //  ## per stage ready flags
-  reg  div_s1_rdy;
-  reg  div_s2_rdy;
-  //  ## stage busy signals
-  wire div_proc; // SRT-4 kernel is busy
-  wire div_s3_busy = div_proc | (div_valid_o & ~wb_taking_div);
-  wire div_s2_busy = div_s2_rdy  & div_s3_busy;
-  wire div_s1_busy = div_s1_rdy  & div_s2_busy;
-  //  ## stage advance signals
-  wire div_adv_s3  = div_s2_rdy  & ~div_s3_busy;
-  wire div_adv_s2  = div_s1_rdy  & ~div_s2_busy;
-  wire div_adv_s1  = exec_op_div_i & ~div_s1_busy;
-
-  //  # integer divider is taking operands
-  assign idiv_taking_op_o = div_adv_s1;
-
-  /**** DIV Stage 1 ****/
-  // Absolute values computation
-  // Convert negative operands in the case of signed division.
-  // If only one of the operands is negative, the result is
-  // converted back to negative later on
-  //  # signums
-  wire s1t_div_sign_a = exec_div_a1_i[DIVDW-1] & exec_op_div_signed_i;
-  wire s1t_div_sign_b = exec_div_b1_i[DIVDW-1] & exec_op_div_signed_i;
-  //  # modulos
-  wire [DIVDW-1:0] s1t_div_a = (exec_div_a1_i ^ {DIVDW{s1t_div_sign_a}}) + {{(DIVDW-1){1'b0}},s1t_div_sign_a};
-  wire [DIVDW-1:0] s1t_div_b = (exec_div_b1_i ^ {DIVDW{s1t_div_sign_b}}) + {{(DIVDW-1){1'b0}},s1t_div_sign_b};
-  //  # nlz of denominator
-  reg [4:0] s1t_div_b_nlz;
-  // ---
-  always @(s1t_div_b) begin
-    // synthesis parallel_case full_case
-    casez (s1t_div_b)
-      32'b1???????????????????????????????: s1t_div_b_nlz =  5'd0;
-      32'b01??????????????????????????????: s1t_div_b_nlz =  5'd1;
-      32'b001?????????????????????????????: s1t_div_b_nlz =  5'd2;
-      32'b0001????????????????????????????: s1t_div_b_nlz =  5'd3;
-      32'b00001???????????????????????????: s1t_div_b_nlz =  5'd4;
-      32'b000001??????????????????????????: s1t_div_b_nlz =  5'd5;
-      32'b0000001?????????????????????????: s1t_div_b_nlz =  5'd6;
-      32'b00000001????????????????????????: s1t_div_b_nlz =  5'd7;
-      32'b000000001???????????????????????: s1t_div_b_nlz =  5'd8;
-      32'b0000000001??????????????????????: s1t_div_b_nlz =  5'd9;
-      32'b00000000001?????????????????????: s1t_div_b_nlz = 5'd10;
-      32'b000000000001????????????????????: s1t_div_b_nlz = 5'd11;
-      32'b0000000000001???????????????????: s1t_div_b_nlz = 5'd12;
-      32'b00000000000001??????????????????: s1t_div_b_nlz = 5'd13;
-      32'b000000000000001?????????????????: s1t_div_b_nlz = 5'd14;
-      32'b0000000000000001????????????????: s1t_div_b_nlz = 5'd15;
-      32'b00000000000000001???????????????: s1t_div_b_nlz = 5'd16;
-      32'b000000000000000001??????????????: s1t_div_b_nlz = 5'd17;
-      32'b0000000000000000001?????????????: s1t_div_b_nlz = 5'd18;
-      32'b00000000000000000001????????????: s1t_div_b_nlz = 5'd19;
-      32'b000000000000000000001???????????: s1t_div_b_nlz = 5'd20;
-      32'b0000000000000000000001??????????: s1t_div_b_nlz = 5'd21;
-      32'b00000000000000000000001?????????: s1t_div_b_nlz = 5'd22;
-      32'b000000000000000000000001????????: s1t_div_b_nlz = 5'd23;
-      32'b0000000000000000000000001???????: s1t_div_b_nlz = 5'd24;
-      32'b00000000000000000000000001??????: s1t_div_b_nlz = 5'd25;
-      32'b000000000000000000000000001?????: s1t_div_b_nlz = 5'd26;
-      32'b0000000000000000000000000001????: s1t_div_b_nlz = 5'd27;
-      32'b00000000000000000000000000001???: s1t_div_b_nlz = 5'd28;
-      32'b000000000000000000000000000001??: s1t_div_b_nlz = 5'd29;
-      32'b0000000000000000000000000000001?: s1t_div_b_nlz = 5'd30;
-      32'b00000000000000000000000000000001: s1t_div_b_nlz = 5'd31;
-      32'b00000000000000000000000000000000: s1t_div_b_nlz =  5'd0;
-    endcase
-  end // always
-  // ---
-  reg             s1o_div_signed, s1o_div_unsigned,
-                  s1o_div_neg;
-  reg [DIVDW-1:0] s1o_div_a;
-  reg [DIVDW-1:0] s1o_div_b;
-  reg       [4:0] s1o_div_b_nlz;
-  // ---
-  always @(posedge clk) begin
-    if (div_adv_s1) begin
-      s1o_div_a        <= s1t_div_a;
-      s1o_div_b        <= s1t_div_b;
-      s1o_div_b_nlz    <= s1t_div_b_nlz;
-      s1o_div_neg      <= (s1t_div_sign_a ^ s1t_div_sign_b);
-      s1o_div_signed   <= exec_op_div_signed_i;
-      s1o_div_unsigned <= exec_op_div_unsigned_i;
-    end
-  end // @clock
-  //  ready flag
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      div_s1_rdy <= 1'b0;
-    else if (pipeline_flush_i)
-      div_s1_rdy <= 1'b0;
-    else if (div_adv_s1)
-      div_s1_rdy <= 1'b1;
-    else if (div_adv_s2)
-      div_s1_rdy <= 1'b0;
-  end // @clock
-
-
-  /**** DIV Stage 2 ****/
-  // Normalization
-  wire [2*DIVDW-1:0] s2t_div_a = s1o_div_a << s1o_div_b_nlz;
-  wire   [DIVDW-1:0] s2t_div_b = s1o_div_b << s1o_div_b_nlz;
-  // ---
-  reg               s2o_div_signed, s2o_div_unsigned,
-                    s2o_div_neg;
-  reg [2*DIVDW-1:0] s2o_div_a;
-  reg   [DIVDW-1:0] s2o_div_b;
-  // ---
-  always @(posedge clk) begin
-    if (div_adv_s2) begin
-      s2o_div_a        <= s2t_div_a;
-      s2o_div_b        <= s2t_div_b;
-      s2o_div_neg      <= s1o_div_neg;
-      s2o_div_signed   <= s1o_div_signed;
-      s2o_div_unsigned <= s1o_div_unsigned;
-    end
-  end // @clock
-  //  ready flag
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      div_s2_rdy <= 1'b0;
-    else if (pipeline_flush_i)
-      div_s2_rdy <= 1'b0;
-    else if (div_adv_s2)
-      div_s2_rdy <= 1'b1;
-    else if (div_adv_s3)
-      div_s2_rdy <= 1'b0;
-  end // @clock
-
-
-  /**** DIV Stage 3 ****/
-  // Compute denominator multiplies and run iterations
+  // common interface for both SERIAL/SRT4 divisors
   wire [DIVDW-1:0] s3t_div_result;
   wire             s3o_dbz;
   reg              s3o_div_signed, s3o_div_unsigned;
-  // ---
-  always @(posedge clk) begin
-    if (div_adv_s3) begin
-      s3o_div_signed   <= s2o_div_signed;
-      s3o_div_unsigned <= s2o_div_unsigned;
+
+  generate
+  /* verilator lint_off WIDTH */
+  if (FEATURE_DIVIDER == "SERIAL") begin : radix2_divisor
+  /* verilator lint_on WIDTH */
+  
+    // divider controls
+    //  ## iterations counter
+    reg [5:0] div_count;
+    reg       div_proc_r;
+    reg       div_valid_r;
+    //  ## start division
+    assign idiv_taking_op_o = exec_op_div_i & (div_valid_r ? (padv_wb_i & grant_wb_to_div_i) : (~div_proc_r));
+    //  ## result valid
+    assign div_valid_o = div_valid_r;
+  
+  
+    // division controller
+    always @(posedge clk `OR_ASYNC_RST) begin
+      if (rst) begin
+        div_valid_r <= 1'b0;
+        div_proc_r  <= 1'b0;
+        div_count   <= 6'd0;
+      end
+      if (pipeline_flush_i) begin
+        div_valid_r <= 1'b0;
+        div_proc_r  <= 1'b0;
+        div_count   <= 6'd0;
+      end
+      else if (idiv_taking_op_o) begin
+        div_valid_r <= 1'b0;
+        div_proc_r  <= 1'b1;
+        div_count   <= DIVDW;
+      end
+      else if (div_valid_r & padv_wb_i & grant_wb_to_div_i) begin
+        div_valid_r <= 1'b0;
+        div_proc_r  <= 1'b0;
+        div_count   <= 6'd0;
+      end
+      else if (div_proc_r) begin
+        if (div_count == 6'd1) begin
+          div_valid_r <= 1'b1;
+          div_proc_r  <= 1'b0;
+        end
+        div_count <= div_count - 6'd1;
+      end
+    end // @clock
+  
+    // regs of divider
+    reg [DIVDW-1:0] div_n;
+    reg [DIVDW-1:0] div_d;
+    reg [DIVDW-1:0] div_r;
+    reg             div_neg;
+    reg             dbz_r;
+  
+    // signums of input operands
+    wire op_div_sign_a = exec_div_a1_i[DIVDW-1] & exec_op_div_signed_i;
+    wire op_div_sign_b = exec_div_b1_i[DIVDW-1] & exec_op_div_signed_i;
+  
+    // partial reminder
+    wire [DIVDW:0] div_sub = {div_r[DIVDW-2:0],div_n[DIVDW-1]} - div_d;
+  
+    always @(posedge clk) begin
+      if (idiv_taking_op_o) begin
+        // Convert negative operands in the case of signed division.
+        // If only one of the operands is negative, the result is
+        // converted back to negative later on
+        div_n   <= (exec_div_a1_i ^ {DIVDW{op_div_sign_a}}) + {{(DIVDW-1){1'b0}},op_div_sign_a};
+        div_d   <= (exec_div_b1_i ^ {DIVDW{op_div_sign_b}}) + {{(DIVDW-1){1'b0}},op_div_sign_b};
+        div_r   <= {DIVDW{1'b0}};
+        div_neg <= (op_div_sign_a ^ op_div_sign_b);
+        dbz_r   <= ~(|exec_div_b1_i);
+        s3o_div_signed   <= exec_op_div_signed_i;
+        s3o_div_unsigned <= exec_op_div_unsigned_i;
+      end
+      else if (~div_valid_r) begin
+        if (~div_sub[DIVDW]) begin // div_sub >= 0
+          div_r <= div_sub[DIVDW-1:0];
+          div_n <= {div_n[DIVDW-2:0], 1'b1};
+        end
+        else begin                 // div_sub < 0
+          div_r <= {div_r[DIVDW-2:0],div_n[DIVDW-1]};
+          div_n <= {div_n[DIVDW-2:0], 1'b0};
+        end
+      end // ~done
+    end // @clock
+  
+    assign s3t_div_result = (div_n ^ {DIVDW{div_neg}}) + {{(DIVDW-1){1'b0}},div_neg}; // SERIAL_DIV
+    assign s3o_dbz = dbz_r; // SERIAL_DIV
+
+  end       // radix2_divisor
+  else begin : radix4_divisor
+  
+   `ifndef SYNTHESIS // DIV: Normalization supports 32-bits operands only
+    // synthesis translate_off
+    if (OPTION_OPERAND_WIDTH != 32) begin
+      initial begin
+        $display("INT DIV ERROR: Normalization supports 32-bits operands only");
+        $finish();
+      end
     end
-  end // @clock
-  // ---
-  srt4_kernel
-  #(
-     .N       (DIVDW), // SRT_4_KERNEL
-     .LOG2N2  (LOG2_DIVDW_2) // SRT_4_KERNEL
-  )
-  u_srt4_kernel
-  (
-    // clock and reset
-    .clk                (clk), // SRT_4_KERNEL
-    .rst                (rst), // SRT_4_KERNEL
-    // pipeline controls
-    .pipeline_flush_i   (pipeline_flush_i), // SRT_4_KERNEL
-    .div_start_i        (div_adv_s3), // SRT_4_KERNEL
-    .div_proc_o         (div_proc), // SRT_4_KERNEL
-    .div_valid_o        (div_valid_o), // SRT_4_KERNEL
-    .wb_taking_div_i    (wb_taking_div), // SRT_4_KERNEL
-    // numerator and denominator
-    .num_i              (s2o_div_a), // SRT_4_KERNEL
-    .den_i              (s2o_div_b), // SRT_4_KERNEL
-    // signum for output
-    .div_neg_i          (s2o_div_neg), // SRT_4_KERNEL
-    // outputs
-    .dbz_o              (s3o_dbz), // SRT_4_KERNEL
-    //.rem_o              (remainder),
-    .qtnt_o             (s3t_div_result) // SRT_4_KERNEL
-  );
+    // synthesis translate_on
+   `endif // !synth
+  
+    // divider controls
+    //  ## Write Back taking DIV result
+    wire wb_taking_div = padv_wb_i & grant_wb_to_div_i;
+    //  ## per stage ready flags
+    reg  div_s1_rdy;
+    reg  div_s2_rdy;
+    //  ## stage busy signals
+    wire div_proc; // SRT-4 kernel is busy
+    wire div_s3_busy = div_proc | (div_valid_o & ~wb_taking_div);
+    wire div_s2_busy = div_s2_rdy  & div_s3_busy;
+    wire div_s1_busy = div_s1_rdy  & div_s2_busy;
+    //  ## stage advance signals
+    wire div_adv_s3  = div_s2_rdy  & ~div_s3_busy;
+    wire div_adv_s2  = div_s1_rdy  & ~div_s2_busy;
+    wire div_adv_s1  = exec_op_div_i & ~div_s1_busy;
+  
+    //  # integer divider is taking operands
+    assign idiv_taking_op_o = div_adv_s1;
+  
+    /**** DIV Stage 1 ****/
+    // Absolute values computation
+    // Convert negative operands in the case of signed division.
+    // If only one of the operands is negative, the result is
+    // converted back to negative later on
+    //  # signums
+    wire s1t_div_sign_a = exec_div_a1_i[DIVDW-1] & exec_op_div_signed_i;
+    wire s1t_div_sign_b = exec_div_b1_i[DIVDW-1] & exec_op_div_signed_i;
+    //  # modulos
+    wire [DIVDW-1:0] s1t_div_a = (exec_div_a1_i ^ {DIVDW{s1t_div_sign_a}}) + {{(DIVDW-1){1'b0}},s1t_div_sign_a};
+    wire [DIVDW-1:0] s1t_div_b = (exec_div_b1_i ^ {DIVDW{s1t_div_sign_b}}) + {{(DIVDW-1){1'b0}},s1t_div_sign_b};
+    //  # nlz of denominator
+    reg [4:0] s1t_div_b_nlz;
+    // ---
+    always @(s1t_div_b) begin
+      // synthesis parallel_case full_case
+      casez (s1t_div_b)
+        32'b1???????????????????????????????: s1t_div_b_nlz =  5'd0;
+        32'b01??????????????????????????????: s1t_div_b_nlz =  5'd1;
+        32'b001?????????????????????????????: s1t_div_b_nlz =  5'd2;
+        32'b0001????????????????????????????: s1t_div_b_nlz =  5'd3;
+        32'b00001???????????????????????????: s1t_div_b_nlz =  5'd4;
+        32'b000001??????????????????????????: s1t_div_b_nlz =  5'd5;
+        32'b0000001?????????????????????????: s1t_div_b_nlz =  5'd6;
+        32'b00000001????????????????????????: s1t_div_b_nlz =  5'd7;
+        32'b000000001???????????????????????: s1t_div_b_nlz =  5'd8;
+        32'b0000000001??????????????????????: s1t_div_b_nlz =  5'd9;
+        32'b00000000001?????????????????????: s1t_div_b_nlz = 5'd10;
+        32'b000000000001????????????????????: s1t_div_b_nlz = 5'd11;
+        32'b0000000000001???????????????????: s1t_div_b_nlz = 5'd12;
+        32'b00000000000001??????????????????: s1t_div_b_nlz = 5'd13;
+        32'b000000000000001?????????????????: s1t_div_b_nlz = 5'd14;
+        32'b0000000000000001????????????????: s1t_div_b_nlz = 5'd15;
+        32'b00000000000000001???????????????: s1t_div_b_nlz = 5'd16;
+        32'b000000000000000001??????????????: s1t_div_b_nlz = 5'd17;
+        32'b0000000000000000001?????????????: s1t_div_b_nlz = 5'd18;
+        32'b00000000000000000001????????????: s1t_div_b_nlz = 5'd19;
+        32'b000000000000000000001???????????: s1t_div_b_nlz = 5'd20;
+        32'b0000000000000000000001??????????: s1t_div_b_nlz = 5'd21;
+        32'b00000000000000000000001?????????: s1t_div_b_nlz = 5'd22;
+        32'b000000000000000000000001????????: s1t_div_b_nlz = 5'd23;
+        32'b0000000000000000000000001???????: s1t_div_b_nlz = 5'd24;
+        32'b00000000000000000000000001??????: s1t_div_b_nlz = 5'd25;
+        32'b000000000000000000000000001?????: s1t_div_b_nlz = 5'd26;
+        32'b0000000000000000000000000001????: s1t_div_b_nlz = 5'd27;
+        32'b00000000000000000000000000001???: s1t_div_b_nlz = 5'd28;
+        32'b000000000000000000000000000001??: s1t_div_b_nlz = 5'd29;
+        32'b0000000000000000000000000000001?: s1t_div_b_nlz = 5'd30;
+        32'b00000000000000000000000000000001: s1t_div_b_nlz = 5'd31;
+        32'b00000000000000000000000000000000: s1t_div_b_nlz =  5'd0;
+      endcase
+    end // always
+    // ---
+    reg             s1o_div_signed, s1o_div_unsigned,
+                    s1o_div_neg;
+    reg [DIVDW-1:0] s1o_div_a;
+    reg [DIVDW-1:0] s1o_div_b;
+    reg       [4:0] s1o_div_b_nlz;
+    // ---
+    always @(posedge clk) begin
+      if (div_adv_s1) begin
+        s1o_div_a        <= s1t_div_a;
+        s1o_div_b        <= s1t_div_b;
+        s1o_div_b_nlz    <= s1t_div_b_nlz;
+        s1o_div_neg      <= (s1t_div_sign_a ^ s1t_div_sign_b);
+        s1o_div_signed   <= exec_op_div_signed_i;
+        s1o_div_unsigned <= exec_op_div_unsigned_i;
+      end
+    end // @clock
+    //  ready flag
+    always @(posedge clk `OR_ASYNC_RST) begin
+      if (rst)
+        div_s1_rdy <= 1'b0;
+      else if (pipeline_flush_i)
+        div_s1_rdy <= 1'b0;
+      else if (div_adv_s1)
+        div_s1_rdy <= 1'b1;
+      else if (div_adv_s2)
+        div_s1_rdy <= 1'b0;
+    end // @clock
+  
+  
+    /**** DIV Stage 2 ****/
+    // Normalization
+    wire [2*DIVDW-1:0] s2t_div_a = s1o_div_a << s1o_div_b_nlz;
+    wire   [DIVDW-1:0] s2t_div_b = s1o_div_b << s1o_div_b_nlz;
+    // ---
+    reg               s2o_div_signed, s2o_div_unsigned,
+                      s2o_div_neg;
+    reg [2*DIVDW-1:0] s2o_div_a;
+    reg   [DIVDW-1:0] s2o_div_b;
+    // ---
+    always @(posedge clk) begin
+      if (div_adv_s2) begin
+        s2o_div_a        <= s2t_div_a;
+        s2o_div_b        <= s2t_div_b;
+        s2o_div_neg      <= s1o_div_neg;
+        s2o_div_signed   <= s1o_div_signed;
+        s2o_div_unsigned <= s1o_div_unsigned;
+      end
+    end // @clock
+    //  ready flag
+    always @(posedge clk `OR_ASYNC_RST) begin
+      if (rst)
+        div_s2_rdy <= 1'b0;
+      else if (pipeline_flush_i)
+        div_s2_rdy <= 1'b0;
+      else if (div_adv_s2)
+        div_s2_rdy <= 1'b1;
+      else if (div_adv_s3)
+        div_s2_rdy <= 1'b0;
+    end // @clock
+  
+  
+    /**** DIV Stage 3 ****/
+    // Compute denominator multiplies and run iterations
+    // ---
+    always @(posedge clk) begin
+      if (div_adv_s3) begin
+        s3o_div_signed   <= s2o_div_signed;
+        s3o_div_unsigned <= s2o_div_unsigned;
+      end
+    end // @clock
+    // ---
+    srt4_kernel
+    #(
+       .N       (DIVDW), // SRT_4_KERNEL
+       .LOG2N2  (LOG2_DIVDW_2) // SRT_4_KERNEL
+    )
+    u_srt4_kernel
+    (
+      // clock and reset
+      .clk                (clk), // SRT_4_KERNEL
+      .rst                (rst), // SRT_4_KERNEL
+      // pipeline controls
+      .pipeline_flush_i   (pipeline_flush_i), // SRT_4_KERNEL
+      .div_start_i        (div_adv_s3), // SRT_4_KERNEL
+      .div_proc_o         (div_proc), // SRT_4_KERNEL
+      .div_valid_o        (div_valid_o), // SRT_4_KERNEL
+      .wb_taking_div_i    (wb_taking_div), // SRT_4_KERNEL
+      // numerator and denominator
+      .num_i              (s2o_div_a), // SRT_4_KERNEL
+      .den_i              (s2o_div_b), // SRT_4_KERNEL
+      // signum for output
+      .div_neg_i          (s2o_div_neg), // SRT_4_KERNEL
+      // outputs
+      .dbz_o              (s3o_dbz), // SRT_4_KERNEL
+      //.rem_o              (remainder),
+      .qtnt_o             (s3t_div_result) // SRT_4_KERNEL
+    );
+
+  end
+  endgenerate
 
   /**** DIV Write Back result ****/
 
