@@ -1524,14 +1524,6 @@ end
 endgenerate
 
 generate
-if (FEATURE_PERFCOUNTERS!="NONE") begin : perfcounters_ctrl
-   assign spr_access_ack[`OR1K_SPR_PC_BASE] = spr_access[`OR1K_SPR_PC_BASE];
-end else begin
-   assign spr_access_ack[`OR1K_SPR_PC_BASE] = 0;
-end
-endgenerate
-
-generate
 if (FEATURE_PMU!="NONE") begin : pmu_ctrl
    assign spr_access_ack[`OR1K_SPR_PM_BASE] = spr_bus_ack_pmu_i &
                                               spr_access[`OR1K_SPR_PM_BASE];
