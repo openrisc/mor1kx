@@ -96,6 +96,7 @@ module mor1kx_lsu_cappuccino
     input 			      dc_enable_i,
     input 			      dmmu_enable_i,
     input 			      supervisor_mode_i,
+    output 			      dc_hit_o,
 
     // interface to data bus
     output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
@@ -731,7 +732,8 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .refill_o			(dc_refill),		 // Templated
 	    .refill_req_o		(dc_refill_req),	 // Templated
 	    .refill_done_o		(dc_refill_done),	 // Templated
-	    .cpu_err_o			(),			 // Templated
+	    .cache_hit_o		(dc_hit_o),
+	    .cpu_err_o			(dc_err),		 // Templated
 	    .cpu_ack_o			(dc_ack),		 // Templated
 	    .cpu_dat_o			(dc_ldat),		 // Templated
 	    .snoop_hit_o		(dc_snoop_hit),		 // Templated
@@ -768,6 +770,7 @@ end else begin
    assign dc_bsel = 0;
    assign dc_we = 0;
    assign dc_snoop_hit = 0;
+   assign dc_hit_o = 0;
    assign dc_ldat = 0;
 end
 

@@ -51,6 +51,7 @@ module mor1kx_fetch_cappuccino
     input 				  ic_enable,
     input 				  immu_enable_i,
     input 				  supervisor_mode_i,
+    output 				  ic_hit_o,
 
     // interface to ibus
     input 				  ibus_err_i,
@@ -528,6 +529,7 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
       .cpu_dat_o			(ic_dat[OPTION_OPERAND_WIDTH-1:0]), // Templated
       .spr_bus_dat_o			(spr_bus_dat_ic_o),	 // Templated
       .spr_bus_ack_o			(spr_bus_ack_ic_o),	 // Templated
+      .cache_hit_o			(ic_hit_o),
       // Inputs
       .clk				(clk),
       .rst				(rst),		 // Templated
@@ -549,11 +551,11 @@ end else begin // block: icache_gen
    assign ic_refill_req = 1'b0;
    assign ic_refill_done = 0;
    assign ic_ack = 0;
+   assign ic_hit_o = 0;
    assign ic_dat = 0;
    assign ic_invalidate = 0;
    assign spr_bus_dat_ic_o = 0;
    assign spr_bus_ack_ic_o = 0;
-   
 end
 endgenerate
 

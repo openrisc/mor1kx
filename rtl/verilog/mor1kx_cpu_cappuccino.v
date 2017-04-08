@@ -40,6 +40,7 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_TIMER = "ENABLED",
     parameter FEATURE_DEBUGUNIT = "NONE",
     parameter FEATURE_PERFCOUNTERS = "NONE",
+    parameter OPTION_PERFCOUNTERS_NUM = 0,
     parameter FEATURE_MAC = "NONE",
 
     parameter FEATURE_SYSCALL = "ENABLED",
@@ -97,7 +98,7 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_MULTICORE = "NONE",
 
     parameter FEATURE_TRACEPORT_EXEC = "NONE",
-    parameter FEATURE_BRANCH_PREDICTOR = "SIMPLE"  // SIMPLE|SAT_COUNTER
+    parameter FEATURE_BRANCH_PREDICTOR = "SIMPLE"  // SIMPLE|SAT_COUNTER|GSHARE
     )
    (
     input 			      clk,
@@ -342,6 +343,8 @@ module mor1kx_cpu_cappuccino
    wire                 fetch_valid_o;          // From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire                 flag_clear_o;           // From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire                 flag_set_o;             // From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire                 icache_hit_o;           // From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire                 dcache_hit_o;           // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire                 lsu_except_align_o;     // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire                 lsu_except_dbus_o;      // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire                 lsu_except_dpagefault_o;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
@@ -440,6 +443,7 @@ module mor1kx_cpu_cappuccino
       .decode_except_itlb_miss_o        (decode_except_itlb_miss_o),
       .decode_except_ipagefault_o       (decode_except_ipagefault_o),
       .fetch_exception_taken_o          (fetch_exception_taken_o),
+      .ic_hit_o                         (icache_hit_o),
       // Inputs
       .clk                              (clk),
       .rst                              (rst),
@@ -756,11 +760,13 @@ module mor1kx_cpu_cappuccino
       .immjbr_upper_i			(decode_immjbr_upper_o),
       .prev_op_brcond_i			(execute_op_brcond_o),
       .prev_predicted_flag_i		(execute_predicted_flag_o),
+      .brn_pc_i			(pc_fetch_to_decode),
       .flag_i				(ctrl_flag_o),
     );*/
    mor1kx_branch_prediction
      #(
-       .FEATURE_BRANCH_PREDICTOR(FEATURE_BRANCH_PREDICTOR)
+       .FEATURE_BRANCH_PREDICTOR(FEATURE_BRANCH_PREDICTOR),
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
        )
    mor1kx_branch_prediction
      (/*AUTOINST*/
@@ -778,6 +784,7 @@ module mor1kx_cpu_cappuccino
       .immjbr_upper_i                   (decode_immjbr_upper_o), // Templated
       .prev_op_brcond_i                 (execute_op_brcond_o),   // Templated
       .prev_predicted_flag_i            (execute_predicted_flag_o), // Templated
+      .brn_pc_i                         (pc_fetch_to_decode),      // Templated
       .flag_i                           (ctrl_flag_o));           // Templated
 
    /* mor1kx_execute_alu AUTO_TEMPLATE (
@@ -979,6 +986,7 @@ module mor1kx_cpu_cappuccino
       .dbus_bsel_o                      (dbus_bsel_o[3:0]),
       .dbus_we_o                        (dbus_we_o),
       .dbus_burst_o                     (dbus_burst_o),
+      .dc_hit_o                         (dcache_hit_o),
       // Inputs
       .clk                              (clk),
       .rst                              (rst),
@@ -1370,6 +1378,7 @@ module mor1kx_cpu_cappuccino
        .OPTION_IMMU_WAYS(OPTION_IMMU_WAYS),
        .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
        .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
+       .OPTION_PERFCOUNTERS_NUM(OPTION_PERFCOUNTERS_NUM),
        .FEATURE_MAC(FEATURE_MAC),
        .FEATURE_FPU(FEATURE_FPU), // pipeline cappuccino: ctrl instance
        .FEATURE_MULTICORE(FEATURE_MULTICORE),
@@ -1445,6 +1454,8 @@ module mor1kx_cpu_cappuccino
       .fetch_valid_i                    (fetch_valid_o),         // Templated
       .decode_valid_i                   (decode_valid_o),        // Templated
       .execute_valid_i                  (execute_valid_o),       // Templated
+      .execute_op_lsu_load_i            (execute_op_lsu_load_o),
+      .execute_op_lsu_store_i           (execute_op_lsu_store_o),
       .ctrl_valid_i                     (ctrl_valid_o),          // Templated
       .fetch_exception_taken_i          (fetch_exception_taken_o), // Templated
       .decode_bubble_i                  (decode_bubble_o),       // Templated
@@ -1458,6 +1469,8 @@ module mor1kx_cpu_cappuccino
       .ctrl_overflow_clear_i            (ctrl_overflow_clear_o), // Templated
       .ctrl_fpcsr_i                     (ctrl_fpcsr_o),
       .ctrl_fpcsr_set_i                 (ctrl_fpcsr_set_o),
+      .icache_hit_i                     (icache_hit_o),
+      .dcache_hit_i                     (dcache_hit_o),
       .du_addr_i                        (du_addr_i[15:0]),
       .du_stb_i                         (du_stb_i),
       .du_dat_i                         (du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
