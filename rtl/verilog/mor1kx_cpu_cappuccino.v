@@ -139,6 +139,10 @@ module mor1kx_cpu_cappuccino
 
     output reg	                      traceport_exec_valid_o,
     output reg [31:0]                 traceport_exec_pc_o,
+    output reg                        traceport_exec_jb_o,
+    output reg                        traceport_exec_jal_o,
+    output reg                        traceport_exec_jr_o,
+    output reg [31:0]                 traceport_exec_jbtarget_o,
     output reg [`OR1K_INSN_WIDTH-1:0] traceport_exec_insn_o,
     output [OPTION_OPERAND_WIDTH-1:0] traceport_exec_wbdata_o,
     output [OPTION_RF_ADDR_WIDTH-1:0] traceport_exec_wbreg_o,
@@ -1500,64 +1504,79 @@ module mor1kx_cpu_cappuccino
    reg [`OR1K_INSN_WIDTH-1:0] traceport_stage_decode_insn;
    reg [`OR1K_INSN_WIDTH-1:0] traceport_stage_exec_insn;
 
-   reg 			      traceport_waitexec;
+   reg                            traceport_jal_execute_to_ctrl;
+   reg                            traceport_jr_execute_to_ctrl;
+   reg [31:0]                     traceport_jbtarget_decode_to_execute;
+   reg [31:0]                     traceport_jbtarget_execute_to_ctrl;
+
+   reg                        traceport_waitexec;
 
    always @(posedge clk) begin
       if (FEATURE_TRACEPORT_EXEC != "NONE") begin
-	 if (rst) begin
-	    traceport_waitexec <= 0;
-	 end else begin
-	    if (padv_decode_o) begin
-	       traceport_stage_decode_insn <= insn_fetch_to_decode;
-	    end
+         if (rst) begin
+            traceport_waitexec <= 0;
+         end else begin
+            if (padv_decode_o) begin
+               traceport_stage_decode_insn <= insn_fetch_to_decode;
+               traceport_jbtarget_decode_to_execute <= decode_branch_target_o;
+            end
 
-	    if (padv_execute_o) begin
-	       traceport_stage_exec_insn <= traceport_stage_decode_insn;
-	    end
+            if (padv_execute_o) begin
+               traceport_stage_exec_insn <= traceport_stage_decode_insn;
+               traceport_jbtarget_execute_to_ctrl <= traceport_jbtarget_decode_to_execute;
+               traceport_jal_execute_to_ctrl <= execute_op_jal_o;
+               traceport_jr_execute_to_ctrl <= execute_op_jr_o & !execute_op_jal_o;
+            end
 
-	    if (padv_ctrl_o) begin
-	       traceport_exec_insn_o <= traceport_stage_exec_insn;
-	    end
+            if (padv_ctrl_o) begin
+               traceport_exec_jal_o <= traceport_jal_execute_to_ctrl;
+               traceport_exec_jr_o <= traceport_jr_execute_to_ctrl;
+               traceport_exec_insn_o <= traceport_stage_exec_insn;
+               traceport_exec_jbtarget_o <= traceport_jbtarget_execute_to_ctrl;
+            end
 
-	    traceport_exec_pc_o <= pc_execute_to_ctrl;
-	    if (!traceport_waitexec) begin
-	       if (padv_ctrl_o & !ctrl_bubble_o) begin
-		  if (execute_valid_o) begin
-		     traceport_exec_valid_o <= 1'b1;
-		  end else begin
-		     traceport_exec_valid_o <= 1'b0;
-		     traceport_waitexec <= 1'b1;
-		  end
-	       end else begin
-		  traceport_exec_valid_o <= 1'b0;
-	       end
-	    end else begin
-	       if (execute_valid_o) begin
-		  traceport_exec_valid_o <= 1'b1;
-		  traceport_waitexec <= 1'b0;
-	       end else begin
-		  traceport_exec_valid_o <= 1'b0;
-	       end
-	    end // else: !if(!traceport_waitexec)
-	 end // else: !if(rst)
+            traceport_exec_pc_o <= pc_execute_to_ctrl;
+
+            if (!traceport_waitexec) begin
+               if (padv_ctrl_o & !ctrl_bubble_o) begin
+                  if (execute_valid_o) begin
+                     traceport_exec_valid_o <= 1'b1;
+                  end else begin
+                     traceport_exec_valid_o <= 1'b0;
+                     traceport_waitexec <= 1'b1;
+                  end
+               end else if (ctrl_op_rfe_o) begin
+                  traceport_exec_valid_o <= 1'b1;
+               end else begin
+                  traceport_exec_valid_o <= 1'b0;
+               end
+            end else begin
+               if (execute_valid_o) begin
+                  traceport_exec_valid_o <= 1'b1;
+                  traceport_waitexec <= 1'b0;
+               end else begin
+                  traceport_exec_valid_o <= 1'b0;
+               end
+            end // else: !if(!traceport_waitexec)
+         end // else: !if(rst)
       end else begin // if (FEATURE_TRACEPORT_EXEC != "NONE")
-	 traceport_stage_decode_insn <= {`OR1K_INSN_WIDTH{1'b0}};
-	 traceport_stage_exec_insn <= {`OR1K_INSN_WIDTH{1'b0}};
-	 traceport_exec_insn_o <= {`OR1K_INSN_WIDTH{1'b0}};
-	 traceport_exec_pc_o <= 32'h0;
-	 traceport_exec_valid_o <= 1'b0;
+         traceport_stage_decode_insn <= {`OR1K_INSN_WIDTH{1'b0}};
+         traceport_stage_exec_insn <= {`OR1K_INSN_WIDTH{1'b0}};
+         traceport_exec_insn_o <= {`OR1K_INSN_WIDTH{1'b0}};
+         traceport_exec_pc_o <= 32'h0;
+         traceport_exec_valid_o <= 1'b0;
       end
    end
 
    generate
       if (FEATURE_TRACEPORT_EXEC != "NONE") begin
-	 assign traceport_exec_wbreg_o = wb_rfd_adr_o;
-	 assign traceport_exec_wben_o = wb_rf_wb_o;
-	 assign traceport_exec_wbdata_o = rf_result_o;
+         assign traceport_exec_wbreg_o = wb_rfd_adr_o;
+         assign traceport_exec_wben_o = wb_rf_wb_o;
+         assign traceport_exec_wbdata_o = rf_result_o;
       end else begin
-	 assign traceport_exec_wbreg_o = {OPTION_RF_ADDR_WIDTH{1'b0}};
-	 assign traceport_exec_wben_o = 1'b0;
-	 assign traceport_exec_wbdata_o = {OPTION_OPERAND_WIDTH{1'b0}};
+         assign traceport_exec_wbreg_o = {OPTION_RF_ADDR_WIDTH{1'b0}};
+         assign traceport_exec_wben_o = 1'b0;
+         assign traceport_exec_wbdata_o = {OPTION_OPERAND_WIDTH{1'b0}};
       end
    endgenerate
 
