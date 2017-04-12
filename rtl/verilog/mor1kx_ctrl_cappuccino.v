@@ -329,6 +329,7 @@ module mor1kx_ctrl_cappuccino
    wire 			     spr_write_access;
    wire 			     spr_bus_access;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_sys_group_read;
+   wire [3:0] 			     spr_group;
 
    /* Wires from mor1kx_cfgrs module */
    wire [31:0] 			     spr_vr;
@@ -1184,10 +1185,12 @@ module mor1kx_ctrl_cappuccino
                           spr_access_valid & spr_bus_access;
    assign spr_bus_dat_o = spr_write_dat;
 
+   assign spr_group = spr_addr[14:11];
+
    /* Select spr */
    always @(*) begin
      spr_access = 0;
-      case(`SPR_BASE(spr_addr))
+      case(spr_group)
          // System group
          `OR1K_SPR_SYS_BASE:
            spr_access[`OR1K_SPR_SYS_BASE] = 1'b1;
