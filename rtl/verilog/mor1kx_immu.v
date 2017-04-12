@@ -148,7 +148,8 @@ endgenerate
    integer j;
    always @(*) begin
       tlb_miss_o = !tlb_reload_pagefault & !busy_o;
-      phys_addr_o = virt_addr_match_i[23:0];
+      phys_addr_o = {OPTION_OPERAND_WIDTH{1'b0}};
+      phys_addr_o[23:0] = virt_addr_match_i[23:0];
       sxe = 0;
       uxe = 0;
       cache_inhibit_o = 0;
