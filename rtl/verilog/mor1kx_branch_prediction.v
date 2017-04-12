@@ -19,7 +19,7 @@
 
 module mor1kx_branch_prediction
   #(
-    parameter FEATURE_BRANCH_PREDICTOR = "NONE",
+    parameter [95:0] FEATURE_BRANCH_PREDICTOR = "NONE",
     parameter OPTION_OPERAND_WIDTH = 32
     )
    (
