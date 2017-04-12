@@ -627,6 +627,7 @@ endgenerate
 	 wire [OPTION_OPERAND_WIDTH-1:0] shift_right;
 	 wire [OPTION_OPERAND_WIDTH-1:0] shift_lsw;
 	 wire [OPTION_OPERAND_WIDTH-1:0] shift_msw;
+	 wire [OPTION_OPERAND_WIDTH*2-1:0] shift_wide;
 
 	 //
 	 // Bit-reverse on left shift, perform right shift,
@@ -637,7 +638,8 @@ endgenerate
 			    {OPTION_OPERAND_WIDTH{a[OPTION_OPERAND_WIDTH-1]}} :
 			    op_ror ? a : {OPTION_OPERAND_WIDTH{1'b0}};
 
-	 assign shift_right = {shift_msw, shift_lsw} >> b[4:0];
+	 assign shift_wide = {shift_msw, shift_lsw} >> b[4:0];
+	 assign shift_right = shift_wide[OPTION_OPERAND_WIDTH-1:0];
 	 assign shift_result = op_sll ? reverse(shift_right) : shift_right;
 
          assign shift_valid = 1;
