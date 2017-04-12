@@ -54,6 +54,8 @@ module mor1kx_dmmu
     output 				  spr_bus_ack_o
     );
 
+   localparam WAYS_WIDTH = (OPTION_DMMU_WAYS < 2) ? 1 : 2;
+
    wire [OPTION_OPERAND_WIDTH-1:0]    dtlb_match_dout[OPTION_DMMU_WAYS-1:0];
    wire [OPTION_DMMU_SET_WIDTH-1:0]   dtlb_match_addr;
    reg [OPTION_DMMU_WAYS-1:0]         dtlb_match_we;
@@ -87,8 +89,9 @@ module mor1kx_dmmu
    reg 				      dmmucr_spr_cs_r;
    reg [OPTION_OPERAND_WIDTH-1:0]     dmmucr;
 
-   wire [1:0]                         spr_way_idx;
-   reg [1:0]                          spr_way_idx_r;
+   wire [1:0] 			      spr_way_idx_full;
+   wire [WAYS_WIDTH-1:0] 	      spr_way_idx;
+   reg [WAYS_WIDTH-1:0] 	      spr_way_idx_r;
 
    wire [OPTION_DMMU_WAYS-1:0]        way_huge;
 
@@ -168,13 +171,13 @@ endgenerate
          dtlb_match_we[j] = 0;
          if (dtlb_match_reload_we)
            dtlb_match_we[j] = 1;
-         if (j == spr_way_idx)
+         if (j[WAYS_WIDTH-1:0] == spr_way_idx)
            dtlb_match_we[j] = dtlb_match_spr_cs & spr_bus_we_i;
 
          dtlb_trans_we[j] = 0;
          if (dtlb_trans_reload_we)
            dtlb_trans_we[j] = 1;
-         if (j == spr_way_idx)
+         if (j[WAYS_WIDTH-1:0] == spr_way_idx)
            dtlb_trans_we[j] = dtlb_trans_spr_cs & spr_bus_we_i;
       end
    end
@@ -184,7 +187,8 @@ endgenerate
 			!uwe & op_store_i || !ure & op_load_i) &
 			!tlb_reload_busy_o;
 
-   assign spr_way_idx = {spr_bus_addr_i[10], spr_bus_addr_i[8]};
+   assign spr_way_idx_full = {spr_bus_addr_i[10], spr_bus_addr_i[8]};
+   assign spr_way_idx = spr_way_idx_full[WAYS_WIDTH-1:0];
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin
