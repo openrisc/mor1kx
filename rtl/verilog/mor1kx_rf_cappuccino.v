@@ -273,8 +273,11 @@ if (FEATURE_DEBUGUNIT!="NONE" || FEATURE_FASTCONTEXTS!="NONE" ||
    assign spr_gpr_ack_o = spr_gpr_we & !wb_rf_wb_i |
 			  spr_gpr_re & spr_gpr_read_ack;
 
+   wire [RF_ADDR_WIDTH-1:0] wb_rfd_adr_expand;
+   assign wb_rfd_adr_expand[RF_ADDR_WIDTH-1:OPTION_RF_ADDR_WIDTH] = 0;
+   assign wb_rfd_adr_expand[OPTION_RF_ADDR_WIDTH-1:0] = wb_rfd_adr_i;
    assign rf_wren =  wb_rf_wb_i | spr_gpr_we;
-   assign rf_wradr = wb_rf_wb_i ? wb_rfd_adr_i : spr_bus_addr_i;
+   assign rf_wradr = wb_rf_wb_i ? wb_rfd_adr_expand : spr_bus_addr_i[RF_ADDR_WIDTH-1:0];
    assign rf_wrdat = wb_rf_wb_i ? result_i : spr_bus_dat_i;
 
    // Zero-pad unused parts of vector
