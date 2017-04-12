@@ -143,6 +143,7 @@ module mor1kx_lsu_cappuccino
    wire				     lsu_ack;
 
    wire 			     dc_ack;
+   wire 			     dc_err;
    wire [31:0] 			     dc_ldat;
    wire [31:0] 			     dc_sdat;
    wire [31:0] 			     dc_adr;
@@ -151,6 +152,7 @@ module mor1kx_lsu_cappuccino
    wire [3:0] 			     dc_bsel;
 
    wire 			     dc_access;
+   wire 			     dc_hit;
    wire 			     dc_refill_allowed;
    wire 			     dc_refill;
    wire 			     dc_refill_req;
@@ -692,6 +694,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .refill_o			(dc_refill),
 	    .refill_req_o		(dc_refill_req),
 	    .refill_done_o		(dc_refill_done),
+            .cache_hit_o                (dc_hit),
 	    .cpu_err_o			(dc_err),
 	    .cpu_ack_o			(dc_ack),
 	    .cpu_dat_o			(dc_ldat),
@@ -732,7 +735,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .refill_o			(dc_refill),		 // Templated
 	    .refill_req_o		(dc_refill_req),	 // Templated
 	    .refill_done_o		(dc_refill_done),	 // Templated
-	    .cache_hit_o		(dc_hit_o),
+	    .cache_hit_o		(dc_hit),		 // Templated
 	    .cpu_err_o			(dc_err),		 // Templated
 	    .cpu_ack_o			(dc_ack),		 // Templated
 	    .cpu_dat_o			(dc_ldat),		 // Templated
@@ -767,6 +770,7 @@ end else begin
    assign dc_refill_done = 0;
    assign dc_refill_req = 0;
    assign dc_ack = 0;
+   assign dc_err = 0;
    assign dc_bsel = 0;
    assign dc_we = 0;
    assign dc_snoop_hit = 0;
