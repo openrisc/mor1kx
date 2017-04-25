@@ -53,9 +53,6 @@ module mor1kx_bus_if_wb32
                             (BURST_LENGTH==8) ? 3 :
                             (BURST_LENGTH==16)? 4 : 30;
 
-   initial
-     $display("%m: Wishbone bus IF is %s",BUS_IF_TYPE);
-
    generate
       /* verilator lint_off WIDTH */
       if (BUS_IF_TYPE=="B3_READ_BURSTING") begin : b3_read_bursting
