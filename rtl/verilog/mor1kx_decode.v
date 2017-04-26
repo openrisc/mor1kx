@@ -295,7 +295,7 @@ module mor1kx_decode
    assign decode_rfa_adr_o = decode_insn_i[`OR1K_RA_SELECT];
    assign decode_rfb_adr_o = decode_insn_i[`OR1K_RB_SELECT];
 
-   assign decode_rfd_adr_o = decode_op_jal_o ? 9 :
+   assign decode_rfd_adr_o = decode_op_jal_o ? 5'd9 :
 			     decode_insn_i[`OR1K_RD_SELECT];
 
    // Immediate in l.mtspr is broken up, reassemble

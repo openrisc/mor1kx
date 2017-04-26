@@ -55,6 +55,8 @@ module mor1kx_immu
     output 				  spr_bus_ack_o
     );
 
+   localparam WAYS_WIDTH = (OPTION_IMMU_WAYS < 2) ? 1 : 2;
+
    wire [OPTION_OPERAND_WIDTH-1:0]    itlb_match_dout[OPTION_IMMU_WAYS-1:0];
    wire [OPTION_IMMU_SET_WIDTH-1:0]   itlb_match_addr;
    reg [OPTION_IMMU_WAYS-1:0]         itlb_match_we;
@@ -88,8 +90,9 @@ module mor1kx_immu
    reg 				      immucr_spr_cs_r;
    reg [OPTION_OPERAND_WIDTH-1:0]     immucr;
 
-   wire [1:0]                         spr_way_idx;
-   reg [1:0]                          spr_way_idx_r;
+   wire [1:0] 			      spr_way_idx_full;
+   wire [WAYS_WIDTH-1:0] 	      spr_way_idx;
+   reg [WAYS_WIDTH-1:0] 	      spr_way_idx_r;
 
    wire [OPTION_IMMU_WAYS-1:0]        way_huge;
 
@@ -145,7 +148,8 @@ endgenerate
    integer j;
    always @(*) begin
       tlb_miss_o = !tlb_reload_pagefault & !busy_o;
-      phys_addr_o = virt_addr_match_i[23:0];
+      phys_addr_o = {OPTION_OPERAND_WIDTH{1'b0}};
+      phys_addr_o[23:0] = virt_addr_match_i[23:0];
       sxe = 0;
       uxe = 0;
       cache_inhibit_o = 0;
@@ -169,13 +173,13 @@ endgenerate
          itlb_match_we[j] = 0;
          if (itlb_match_reload_we & !tlb_reload_huge)
            itlb_match_we[j] = 1;
-         if (j == spr_way_idx)
+         if (j[WAYS_WIDTH-1:0] == spr_way_idx)
            itlb_match_we[j] = itlb_match_spr_cs & spr_bus_we_i & !spr_bus_ack;
 
          itlb_trans_we[j] = 0;
          if (itlb_trans_reload_we & !tlb_reload_huge)
            itlb_trans_we[j] = 1;
-         if (j == spr_way_idx)
+         if (j[WAYS_WIDTH-1:0] == spr_way_idx)
            itlb_trans_we[j] = itlb_trans_spr_cs & spr_bus_we_i & !spr_bus_ack;
       end
    end
@@ -187,7 +191,8 @@ endgenerate
 		    (itlb_match_spr_cs_r | itlb_trans_spr_cs_r) &
 		    spr_bus_ack & !spr_bus_ack_r) & enable_i;
 
-   assign spr_way_idx = {spr_bus_addr_i[10], spr_bus_addr_i[8]};
+   assign spr_way_idx_full = {spr_bus_addr_i[10], spr_bus_addr_i[8]};
+   assign spr_way_idx = spr_way_idx_full[WAYS_WIDTH-1:0];
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst) begin

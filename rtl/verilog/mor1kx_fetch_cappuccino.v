@@ -121,8 +121,6 @@ module mor1kx_fetch_cappuccino
    wire 				  ic_ack;
    wire [`OR1K_INSN_WIDTH-1:0] 		  ic_dat;
 
-   wire 				  ic_req;
-   wire 				  ic_refill_allowed;
    wire 				  ic_refill;
    wire 				  ic_refill_req;
    wire 				  ic_refill_done;
@@ -132,8 +130,6 @@ module mor1kx_fetch_cappuccino
 
    wire 				  ic_access;
 
-   reg 					  ic_enable_r;
-   wire 				  ic_enabled;
 
    wire [OPTION_OPERAND_WIDTH-1:0] 	  immu_phys_addr;
    wire 				  immu_cache_inhibit;
@@ -454,6 +450,13 @@ module mor1kx_fetch_cappuccino
       end
    end
 
+
+   assign ic_addr = (addr_valid | du_restart_i) ? pc_addr : pc_fetch;
+   assign ic_addr_match = immu_enable_i ? immu_phys_addr : pc_fetch;
+
+generate
+if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
+   reg 					  ic_enable_r;
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        ic_enable_r <= 0;
@@ -461,22 +464,16 @@ module mor1kx_fetch_cappuccino
        ic_enable_r <= 1;
      else if (!ic_enable & !ic_refill)
        ic_enable_r <= 0;
-
-   assign ic_enabled = ic_enable & ic_enable_r;
-   assign ic_addr = (addr_valid | du_restart_i) ? pc_addr : pc_fetch;
-   assign ic_addr_match = immu_enable_i ? immu_phys_addr : pc_fetch;
-   assign ic_refill_allowed = (!((tlb_miss | pagefault) & immu_enable_i) &
+   wire ic_enabled = ic_enable & ic_enable_r;
+   wire ic_refill_allowed = (!((tlb_miss | pagefault) & immu_enable_i) &
 			      !ctrl_branch_exception_i & !pipeline_flush_i &
 			      !mispredict_stall | doing_rfe_i) &
 			      !tlb_reload_busy & !immu_busy;
-
-   assign ic_req = padv_i & !decode_except_ibus_err_o &
+   wire ic_req = padv_i & !decode_except_ibus_err_o &
 		   !decode_except_itlb_miss_o & !except_itlb_miss &
 		   !decode_except_ipagefault_o & !except_ipagefault &
 		   ic_access & ic_refill_allowed;
 
-generate
-if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
    if (OPTION_ICACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
       assign ic_access = ic_enabled &
 			 !(immu_cache_inhibit & immu_enable_i);
@@ -551,9 +548,14 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
 end else begin // block: icache_gen
    assign ic_access = 0;
    assign ic_refill = 0;
+   assign ic_refill_req = 1'b0;
    assign ic_refill_done = 0;
    assign ic_ack = 0;
    assign ic_hit_o = 0;
+   assign ic_dat = 0;
+   assign ic_invalidate = 0;
+   assign spr_bus_dat_ic_o = 0;
+   assign spr_bus_ack_ic_o = 0;
 end
 endgenerate
 

@@ -179,14 +179,15 @@ module mor1kx_cpu_espresso
    wire			decode_op_div_signed_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_div_unsigned_o;// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_ffl1_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire [`OR1K_FPUOP_WIDTH-1:0] decode_op_fpu_o;// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_jal_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_jbr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_jr_o;		// From mor1kx_decode of mor1kx_decode.v
-   wire			decode_op_lsu_atomic_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_lsu_load_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_lsu_store_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mfspr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_movhi_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_msync_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mtspr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mul_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mul_signed_o;	// From mor1kx_decode of mor1kx_decode.v
@@ -212,6 +213,8 @@ module mor1kx_cpu_espresso
    wire			flag_clear_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			flag_o;			// From mor1kx_ctrl_espresso of mor1kx_ctrl_espresso.v
    wire			flag_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire [`OR1K_FPCSR_WIDTH-1:0] fpcsr_o;	// From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire			fpcsr_set_o;		// From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire			lsu_except_align_o;	// From mor1kx_lsu_espresso of mor1kx_lsu_espresso.v
    wire			lsu_except_dbus_o;	// From mor1kx_lsu_espresso of mor1kx_lsu_espresso.v
    wire [OPTION_OPERAND_WIDTH-1:0] lsu_result_o;// From mor1kx_lsu_espresso of mor1kx_lsu_espresso.v
@@ -341,7 +344,7 @@ module mor1kx_cpu_espresso
       .decode_op_alu_o			(decode_op_alu_o),
       .decode_op_lsu_load_o		(decode_op_lsu_load_o),
       .decode_op_lsu_store_o		(decode_op_lsu_store_o),
-      .decode_op_lsu_atomic_o		(decode_op_lsu_atomic_o),
+      .decode_op_lsu_atomic_o		(),			 // Templated
       .decode_lsu_length_o		(decode_lsu_length_o[1:0]),
       .decode_lsu_zext_o		(decode_lsu_zext_o),
       .decode_op_mfspr_o		(decode_op_mfspr_o),
@@ -358,6 +361,8 @@ module mor1kx_cpu_espresso
       .decode_op_shift_o		(decode_op_shift_o),
       .decode_op_ffl1_o			(decode_op_ffl1_o),
       .decode_op_movhi_o		(decode_op_movhi_o),
+      .decode_op_msync_o		(decode_op_msync_o),
+      .decode_op_fpu_o			(decode_op_fpu_o[`OR1K_FPUOP_WIDTH-1:0]),
       .decode_adder_do_sub_o		(decode_adder_do_sub_o),
       .decode_adder_do_carry_o		(decode_adder_do_carry_o),
       .decode_except_illegal_o		(decode_except_illegal_o),
@@ -370,14 +375,19 @@ module mor1kx_cpu_espresso
       .decode_insn_i			(insn_fetch_to_decode));	 // Templated
 
    /* mor1kx_execute_alu AUTO_TEMPLATE (
+    .padv_decode_i			(padv_decode_o),
     .padv_execute_i			(padv_execute_o),
     .padv_ctrl_i			(1'b1),
+    .pipeline_flush_i			(pipeline_flush_o),
     .opc_alu_i			        (decode_opc_alu_o),
     .opc_alu_secondary_i		(decode_opc_alu_secondary_o),
     .imm16_i				(decode_imm16_o),
     .immediate_i			(decode_immediate_o),
     .immediate_sel_i			(decode_immediate_sel_o),
     .decode_valid_i			(padv_decode_o),
+    .decode_immediate_i		        (decode_immediate_o),
+    .decode_immediate_sel_i		(decode_immediate_sel_o),
+    .decode_op_mul_i			(decode_op_mul_o),
     .op_alu_i				(decode_op_alu_o),
     .op_add_i				(decode_op_add_o),
     .op_mul_i				(decode_op_mul_o),
@@ -394,10 +404,14 @@ module mor1kx_cpu_espresso
     .op_movhi_i				(decode_op_movhi_o),
     .op_jbr_i				(decode_op_jbr_o),
     .op_jr_i				(decode_op_jr_o),
+    .op_fpu_i				(decode_op_fpu_o),
+    .fpu_round_mode_i                   (2'b00),
     .immjbr_upper_i			(decode_immjbr_upper_o),
     .pc_execute_i			(spr_ppc_o),
     .adder_do_sub_i			(decode_adder_do_sub_o),
     .adder_do_carry_i			(decode_adder_do_carry_o),
+    .decode_rfa_i			(rfa_o),
+    .decode_rfb_i			(rfb_o),
     .rfa_i				(rfa_o),
     .rfb_i				(rfb_o),
     .flag_i				(flag_o),
@@ -433,6 +447,8 @@ module mor1kx_cpu_espresso
       .carry_clear_o			(carry_clear_o),
       .overflow_set_o			(overflow_set_o),
       .overflow_clear_o			(overflow_clear_o),
+      .fpcsr_o				(fpcsr_o[`OR1K_FPCSR_WIDTH-1:0]),
+      .fpcsr_set_o			(fpcsr_set_o),
       .alu_result_o			(alu_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .alu_valid_o			(alu_valid_o),
       .mul_result_o			(mul_result_o[OPTION_OPERAND_WIDTH-1:0]),
@@ -440,14 +456,19 @@ module mor1kx_cpu_espresso
       // Inputs
       .clk				(clk),
       .rst				(rst),
+      .padv_decode_i			(padv_decode_o),	 // Templated
       .padv_execute_i			(padv_execute_o),	 // Templated
       .padv_ctrl_i			(1'b1),			 // Templated
+      .pipeline_flush_i			(pipeline_flush_o),	 // Templated
       .opc_alu_i			(decode_opc_alu_o),	 // Templated
       .opc_alu_secondary_i		(decode_opc_alu_secondary_o), // Templated
       .imm16_i				(decode_imm16_o),	 // Templated
       .immediate_i			(decode_immediate_o),	 // Templated
       .immediate_sel_i			(decode_immediate_sel_o), // Templated
+      .decode_immediate_i		(decode_immediate_o),	 // Templated
+      .decode_immediate_sel_i		(decode_immediate_sel_o), // Templated
       .decode_valid_i			(padv_decode_o),	 // Templated
+      .decode_op_mul_i			(decode_op_mul_o),	 // Templated
       .op_alu_i				(decode_op_alu_o),	 // Templated
       .op_add_i				(decode_op_add_o),	 // Templated
       .op_mul_i				(decode_op_mul_o),	 // Templated
@@ -462,12 +483,16 @@ module mor1kx_cpu_espresso
       .op_mtspr_i			(decode_op_mtspr_o),	 // Templated
       .op_mfspr_i			(decode_op_mfspr_o),	 // Templated
       .op_movhi_i			(decode_op_movhi_o),	 // Templated
+      .op_fpu_i				(decode_op_fpu_o),	 // Templated
+      .fpu_round_mode_i			(2'b00),		 // Templated
       .op_jbr_i				(decode_op_jbr_o),	 // Templated
       .op_jr_i				(decode_op_jr_o),	 // Templated
       .immjbr_upper_i			(decode_immjbr_upper_o), // Templated
       .pc_execute_i			(spr_ppc_o),		 // Templated
       .adder_do_sub_i			(decode_adder_do_sub_o), // Templated
       .adder_do_carry_i			(decode_adder_do_carry_o), // Templated
+      .decode_rfa_i			(rfa_o),		 // Templated
+      .decode_rfb_i			(rfb_o),		 // Templated
       .rfa_i				(rfa_o),		 // Templated
       .rfb_i				(rfb_o),		 // Templated
       .flag_i				(flag_o),		 // Templated

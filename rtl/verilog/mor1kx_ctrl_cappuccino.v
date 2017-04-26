@@ -329,6 +329,7 @@ module mor1kx_ctrl_cappuccino
    wire 			     spr_write_access;
    wire 			     spr_bus_access;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_sys_group_read;
+   wire [3:0] 			     spr_group;
 
    /* Wires from mor1kx_cfgrs module */
    wire [31:0] 			     spr_vr;
@@ -1184,49 +1185,51 @@ module mor1kx_ctrl_cappuccino
                           spr_access_valid & spr_bus_access;
    assign spr_bus_dat_o = spr_write_dat;
 
+   assign spr_group = spr_addr[14:11];
+
    /* Select spr */
    always @(*) begin
-     spr_access <= 0;
-      case(`SPR_BASE(spr_addr))
+     spr_access = 0;
+      case(spr_group)
          // System group
          `OR1K_SPR_SYS_BASE:
-           spr_access[`OR1K_SPR_SYS_BASE] <= 1'b1;
+           spr_access[`OR1K_SPR_SYS_BASE] = 1'b1;
          // DMMU
          `OR1K_SPR_DMMU_BASE:
-           spr_access[`OR1K_SPR_DMMU_BASE] <= (FEATURE_DMMU!="NONE");
+           spr_access[`OR1K_SPR_DMMU_BASE] = (FEATURE_DMMU!="NONE");
          // IMMU
          `OR1K_SPR_IMMU_BASE:
-           spr_access[`OR1K_SPR_IMMU_BASE] <= (FEATURE_IMMU!="NONE");
+           spr_access[`OR1K_SPR_IMMU_BASE] = (FEATURE_IMMU!="NONE");
          // Data cache
          `OR1K_SPR_DC_BASE:
-           spr_access[`OR1K_SPR_DC_BASE] <= (FEATURE_DATACACHE!="NONE");
+           spr_access[`OR1K_SPR_DC_BASE] = (FEATURE_DATACACHE!="NONE");
          // Instruction cache
          `OR1K_SPR_IC_BASE:
-           spr_access[`OR1K_SPR_IC_BASE] <= (FEATURE_INSTRUCTIONCACHE!= "NONE");
+           spr_access[`OR1K_SPR_IC_BASE] = (FEATURE_INSTRUCTIONCACHE!= "NONE");
          // MAC unit
          `OR1K_SPR_MAC_BASE:
-           spr_access[`OR1K_SPR_MAC_BASE] <= (FEATURE_MAC!="NONE");
+           spr_access[`OR1K_SPR_MAC_BASE] = (FEATURE_MAC!="NONE");
          // Debug unit
          `OR1K_SPR_DU_BASE:
-           spr_access[`OR1K_SPR_DU_BASE] <= (FEATURE_DEBUGUNIT!="NONE");
+           spr_access[`OR1K_SPR_DU_BASE] = (FEATURE_DEBUGUNIT!="NONE");
          // Performance counters
          `OR1K_SPR_PC_BASE:
-           spr_access[`OR1K_SPR_PC_BASE] <= (FEATURE_PERFCOUNTERS!="NONE");
+           spr_access[`OR1K_SPR_PC_BASE] = (FEATURE_PERFCOUNTERS!="NONE");
          // Power Management
          `OR1K_SPR_PM_BASE:
-           spr_access[`OR1K_SPR_PM_BASE] <= (FEATURE_PMU!="NONE");
+           spr_access[`OR1K_SPR_PM_BASE] = (FEATURE_PMU!="NONE");
          // PIC
          `OR1K_SPR_PIC_BASE:
-           spr_access[`OR1K_SPR_PIC_BASE] <= (FEATURE_PIC!="NONE");
+           spr_access[`OR1K_SPR_PIC_BASE] = (FEATURE_PIC!="NONE");
          // Tick timer
          `OR1K_SPR_TT_BASE:
-           spr_access[`OR1K_SPR_TT_BASE] <= (FEATURE_TIMER!="NONE");
+           spr_access[`OR1K_SPR_TT_BASE] = (FEATURE_TIMER!="NONE");
          // FPU
          `OR1K_SPR_FPU_BASE:
-           spr_access[`OR1K_SPR_FPU_BASE] <= (FEATURE_FPU!="NONE");
+           spr_access[`OR1K_SPR_FPU_BASE] = (FEATURE_FPU!="NONE");
          /* generate invalid if the group is not present in the design  */
          default:
-           spr_access <= 0;
+           spr_access = 0;
        endcase
     end
 

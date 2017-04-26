@@ -385,7 +385,7 @@ endgenerate
 
    // One signed overflow detection for all multiplication implmentations
    assign mul_signed_overflow = (FEATURE_MULTIPLIER=="NONE") ||
-				(FEATURE_MULTIPLIER=="PIPELINED") ? 0 :
+				(FEATURE_MULTIPLIER=="PIPELINED") ? 1'b0 :
 				// Same signs, check for negative result
 				// (should be positive)
 				((a[OPTION_OPERAND_WIDTH-1] ==
@@ -423,11 +423,11 @@ endgenerate
                div_count <= 0;
             end else if (decode_valid_i & op_div_i) begin
                div_done <= 0;
-               div_count <= OPTION_OPERAND_WIDTH;
+               div_count <= OPTION_OPERAND_WIDTH[5:0];
             end else if (div_count == 1)
                div_done <= 1;
             else if (!div_done)
-               div_count <= div_count - 1;
+               div_count <= div_count - 1'd1;
 
          always @(posedge clk) begin
             if (decode_valid_i & op_div_i) begin
@@ -627,6 +627,7 @@ endgenerate
 	 wire [OPTION_OPERAND_WIDTH-1:0] shift_right;
 	 wire [OPTION_OPERAND_WIDTH-1:0] shift_lsw;
 	 wire [OPTION_OPERAND_WIDTH-1:0] shift_msw;
+	 wire [OPTION_OPERAND_WIDTH*2-1:0] shift_wide;
 
 	 //
 	 // Bit-reverse on left shift, perform right shift,
@@ -637,7 +638,8 @@ endgenerate
 			    {OPTION_OPERAND_WIDTH{a[OPTION_OPERAND_WIDTH-1]}} :
 			    op_ror ? a : {OPTION_OPERAND_WIDTH{1'b0}};
 
-	 assign shift_right = {shift_msw, shift_lsw} >> b[4:0];
+	 assign shift_wide = {shift_msw, shift_lsw} >> b[4:0];
+	 assign shift_right = shift_wide[OPTION_OPERAND_WIDTH-1:0];
 	 assign shift_result = op_sll ? reverse(shift_right) : shift_right;
 
          assign shift_valid = 1;

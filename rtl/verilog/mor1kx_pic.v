@@ -101,7 +101,7 @@ module mor1kx_pic
            begin: picsrlevelgenerate
               // PIC status register
               always @(*)
-                spr_picsr[irqline] <= irq_unmasked[irqline];
+                spr_picsr[irqline] = irq_unmasked[irqline];
            end
       end // if (OPTION_PIC_TRIGGER=="LEVEL")
 

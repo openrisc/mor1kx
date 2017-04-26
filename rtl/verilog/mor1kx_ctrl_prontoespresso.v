@@ -960,6 +960,7 @@ module mor1kx_ctrl_prontoespresso
 	  .spr_dat_o		(spr_internal_read_dat[9]),
 	  // Inputs
 	  .spr_we_i		(spr_we),
+          .spr_access_i         (1'b1),
 	  .spr_addr_i		(spr_addr),
 	  .spr_dat_i		(spr_write_dat),
 	  );*/
@@ -979,6 +980,7 @@ module mor1kx_ctrl_prontoespresso
 	    .clk			(clk),
 	    .rst			(rst),
 	    .irq_i			(irq_i[31:0]),
+	    .spr_access_i		(1'b1),			 // Templated
 	    .spr_we_i			(spr_we),		 // Templated
 	    .spr_addr_i			(spr_addr),		 // Templated
 	    .spr_dat_i			(spr_write_dat));	 // Templated
@@ -1014,6 +1016,7 @@ module mor1kx_ctrl_prontoespresso
 	  .spr_dat_o		(spr_internal_read_dat[10]),
 	  // Inputs
 	  .spr_we_i		(spr_we),
+          .spr_access_i         (1'b1),
 	  .spr_addr_i		(spr_addr),
 	  .spr_dat_i		(spr_write_dat),
 	  );*/
@@ -1027,6 +1030,7 @@ module mor1kx_ctrl_prontoespresso
 			  // Inputs
 			  .clk			(clk),
 			  .rst			(rst),
+			  .spr_access_i		(1'b1),		 // Templated
 			  .spr_we_i		(spr_we),	 // Templated
 			  .spr_addr_i		(spr_addr),	 // Templated
 			  .spr_dat_i		(spr_write_dat)); // Templated
