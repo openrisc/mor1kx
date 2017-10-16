@@ -86,6 +86,25 @@ module mor1kx_pcu
    genvar pcu_num;
    generate
       for(pcu_num = 0; pcu_num < OPTION_PERFCOUNTERS_NUM + 1; pcu_num = pcu_num + 1) begin: pcu_generate
+         wire [`OR1K_PCMR_DDS:`OR1K_PCMR_LA] pcu_events_active;
+         wire [`OR1K_PCMR_DDS:`OR1K_PCMR_LA] pcu_events_hit;
+
+         assign pcu_events_active =
+            (pcu_event_load_i << `OR1K_PCMR_LA) |
+            (pcu_event_store_i << `OR1K_PCMR_SA) |
+            (pcu_event_ifetch_i << `OR1K_PCMR_IF) |
+            (pcu_event_dcache_miss_i << `OR1K_PCMR_DCM) |
+            (pcu_event_icache_miss_i << `OR1K_PCMR_ICM) |
+            (pcu_event_ifetch_stall_i << `OR1K_PCMR_IFS) |
+            (pcu_event_lsu_stall_i << `OR1K_PCMR_LSUS) |
+            (pcu_event_brn_stall_i << `OR1K_PCMR_BS) |
+            (pcu_event_dtlb_miss_i << `OR1K_PCMR_DTLBM) |
+            (pcu_event_itlb_miss_i << `OR1K_PCMR_ITLBM) |
+            (pcu_event_datadep_stall_i << `OR1K_PCMR_DDS);
+
+         assign pcu_events_hit =
+            pcu_events_active & pcu_pcmr[pcu_num];
+
          always @(posedge clk `OR_ASYNC_RST) begin
             if (rst) begin
                pcu_pccr[pcu_num] <= 32'd0;
@@ -101,28 +120,18 @@ module mor1kx_pcu
                end
             end else if (((pcu_pcmr[pcu_num][`OR1K_PCMR_CISM] & spr_sys_mode_i) |
                        (pcu_pcmr[pcu_num][`OR1K_PCMR_CIUM] & ~spr_sys_mode_i))) begin
-               if (pcu_pcmr[pcu_num] & (pcu_event_load_i << `OR1K_PCMR_LA))
-                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-               if (pcu_pcmr[pcu_num] & (pcu_event_store_i << `OR1K_PCMR_SA))
-                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-               if (pcu_pcmr[pcu_num] & (pcu_event_ifetch_i << `OR1K_PCMR_IF))
-                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-               if (pcu_pcmr[pcu_num] & (pcu_event_dcache_miss_i << `OR1K_PCMR_DCM))
-                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-               if (pcu_pcmr[pcu_num] & (pcu_event_icache_miss_i << `OR1K_PCMR_ICM))
-                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-               if (pcu_pcmr[pcu_num] & (pcu_event_ifetch_stall_i << `OR1K_PCMR_IFS))
-                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-               if (pcu_pcmr[pcu_num] & (pcu_event_lsu_stall_i << `OR1K_PCMR_LSUS))
-                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-               if (pcu_pcmr[pcu_num] & (pcu_event_brn_stall_i << `OR1K_PCMR_BS))
-                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-               if (pcu_pcmr[pcu_num] & (pcu_event_dtlb_miss_i << `OR1K_PCMR_DTLBM))
-                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-               if (pcu_pcmr[pcu_num] & (pcu_event_itlb_miss_i << `OR1K_PCMR_ITLBM))
-                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-               if (pcu_pcmr[pcu_num] & (pcu_event_datadep_stall_i << `OR1K_PCMR_DDS))
-                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] +
+                  pcu_events_hit[`OR1K_PCMR_LA] +
+                  pcu_events_hit[`OR1K_PCMR_SA] +
+                  pcu_events_hit[`OR1K_PCMR_IF] +
+                  pcu_events_hit[`OR1K_PCMR_DCM] +
+                  pcu_events_hit[`OR1K_PCMR_ICM] +
+                  pcu_events_hit[`OR1K_PCMR_IFS] +
+                  pcu_events_hit[`OR1K_PCMR_LSUS] +
+                  pcu_events_hit[`OR1K_PCMR_BS] +
+                  pcu_events_hit[`OR1K_PCMR_DTLBM] +
+                  pcu_events_hit[`OR1K_PCMR_ITLBM] +
+                  pcu_events_hit[`OR1K_PCMR_DDS];
             end
          end
       end
