@@ -34,7 +34,7 @@ module mor1kx_pcu
    // Current cpu mode: user/supervisor
    input         spr_sys_mode_i,
    // Events that can occur
-   input         pcu_event_load_i,            // track load insn  
+   input         pcu_event_load_i,            // track load insn
    input         pcu_event_store_i,           // track store insn
    input         pcu_event_ifetch_i,          // track insn fetch
    input         pcu_event_dcache_miss_i,     // track data cache miss
@@ -98,31 +98,31 @@ module mor1kx_pcu
                if (pcu_pcmr_access && (spr_addr_i[2:0] == pcu_num)) begin
                   pcu_pcmr[pcu_num][`OR1K_PCMR_DDS:`OR1K_PCMR_CISM] <=
                      spr_dat_i[`OR1K_PCMR_DDS:`OR1K_PCMR_CISM];
-               end else if (((pcu_pcmr[pcu_num][`OR1K_PCMR_CISM] & spr_sys_mode_i) |
-                       (pcu_pcmr[pcu_num][`OR1K_PCMR_CIUM] & ~spr_sys_mode_i))) begin
-                  if (pcu_pcmr[pcu_num] & (pcu_event_load_i << `OR1K_PCMR_LA))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num] & (pcu_event_store_i << `OR1K_PCMR_SA))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num] & (pcu_event_ifetch_i << `OR1K_PCMR_IF))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num] & (pcu_event_dcache_miss_i << `OR1K_PCMR_DCM))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num] & (pcu_event_icache_miss_i << `OR1K_PCMR_ICM))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num] & (pcu_event_ifetch_stall_i << `OR1K_PCMR_IFS))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num] & (pcu_event_lsu_stall_i << `OR1K_PCMR_LSUS))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num] & (pcu_event_brn_stall_i << `OR1K_PCMR_BS))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num] & (pcu_event_dtlb_miss_i << `OR1K_PCMR_DTLBM))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num] & (pcu_event_itlb_miss_i << `OR1K_PCMR_ITLBM))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
-                  if (pcu_pcmr[pcu_num] & (pcu_event_datadep_stall_i << `OR1K_PCMR_DDS))
-                     pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
                end
+            end else if (((pcu_pcmr[pcu_num][`OR1K_PCMR_CISM] & spr_sys_mode_i) |
+                       (pcu_pcmr[pcu_num][`OR1K_PCMR_CIUM] & ~spr_sys_mode_i))) begin
+               if (pcu_pcmr[pcu_num] & (pcu_event_load_i << `OR1K_PCMR_LA))
+                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               if (pcu_pcmr[pcu_num] & (pcu_event_store_i << `OR1K_PCMR_SA))
+                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               if (pcu_pcmr[pcu_num] & (pcu_event_ifetch_i << `OR1K_PCMR_IF))
+                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               if (pcu_pcmr[pcu_num] & (pcu_event_dcache_miss_i << `OR1K_PCMR_DCM))
+                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               if (pcu_pcmr[pcu_num] & (pcu_event_icache_miss_i << `OR1K_PCMR_ICM))
+                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               if (pcu_pcmr[pcu_num] & (pcu_event_ifetch_stall_i << `OR1K_PCMR_IFS))
+                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               if (pcu_pcmr[pcu_num] & (pcu_event_lsu_stall_i << `OR1K_PCMR_LSUS))
+                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               if (pcu_pcmr[pcu_num] & (pcu_event_brn_stall_i << `OR1K_PCMR_BS))
+                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               if (pcu_pcmr[pcu_num] & (pcu_event_dtlb_miss_i << `OR1K_PCMR_DTLBM))
+                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               if (pcu_pcmr[pcu_num] & (pcu_event_itlb_miss_i << `OR1K_PCMR_ITLBM))
+                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
+               if (pcu_pcmr[pcu_num] & (pcu_event_datadep_stall_i << `OR1K_PCMR_DDS))
+                  pcu_pccr[pcu_num] <= pcu_pccr[pcu_num] + 1;
             end
          end
       end
