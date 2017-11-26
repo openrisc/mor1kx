@@ -1128,9 +1128,14 @@ module mor1kx_cpu_cappuccino
 `ifndef SYNTHESIS
 // synthesis translate_off
    /* Debug signals required for the debug monitor */
+
+   localparam RF_ADDR_WIDTH = mor1kx_rf_cappuccino.calc_rf_addr_width(
+                                OPTION_RF_ADDR_WIDTH,
+                                OPTION_RF_NUM_SHADOW_GPR);
+
    function [OPTION_OPERAND_WIDTH-1:0] get_gpr;
       // verilator public
-      input [mor1kx_rf_cappuccino.RF_ADDR_WIDTH-1:0] gpr_num;
+      input [RF_ADDR_WIDTH-1:0] gpr_num;
       begin
 	 // TODO: handle load ops
 	 if ((mor1kx_rf_cappuccino.execute_rfd_adr_i == gpr_num[4:0]) &
@@ -1150,7 +1155,7 @@ module mor1kx_cpu_cappuccino
 
    task set_gpr;
       // verilator public
-      input [mor1kx_rf_cappuccino.RF_ADDR_WIDTH-1:0] gpr_num;
+      input [RF_ADDR_WIDTH-1:0] gpr_num;
       input [OPTION_OPERAND_WIDTH-1:0] gpr_value;
       begin
 	 mor1kx_rf_cappuccino.rfa.mem[gpr_num] = gpr_value;
