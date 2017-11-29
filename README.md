@@ -27,11 +27,11 @@ details please see the LICENSE file or http://juliusbaxter.net/ohdl/
 
 ## Configuration
 
-The mor1kx CPU is very configurable to allow your to customize the core to your
-exact needs. The tables explain explain how each parameter can be configure,
-what the configuration a does and why you might want to use it.
+The mor1kx CPU is very configurable to allow you to customize the core to your
+exact needs. The following tables explain how each parameter can be configure,
+what the configuration does and why you might want to use it.
 
-*Note** *Below the *Usage* field is populated to indicate if a certain application such
+**Note** *Below the _Usage_ field is populated to indicate if a certain application such
 as running Linux requires a setting different than the default value.*
 
 ### Basic parameters
