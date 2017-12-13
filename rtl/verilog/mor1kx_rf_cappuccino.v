@@ -76,14 +76,6 @@ module mor1kx_rf_cappuccino
     );
 
 `include "mor1kx_utils.vh"
-   function integer calc_rf_addr_width;
-      input integer rf_addr_width;
-      input integer rf_num_shadow_gpr;
-      calc_rf_addr_width  = rf_addr_width +
-                           ((rf_num_shadow_gpr == 1) ? 1 :
-                             `clog2(rf_num_shadow_gpr));
-   endfunction
-
    localparam RF_ADDR_WIDTH = calc_rf_addr_width(OPTION_RF_ADDR_WIDTH,
                                                  OPTION_RF_NUM_SHADOW_GPR);
 

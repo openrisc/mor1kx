@@ -1129,9 +1129,9 @@ module mor1kx_cpu_cappuccino
 // synthesis translate_off
    /* Debug signals required for the debug monitor */
 
-   localparam RF_ADDR_WIDTH = mor1kx_rf_cappuccino.calc_rf_addr_width(
-                                OPTION_RF_ADDR_WIDTH,
-                                OPTION_RF_NUM_SHADOW_GPR);
+`include "mor1kx_utils.vh"
+   localparam RF_ADDR_WIDTH = calc_rf_addr_width(OPTION_RF_ADDR_WIDTH,
+                                                 OPTION_RF_NUM_SHADOW_GPR);
 
    function [OPTION_OPERAND_WIDTH-1:0] get_gpr;
       // verilator public
