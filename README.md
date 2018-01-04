@@ -50,7 +50,7 @@ as running Linux requires a setting different than the default value.*
 |OPTION_DCACHE_BLOCK_WIDTH|Specifies the address width of a cache block|5|`n`| |
 |OPTION_DCACHE_SET_WIDTH|Specifies the set address width|9|`n`| |
 |OPTION_DCACHE_WAYS|Specifies the number of blocks per set|2|`n`| |
-|OPTION_DCACHE_LIMIT_WIDTH|Specifies the maximum address width|32|`n`| |
+|OPTION_DCACHE_LIMIT_WIDTH|Specifies the maximum address width|32|`n`|`31` for Linux to allow uncached device access|
 |OPTION_DCACHE_SNOOP|Enable bus snooping for cache coherency|`NONE`|`ENABLED` `NONE`|Linux SMP|
 |FEATURE_INSTRUCTIONCACHE|Enable memory access instruction caching|`NONE`|`ENABLED` `NONE`| |
 |OPTION_ICACHE_BLOCK_WIDTH|Specifies the address width of a cache block|5|`n`| |
