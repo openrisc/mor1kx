@@ -413,6 +413,10 @@ module mor1kx_fetch_cappuccino
 		 state <= IDLE;
 	      end
 	   end
+	   if (ibus_err_i) begin
+	      ibus_req <= 0;
+	      state <= IDLE;
+	   end
 	end
 
 	READ: begin
