@@ -419,10 +419,11 @@ for (i = 0; i < OPTION_DMMU_WAYS; i=i+1) begin : dtlb
        .dout_a (dtlb_match_dout[i]),
        .dout_b (dtlb_match_huge_dout[i]),
        // Inputs
-       .clk    (clk),
+       .clk_a  (clk),
        .addr_a (dtlb_match_addr),
        .we_a   (dtlb_match_we[i]),
        .din_a  (dtlb_match_din),
+       .clk_b  (clk),
        .addr_b (dtlb_match_huge_addr),
        .we_b   (dtlb_match_huge_we),
        .din_b  (dtlb_match_reload_din)
@@ -441,10 +442,11 @@ for (i = 0; i < OPTION_DMMU_WAYS; i=i+1) begin : dtlb
       .dout_a (dtlb_trans_dout[i]),
       .dout_b (dtlb_trans_huge_dout[i]),
       // Inputs
-      .clk    (clk),
+      .clk_a  (clk),
       .addr_a (dtlb_trans_addr),
       .we_a   (dtlb_trans_we[i]),
       .din_a  (dtlb_trans_din),
+      .clk_b  (clk),
       .addr_b (dtlb_trans_huge_addr),
       .we_b   (dtlb_trans_huge_we),
       .din_b  (dtlb_trans_reload_din)
