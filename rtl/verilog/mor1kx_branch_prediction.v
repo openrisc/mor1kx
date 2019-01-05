@@ -11,7 +11,7 @@
  in order to keep this module generic.
 
  Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
- Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com> 
+ Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
 
  ******************************************************************************/
 
@@ -19,7 +19,7 @@
 
 module mor1kx_branch_prediction
   #(
-    parameter [95:0] FEATURE_BRANCH_PREDICTOR = "NONE",
+    parameter [95:0] FEATURE_BRANCH_PREDICTOR = "SIMPLE",
     parameter OPTION_OPERAND_WIDTH = 32
     )
    (
@@ -68,7 +68,7 @@ if (FEATURE_BRANCH_PREDICTOR=="SAT_COUNTER") begin : branch_predictor_saturation
          .prev_op_brcond_i                 (prev_op_brcond_i),
          .padv_decode_i                    (padv_decode_i),
          .branch_mispredict_i              (branch_mispredict_o));
-       
+
 end else if (FEATURE_BRANCH_PREDICTOR=="GSHARE") begin : branch_predictor_gshare
    mor1kx_branch_predictor_gshare
      #(
@@ -101,7 +101,7 @@ end else if (FEATURE_BRANCH_PREDICTOR=="SIMPLE") begin : branch_predictor_simple
          .op_bf_i                          (op_bf_i),
          .op_bnf_i                         (op_bnf_i),
          .immjbr_upper_i                   (immjbr_upper_i));
-  
+
 end else begin
    initial begin
       $display("Error: FEATURE_PREDICTOR_TYPE, %s, not valid", FEATURE_BRANCH_PREDICTOR);

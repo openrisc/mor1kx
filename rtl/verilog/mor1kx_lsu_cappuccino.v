@@ -636,8 +636,10 @@ end else begin
    assign store_buffer_empty = 1'b1;
 
    reg store_buffer_full_r;
-   always @(posedge clk)
-     if (store_buffer_write)
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       store_buffer_full_r <= 0;
+     else if (store_buffer_write)
        store_buffer_full_r <= 1;
      else if (write_done)
        store_buffer_full_r <= 0;

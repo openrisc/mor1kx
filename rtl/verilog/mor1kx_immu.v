@@ -421,10 +421,11 @@ for (i = 0; i < OPTION_IMMU_WAYS; i=i+1) begin : itlb
        .dout_a (itlb_match_dout[i]),
        .dout_b (itlb_match_huge_dout[i]),
        // Inputs
-       .clk    (clk),
+       .clk_a  (clk),
        .addr_a (itlb_match_addr),
        .we_a   (itlb_match_we[i]),
        .din_a  (itlb_match_din),
+       .clk_b  (clk),
        .addr_b (itlb_match_huge_addr),
        .we_b   (itlb_match_huge_we),
        .din_b  (itlb_match_reload_din)
@@ -443,10 +444,11 @@ for (i = 0; i < OPTION_IMMU_WAYS; i=i+1) begin : itlb
       .dout_a (itlb_trans_dout[i]),
       .dout_b (itlb_trans_huge_dout[i]),
       // Inputs
-      .clk    (clk),
+      .clk_a  (clk),
       .addr_a (itlb_trans_addr),
       .we_a   (itlb_trans_we[i]),
       .din_a  (itlb_trans_din),
+      .clk_b  (clk),
       .addr_b (itlb_trans_huge_addr),
       .we_b   (itlb_trans_huge_we),
       .din_b  (itlb_trans_reload_din)

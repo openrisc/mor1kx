@@ -100,6 +100,7 @@ as running Linux) requires a setting different than the default value.*
 |FEATURE_FASTCONTEXTS|Enable fast context switching of register sets|`NONE`|`ENABLED` `NONE`| |
 |FEATURE_MULTICORE|Enable the `coreid` and `numcores` SPR registers|`NONE`|`ENABLED` `NONE`|Linux SMP|
 |FEATURE_FPU|Enable the FPU, for cappuccino pipeline only|`NONE`|`ENABLED` `NONE`| |
+|FEATURE_BRANCH_PREDICTOR|Select the branch predictor implementation|`SIMPLE`|`SIMPLE` `GSHARE` `SAT_COUNTER`| |
 
 ### Exception handling options
 

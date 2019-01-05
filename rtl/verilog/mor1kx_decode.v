@@ -114,6 +114,7 @@ module mor1kx_decode
     output 			      decode_op_shift_o,
     output 			      decode_op_ffl1_o,
     output 			      decode_op_movhi_o,
+    output 			      decode_op_ext_o,
 
     // Sync operations
     output                            decode_op_msync_o,
@@ -262,6 +263,11 @@ module mor1kx_decode
 			     opc_alu == `OR1K_ALU_OPC_FFL1;
 
    assign decode_op_movhi_o = opc_insn == `OR1K_OPCODE_MOVHI;
+
+   assign decode_op_ext_o = opc_insn == `OR1K_OPCODE_ALU &&
+			    (opc_alu == `OR1K_ALU_OPC_EXTBH ||
+			     opc_alu == `OR1K_ALU_OPC_EXTW) &&
+			    (FEATURE_EXT!="NONE");
 
    // FPU related
    generate

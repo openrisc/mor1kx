@@ -187,6 +187,7 @@ module mor1kx_cpu_espresso
    wire			decode_op_lsu_store_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mfspr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_movhi_o;	// From mor1kx_decode of mor1kx_decode.v
+   wire			decode_op_ext_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_msync_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mtspr_o;	// From mor1kx_decode of mor1kx_decode.v
    wire			decode_op_mul_o;	// From mor1kx_decode of mor1kx_decode.v
@@ -361,6 +362,7 @@ module mor1kx_cpu_espresso
       .decode_op_shift_o		(decode_op_shift_o),
       .decode_op_ffl1_o			(decode_op_ffl1_o),
       .decode_op_movhi_o		(decode_op_movhi_o),
+      .decode_op_ext_o			(decode_op_ext_o),
       .decode_op_msync_o		(decode_op_msync_o),
       .decode_op_fpu_o			(decode_op_fpu_o[`OR1K_FPUOP_WIDTH-1:0]),
       .decode_adder_do_sub_o		(decode_adder_do_sub_o),
@@ -402,6 +404,7 @@ module mor1kx_cpu_espresso
     .op_mtspr_i				(decode_op_mtspr_o),
     .op_mfspr_i				(decode_op_mfspr_o),
     .op_movhi_i				(decode_op_movhi_o),
+    .op_ext_i				(decode_op_ext_o),
     .op_jbr_i				(decode_op_jbr_o),
     .op_jr_i				(decode_op_jr_o),
     .op_fpu_i				(decode_op_fpu_o),
@@ -483,6 +486,7 @@ module mor1kx_cpu_espresso
       .op_mtspr_i			(decode_op_mtspr_o),	 // Templated
       .op_mfspr_i			(decode_op_mfspr_o),	 // Templated
       .op_movhi_i			(decode_op_movhi_o),	 // Templated
+      .op_ext_i				(decode_op_ext_o),	 // Templated
       .op_fpu_i				(decode_op_fpu_o),	 // Templated
       .fpu_round_mode_i			(2'b00),		 // Templated
       .op_jbr_i				(decode_op_jbr_o),	 // Templated

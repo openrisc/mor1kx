@@ -264,6 +264,7 @@ module mor1kx_cpu_cappuccino
    wire                 decode_op_lsu_store_o;  // From mor1kx_decode of mor1kx_decode.v
    wire                 decode_op_mfspr_o;      // From mor1kx_decode of mor1kx_decode.v
    wire                 decode_op_movhi_o;      // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_ext_o;      // From mor1kx_decode of mor1kx_decode.v
    wire                 decode_op_msync_o;      // From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_FPUOP_WIDTH-1:0] decode_op_fpu_o; // From mor1kx_decode of mor1kx_decode.v
    wire                 decode_op_mtspr_o;      // From mor1kx_decode of mor1kx_decode.v
@@ -322,6 +323,7 @@ module mor1kx_cpu_cappuccino
    wire                 execute_op_lsu_store_o; // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_mfspr_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_movhi_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_ext_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_msync_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [`OR1K_FPUOP_WIDTH-1:0] execute_op_fpu_o; // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_mtspr_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
@@ -549,6 +551,7 @@ module mor1kx_cpu_cappuccino
       .decode_op_shift_o                (decode_op_shift_o),
       .decode_op_ffl1_o                 (decode_op_ffl1_o),
       .decode_op_movhi_o                (decode_op_movhi_o),
+      .decode_op_ext_o                  (decode_op_ext_o),
       .decode_op_msync_o                (decode_op_msync_o),
       .decode_op_fpu_o                  (decode_op_fpu_o),
       .decode_adder_do_sub_o            (decode_adder_do_sub_o),
@@ -674,6 +677,7 @@ module mor1kx_cpu_cappuccino
       .execute_op_shift_o               (execute_op_shift_o),
       .execute_op_ffl1_o                (execute_op_ffl1_o),
       .execute_op_movhi_o               (execute_op_movhi_o),
+      .execute_op_ext_o                 (execute_op_ext_o),
       .execute_op_msync_o               (execute_op_msync_o),
       .execute_op_fpu_o                 (execute_op_fpu_o),
       .execute_op_bf_o                  (execute_op_bf_o),
@@ -745,6 +749,7 @@ module mor1kx_cpu_cappuccino
       .decode_op_shift_i                (decode_op_shift_o),     // Templated
       .decode_op_ffl1_i                 (decode_op_ffl1_o),      // Templated
       .decode_op_movhi_i                (decode_op_movhi_o),     // Templated
+      .decode_op_ext_i                  (decode_op_ext_o),     // Templated
       .decode_op_msync_i                (decode_op_msync_o),     // Templated
       .decode_op_fpu_i                  (decode_op_fpu_o), // Templated
       .decode_opc_insn_i                (decode_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]), // Templated
@@ -903,6 +908,7 @@ module mor1kx_cpu_cappuccino
       .op_mtspr_i                       (execute_op_mtspr_o),    // Templated
       .op_mfspr_i                       (execute_op_mfspr_o),    // Templated
       .op_movhi_i                       (execute_op_movhi_o),    // Templated
+      .op_ext_i                         (execute_op_ext_o),    // Templated
       .op_fpu_i                         (execute_op_fpu_o), // Templated
       .fpu_round_mode_i                 (ctrl_fpu_round_mode_o), // Templated
       .op_jbr_i                         (execute_op_jbr_o),      // Templated
