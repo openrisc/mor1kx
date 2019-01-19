@@ -8,8 +8,8 @@
 //                                                                 //
 /////////////////////////////////////////////////////////////////////
 //                                                                 //
-//   Copyright (C) 2015 Andrey Bacherov                            //
-//                      avbacherov@opencores.org                   //
+//   Copyright (C) 2015-2018 Andrey Bacherov                       //
+//                           avbacherov@opencores.org              //
 //                                                                 //
 //   This source file may be used and distributed without          //
 //   restriction provided that this copyright statement is not     //
@@ -51,23 +51,23 @@
 module pfpu_top_marocchino
 (
   // clock & reset
-  input                               clk,
-  input                               rst,
+  input                               cpu_clk,
 
   // pipeline control
   input                               pipeline_flush_i,
-  input                               padv_wb_i,
-  input                               grant_wb_to_fpxx_arith_i,
-  input                               grant_wb_to_fp64_cmp_i,
+  input                               padv_wrbk_i,
+  input                               grant_wrbk_to_fpxx_arith_i,
+  input                               grant_wrbk_to_fpxx_cmp_i,
 
   // pipeline control outputs
   output                              fpxx_taking_op_o,
-  output                              fpxx_arith_valid_o,  // WB-latching ahead arithmetic ready flag
+  output                              fpxx_arith_valid_o,  // ahead to Write-Back arithmetic ready flag
+  output                              fpxx_cmp_valid_o,    // ahead to Write-Back comparison ready flag
 
   // Configuration
-  input     [`OR1K_FPCSR_RM_SIZE-1:0] round_mode_i,
+  input     [`OR1K_FPCSR_RM_SIZE-1:0] fpu_round_mode_i,
   input                               except_fpu_enable_i,
-  input   [`OR1K_FPCSR_ALLF_SIZE-1:0] ctrl_fpu_mask_flags_i,
+  input   [`OR1K_FPCSR_ALLF_SIZE-1:0] fpu_mask_flags_i,
 
   // Commands for arithmetic part
   input                               exec_op_fp64_arith_i, // Clarification: FP64 instruction
@@ -79,7 +79,8 @@ module pfpu_top_marocchino
   input                               exec_op_fpxx_f2i_i,
 
   // Commands for comparison part
-  input                         [2:0] exec_opc_fp64_cmp_i,
+  input                               exec_op_fpxx_cmp_i,
+  input                         [2:0] exec_opc_fpxx_cmp_i,
 
   // Operands from reservation station
   input                        [31:0] exec_fpxx_a1_i,
@@ -87,30 +88,30 @@ module pfpu_top_marocchino
   input                        [31:0] exec_fpxx_a2_i,
   input                        [31:0] exec_fpxx_b2_i,
 
-  // pre WB outputs
+  // pre Write-Back outputs
   output                              exec_except_fpxx_arith_o, // exception by FP3264-arithmetic
-  output                              exec_except_fp64_cmp_o,   // exception by FP64-comparison
+  output                              exec_except_fpxx_cmp_o,   // exception by FP64-comparison
 
   // FPU-64 arithmetic part
-  output                       [31:0] wb_fpxx_arith_res_hi_o,   // arithmetic result
-  output                       [31:0] wb_fpxx_arith_res_lo_o,   // arithmetic result 2
-  output  [`OR1K_FPCSR_ALLF_SIZE-1:0] wb_fpxx_arith_fpcsr_o,    // arithmetic exceptions
-  output                              wb_fpxx_arith_wb_fpcsr_o, // update FPCSR
-  output                              wb_except_fpxx_arith_o,   // generate exception
+  output                       [31:0] wrbk_fpxx_arith_res_hi_o,   // arithmetic result
+  output                       [31:0] wrbk_fpxx_arith_res_lo_o,   // arithmetic result 2
+  output  [`OR1K_FPCSR_ALLF_SIZE-1:0] wrbk_fpxx_arith_fpcsr_o,    // arithmetic exceptions
+  output                              wrbk_fpxx_arith_fpcsr_we_o, // update FPCSR
+  output                              wrbk_except_fpxx_arith_o,   // generate exception
 
   // FPU-64 comparison part
-  output                              wb_fp64_flag_set_o,      // comparison result
-  output                              wb_fp64_flag_clear_o,    // comparison result
-  output                              wb_fp64_cmp_inv_o,       // comparison flag 'invalid'
-  output                              wb_fp64_cmp_inf_o,       // comparison flag 'infinity'
-  output                              wb_fp64_cmp_wb_fpcsr_o,  // update FPCSR
-  output                              wb_except_fp64_cmp_o     // exception by FP64-comparison
+  output                              wrbk_fpxx_flag_set_o,      // comparison result
+  output                              wrbk_fpxx_flag_clear_o,    // comparison result
+  output                              wrbk_fpxx_cmp_inv_o,       // comparison flag 'invalid'
+  output                              wrbk_fpxx_cmp_inf_o,       // comparison flag 'infinity'
+  output                              wrbk_fpxx_cmp_fpcsr_we_o,  // update FPCSR
+  output                              wrbk_except_fpxx_cmp_o     // exception by FP64-comparison
 );
 
 // fp64 pipes controls
 wire   taking_op_fpxx_arith;
-wire   taking_op_fp64_cmp = padv_wb_i & grant_wb_to_fp64_cmp_i;
-assign fpxx_taking_op_o   = taking_op_fpxx_arith | taking_op_fp64_cmp;
+wire   taking_op_fpxx_cmp;
+assign fpxx_taking_op_o   = taking_op_fpxx_arith | taking_op_fpxx_cmp;
 
 // Double precision operands A and B
 wire [63:0] fp64_opa = {exec_fpxx_a1_i, ({32{exec_op_fp64_arith_i}} & exec_fpxx_a2_i)};
@@ -174,9 +175,6 @@ wire exp_eq = (exp13a == exp13b);
 //  # fractionals
 wire fract_gt = (fract53a  > fract53b);
 wire fract_eq = (fract53a == fract53b);
-//  # comparisons for ADD/SUB
-wire addsub_agtb = exp_gt | (exp_eq & fract_gt);
-wire addsub_aeqb = exp_eq & fract_eq;
 
 
 // Calculate INV,INF,SNaN,QNaN and signum(NaN)
@@ -273,35 +271,36 @@ wire rnd_op_fp64_arith;
 
 
 // PFPU [O]rder [C]ontrol [B]uffer instance
-mor1kx_ocb_marocchino
+mor1kx_oreg_buff_marocchino
 #(
-  .NUM_TAPS   (4),
-  .NUM_OUTS   (1),
-  .DATA_SIZE (11)
+  .NUM_TAPS         (4), // PFPU_OCB
+  .DATA_WIDTH       (11), // PFPU_OCB
+  .RAM_EMPTY_FLAG   ("NONE"), // PFPU_OCB
+  .REG_RDY_FLAG     ("NONE") // PFPU_OCB
 )
 u_pfpu_ocb
 (
-  // clocks and resets
-  .clk                (clk), // PFPU_OCB
-  .rst                (rst), // PFPU_OCB
-  // pipe controls
-  .pipeline_flush_i   (pipeline_flush_i), // PFPU_OCB
-  .padv_decode_i      (taking_op_fpxx_arith), // PFPU_OCB
-  .padv_wb_i          (rnd_taking_op), // PFPU_OCB
-  // value at reset/flush
-  .default_value_i    (11'd0),
+  // clocks
+  .cpu_clk      (cpu_clk), // PFPU_OCB
+  // resets
+  .ini_rst      (pipeline_flush_i), // PFPU_OCB
+  .ext_rst      (1'b0), // PFPU_OCB
+  // RW-controls
+  .write_i      (taking_op_fpxx_arith), // PFPU_OCB
+  .read_i       (rnd_taking_op), // PFPU_OCB
   // data input
-  .ocbi_i             ({exec_op_fp64_arith_i, // PFPU_OCB
-                        add_start, mul_start, div_start, i2f_start, f2i_start, // PFPU_OCB
-                        res_inv, res_inf, res_snan, res_qnan, res_anan_sign}), // PFPU_OCB
-  // "OCB is empty" flag
-  .empty_o            (), // PFPU_OCB
-  // "OCB is full" flag
-  .full_o             (pfpu_ocb_full), // PFPU_OCB
-  // data ouputs
-  .ocbo_o             ({rnd_op_fp64_arith, // PFPU_OCB
-                        grant_rnd_to_add, grant_rnd_to_mul, grant_rnd_to_div, grant_rnd_to_i2f, grant_rnd_to_f2i, // PFPU_OCB
-                        ocb_inv, ocb_inf, ocb_snan, ocb_qnan, ocb_anan_sign}) // PFPU_OCB
+  .data_i       ({exec_op_fp64_arith_i, // PFPU_OCB
+                  add_start, mul_start, div_start, i2f_start, f2i_start, // PFPU_OCB
+                  res_inv, res_inf, res_snan, res_qnan, res_anan_sign}), // PFPU_OCB
+  // "RAM is empty" flag
+  .ram_empty_o  (), // PFPU_OCB
+  // "RAM is full" flag
+  .ram_full_o   (pfpu_ocb_full), // PFPU_OCB
+  // output register
+  .rdy_o        (), // PFPU_OCB
+  .data_o       ({rnd_op_fp64_arith, // PFPU_OCB
+                  grant_rnd_to_add, grant_rnd_to_mul, grant_rnd_to_div, grant_rnd_to_i2f, grant_rnd_to_f2i, // PFPU_OCB
+                  ocb_inv, ocb_inf, ocb_snan, ocb_qnan, ocb_anan_sign}) // PFPU_OCB
 );
 
 
@@ -309,6 +308,8 @@ u_pfpu_ocb
 //   connection wires
 wire        add_sign;      // add/sub signum
 wire        add_sub_0;     // flag that actual substruction is performed and result is zero
+wire        add_shr;       // do right shift in align stage
+wire [12:0] add_exp13shr;  // exponent for right shift align
 wire  [5:0] add_shl;       // do left shift in align stage
 wire [12:0] add_exp13shl;  // exponent for left shift align
 wire [12:0] add_exp13sh0;  // exponent for no shift in align
@@ -317,8 +318,7 @@ wire [56:0] add_fract57;   // fractional with appended {r,s} bits
 pfpu_addsub_marocchino u_pfpu_addsub
 (
   // clocks and resets
-  .clk                    (clk), // PFPU_ADDSUB
-  .rst                    (rst), // PFPU_ADDSUB
+  .cpu_clk                (cpu_clk), // PFPU_ADDSUB
   // ADD/SUB pipe controls
   .pipeline_flush_i       (pipeline_flush_i), // PFPU_ADDSUB
   .add_start_i            (add_start), // PFPU_ADDSUB
@@ -337,11 +337,15 @@ pfpu_addsub_marocchino u_pfpu_addsub
   // 'a'/'b' related
   .exec_op_fp64_arith_i   (exec_op_fp64_arith_i), // PFPU_ADDSUB
   .opc_0_i                (infa | infb), // PFPU_ADDSUB
-  .addsub_agtb_i          (addsub_agtb), // PFPU_ADDSUB
-  .addsub_aeqb_i          (addsub_aeqb), // PFPU_ADDSUB
+  .exp_eq_i               (exp_eq), // PFPU_ADDSUB
+  .exp_gt_i               (exp_gt), // PFPU_ADDSUB
+  .fract_eq_i             (fract_eq), // PFPU_ADDSUB
+  .fract_gt_i             (fract_gt), // PFPU_ADDSUB
   // outputs
   .add_sign_o             (add_sign), // PFPU_ADDSUB
   .add_sub_0_o            (add_sub_0), // PFPU_ADDSUB
+  .add_shr_o              (add_shr), // PFPU_ADDSUB
+  .add_exp13shr_o         (add_exp13shr), // PFPU_ADDSUB
   .add_shl_o              (add_shl), // PFPU_ADDSUB
   .add_exp13shl_o         (add_exp13shl), // PFPU_ADDSUB
   .add_exp13sh0_o         (add_exp13sh0), // PFPU_ADDSUB
@@ -369,8 +373,7 @@ wire        div_dbz;        // div division by zero flag
 pfpu_muldiv_marocchino u_pfpu_muldiv
 (
   // clocks and resets
-  .clk                    (clk), // PFPU_MULDIV
-  .rst                    (rst), // PFPU_MULDIV
+  .cpu_clk                (cpu_clk), // PFPU_MULDIV
   // pipe controls
   .pipeline_flush_i       (pipeline_flush_i), // PFPU_MULDIV
   .mul_start_i            (mul_start), // PFPU_MULDIV
@@ -423,8 +426,7 @@ wire [63:0] i2f_fract64;
 pfpu_i2f_marocchino u_pfpu_i2f
 (
   // clocks and resets
-  .clk                    (clk), // PFPU_I2F
-  .rst                    (rst), // PFPU_I2F
+  .cpu_clk                (cpu_clk), // PFPU_I2F
   // I2F pipe controls
   .pipeline_flush_i       (pipeline_flush_i), // PFPU_I2F
   .start_i                (i2f_start), // PFPU_I2F
@@ -455,8 +457,7 @@ wire        f2i_ovf;       // f2i overflow flag
 pfpu_f2i_marocchino u_pfpu_f2i
 (
   // clocks and resets
-  .clk                  (clk), // PFPU_F2I
-  .rst                  (rst), // PFPU_F2I
+  .cpu_clk              (cpu_clk), // PFPU_F2I
   // pipe controls
   .pipeline_flush_i     (pipeline_flush_i), // PFPU_F2I
   .start_i              (f2i_start), // PFPU_F2I
@@ -479,126 +480,164 @@ pfpu_f2i_marocchino u_pfpu_f2i
 );
 
 
+//
+// Local copy of FPU-related control bits to simplify routing
+//
+// MT(F)SPR_RULE:
+//   Before issuing MT(F)SPR, OMAN waits till order control buffer has become
+// empty. Also we don't issue new instruction till l.mf(t)spr completion.
+//   So, it is safely to detect changing FPU-related control bits here
+// and update local copies.
+//
+
+localparam [`OR1K_FPCSR_RM_SIZE-1:0] RM_NEAREST = 0;
+//localparam [`OR1K_FPCSR_RM_SIZE-1:0] RM_TO_ZERO = 1; -- not used
+localparam [`OR1K_FPCSR_RM_SIZE-1:0] RM_TO_INFP = 2;
+localparam [`OR1K_FPCSR_RM_SIZE-1:0] RM_TO_INFM = 3;
+
+reg                             rm_nearest_r;
+//reg                           rm_to_zero_r; -- not used, see PFPU_RND
+reg                             rm_to_infp_r;
+reg                             rm_to_infm_r;
+reg                             except_fpu_enable_r;
+reg [`OR1K_FPCSR_ALLF_SIZE-1:0] fpu_mask_flags_r;
+
+// ---
+always @(posedge cpu_clk) begin
+  rm_nearest_r        <= (fpu_round_mode_i == RM_NEAREST);
+  rm_to_infp_r        <= (fpu_round_mode_i == RM_TO_INFP);
+  rm_to_infm_r        <= (fpu_round_mode_i == RM_TO_INFM);
+  except_fpu_enable_r <= except_fpu_enable_i;
+  fpu_mask_flags_r    <= fpu_mask_flags_i;
+end
+
+
+
 // multiplexing and rounding
 pfpu_rnd_marocchino u_pfpu_rnd
 (
   // clocks, resets
-  .clk                      (clk), // PFPU_RND
-  .rst                      (rst), // PFPU_RND
+  .cpu_clk                    (cpu_clk), // PFPU_RND
   // pipe controls
-  .pipeline_flush_i         (pipeline_flush_i), // PFPU_RND
-  .rnd_taking_add_o         (rnd_taking_add), // PFPU_RND
-  .rnd_taking_mul_o         (rnd_taking_mul), // PFPU_RND
-  .rnd_taking_div_o         (rnd_taking_div), // PFPU_RND
-  .rnd_taking_i2f_o         (rnd_taking_i2f), // PFPU_RND
-  .rnd_taking_f2i_o         (rnd_taking_f2i), // PFPU_RND
-  .fpxx_arith_valid_o       (fpxx_arith_valid_o), // PFPU_RND
-  .padv_wb_i                (padv_wb_i), // PFPU_RND
-  .grant_wb_to_fpxx_arith_i (grant_wb_to_fpxx_arith_i), // PFPU_RND
+  .pipeline_flush_i           (pipeline_flush_i), // PFPU_RND
+  .rnd_taking_add_o           (rnd_taking_add), // PFPU_RND
+  .rnd_taking_mul_o           (rnd_taking_mul), // PFPU_RND
+  .rnd_taking_div_o           (rnd_taking_div), // PFPU_RND
+  .rnd_taking_i2f_o           (rnd_taking_i2f), // PFPU_RND
+  .rnd_taking_f2i_o           (rnd_taking_f2i), // PFPU_RND
+  .fpxx_arith_valid_o         (fpxx_arith_valid_o), // PFPU_RND
+  .padv_wrbk_i                (padv_wrbk_i), // PFPU_RND
+  .grant_wrbk_to_fpxx_arith_i (grant_wrbk_to_fpxx_arith_i), // PFPU_RND
   // configuration
-  .rmode_i                  (round_mode_i), // PFPU_RND
-  .except_fpu_enable_i      (except_fpu_enable_i), // PFPU_RND
-  .ctrl_fpu_mask_flags_i    (ctrl_fpu_mask_flags_i), // PFPU_RND
+  .rm_nearest_i               (rm_nearest_r), // PFPU_RND
+  .rm_to_infp_i               (rm_to_infp_r), // PFPU_RND
+  .rm_to_infm_i               (rm_to_infm_r), // PFPU_RND
+  .except_fpu_enable_i        (except_fpu_enable_r), // PFPU_RND
+  .fpu_mask_flags_i           (fpu_mask_flags_r), // PFPU_RND
   // from add/sub
-  .add_rdy_i                (rnd_muxing_add), // PFPU_RND
-  .add_sign_i               (add_sign), // PFPU_RND
-  .add_sub_0_i              (add_sub_0), // PFPU_RND
-  .add_shl_i                (add_shl), // PFPU_RND
-  .add_exp13shl_i           (add_exp13shl), // PFPU_RND
-  .add_exp13sh0_i           (add_exp13sh0), // PFPU_RND
-  .add_fract57_i            (add_fract57), // PFPU_RND
+  .add_rdy_i                  (rnd_muxing_add), // PFPU_RND
+  .add_sign_i                 (add_sign), // PFPU_RND
+  .add_sub_0_i                (add_sub_0), // PFPU_RND
+  .add_shr_i                  (add_shr), // PFPU_RND
+  .add_exp13shr_i             (add_exp13shr), // PFPU_RND
+  .add_shl_i                  (add_shl), // PFPU_RND
+  .add_exp13shl_i             (add_exp13shl), // PFPU_RND
+  .add_exp13sh0_i             (add_exp13sh0), // PFPU_RND
+  .add_fract57_i              (add_fract57), // PFPU_RND
   // from mul
-  .mul_rdy_i                (rnd_muxing_mul), // PFPU_RND
-  .mul_sign_i               (mul_sign), // PFPU_RND
-  .mul_shr_i                (mul_shr), // PFPU_RND
-  .mul_exp13shr_i           (mul_exp13shr), // PFPU_RND
-  .mul_exp13sh0_i           (mul_exp13sh0), // PFPU_RND
-  .mul_fract57_i            (mul_fract57), // PFPU_RND
+  .mul_rdy_i                  (rnd_muxing_mul), // PFPU_RND
+  .mul_sign_i                 (mul_sign), // PFPU_RND
+  .mul_shr_i                  (mul_shr), // PFPU_RND
+  .mul_exp13shr_i             (mul_exp13shr), // PFPU_RND
+  .mul_exp13sh0_i             (mul_exp13sh0), // PFPU_RND
+  .mul_fract57_i              (mul_fract57), // PFPU_RND
   // from div
-  .div_rdy_i                (rnd_muxing_div), // PFPU_RND
-  .div_sign_i               (div_sign), // PFPU_RND
-  .div_shr_i                (div_shr), // PFPU_RND
-  .div_exp13shr_i           (div_exp13shr), // PFPU_RND
-  .div_shl_i                (div_shl), // PFPU_RND
-  .div_exp13shl_i           (div_exp13shl), // PFPU_RND
-  .div_exp13sh0_i           (div_exp13sh0), // PFPU_RND
-  .div_fract57_i            (div_fract57), // PFPU_RND
-  .div_dbz_i                (div_dbz), // PFPU_RND
+  .div_rdy_i                  (rnd_muxing_div), // PFPU_RND
+  .div_sign_i                 (div_sign), // PFPU_RND
+  .div_shr_i                  (div_shr), // PFPU_RND
+  .div_exp13shr_i             (div_exp13shr), // PFPU_RND
+  .div_shl_i                  (div_shl), // PFPU_RND
+  .div_exp13shl_i             (div_exp13shl), // PFPU_RND
+  .div_exp13sh0_i             (div_exp13sh0), // PFPU_RND
+  .div_fract57_i              (div_fract57), // PFPU_RND
+  .div_dbz_i                  (div_dbz), // PFPU_RND
   // from i2f
-  .i2f_rdy_i                (rnd_muxing_i2f), // PFPU_RND
-  .i2f_sign_i               (i2f_sign), // PFPU_RND
-  .i2f_shr_i                (i2f_shr), // PFPU_RND
-  .i2f_exp11shr_i           (i2f_exp11shr), // PFPU_RND
-  .i2f_shl_i                (i2f_shl), // PFPU_RND
-  .i2f_exp11shl_i           (i2f_exp11shl), // PFPU_RND
-  .i2f_exp11sh0_i           (i2f_exp11sh0), // PFPU_RND
-  .i2f_fract64_i            (i2f_fract64), // PFPU_RND
+  .i2f_rdy_i                  (rnd_muxing_i2f), // PFPU_RND
+  .i2f_sign_i                 (i2f_sign), // PFPU_RND
+  .i2f_shr_i                  (i2f_shr), // PFPU_RND
+  .i2f_exp11shr_i             (i2f_exp11shr), // PFPU_RND
+  .i2f_shl_i                  (i2f_shl), // PFPU_RND
+  .i2f_exp11shl_i             (i2f_exp11shl), // PFPU_RND
+  .i2f_exp11sh0_i             (i2f_exp11sh0), // PFPU_RND
+  .i2f_fract64_i              (i2f_fract64), // PFPU_RND
   // from f2i
-  .f2i_rdy_i                (rnd_muxing_f2i), // PFPU_RND
-  .f2i_sign_i               (f2i_sign), // PFPU_RND
-  .f2i_int53_i              (f2i_int53), // PFPU_RND
-  .f2i_shr_i                (f2i_shr), // PFPU_RND
-  .f2i_shl_i                (f2i_shl), // PFPU_RND
-  .f2i_ovf_i                (f2i_ovf), // PFPU_RND
+  .f2i_rdy_i                  (rnd_muxing_f2i), // PFPU_RND
+  .f2i_sign_i                 (f2i_sign), // PFPU_RND
+  .f2i_int53_i                (f2i_int53), // PFPU_RND
+  .f2i_shr_i                  (f2i_shr), // PFPU_RND
+  .f2i_shl_i                  (f2i_shl), // PFPU_RND
+  .f2i_ovf_i                  (f2i_ovf), // PFPU_RND
   // from order control buffer
-  .rnd_op_fp64_arith_i      (rnd_op_fp64_arith), // PFPU_RND
-  .ocb_inv_i                (ocb_inv), // PFPU_RND
-  .ocb_inf_i                (ocb_inf), // PFPU_RND
-  .ocb_snan_i               (ocb_snan), // PFPU_RND
-  .ocb_qnan_i               (ocb_qnan), // PFPU_RND
-  .ocb_anan_sign_i          (ocb_anan_sign), // PFPU_RND
-  // pre-WB outputs
-  .exec_except_fpxx_arith_o (exec_except_fpxx_arith_o), // PFPU_RND
-  // output WB latches
-  .wb_fpxx_arith_res_hi_o   (wb_fpxx_arith_res_hi_o), // PFPU_RND
-  .wb_fpxx_arith_res_lo_o   (wb_fpxx_arith_res_lo_o), // PFPU_RND
-  .wb_fpxx_arith_fpcsr_o    (wb_fpxx_arith_fpcsr_o), // PFPU_RND
-  .wb_fpxx_arith_wb_fpcsr_o (wb_fpxx_arith_wb_fpcsr_o), // PFPU_RND
-  .wb_except_fpxx_arith_o   (wb_except_fpxx_arith_o) // PFPU_RND
+  .rnd_op_fp64_arith_i        (rnd_op_fp64_arith), // PFPU_RND
+  .ocb_inv_i                  (ocb_inv), // PFPU_RND
+  .ocb_inf_i                  (ocb_inf), // PFPU_RND
+  .ocb_snan_i                 (ocb_snan), // PFPU_RND
+  .ocb_qnan_i                 (ocb_qnan), // PFPU_RND
+  .ocb_anan_sign_i            (ocb_anan_sign), // PFPU_RND
+  // pre-Write-Back outputs
+  .exec_except_fpxx_arith_o   (exec_except_fpxx_arith_o), // PFPU_RND
+  // output Write-Back latches
+  .wrbk_fpxx_arith_res_hi_o   (wrbk_fpxx_arith_res_hi_o), // PFPU_RND
+  .wrbk_fpxx_arith_res_lo_o   (wrbk_fpxx_arith_res_lo_o), // PFPU_RND
+  .wrbk_fpxx_arith_fpcsr_o    (wrbk_fpxx_arith_fpcsr_o), // PFPU_RND
+  .wrbk_fpxx_arith_fpcsr_we_o (wrbk_fpxx_arith_fpcsr_we_o), // PFPU_RND
+  .wrbk_except_fpxx_arith_o   (wrbk_except_fpxx_arith_o) // PFPU_RND
 );
 
 
 // FP64 Comparison
-pfpu64_fcmp_marocchino u_fp64_cmp
+pfpu_cmp_marocchino u_fpxx_cmp
 (
   // clock and reset
-  .clk                        (clk), // FP64_CMP
-  .rst                        (rst), // FP64_CMP
+  .cpu_clk                    (cpu_clk), // PFPU_CMP
   // pipeline controls
-  .pipeline_flush_i           (pipeline_flush_i), // FP64_CMP
-  .padv_wb_i                  (padv_wb_i), // FP64_CMP
-  .grant_wb_to_fp64_cmp_i     (grant_wb_to_fp64_cmp_i), // FP64_CMP
+  .pipeline_flush_i           (pipeline_flush_i), // PFPU_CMP
+  .taking_op_fpxx_cmp_o       (taking_op_fpxx_cmp), // PFPU_CMP
+  .padv_wrbk_i                (padv_wrbk_i), // PFPU_CMP
+  .grant_wrbk_to_fpxx_cmp_i   (grant_wrbk_to_fpxx_cmp_i), // PFPU_CMP
   // command
-  .opc_fp64_cmp_i             (exec_opc_fp64_cmp_i), // FP64_CMP
+  .op_fpxx_cmp_i              (exec_op_fpxx_cmp_i), // PFPU_CMP
+  .opc_fpxx_cmp_i             (exec_opc_fpxx_cmp_i), // PFPU_CMP
   // data related to operand A
-  .signa_i                    (signa), // FP64_CMP
-  .opa_0_i                    (opa_0), // FP64_CMP
-  .infa_i                     (infa), // FP64_CMP
+  .signa_i                    (signa), // PFPU_CMP
+  .opa_0_i                    (opa_0), // PFPU_CMP
+  .infa_i                     (infa), // PFPU_CMP
   // data related to operand B
-  .signb_i                    (signb), // FP64_CMP
-  .opb_0_i                    (opb_0), // FP64_CMP
-  .infb_i                     (infb), // FP64_CMP
+  .signb_i                    (signb), // PFPU_CMP
+  .opb_0_i                    (opb_0), // PFPU_CMP
+  .infb_i                     (infb), // PFPU_CMP
   // data related to operand A|B
-  .snan_i                     (snan_x), // FP64_CMP
-  .qnan_i                     (qnan_x), // FP64_CMP
-  .exp_gt_i                   (exp_gt), // FP64_CMP
-  .exp_eq_i                   (exp_eq), // FP64_CMP
-  .fract_gt_i                 (fract_gt), // FP64_CMP
-  .fract_eq_i                 (fract_eq), // FP64_CMP
+  .snan_i                     (snan_x), // PFPU_CMP
+  .qnan_i                     (qnan_x), // PFPU_CMP
+  .exp_gt_i                   (exp_gt), // PFPU_CMP
+  .exp_eq_i                   (exp_eq), // PFPU_CMP
+  .fract_gt_i                 (fract_gt), // PFPU_CMP
+  .fract_eq_i                 (fract_eq), // PFPU_CMP
   // Modes
-  .except_fpu_enable_i        (except_fpu_enable_i), // FP64_CMP
-  .ctrl_fpu_mask_flags_inv_i  (ctrl_fpu_mask_flags_i[`OR1K_FPCSR_IVF - `OR1K_FPCSR_OVF]), // FP64_CMP
-  .ctrl_fpu_mask_flags_inf_i  (ctrl_fpu_mask_flags_i[`OR1K_FPCSR_INF - `OR1K_FPCSR_OVF]), // FP64_CMP
+  .except_fpu_enable_i        (except_fpu_enable_r), // PFPU_CMP
+  .fpu_mask_flags_inv_i       (fpu_mask_flags_r[`OR1K_FPCSR_IVF - `OR1K_FPCSR_OVF]), // PFPU_CMP
+  .fpu_mask_flags_inf_i       (fpu_mask_flags_r[`OR1K_FPCSR_INF - `OR1K_FPCSR_OVF]), // PFPU_CMP
   // Outputs
-  //  # pre WB
-  .exec_except_fp64_cmp_o     (exec_except_fp64_cmp_o), // FP64_CMP
-  //  # WB-latched
-  .wb_fp64_flag_set_o         (wb_fp64_flag_set_o), // FP64_CMP
-  .wb_fp64_flag_clear_o       (wb_fp64_flag_clear_o), // FP64_CMP
-  .wb_fp64_cmp_inv_o          (wb_fp64_cmp_inv_o), // FP64_CMP
-  .wb_fp64_cmp_inf_o          (wb_fp64_cmp_inf_o), // FP64_CMP
-  .wb_fp64_cmp_wb_fpcsr_o     (wb_fp64_cmp_wb_fpcsr_o), // FP64_CMP
-  .wb_except_fp64_cmp_o       (wb_except_fp64_cmp_o) // FP64_CMP
+  //  # pre Write-Back
+  .fpxx_cmp_valid_o           (fpxx_cmp_valid_o), // PFPU_CMP
+  .exec_except_fpxx_cmp_o     (exec_except_fpxx_cmp_o), // PFPU_CMP
+  //  # Write-Back-latched
+  .wrbk_fpxx_flag_set_o       (wrbk_fpxx_flag_set_o), // PFPU_CMP
+  .wrbk_fpxx_flag_clear_o     (wrbk_fpxx_flag_clear_o), // PFPU_CMP
+  .wrbk_fpxx_cmp_inv_o        (wrbk_fpxx_cmp_inv_o), // PFPU_CMP
+  .wrbk_fpxx_cmp_inf_o        (wrbk_fpxx_cmp_inf_o), // PFPU_CMP
+  .wrbk_fpxx_cmp_fpcsr_we_o   (wrbk_fpxx_cmp_fpcsr_we_o), // PFPU_CMP
+  .wrbk_except_fpxx_cmp_o     (wrbk_except_fpxx_cmp_o) // PFPU_CMP
 );
 
 endmodule // pfpu_top_marocchino

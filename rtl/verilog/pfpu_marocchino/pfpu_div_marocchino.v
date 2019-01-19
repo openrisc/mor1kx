@@ -55,8 +55,7 @@ module srt4_fract58
 )
 (
   // clock and reset
-  input              clk,
-  input              rst,
+  input              cpu_clk,
   // pipeline controls
   input              pipeline_flush_i,
   input              div_start_i,      // take operands and start
@@ -93,7 +92,7 @@ module srt4_fract58
   reg [2:0] q_digit_2or3_r;
   reg [2:0] q_digit_minus_2or3_r;
   // ---
-  always @(posedge clk) begin
+  always @(posedge cpu_clk) begin
     if (div_start_i) begin
       q_digit_2or3_r       <= {2'b01, ~den_i[N-2]};
       q_digit_minus_2or3_r <= { 1'b1,  den_i[N-2], ~den_i[N-2]};
@@ -103,7 +102,7 @@ module srt4_fract58
   reg [2:0] q_digit; // [2] - signum
   // ---
   always @(*) begin
-    // synthesis parallel_case full_case
+    // synthesis parallel_case
     casez (trunc_rem)
       4'b0000: q_digit = 3'b000;
       4'b0001: q_digit = 3'b001;
@@ -122,7 +121,7 @@ module srt4_fract58
   reg [N-1:0] one_den_r;    // 1 * denominator
   reg   [N:0] three_den_r;  // 3 * denominator
   // ---
-  always @(posedge clk) begin
+  always @(posedge cpu_clk) begin
     if (div_start_i) begin
       one_den_r   <= den_i;
       three_den_r <= {1'b0, den_i} + {den_i, 1'b0};
@@ -132,7 +131,7 @@ module srt4_fract58
   reg [N:0] mult_den; // : 0 / den / 2*den / 3*den
   // second operand selection
   always @(*) begin
-    // synthesis parallel_case full_case
+    // synthesis parallel_case
     case (q_digit)
       3'b000:  mult_den = {(N+1){1'b0}};     // 0 * denominator
       3'b001:  mult_den = {1'b0, one_den_r}; // 1 * denominator
@@ -151,7 +150,7 @@ module srt4_fract58
   assign nrem = four_rem + (mult_den ^ {(N+1){sub}}) + {{N{1'b0}},sub};
 
   // and partial reminder update
-  always @(posedge clk) begin
+  always @(posedge cpu_clk) begin
     if (div_start_i)
       prem_hi_r <= {1'b0,({N{~zer}} & num_i)};
     else if (div_proc_o)
@@ -162,11 +161,11 @@ module srt4_fract58
   //  # part Q
   reg   [N-1:0] q_r;
   //  # ---
-  always @(posedge clk) begin
+  always @(posedge cpu_clk) begin
     if (div_start_i)
       q_r <= {N{1'b0}};
     else if (div_proc_o) begin
-      // synthesis parallel_case full_case
+      // synthesis parallel_case
       case (q_digit)
         3'b000:  q_r <= { q_r[N-3:0],2'b00};
         3'b001:  q_r <= { q_r[N-3:0],2'b01};
@@ -181,11 +180,11 @@ module srt4_fract58
   //  # part QM
   reg   [N-1:0] qm_r;
   //  # ---
-  always @(posedge clk) begin
+  always @(posedge cpu_clk) begin
     if (div_start_i)
       qm_r <= {{(N-2){1'b0}},2'b11};
     else if (div_proc_o) begin
-      // synthesis parallel_case full_case
+      // synthesis parallel_case
       case (q_digit)
         3'b000:  qm_r <= {qm_r[N-3:0],2'b11};
         3'b001:  qm_r <= { q_r[N-3:0],2'b00};
@@ -214,14 +213,8 @@ module srt4_fract58
   // ---
   reg [LOG2N2-1:0] div_count_r;
   // division controller
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst) begin
-      div_valid_o <= 1'b0;
-      dbz_o       <= 1'b0;
-      div_proc_o  <= 1'b0;
-      div_count_r <= {LOG2N2{1'b0}};
-    end
-    else if (pipeline_flush_i) begin
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i) begin
       div_valid_o <= 1'b0;
       dbz_o       <= 1'b0;
       div_proc_o  <= 1'b0;
@@ -267,8 +260,7 @@ endmodule // srt4_fract58
 module pfpu_div_marocchino
 (
   // clocks and resets
-  input             clk,
-  input             rst,
+  input             cpu_clk,
   // pipe controls
   input             pipeline_flush_i,
   input             s1o_div_ready_i,
@@ -329,7 +321,7 @@ module pfpu_div_marocchino
   //   double / single mode selector
   reg        s2o_op_fp64_arith;
   //   registering
-  always @(posedge clk) begin
+  always @(posedge cpu_clk) begin
     if (s2_adv) begin
       s2o_opc_0         <= s1o_opc_0_i;
       s2o_signc         <= s1o_signc_i;
@@ -348,8 +340,7 @@ module pfpu_div_marocchino
   srt4_fract58 u_srt4_fract
   (
     // clock and reset
-    .clk                  (clk), // SRT4-FRACT
-    .rst                  (rst), // SRT4-FRACT
+    .cpu_clk              (cpu_clk), // SRT4-FRACT
     // pipeline controls
     .pipeline_flush_i     (pipeline_flush_i), // SRT4-FRACT
     .div_start_i          (s2_adv), // SRT4-FRACT
@@ -401,7 +392,7 @@ module pfpu_div_marocchino
                             {1'b0,{12'd0,~s2o_opc_0}};
 
   // output
-  always @(posedge clk) begin
+  always @(posedge cpu_clk) begin
     if (out_adv) begin
       div_sign_o     <= s2o_signc;
       div_shr_o      <= s2o_shrx;
@@ -413,8 +404,8 @@ module pfpu_div_marocchino
     end // advance pipe
   end // @clock
   // division by zero flag
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i)
       div_dbz_o <= 1'b0;
     else if (out_adv)
       div_dbz_o <= s2o_dbz;
@@ -422,10 +413,8 @@ module pfpu_div_marocchino
 
 
   // ready is special case
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      div_rdy_o <= 1'b0;
-    else if (pipeline_flush_i)
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i)
       div_rdy_o <= 1'b0;
     else if (out_adv)
       div_rdy_o <= 1'b1;

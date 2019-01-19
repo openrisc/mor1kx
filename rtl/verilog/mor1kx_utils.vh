@@ -90,3 +90,21 @@ begin
 	end
 end
 endfunction
+
+//
+// Calculate register file address width, considers shadow registers, used in
+// rf and cpu.
+//
+function integer calc_rf_addr_width;
+input integer rf_addr_width;
+input integer rf_num_shadow_gpr;
+begin
+	if (rf_num_shadow_gpr == 0)
+		calc_rf_addr_width = rf_addr_width;
+	else
+		calc_rf_addr_width = rf_addr_width
+			+ ((rf_num_shadow_gpr == 1) ? 1 : `clog2(rf_num_shadow_gpr));
+end
+endfunction
+
+

@@ -4,12 +4,12 @@
   Additionally, only Wishbone interface is supported. The Avalon bus
 logic is removed temporary to reduce number of files for compilation.
 
-  The MAROCCHINO top level is:     mor1kx_marocchino_alone.v
+  The MAROCCHINO top level is:     mor1kx_top_marocchino.v
 
   The example of MAROCCHINO instance for Atlys-board SoC
 (instead of mor1kx):
 
-mor1kx_marocchino_alone
+mor1kx_top_marocchino
 #(
   .FEATURE_DEBUGUNIT("ENABLED"), // ENABLED | NONE
   // insn cache
@@ -19,7 +19,7 @@ mor1kx_marocchino_alone
   .OPTION_ICACHE_LIMIT_WIDTH(32),
   // insn mmu
   .OPTION_IMMU_SET_WIDTH(7),
-  .FEATURE_IMMU_HW_TLB_RELOAD("NONE"), // MAROCCHINO_TODO: not implemented
+  .FEATURE_IMMU_HW_TLB_RELOAD("NONE"), // not implemented
   // data cache
   .OPTION_DCACHE_BLOCK_WIDTH(5),
   .OPTION_DCACHE_SET_WIDTH(8),
@@ -27,18 +27,24 @@ mor1kx_marocchino_alone
   .OPTION_DCACHE_LIMIT_WIDTH(31),
   // data mmu
   .OPTION_DMMU_SET_WIDTH(7),
-  .FEATURE_DMMU_HW_TLB_RELOAD("NONE"), // MAROCCHINO_TODO: not implemented
+  .FEATURE_DMMU_HW_TLB_RELOAD("NONE"), // not implemented
 
   .OPTION_PIC_TRIGGER("LATCHED_LEVEL"),
 
   .IBUS_WB_TYPE("B3_REGISTERED_FEEDBACK"),
   .DBUS_WB_TYPE("B3_REGISTERED_FEEDBACK"),
 
-  .OPTION_RESET_PC(32'hf0000100),
-  .FEATURE_DIVIDER("SERIAL") // SERIAL (restoring, radix-2) / SRT4
+  .OPTION_RESET_PC(32'hf0000100)
 )
 u_mor1kx_marocchino
 (
+  // Wishbone-domain: clock and reset
+  .wb_clk       (wb_clk),
+  .wb_rst       (wb_rst),
+  // CPU-domain: clock and reset
+  .cpu_clk      (cpu_clk), // could be the same to wb_clk
+  .cpu_rst      (cpu_rst), // could be the same to wb_rst
+
   .iwbm_adr_o(wb_m2s_or1k_i_adr),
   .iwbm_stb_o(wb_m2s_or1k_i_stb),
   .iwbm_cyc_o(wb_m2s_or1k_i_cyc),
@@ -56,9 +62,6 @@ u_mor1kx_marocchino
   .dwbm_cti_o(wb_m2s_or1k_d_cti),
   .dwbm_bte_o(wb_m2s_or1k_d_bte),
   .dwbm_dat_o(wb_m2s_or1k_d_dat),
-
-  .clk(wb_clk),
-  .rst(or1k_rst),
 
   .iwbm_err_i(wb_s2m_or1k_i_err),
   .iwbm_ack_i(wb_s2m_or1k_i_ack),
@@ -90,11 +93,11 @@ u_mor1kx_marocchino
   The following files must be included into project:
 
  your_path/mor1kx/rtl/verilog/mor1kx_spram_en_w1st.v
- your_path/mor1kx/rtl/verilog/mor1kx_dpram_en_w1st_sclk.v
+ your_path/mor1kx/rtl/verilog/mor1kx_dpram_en_w1st.v
+ your_path/mor1kx/rtl/verilog/mor1kx_cfgrs.v
  your_path/mor1kx/rtl/verilog/mor1kx_ocb_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_oman_marocchino.v
- your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu32_cmp_marocchino.v
- your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu64_cmp_marocchino.v
+ your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_cmp_marocchino.v
  your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_addsub_marocchino.v
  your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_f2i_marocchino.v
  your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_i2f_marocchino.v
@@ -103,23 +106,21 @@ u_mor1kx_marocchino
  your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_muldiv_marocchino.v
  your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_rnd_marocchino.v
  your_path/mor1kx/rtl/verilog/pfpu_marocchino/pfpu_top_marocchino.v
- your_path/mor1kx/rtl/verilog/mor1kx_bus_if_wb32.v
- your_path/mor1kx/rtl/verilog/mor1kx_cache_lru.v
+ your_path/mor1kx/rtl/verilog/mor1kx_bus_if_wb32_marocchino.v
+ your_path/mor1kx/rtl/verilog/mor1kx_cache_lru_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_immu_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_icache_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_fetch_marocchino.v
- your_path/mor1kx/rtl/verilog/mor1kx_store_buffer_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_dmmu_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_dcache_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_lsu_marocchino.v
- your_path/mor1kx/rtl/verilog/mor1kx_cfgrs.v
- your_path/mor1kx/rtl/verilog/mor1kx_pic_oneself.v
- your_path/mor1kx/rtl/verilog/mor1kx_ticktimer_oneself.v
+ your_path/mor1kx/rtl/verilog/mor1kx_pic_marocchino.v
+ your_path/mor1kx/rtl/verilog/mor1kx_ticktimer_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_ctrl_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_decode_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_execute_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_rf_marocchino.v
  your_path/mor1kx/rtl/verilog/mor1kx_cpu_marocchino.v
- your_path/mor1kx/rtl/verilog/mor1kx_marocchino_alone.v
+ your_path/mor1kx/rtl/verilog/mor1kx_top_marocchino.v
 
   Add "your_path/mor1kx/rtl/verilog" in include paths.

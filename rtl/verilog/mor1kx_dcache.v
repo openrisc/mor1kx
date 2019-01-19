@@ -33,6 +33,7 @@ module mor1kx_dcache
     output 			      refill_o,
     output 			      refill_req_o,
     output 			      refill_done_o,
+    output 			      cache_hit_o,
 
     // CPU Interface
     output 			      cpu_err_o,
@@ -264,6 +265,7 @@ module mor1kx_dcache
    endgenerate
 
    assign hit = |way_hit;
+   assign cache_hit_o = hit;
 
    assign snoop_hit = (OPTION_DCACHE_SNOOP != "NONE") &
 		      |snoop_way_hit & snoop_check;

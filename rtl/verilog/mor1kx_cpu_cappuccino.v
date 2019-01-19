@@ -40,6 +40,7 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_TIMER = "ENABLED",
     parameter FEATURE_DEBUGUNIT = "NONE",
     parameter FEATURE_PERFCOUNTERS = "NONE",
+    parameter OPTION_PERFCOUNTERS_NUM = 0,
     parameter FEATURE_MAC = "NONE",
 
     parameter FEATURE_SYSCALL = "ENABLED",
@@ -96,7 +97,8 @@ module mor1kx_cpu_cappuccino
 
     parameter FEATURE_MULTICORE = "NONE",
 
-    parameter FEATURE_TRACEPORT_EXEC = "NONE"
+    parameter FEATURE_TRACEPORT_EXEC = "NONE",
+    parameter FEATURE_BRANCH_PREDICTOR = "SIMPLE"  // SIMPLE|SAT_COUNTER|GSHARE
     )
    (
     input 			      clk,
@@ -137,6 +139,10 @@ module mor1kx_cpu_cappuccino
 
     output reg	                      traceport_exec_valid_o,
     output reg [31:0]                 traceport_exec_pc_o,
+    output reg                        traceport_exec_jb_o,
+    output reg                        traceport_exec_jal_o,
+    output reg                        traceport_exec_jr_o,
+    output reg [31:0]                 traceport_exec_jbtarget_o,
     output reg [`OR1K_INSN_WIDTH-1:0] traceport_exec_insn_o,
     output [OPTION_OPERAND_WIDTH-1:0] traceport_exec_wbdata_o,
     output [OPTION_RF_ADDR_WIDTH-1:0] traceport_exec_wbreg_o,
@@ -258,6 +264,7 @@ module mor1kx_cpu_cappuccino
    wire                 decode_op_lsu_store_o;  // From mor1kx_decode of mor1kx_decode.v
    wire                 decode_op_mfspr_o;      // From mor1kx_decode of mor1kx_decode.v
    wire                 decode_op_movhi_o;      // From mor1kx_decode of mor1kx_decode.v
+   wire                 decode_op_ext_o;      // From mor1kx_decode of mor1kx_decode.v
    wire                 decode_op_msync_o;      // From mor1kx_decode of mor1kx_decode.v
    wire [`OR1K_FPUOP_WIDTH-1:0] decode_op_fpu_o; // From mor1kx_decode of mor1kx_decode.v
    wire                 decode_op_mtspr_o;      // From mor1kx_decode of mor1kx_decode.v
@@ -300,6 +307,8 @@ module mor1kx_cpu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0] execute_mispredict_target_o;// From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_add_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_alu_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_bf_o;
+   wire                 execute_op_bnf_o;
    wire                 execute_op_branch_o;    // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_brcond_o;    // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_div_o;       // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
@@ -314,6 +323,7 @@ module mor1kx_cpu_cappuccino
    wire                 execute_op_lsu_store_o; // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_mfspr_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_movhi_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
+   wire                 execute_op_ext_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_msync_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire [`OR1K_FPUOP_WIDTH-1:0] execute_op_fpu_o; // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
    wire                 execute_op_mtspr_o;     // From mor1kx_decode_execute_cappuccino of mor1kx_decode_execute_cappuccino.v
@@ -339,6 +349,8 @@ module mor1kx_cpu_cappuccino
    wire                 fetch_valid_o;          // From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
    wire                 flag_clear_o;           // From mor1kx_execute_alu of mor1kx_execute_alu.v
    wire                 flag_set_o;             // From mor1kx_execute_alu of mor1kx_execute_alu.v
+   wire                 icache_hit_o;           // From mor1kx_fetch_cappuccino of mor1kx_fetch_cappuccino.v
+   wire                 dcache_hit_o;           // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire                 lsu_except_align_o;     // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire                 lsu_except_dbus_o;      // From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
    wire                 lsu_except_dpagefault_o;// From mor1kx_lsu_cappuccino of mor1kx_lsu_cappuccino.v
@@ -437,6 +449,7 @@ module mor1kx_cpu_cappuccino
       .decode_except_itlb_miss_o        (decode_except_itlb_miss_o),
       .decode_except_ipagefault_o       (decode_except_ipagefault_o),
       .fetch_exception_taken_o          (fetch_exception_taken_o),
+      .ic_hit_o                         (icache_hit_o),
       // Inputs
       .clk                              (clk),
       .rst                              (rst),
@@ -538,6 +551,7 @@ module mor1kx_cpu_cappuccino
       .decode_op_shift_o                (decode_op_shift_o),
       .decode_op_ffl1_o                 (decode_op_ffl1_o),
       .decode_op_movhi_o                (decode_op_movhi_o),
+      .decode_op_ext_o                  (decode_op_ext_o),
       .decode_op_msync_o                (decode_op_msync_o),
       .decode_op_fpu_o                  (decode_op_fpu_o),
       .decode_adder_do_sub_o            (decode_adder_do_sub_o),
@@ -663,8 +677,11 @@ module mor1kx_cpu_cappuccino
       .execute_op_shift_o               (execute_op_shift_o),
       .execute_op_ffl1_o                (execute_op_ffl1_o),
       .execute_op_movhi_o               (execute_op_movhi_o),
+      .execute_op_ext_o                 (execute_op_ext_o),
       .execute_op_msync_o               (execute_op_msync_o),
       .execute_op_fpu_o                 (execute_op_fpu_o),
+      .execute_op_bf_o                  (execute_op_bf_o),
+      .execute_op_bnf_o                 (execute_op_bnf_o),
       .execute_jal_result_o             (execute_jal_result_o[OPTION_OPERAND_WIDTH-1:0]),
       .execute_opc_insn_o               (execute_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]),
       .decode_branch_o                  (decode_branch_o),
@@ -732,6 +749,7 @@ module mor1kx_cpu_cappuccino
       .decode_op_shift_i                (decode_op_shift_o),     // Templated
       .decode_op_ffl1_i                 (decode_op_ffl1_o),      // Templated
       .decode_op_movhi_i                (decode_op_movhi_o),     // Templated
+      .decode_op_ext_i                  (decode_op_ext_o),     // Templated
       .decode_op_msync_i                (decode_op_msync_o),     // Templated
       .decode_op_fpu_i                  (decode_op_fpu_o), // Templated
       .decode_opc_insn_i                (decode_opc_insn_o[`OR1K_OPCODE_WIDTH-1:0]), // Templated
@@ -745,13 +763,18 @@ module mor1kx_cpu_cappuccino
    /* mor1kx_branch_prediction AUTO_TEMPLATE (
       .op_bf_i				(decode_op_bf_o),
       .op_bnf_i				(decode_op_bnf_o),
+      .execute_bf_i			(execute_op_bf_o),
+      .execute_bnf_i			(execute_op_bnf_o),
+      .padv_decode_i			(padv_decode_o),
       .immjbr_upper_i			(decode_immjbr_upper_o),
       .prev_op_brcond_i			(execute_op_brcond_o),
       .prev_predicted_flag_i		(execute_predicted_flag_o),
+      .brn_pc_i			(pc_fetch_to_decode),
       .flag_i				(ctrl_flag_o),
     );*/
    mor1kx_branch_prediction
      #(
+       .FEATURE_BRANCH_PREDICTOR(FEATURE_BRANCH_PREDICTOR),
        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
        )
    mor1kx_branch_prediction
@@ -764,9 +787,13 @@ module mor1kx_cpu_cappuccino
       .rst                              (rst),
       .op_bf_i                          (decode_op_bf_o),        // Templated
       .op_bnf_i                         (decode_op_bnf_o),       // Templated
+      .execute_bf_i                     (execute_op_bf_o),        // Templated
+      .execute_bnf_i                    (execute_op_bnf_o),        // Templated
+      .padv_decode_i                    (padv_decode_o),        // Templated
       .immjbr_upper_i                   (decode_immjbr_upper_o), // Templated
       .prev_op_brcond_i                 (execute_op_brcond_o),   // Templated
       .prev_predicted_flag_i            (execute_predicted_flag_o), // Templated
+      .brn_pc_i                         (pc_fetch_to_decode),      // Templated
       .flag_i                           (ctrl_flag_o));           // Templated
 
    /* mor1kx_execute_alu AUTO_TEMPLATE (
@@ -881,6 +908,7 @@ module mor1kx_cpu_cappuccino
       .op_mtspr_i                       (execute_op_mtspr_o),    // Templated
       .op_mfspr_i                       (execute_op_mfspr_o),    // Templated
       .op_movhi_i                       (execute_op_movhi_o),    // Templated
+      .op_ext_i                         (execute_op_ext_o),    // Templated
       .op_fpu_i                         (execute_op_fpu_o), // Templated
       .fpu_round_mode_i                 (ctrl_fpu_round_mode_o), // Templated
       .op_jbr_i                         (execute_op_jbr_o),      // Templated
@@ -968,6 +996,7 @@ module mor1kx_cpu_cappuccino
       .dbus_bsel_o                      (dbus_bsel_o[3:0]),
       .dbus_we_o                        (dbus_we_o),
       .dbus_burst_o                     (dbus_burst_o),
+      .dc_hit_o                         (dcache_hit_o),
       // Inputs
       .clk                              (clk),
       .rst                              (rst),
@@ -1105,18 +1134,23 @@ module mor1kx_cpu_cappuccino
 `ifndef SYNTHESIS
 // synthesis translate_off
    /* Debug signals required for the debug monitor */
+
+`include "mor1kx_utils.vh"
+   localparam RF_ADDR_WIDTH = calc_rf_addr_width(OPTION_RF_ADDR_WIDTH,
+                                                 OPTION_RF_NUM_SHADOW_GPR);
+
    function [OPTION_OPERAND_WIDTH-1:0] get_gpr;
       // verilator public
-      input [4:0] 		   gpr_num;
+      input [RF_ADDR_WIDTH-1:0] gpr_num;
       begin
 	 // TODO: handle load ops
-	 if ((mor1kx_rf_cappuccino.execute_rfd_adr_i == gpr_num) &
+	 if ((mor1kx_rf_cappuccino.execute_rfd_adr_i == gpr_num[4:0]) &
 	     mor1kx_rf_cappuccino.execute_rf_wb_i)
 	   get_gpr = alu_result_o;
-	 else if ((mor1kx_rf_cappuccino.ctrl_rfd_adr_i == gpr_num) &
+	 else if ((mor1kx_rf_cappuccino.ctrl_rfd_adr_i == gpr_num[4:0]) &
 		  mor1kx_rf_cappuccino.ctrl_rf_wb_i)
 	   get_gpr = ctrl_alu_result_o;
-	 else if ((mor1kx_rf_cappuccino.wb_rfd_adr_i == gpr_num) &
+	 else if ((mor1kx_rf_cappuccino.wb_rfd_adr_i == gpr_num[4:0]) &
 		  mor1kx_rf_cappuccino.wb_rf_wb_i)
 	   get_gpr = mor1kx_rf_cappuccino.result_i;
 	 else
@@ -1127,7 +1161,7 @@ module mor1kx_cpu_cappuccino
 
    task set_gpr;
       // verilator public
-      input [4:0] gpr_num;
+      input [RF_ADDR_WIDTH-1:0] gpr_num;
       input [OPTION_OPERAND_WIDTH-1:0] gpr_value;
       begin
 	 mor1kx_rf_cappuccino.rfa.mem[gpr_num] = gpr_value;
@@ -1185,8 +1219,8 @@ module mor1kx_cpu_cappuccino
     .carry_clear_i		        (carry_clear_o),
     .overflow_set_i		        (overflow_set_o),
     .overflow_clear_i		        (overflow_clear_o),
-    .fpcsr_i(fpcsr_o),
-    .fpcsr_set_i(fpcsr_set_o)
+    .fpcsr_i                            (fpcsr_o),
+    .fpcsr_set_i                        (fpcsr_set_o),
     ); */
    mor1kx_execute_ctrl_cappuccino
      #(
@@ -1359,6 +1393,7 @@ module mor1kx_cpu_cappuccino
        .OPTION_IMMU_WAYS(OPTION_IMMU_WAYS),
        .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
        .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
+       .OPTION_PERFCOUNTERS_NUM(OPTION_PERFCOUNTERS_NUM),
        .FEATURE_MAC(FEATURE_MAC),
        .FEATURE_FPU(FEATURE_FPU), // pipeline cappuccino: ctrl instance
        .FEATURE_MULTICORE(FEATURE_MULTICORE),
@@ -1434,6 +1469,8 @@ module mor1kx_cpu_cappuccino
       .fetch_valid_i                    (fetch_valid_o),         // Templated
       .decode_valid_i                   (decode_valid_o),        // Templated
       .execute_valid_i                  (execute_valid_o),       // Templated
+      .execute_op_lsu_load_i            (execute_op_lsu_load_o),
+      .execute_op_lsu_store_i           (execute_op_lsu_store_o),
       .ctrl_valid_i                     (ctrl_valid_o),          // Templated
       .fetch_exception_taken_i          (fetch_exception_taken_o), // Templated
       .decode_bubble_i                  (decode_bubble_o),       // Templated
@@ -1447,6 +1484,8 @@ module mor1kx_cpu_cappuccino
       .ctrl_overflow_clear_i            (ctrl_overflow_clear_o), // Templated
       .ctrl_fpcsr_i                     (ctrl_fpcsr_o),
       .ctrl_fpcsr_set_i                 (ctrl_fpcsr_set_o),
+      .icache_hit_i                     (icache_hit_o),
+      .dcache_hit_i                     (dcache_hit_o),
       .du_addr_i                        (du_addr_i[15:0]),
       .du_stb_i                         (du_stb_i),
       .du_dat_i                         (du_dat_i[OPTION_OPERAND_WIDTH-1:0]),
@@ -1476,64 +1515,79 @@ module mor1kx_cpu_cappuccino
    reg [`OR1K_INSN_WIDTH-1:0] traceport_stage_decode_insn;
    reg [`OR1K_INSN_WIDTH-1:0] traceport_stage_exec_insn;
 
-   reg 			      traceport_waitexec;
+   reg                            traceport_jal_execute_to_ctrl;
+   reg                            traceport_jr_execute_to_ctrl;
+   reg [31:0]                     traceport_jbtarget_decode_to_execute;
+   reg [31:0]                     traceport_jbtarget_execute_to_ctrl;
+
+   reg                        traceport_waitexec;
 
    always @(posedge clk) begin
       if (FEATURE_TRACEPORT_EXEC != "NONE") begin
-	 if (rst) begin
-	    traceport_waitexec <= 0;
-	 end else begin
-	    if (padv_decode_o) begin
-	       traceport_stage_decode_insn <= insn_fetch_to_decode;
-	    end
+         if (rst) begin
+            traceport_waitexec <= 0;
+         end else begin
+            if (padv_decode_o) begin
+               traceport_stage_decode_insn <= insn_fetch_to_decode;
+               traceport_jbtarget_decode_to_execute <= decode_branch_target_o;
+            end
 
-	    if (padv_execute_o) begin
-	       traceport_stage_exec_insn <= traceport_stage_decode_insn;
-	    end
+            if (padv_execute_o) begin
+               traceport_stage_exec_insn <= traceport_stage_decode_insn;
+               traceport_jbtarget_execute_to_ctrl <= traceport_jbtarget_decode_to_execute;
+               traceport_jal_execute_to_ctrl <= execute_op_jal_o;
+               traceport_jr_execute_to_ctrl <= execute_op_jr_o & !execute_op_jal_o;
+            end
 
-	    if (padv_ctrl_o) begin
-	       traceport_exec_insn_o <= traceport_stage_exec_insn;
-	    end
+            if (padv_ctrl_o) begin
+               traceport_exec_jal_o <= traceport_jal_execute_to_ctrl;
+               traceport_exec_jr_o <= traceport_jr_execute_to_ctrl;
+               traceport_exec_insn_o <= traceport_stage_exec_insn;
+               traceport_exec_jbtarget_o <= traceport_jbtarget_execute_to_ctrl;
+            end
 
-	    traceport_exec_pc_o <= pc_execute_to_ctrl;
-	    if (!traceport_waitexec) begin
-	       if (padv_ctrl_o & !ctrl_bubble_o) begin
-		  if (execute_valid_o) begin
-		     traceport_exec_valid_o <= 1'b1;
-		  end else begin
-		     traceport_exec_valid_o <= 1'b0;
-		     traceport_waitexec <= 1'b1;
-		  end
-	       end else begin
-		  traceport_exec_valid_o <= 1'b0;
-	       end
-	    end else begin
-	       if (execute_valid_o) begin
-		  traceport_exec_valid_o <= 1'b1;
-		  traceport_waitexec <= 1'b0;
-	       end else begin
-		  traceport_exec_valid_o <= 1'b0;
-	       end
-	    end // else: !if(!traceport_waitexec)
-	 end // else: !if(rst)
+            traceport_exec_pc_o <= pc_execute_to_ctrl;
+
+            if (!traceport_waitexec) begin
+               if (padv_ctrl_o & !ctrl_bubble_o) begin
+                  if (execute_valid_o) begin
+                     traceport_exec_valid_o <= 1'b1;
+                  end else begin
+                     traceport_exec_valid_o <= 1'b0;
+                     traceport_waitexec <= 1'b1;
+                  end
+               end else if (ctrl_op_rfe_o) begin
+                  traceport_exec_valid_o <= 1'b1;
+               end else begin
+                  traceport_exec_valid_o <= 1'b0;
+               end
+            end else begin
+               if (execute_valid_o) begin
+                  traceport_exec_valid_o <= 1'b1;
+                  traceport_waitexec <= 1'b0;
+               end else begin
+                  traceport_exec_valid_o <= 1'b0;
+               end
+            end // else: !if(!traceport_waitexec)
+         end // else: !if(rst)
       end else begin // if (FEATURE_TRACEPORT_EXEC != "NONE")
-	 traceport_stage_decode_insn <= {`OR1K_INSN_WIDTH{1'b0}};
-	 traceport_stage_exec_insn <= {`OR1K_INSN_WIDTH{1'b0}};
-	 traceport_exec_insn_o <= {`OR1K_INSN_WIDTH{1'b0}};
-	 traceport_exec_pc_o <= 32'h0;
-	 traceport_exec_valid_o <= 1'b0;
+         traceport_stage_decode_insn <= {`OR1K_INSN_WIDTH{1'b0}};
+         traceport_stage_exec_insn <= {`OR1K_INSN_WIDTH{1'b0}};
+         traceport_exec_insn_o <= {`OR1K_INSN_WIDTH{1'b0}};
+         traceport_exec_pc_o <= 32'h0;
+         traceport_exec_valid_o <= 1'b0;
       end
    end
 
    generate
       if (FEATURE_TRACEPORT_EXEC != "NONE") begin
-	 assign traceport_exec_wbreg_o = wb_rfd_adr_o;
-	 assign traceport_exec_wben_o = wb_rf_wb_o;
-	 assign traceport_exec_wbdata_o = rf_result_o;
+         assign traceport_exec_wbreg_o = wb_rfd_adr_o;
+         assign traceport_exec_wben_o = wb_rf_wb_o;
+         assign traceport_exec_wbdata_o = rf_result_o;
       end else begin
-	 assign traceport_exec_wbreg_o = {OPTION_RF_ADDR_WIDTH{1'b0}};
-	 assign traceport_exec_wben_o = 1'b0;
-	 assign traceport_exec_wbdata_o = {OPTION_OPERAND_WIDTH{1'b0}};
+         assign traceport_exec_wbreg_o = {OPTION_RF_ADDR_WIDTH{1'b0}};
+         assign traceport_exec_wben_o = 1'b0;
+         assign traceport_exec_wbdata_o = {OPTION_OPERAND_WIDTH{1'b0}};
       end
    endgenerate
 

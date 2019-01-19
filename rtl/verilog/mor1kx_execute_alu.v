@@ -88,6 +88,7 @@ module mor1kx_execute_alu
     input 			      op_mtspr_i,
     input 			      op_mfspr_i,
     input 			      op_movhi_i,
+    input 			      op_ext_i,
     input [`OR1K_FPUOP_WIDTH-1:0]   op_fpu_i,
     input [`OR1K_FPCSR_RM_SIZE-1:0] fpu_round_mode_i,
     input 			      op_jbr_i,
@@ -177,6 +178,10 @@ module mor1kx_execute_alu
 
    wire [OPTION_OPERAND_WIDTH-1:0]        decode_a;
    wire [OPTION_OPERAND_WIDTH-1:0]        decode_b;
+
+   // Sign extension wires
+   reg [OPTION_OPERAND_WIDTH-1:0]         ext_result; // comb
+   wire [`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0] opc_alu_ext;
 generate
 if (CALCULATE_BRANCH_DEST=="TRUE") begin : calculate_branch_dest
    assign a = (op_jbr_i | op_jr_i) ? pc_execute_i : rfa_i;
@@ -194,6 +199,7 @@ end
 endgenerate
 
    assign opc_alu_shr = opc_alu_secondary_i[`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0];
+   assign opc_alu_ext = opc_alu_secondary_i[`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0];
 
    // Adder/subtractor inputs
    assign b_neg = ~b;
@@ -385,7 +391,7 @@ endgenerate
 
    // One signed overflow detection for all multiplication implmentations
    assign mul_signed_overflow = (FEATURE_MULTIPLIER=="NONE") ||
-				(FEATURE_MULTIPLIER=="PIPELINED") ? 0 :
+				(FEATURE_MULTIPLIER=="PIPELINED") ? 1'b0 :
 				// Same signs, check for negative result
 				// (should be positive)
 				((a[OPTION_OPERAND_WIDTH-1] ==
@@ -423,11 +429,11 @@ endgenerate
                div_count <= 0;
             end else if (decode_valid_i & op_div_i) begin
                div_done <= 0;
-               div_count <= OPTION_OPERAND_WIDTH;
+               div_count <= OPTION_OPERAND_WIDTH[5:0];
             end else if (div_count == 1)
                div_done <= 1;
             else if (!div_done)
-               div_count <= div_count - 1;
+               div_count <= div_count - 1'd1;
 
          always @(posedge clk) begin
             if (decode_valid_i & op_div_i) begin
@@ -627,6 +633,7 @@ endgenerate
 	 wire [OPTION_OPERAND_WIDTH-1:0] shift_right;
 	 wire [OPTION_OPERAND_WIDTH-1:0] shift_lsw;
 	 wire [OPTION_OPERAND_WIDTH-1:0] shift_msw;
+	 wire [OPTION_OPERAND_WIDTH*2-1:0] shift_wide;
 
 	 //
 	 // Bit-reverse on left shift, perform right shift,
@@ -637,7 +644,8 @@ endgenerate
 			    {OPTION_OPERAND_WIDTH{a[OPTION_OPERAND_WIDTH-1]}} :
 			    op_ror ? a : {OPTION_OPERAND_WIDTH{1'b0}};
 
-	 assign shift_right = {shift_msw, shift_lsw} >> b[4:0];
+	 assign shift_wide = {shift_msw, shift_lsw} >> b[4:0];
+	 assign shift_right = shift_wide[OPTION_OPERAND_WIDTH-1:0];
 	 assign shift_result = op_sll ? reverse(shift_right) : shift_right;
 
          assign shift_valid = 1;
@@ -697,6 +705,37 @@ endgenerate
       if (FEATURE_CMOV=="ENABLED") begin
       /* verilator lint_on WIDTH */
          assign cmov_result = flag_i ? a : b;
+      end
+   endgenerate
+
+   // Sign Extension
+   generate
+      /* verilator lint_off WIDTH */
+      if (FEATURE_EXT=="ENABLED") begin
+         always @*
+           case(opc_alu_i)
+             `OR1K_ALU_OPC_EXTBH:
+                case(opc_alu_ext)
+                  `OR1K_ALU_OPC_SECONDARY_EXTBH_EXTBS,
+                  `OR1K_ALU_OPC_SECONDARY_EXTBH_EXTBZ:
+                    ext_result = a[7] && (opc_alu_ext == `OR1K_ALU_OPC_SECONDARY_EXTBH_EXTBS) ?
+                                 {{(OPTION_OPERAND_WIDTH-8){1'b1}}, a[7:0]} :
+                                 {{(OPTION_OPERAND_WIDTH-8){1'b0}}, a[7:0]};
+                  `OR1K_ALU_OPC_SECONDARY_EXTBH_EXTHS,
+                  `OR1K_ALU_OPC_SECONDARY_EXTBH_EXTHZ:
+                    ext_result = a[15] && (opc_alu_ext == `OR1K_ALU_OPC_SECONDARY_EXTBH_EXTHS) ?
+                                 {{(OPTION_OPERAND_WIDTH-16){1'b1}}, a[15:0]} :
+                                 {{(OPTION_OPERAND_WIDTH-16){1'b0}}, a[15:0]};
+                  default:
+                    ext_result = a;
+                endcase // case(opc_alu_ext)
+             `OR1K_ALU_OPC_EXTW:
+                //`OR1K_ALU_OPC_SECONDARY_EXTW_EXTWS,
+                //`OR1K_ALU_OPC_SECONDARY_EXTW_EXTWZ:
+               ext_result = a;
+             default:
+               ext_result = a;
+           endcase // case(opc_alu_i)
       end
    endgenerate
 
@@ -774,6 +813,7 @@ endgenerate
    assign alu_result_o = op_logic ? logic_result :
 			 op_cmov ? cmov_result :
 			 op_movhi_i ? immediate_i :
+			 op_ext_i ? ext_result :
 			 op_mul_i ? mul_result[OPTION_OPERAND_WIDTH-1:0] :
 			 fpu_arith_valid ? fpu_result :
 			 op_shift_i ? shift_result :

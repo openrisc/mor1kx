@@ -1,13 +1,12 @@
 /////////////////////////////////////////////////////////////////////
 //                                                                 //
-//  mor1kx_dpram_en_w1st_sclk                                      //
+//  mor1kx_dpram_en_w1st                                           //
 //                                                                 //
 //  Description:                                                   //
 //    Dual port RAM:                                               //
 //      a) "enable" for both read & write for both ports           //
 //      b) "write 1st": written value appears on output            //
 //      c) "clear on init" feature for simulation                  //
-//      d) common clock                                            //
 //                                                                 //
 //  Based on mor1kx_true_dpram_sclk                                //
 //                                                                 //
@@ -16,8 +15,8 @@
 //   Copyright (C) 2013 Stefan Kristiansson                        //
 //                      stefan.kristiansson@saunalahti.fi          //
 //                                                                 //
-//   Copyright (C) 2015 Andrey Bacherov                            //
-//                      avbacherov@opencores.org                   //
+//   Copyright (C) 2015-2019 Andrey Bacherov                       //
+//                           avbacherov@opencores.org              //
 //                                                                 //
 //      This Source Code Form is subject to the terms of the       //
 //      Open Hardware Description License, v. 1.0. If a copy       //
@@ -26,22 +25,22 @@
 //                                                                 //
 /////////////////////////////////////////////////////////////////////
 
-module mor1kx_dpram_en_w1st_sclk
+module mor1kx_dpram_en_w1st
 #(
   parameter ADDR_WIDTH    = 32,
   parameter DATA_WIDTH    = 32,
   parameter CLEAR_ON_INIT =  0
 )
 (
-  // common clock
-  input                       clk,
   // port "a"
+  input                       clk_a,
   input                       en_a,    // enable port "a"
   input                       we_a,    // operation is "write"
   input      [ADDR_WIDTH-1:0] addr_a,
   input      [DATA_WIDTH-1:0] din_a,
   output reg [DATA_WIDTH-1:0] dout_a,
   // port "b"
+  input                       clk_b,
   input                       en_b,    // enable port "b"
   input                       we_b,    // operation is "write"
   input      [ADDR_WIDTH-1:0] addr_b,
@@ -51,6 +50,9 @@ module mor1kx_dpram_en_w1st_sclk
 
   reg [DATA_WIDTH-1:0] mem[0:((1<<ADDR_WIDTH)-1)];
 
+  // initial values for simulation
+ `ifndef SYNTHESIS
+  // synthesis translate_off
   generate
   if (CLEAR_ON_INIT) begin : clear_ram
     integer idx;
@@ -64,8 +66,11 @@ module mor1kx_dpram_en_w1st_sclk
     end
   end
   endgenerate
+  // synthesis translate_on
+ `endif // !synth
 
-  always @(posedge clk) begin
+  // port "a"
+  always @(posedge clk_a) begin
     if(en_a) begin
       if (we_a) begin
         mem[addr_a] <= din_a;
@@ -75,9 +80,10 @@ module mor1kx_dpram_en_w1st_sclk
         dout_a <= mem[addr_a];
       end // write / read
     end // enable
-  end // @clock
+  end // @clock-a
 
-  always @(posedge clk) begin
+  // port "b"
+  always @(posedge clk_b) begin
     if(en_b) begin
       if (we_b) begin
         mem[addr_b] <= din_b;
@@ -87,6 +93,6 @@ module mor1kx_dpram_en_w1st_sclk
         dout_b <= mem[addr_b];
       end // write / read
     end // enable
-  end // @clock
+  end // @clock-b
 
-endmodule // mor1kx_dpram_en_w1st_sclk
+endmodule // mor1kx_dpram_en_w1st

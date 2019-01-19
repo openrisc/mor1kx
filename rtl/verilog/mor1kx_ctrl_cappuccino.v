@@ -53,6 +53,7 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_TIMER = "ENABLED",
     parameter FEATURE_DEBUGUNIT = "NONE",
     parameter FEATURE_PERFCOUNTERS = "NONE",
+    parameter OPTION_PERFCOUNTERS_NUM = 0,
     parameter FEATURE_PMU = "NONE",
     parameter FEATURE_MAC = "NONE",
     parameter FEATURE_FPU = "NONE",
@@ -131,6 +132,14 @@ module mor1kx_ctrl_cappuccino
 
     input 			      decode_bubble_i,
     input 			      execute_bubble_i,
+
+    // Inputs from decode-exec stage to PCU
+    input               execute_op_lsu_load_i,
+    input               execute_op_lsu_store_i,
+
+    // Inputs from icache and dcache
+    input               icache_hit_i,
+    input               dcache_hit_i,
 
     // External IRQ lines in
     input [31:0] 		      irq_i,
@@ -320,6 +329,7 @@ module mor1kx_ctrl_cappuccino
    wire 			     spr_write_access;
    wire 			     spr_bus_access;
    reg [OPTION_OPERAND_WIDTH-1:0]    spr_sys_group_read;
+   wire [3:0] 			     spr_group;
 
    /* Wires from mor1kx_cfgrs module */
    wire [31:0] 			     spr_vr;
@@ -866,6 +876,7 @@ module mor1kx_ctrl_cappuccino
        .OPTION_IMMU_WAYS		(OPTION_IMMU_WAYS),
        .FEATURE_DEBUGUNIT		(FEATURE_DEBUGUNIT),
        .FEATURE_PERFCOUNTERS		(FEATURE_PERFCOUNTERS),
+       .OPTION_PERFCOUNTERS_NUM  (OPTION_PERFCOUNTERS_NUM),
        .FEATURE_MAC			(FEATURE_MAC),
        .FEATURE_FPU			(FEATURE_FPU), // mor1kx_cfgrs instance
        .FEATURE_SYSCALL			(FEATURE_SYSCALL),
@@ -1064,6 +1075,57 @@ module mor1kx_ctrl_cappuccino
       end // else: !if(FEATURE_PIC !="NONE")
    endgenerate
 
+   // PCU SPR control
+   wire dchache_miss = !dcache_hit_i & ((execute_op_lsu_load_i | execute_op_lsu_store_i) & padv_execute_o);
+   generate
+      if (FEATURE_PERFCOUNTERS !="NONE") begin : pcu
+
+         /* mor1kx_pcu AUTO_TEMPLATE (
+          .spr_bus_ack          (spr_access_ack[`OR1K_SPR_PC_BASE]),
+          .spr_dat_o            (spr_internal_read_dat[`OR1K_SPR_PC_BASE]),
+          // Inputs
+          .spr_we_i             (spr_we),
+          .spr_re_i             (spr_read),
+          .spr_access_i         (spr_access[`OR1K_SPR_PC_BASE])
+          .spr_addr_i           (spr_addr),
+          .spr_dat_i            (spr_write_dat),
+          );*/
+         mor1kx_pcu
+          #(
+            .OPTION_PERFCOUNTERS_NUM(OPTION_PERFCOUNTERS_NUM)
+            )
+         mor1kx_pcu
+           (/*AUTOINST*/
+            // Outputs
+            .spr_bus_ack        (spr_access_ack[`OR1K_SPR_PC_BASE]), // Templated
+            .spr_dat_o          (spr_internal_read_dat[`OR1K_SPR_PC_BASE]), // Templated
+            // Inputs
+            .clk                (clk),
+            .rst                (rst),
+            .spr_access_i       (spr_access[`OR1K_SPR_PC_BASE]), // Templated
+            .spr_we_i           (spr_we),                 // Templated
+            .spr_re_i           (spr_read),               // Templated
+            .spr_addr_i         (spr_addr),               // Templated
+            .spr_dat_i          (spr_write_dat),          // Templated
+            .spr_sys_mode_i     (spr_sr[`OR1K_SPR_SR_SM]),
+            .pcu_event_load_i   (execute_op_lsu_load_i & padv_execute_o),
+            .pcu_event_store_i  (execute_op_lsu_store_i & padv_execute_o),
+            .pcu_event_ifetch_i (fetch_valid_i),
+            .pcu_event_dcache_miss_i(dchache_miss),
+            .pcu_event_icache_miss_i(!icache_hit_i & !waiting_for_fetch),
+            .pcu_event_ifetch_stall_i(!padv_fetch_o),
+            .pcu_event_lsu_stall_i(!ctrl_valid_i),
+            .pcu_event_brn_stall_i(branch_mispredict_i & padv_decode_o),
+            .pcu_event_dtlb_miss_i(except_dtlb_miss_i),
+            .pcu_event_itlb_miss_i(except_itlb_miss_i),
+            .pcu_event_datadep_stall_i(execute_waiting)
+            );
+      end
+      else begin
+         assign spr_access_ack[`OR1K_SPR_PC_BASE] = 0;
+         assign spr_internal_read_dat[`OR1K_SPR_PC_BASE] = 0;
+      end // else: !if(FEATURE_PERFCOUNTERS !="NONE")
+   endgenerate
 
    generate
       if (FEATURE_TIMER!="NONE") begin : tt
@@ -1123,49 +1185,51 @@ module mor1kx_ctrl_cappuccino
                           spr_access_valid & spr_bus_access;
    assign spr_bus_dat_o = spr_write_dat;
 
+   assign spr_group = spr_addr[14:11];
+
    /* Select spr */
    always @(*) begin
-     spr_access <= 0;
-      case(`SPR_BASE(spr_addr))
+     spr_access = 0;
+      case(spr_group)
          // System group
          `OR1K_SPR_SYS_BASE:
-           spr_access[`OR1K_SPR_SYS_BASE] <= 1'b1;
+           spr_access[`OR1K_SPR_SYS_BASE] = 1'b1;
          // DMMU
          `OR1K_SPR_DMMU_BASE:
-           spr_access[`OR1K_SPR_DMMU_BASE] <= (FEATURE_DMMU!="NONE");
+           spr_access[`OR1K_SPR_DMMU_BASE] = (FEATURE_DMMU!="NONE");
          // IMMU
          `OR1K_SPR_IMMU_BASE:
-           spr_access[`OR1K_SPR_IMMU_BASE] <= (FEATURE_IMMU!="NONE");
+           spr_access[`OR1K_SPR_IMMU_BASE] = (FEATURE_IMMU!="NONE");
          // Data cache
          `OR1K_SPR_DC_BASE:
-           spr_access[`OR1K_SPR_DC_BASE] <= (FEATURE_DATACACHE!="NONE");
+           spr_access[`OR1K_SPR_DC_BASE] = (FEATURE_DATACACHE!="NONE");
          // Instruction cache
          `OR1K_SPR_IC_BASE:
-           spr_access[`OR1K_SPR_IC_BASE] <= (FEATURE_INSTRUCTIONCACHE!= "NONE");
+           spr_access[`OR1K_SPR_IC_BASE] = (FEATURE_INSTRUCTIONCACHE!= "NONE");
          // MAC unit
          `OR1K_SPR_MAC_BASE:
-           spr_access[`OR1K_SPR_MAC_BASE] <= (FEATURE_MAC!="NONE");
+           spr_access[`OR1K_SPR_MAC_BASE] = (FEATURE_MAC!="NONE");
          // Debug unit
          `OR1K_SPR_DU_BASE:
-           spr_access[`OR1K_SPR_DU_BASE] <= (FEATURE_DEBUGUNIT!="NONE");
+           spr_access[`OR1K_SPR_DU_BASE] = (FEATURE_DEBUGUNIT!="NONE");
          // Performance counters
          `OR1K_SPR_PC_BASE:
-           spr_access[`OR1K_SPR_PC_BASE] <= (FEATURE_PERFCOUNTERS!="NONE");
+           spr_access[`OR1K_SPR_PC_BASE] = (FEATURE_PERFCOUNTERS!="NONE");
          // Power Management
          `OR1K_SPR_PM_BASE:
-           spr_access[`OR1K_SPR_PM_BASE] <= (FEATURE_PMU!="NONE");
+           spr_access[`OR1K_SPR_PM_BASE] = (FEATURE_PMU!="NONE");
          // PIC
          `OR1K_SPR_PIC_BASE:
-           spr_access[`OR1K_SPR_PIC_BASE] <= (FEATURE_PIC!="NONE");
+           spr_access[`OR1K_SPR_PIC_BASE] = (FEATURE_PIC!="NONE");
          // Tick timer
          `OR1K_SPR_TT_BASE:
-           spr_access[`OR1K_SPR_TT_BASE] <= (FEATURE_TIMER!="NONE");
+           spr_access[`OR1K_SPR_TT_BASE] = (FEATURE_TIMER!="NONE");
          // FPU
          `OR1K_SPR_FPU_BASE:
-           spr_access[`OR1K_SPR_FPU_BASE] <= (FEATURE_FPU!="NONE");
+           spr_access[`OR1K_SPR_FPU_BASE] = (FEATURE_FPU!="NONE");
          /* generate invalid if the group is not present in the design  */
          default:
-           spr_access <= 0;
+           spr_access = 0;
        endcase
     end
 
@@ -1459,18 +1523,6 @@ if (FEATURE_MAC!="NONE") begin : mac_ctrl
 end else begin
    assign spr_access_ack[`OR1K_SPR_MAC_BASE] = 0;
    assign spr_internal_read_dat[`OR1K_SPR_MAC_BASE] = 0;
-end
-endgenerate
-
-generate
-if (FEATURE_PERFCOUNTERS!="NONE") begin : perfcounters_ctrl
-   assign spr_access_ack[`OR1K_SPR_PC_BASE] = spr_bus_ack_pcu_i &
-                                              spr_access[`OR1K_SPR_PC_BASE];
-   assign spr_internal_read_dat[`OR1K_SPR_PC_BASE] =
-     spr_bus_dat_pcu_i & {OPTION_OPERAND_WIDTH{spr_access[`OR1K_SPR_PC_BASE]}};
-end else begin
-   assign spr_access_ack[`OR1K_SPR_PC_BASE] = 0;
-   assign spr_internal_read_dat[`OR1K_SPR_PC_BASE] = 0;
 end
 endgenerate
 

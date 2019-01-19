@@ -13,8 +13,8 @@ CAPPUCCINO by the following steps:
   d) CTRL-stage related registers were removed
   e) The logic for bubble generation, forwarding results, pipeline
      control signals generation were significantly simplified
-  f) Exceptions are taken on WB-stage now
-  g) WB registers were extended to handle flags and exceptions
+  f) Exceptions are taken on Write-Back-stage now
+  g) Write-Back registers were extended to handle flags and exceptions
      additionally to result
   h) Debug unit support was damaged
 
@@ -30,7 +30,7 @@ flag to control pipeline.
 
 
 6 September 2015
-  Pipelined multiplier. Some adaptation for FPU pipelines. Move WB
+  Pipelined multiplier. Some adaptation for FPU pipelines. Move Write-Back
 latches into mor1kx_execute_marocchino to prepare implementation of
 control for paralleled execution units. So, mor1kx_wbmux_marocchino
 has been removed from design.
@@ -69,7 +69,7 @@ flag is usually computed by EXECUTE while FETCH is fetching delay slot)
      moved out of mor1kx_excecute_maroccchino module. The rest part of
      mor1kx_excecute_maroccchino were re-named to
      mor1kx_exec_1clk_marocchino
- (f) WB- registers in all execution modules were re-designed to make
+ (f) Write-Back- registers in all execution modules were re-designed to make
      exception processing more straight
 
 
@@ -124,7 +124,7 @@ JTAG-TAP and Advance Debug System. Step-by-step execution not tested yet.
   (3) Move link address computation for l.jal and l.jalr fro DECODE to ALU
   (4) Remove FLAG and CARRY related hazards detection in DECODE and resolving
 them in 1-CLK reservation station. They were used in 1-CLK execution unit only.
-However, when 1-CLK execution unit receives access to WB it means all hazards
+However, when 1-CLK execution unit receives access to Write-Back it means all hazards
 are resolved. So, FLAG and CARRY related hazards  were redundant.
   (5) Parameterization of Order Control Buffer.
   (6) More accurate EPCR update in according with exception hierarchy
@@ -137,14 +137,56 @@ jump/branch target/flag become ready
   (8) More accurate tracking for NPC thanks to previous
   (9) Remove redundant bits from SPR EVBAR, exception_pc_addr and DU SPRs
 
+
 08 March 2017
-  Restore ability to select divisor type (FEATURE_DIVIDER). The two options are
+  Restore ability to select divisor type (). The two options are
 available. "SERIAL" is equal to CAPPUCCINO's one and means
-"restoring radix-2 divisor". Any other value means "SRT radix-4 divisor".
+"restoring radix-2 divisor". Any other value means .
 For clarity "SRT4" is recommended. By default "SERIAL" is selected. In fact,
 there is no difference in benchmarks (and most of applications) for both types
 of divisor.  On the other hand, "restoring radix-2 divisor" much smaller than
 "SRT radix-4 divisor".
+
+
+19 January 2019
+  (1) Now there are two different clocks: CPU clock and Wishbone clock.
+Pseudo Clock Domains Crossing (Pseudo-CDC) implemented. "Pseudo" means that
+two assumptions were made for CDC implementation: (a) CPU clock is faster or
+equal to Wishbone one (b) if CPU and Wishbone clocks are different they are
+aligned.
+  (2) To achieve faster CPU clock:
+      (a) additional stages added in IFETCH, LSU and FPU
+      (b) Fast forwarding combinatorial multiplexers were removed from
+          reservation station’s outputs
+  (3) The 100MHz of CPU clock were achieved on Atlys board with 2-ways
+I/D caches (16 kilobytes of each).
+  (4) Tick Timer and PIC implemented in Wishbone clock domain to keep
+compatibility with existing software. Their modules are renamed:
+      mor1kx_ticktimer_oneself.v -> mor1kx_ticktimer_marocchino.v
+      mor1kx_pic_oneself.v -> mor1kx_pic_marocchino.v
+  (5) Wishbone bridges are specially re-implemented to support Pseudo-CDC
+and l.lwa/l.swa.
+      mor1kx_bus_if_wb32.v -> mor1kx_bus_if_wb32_marocchino.v
+  (6) STORE BUFFER implementation changed and moved into mor1kx_ocb_marocchino.v.
+The mor1kx_store_buffer_marocchino.v source removed.
+  (7)  pfpu32_cmp_marocchino and pfpu64_cmp_marocchino were merged into single
+pfpu_cmp_marocchino module
+  (8) GSHARE branch prediction were implemented.
+  (9) l.ext* instructions implemented.
+ (10) Temporary option OPTION_ORFPX64A32_ABI implemented to select support
+either GCC9’s ABI (with {rX,rX+2} GPRs combining for 64-bit operands) or
+GCC5’s one (with {rX,rX+1} GPRs combining). To support both ABIs the GPRs
+implementation were changed from set of RAM-bocks to set of flop-flop based
+registers. To select GCC9’s ABI the option should be set to “GCC9”.
+It should be set to “GCC5” otherwise. The default value is “GCC5”.
+ (11) Snoop Invalidation implemented for DCACHE and tested with specially
+designed ram-filler module connected as master to Wishbone interconnect.
+ (12) LRU module was refactored and implemented as separate
+mor1kx_cache_lru_marocchino.v
+ (13) The “wb_” prefix or WriteBack related signals were replaced by “wrbk_”
+one to distinguish them from Wishbone related “wb_”.
+ (14) Top level is renamed from mor1kx_marocchino_alone.v to mor1kx_top_marocchino.v
+
 
 Primary TODOs:
   - Verify step by step execution with DU

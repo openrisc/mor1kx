@@ -15,7 +15,7 @@
 //   Copyright (C) 2012-2014 Stefan Kristiansson                    //
 //                           stefan.kristiansson@saunalahti.fi      //
 //                                                                  //
-//   Copyright (C) 2015-2016 Andrey Bacherov                        //
+//   Copyright (C) 2015-2018 Andrey Bacherov                        //
 //                           avbacherov@opencores.org               //
 //                                                                  //
 //      This Source Code Form is subject to the terms of the        //
@@ -27,403 +27,475 @@
 
 `include "mor1kx-defines.v"
 
-module mor1kx_rf_marocchino
+/*****************************************/
+/* Single GPR (Flip-Flop implementation) */
+/*****************************************/
+
+module single_gpr
 #(
-  parameter OPTION_RF_CLEAR_ON_INIT  = 0,
-  parameter OPTION_RF_ADDR_WIDTH     = 5,
-  parameter FEATURE_DEBUGUNIT        = "NONE",
   parameter OPTION_OPERAND_WIDTH     = 32
 )
 (
-  input                             clk,
-  input                             rst,
+  // clock
+  input                             cpu_clk,
+
+  // write back D1
+  input                             wrbk_rfd1_we1h_i,
+  input  [OPTION_OPERAND_WIDTH-1:0] wrbk_result1_i,
+  // write back D2 for FPU64
+  input                             wrbk_rfd2_we1h_i,
+  input  [OPTION_OPERAND_WIDTH-1:0] wrbk_result2_i,
+  // write by SPR BUS access
+  input                             spr_gpr0_we_i,
+  input  [OPTION_OPERAND_WIDTH-1:0] spr_gpr0_wdata_i,
+
+  // content
+  output [OPTION_OPERAND_WIDTH-1:0] gpr_o
+);
+
+  reg [OPTION_OPERAND_WIDTH-1:0] gpr_r;
+
+  assign gpr_o = gpr_r;
+
+  always @(posedge cpu_clk) begin
+    gpr_r <= spr_gpr0_we_i ? spr_gpr0_wdata_i :
+              (wrbk_rfd1_we1h_i ? wrbk_result1_i :
+               (wrbk_rfd2_we1h_i ? wrbk_result2_i :
+                                    gpr_r));
+  end // at cpu clock
+
+endmodule // single_gpr
+
+
+
+/****************************************************/
+/* Regiter File with Shadow GPRs and SPR BUS access */
+/****************************************************/
+
+module mor1kx_rf_marocchino
+#(
+  parameter OPTION_RF_CLEAR_ON_INIT  =  0,
+  parameter OPTION_RF_ADDR_WIDTH     =  5,
+  parameter NUM_GPRS                 = 32, // (1 << OPTION_RF_ADDR_WIDTH)
+  parameter OPTION_OPERAND_WIDTH     = 32,
+  parameter FEATURE_DEBUGUNIT        = "NONE",
+  parameter OPTION_RF_NUM_SHADOW_GPR =  0       // for multicore mostly
+)
+(
+  input                                 cpu_clk,
+  input                                 cpu_rst,
 
   // pipeline control signals
-  input                             pipeline_flush_i,
-  input                             padv_fetch_i,
+  input                                 pipeline_flush_i,
+  input                                 padv_dcod_i,
 
   // SPR bus
   input                          [15:0] spr_bus_addr_i,
   input                                 spr_bus_stb_i,
   input                                 spr_bus_we_i,
   input      [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_i,
-  output reg                            spr_bus_ack_gpr_o,
-  output     [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_gpr_o,
+  output                                spr_bus_ack_gpr0_o,
+  output     [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_gpr0_o,
+  output                                spr_bus_ack_gprS_o,
+  output     [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_gprS_o,
 
   // from FETCH
-  input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa1_adr_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb1_adr_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa1_adr_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb1_adr_i,
   // for FPU64
-  input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa2_adr_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb2_adr_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfa2_adr_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb2_adr_i,
 
   // from DECODE
-  input                             dcod_rfa1_req_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa1_adr_i,
-  input                             dcod_rfb1_req_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb1_adr_i,
-  input  [OPTION_OPERAND_WIDTH-1:0] dcod_immediate_i,
-  input                             dcod_immediate_sel_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] dcod_immediate_i,
+  input                                 dcod_immediate_sel_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa1_adr_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb1_adr_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa2_adr_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb2_adr_i,
+
+  // from Write-Back
+  input                  [NUM_GPRS-1:0] wrbk_rfd1_we1h_i,
+  input                                 wrbk_rfd1_we_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] wrbk_rfd1_adr_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] wrbk_result1_i,
   // for FPU64
-  input                             dcod_rfa2_req_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa2_adr_i,
-  input                             dcod_rfb2_req_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb2_adr_i,
+  input                  [NUM_GPRS-1:0] wrbk_rfd2_we1h_i,
+  input                                 wrbk_rfd2_we_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] wrbk_rfd2_adr_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] wrbk_result2_i,
 
-  // from WB
-  input                             wb_rfd1_wb_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd1_adr_i,
-  input  [OPTION_OPERAND_WIDTH-1:0] wb_result1_i,
-  // for FPU64
-  input                             wb_rfd2_wb_i,
-  input  [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd2_adr_i,
-  input  [OPTION_OPERAND_WIDTH-1:0] wb_result2_i,
+  // outputs (combinatorial)
+  output reg [OPTION_OPERAND_WIDTH-1:0] dcod_rfa1_o,
+  output reg [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_o,
+  output reg [OPTION_OPERAND_WIDTH-1:0] dcod_rfa2_o,
+  output reg [OPTION_OPERAND_WIDTH-1:0] dcod_rfb2_o,
 
-  // D1 related WB-to-DECODE hazards for LSU WB miss processing
-  output                            dcod_wb2dec_eq_adr_d1a1_o,
-  output                            dcod_wb2dec_eq_adr_d1b1_o,
-  output                            dcod_wb2dec_eq_adr_d1a2_o,
-  output                            dcod_wb2dec_eq_adr_d1b2_o,
-
-  // outputs
-  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfa1_o,
-  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_o,
-  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfa2_o,
-  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb2_o,
-
-  // we use adder for l.jl/l.jalr to compute return address: (pc+8)
-  input                             dcod_op_jal_i,
-  input  [OPTION_OPERAND_WIDTH-1:0] pc_decode_i,
+  // we use adder in EXECUTE to compute return address (pc+8) for l.jl/l.jalr
+  input                                 dcod_op_jal_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] pc_decode_i,
 
   // Special case for l.jr/l.jalr
-  output [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_jr_o
+  output     [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_jr_o
 );
 
   // short names
   localparam RF_AW = OPTION_RF_ADDR_WIDTH;
   localparam RF_DW = OPTION_OPERAND_WIDTH;
 
+  // Declarations
+  wire [RF_DW-1:0] gpr0_rdata_bus [NUM_GPRS-1:0];
 
-  //-----------//
-  // FETCH->RF //
-  //-----------//
+  //--------------------------------------//
+  // Common part of SPR BUS               //
+  //--------------------------------------//
+  // Registering SPR BUS incoming signals //
+  // as they are common for GPR Group #0  //
+  // and GPR Shadow.                      //
+  //--------------------------------------//
 
-  // ram blocks outputs
-  wire [(RF_DW-1):0] rfa_even_dout;
-  wire [(RF_DW-1):0] rfa_odd_dout;
-  wire [(RF_DW-1):0] rfb_even_dout;
-  wire [(RF_DW-1):0] rfb_odd_dout;
+  //  we don't expect R/W-collisions for SPRbus vs Write-Back cycles since
+  //    SPRbus access start 1-clock later than Write-Back
+  //    thanks to MT(F)SPR processing logic (see OMAN)
 
-  // SPR/GPR access from bus signals
-  wire spr_gpr_we;
-  wire spr_gpr_cs;
+  // SPR BUS strobe registering
+  reg spr_bus_stb_r;
+  // ---
+  always @(posedge cpu_clk) begin
+    if (cpu_rst)
+      spr_bus_stb_r <= 1'b0;
+    else if (spr_bus_ack_gpr0_o | spr_bus_ack_gprS_o)
+      spr_bus_stb_r <= 1'b0;
+    else
+      spr_bus_stb_r <= spr_bus_stb_i;
+  end // at clock
 
+  // SPR BUS address registering
+  reg [15:0] spr_bus_addr_r;
+  // ---
+  always @(posedge cpu_clk) begin
+    spr_bus_addr_r <= spr_bus_addr_i;
+  end
 
-  // short name for read request
-  wire read_req = padv_fetch_i;
-
-
-  // 1-clock witting strobes for GPR write
-  //  - writting act could be blocked by exceptions processing
-  //    because the istruction isn't completed and
-  //    will be restarted by l.rfe
-
-  //  write in even
-  wire write_even_req = (wb_rfd1_wb_i & ~wb_rfd1_adr_i[0]) | (wb_rfd2_wb_i & ~wb_rfd2_adr_i[0]) | (spr_gpr_we & ~spr_bus_addr_i[0]);
-  // write in odd
-  wire write_odd_req  = (wb_rfd1_wb_i &  wb_rfd1_adr_i[0]) | (wb_rfd2_wb_i &  wb_rfd2_adr_i[0]) | (spr_gpr_we &  spr_bus_addr_i[0]);
-
-
-  // even/odd multiplexing of input addresses and data
-  //  if A(B)'s address is odd than A2(B2)=A(B)+1 is even and vise verse
-
-  //    operand A-even address
-  wire [(RF_AW-1):0] fetch_rfa_even_addr = fetch_rfa1_adr_i[0] ? fetch_rfa2_adr_i : fetch_rfa1_adr_i;
-  //    operand A-odd address
-  wire [(RF_AW-1):0] fetch_rfa_odd_addr  = fetch_rfa1_adr_i[0] ? fetch_rfa1_adr_i : fetch_rfa2_adr_i;
-
-  //    operand B-even address
-  wire [(RF_AW-1):0] fetch_rfb_even_addr = fetch_rfb1_adr_i[0] ? fetch_rfb2_adr_i : fetch_rfb1_adr_i;
-  //    operand B-odd address
-  wire [(RF_AW-1):0] fetch_rfb_odd_addr  = fetch_rfb1_adr_i[0] ? fetch_rfb1_adr_i : fetch_rfb2_adr_i;
-
-  //    Write Back even address & data
-  wire [(RF_AW-1):0] wb_even_addr = wb_rfd1_adr_i[0] ? wb_rfd2_adr_i : wb_rfd1_adr_i;
-  wire [(RF_DW-1):0] wb_even_data = wb_rfd1_adr_i[0] ? wb_result2_i  : wb_result1_i;
-  //    Write Back odd address & data
-  wire [(RF_AW-1):0] wb_odd_addr = wb_rfd1_adr_i[0] ? wb_rfd1_adr_i : wb_rfd2_adr_i;
-  wire [(RF_DW-1):0] wb_odd_data = wb_rfd1_adr_i[0] ? wb_result1_i  : wb_result2_i;
-
-  //  write even address & data
-  wire [(RF_AW-1):0] write_even_addr = spr_gpr_we ? spr_bus_addr_i[(RF_AW-1):0] : wb_even_addr;
-  wire [(RF_DW-1):0] write_even_data = spr_gpr_we ? spr_bus_dat_i               : wb_even_data;
-  //  write odd address & data
-  wire [(RF_AW-1):0] write_odd_addr = spr_gpr_we ? spr_bus_addr_i[(RF_AW-1):0] : wb_odd_addr;
-  wire [(RF_DW-1):0] write_odd_data = spr_gpr_we ? spr_bus_dat_i               : wb_odd_data;
-
-
-  // Controls for A-even RAM block
-  //  # read/write conflict
-  wire rfa_even_hazard = (write_even_req &  read_req &  (write_even_addr == fetch_rfa_even_addr)) |
-                         (write_even_req & ~read_req & ((write_even_addr == dcod_rfa1_adr_i) |
-                                                        (write_even_addr == dcod_rfa2_adr_i)));
-  //  # signals for Read/Write port *_rwp_*
-  wire               rfa_even_rwp_en   = rfa_even_hazard | read_req;
-  wire               rfa_even_rwp_we   = rfa_even_hazard;
-  wire [(RF_AW-2):0] rfa_even_rwp_addr = rfa_even_hazard ? write_even_addr[(RF_AW-1):1] : fetch_rfa_even_addr[(RF_AW-1):1];
-  //  # signals for Write port *_wp_*
-  wire rfa_even_wp_en = write_even_req & ~rfa_even_hazard;
-  //  # RFA-even RAM-block instance
-  mor1kx_dpram_en_w1st_sclk
-  #(
-    .ADDR_WIDTH     (RF_AW-1),
-    .DATA_WIDTH     (RF_DW),
-    .CLEAR_ON_INIT  (OPTION_RF_CLEAR_ON_INIT)
-  )
-  rfa_even
-  (
-    // common clock
-    .clk    (clk),
-    // port "a": Read / Write (for RW-conflict case)
-    .en_a   (rfa_even_rwp_en & ~pipeline_flush_i),
-    .we_a   (rfa_even_rwp_we),
-    .addr_a (rfa_even_rwp_addr),
-    .din_a  (write_even_data),
-    .dout_a (rfa_even_dout),
-    // port "b": Write if no RW-conflict
-    .en_b   (rfa_even_wp_en & ~pipeline_flush_i),
-    .we_b   (write_even_req),
-    .addr_b (write_even_addr[(RF_AW-1):1]),
-    .din_b  (write_even_data),
-    .dout_b ()
-  );
-
-
-  // Controls for A-odd RAM block
-  //  # read/write conflict
-  wire rfa_odd_hazard = (write_odd_req &  read_req &  (write_odd_addr == fetch_rfa_odd_addr)) |
-                        (write_odd_req & ~read_req & ((write_odd_addr == dcod_rfa1_adr_i) |
-                                                      (write_odd_addr == dcod_rfa2_adr_i)));
-  //  # signals for Read/Write port *_rwp_*
-  wire               rfa_odd_rwp_en   = rfa_odd_hazard | read_req;
-  wire               rfa_odd_rwp_we   = rfa_odd_hazard;
-  wire [(RF_AW-2):0] rfa_odd_rwp_addr = rfa_odd_hazard ? write_odd_addr[(RF_AW-1):1] : fetch_rfa_odd_addr[(RF_AW-1):1];
-  //  # signals for Write port *_wp_*
-  wire rfa_odd_wp_en = write_odd_req & ~rfa_odd_hazard;
-  //  # RFA-odd RAM-block instance
-  mor1kx_dpram_en_w1st_sclk
-  #(
-    .ADDR_WIDTH     (RF_AW-1),
-    .DATA_WIDTH     (RF_DW),
-    .CLEAR_ON_INIT  (OPTION_RF_CLEAR_ON_INIT)
-  )
-  rfa_odd
-  (
-    // common clock
-    .clk    (clk),
-    // port "a": Read / Write (for RW-conflict case)
-    .en_a   (rfa_odd_rwp_en & ~pipeline_flush_i),
-    .we_a   (rfa_odd_rwp_we),
-    .addr_a (rfa_odd_rwp_addr),
-    .din_a  (write_odd_data),
-    .dout_a (rfa_odd_dout),
-    // port "b": Write if no RW-conflict
-    .en_b   (rfa_odd_wp_en & ~pipeline_flush_i),
-    .we_b   (write_odd_req),
-    .addr_b (write_odd_addr[(RF_AW-1):1]),
-    .din_b  (write_odd_data),
-    .dout_b ()
-  );
-
-
-  // Controls for B-even RAM block
-  //  # read/write conflict
-  wire rfb_even_hazard = (write_even_req &  read_req &  (write_even_addr == fetch_rfb_even_addr)) |
-                         (write_even_req & ~read_req & ((write_even_addr == dcod_rfb1_adr_i) |
-                                                        (write_even_addr == dcod_rfb2_adr_i)));
-  //  # signals for Read/Write port *_rwp_*
-  wire               rfb_even_rwp_en   = rfb_even_hazard | read_req;
-  wire               rfb_even_rwp_we   = rfb_even_hazard;
-  wire [(RF_AW-2):0] rfb_even_rwp_addr = rfb_even_hazard ? write_even_addr[(RF_AW-1):1] : fetch_rfb_even_addr[(RF_AW-1):1];
-  //  # signals for Write port *_wp_*
-  wire rfb_even_wp_en = write_even_req & ~rfb_even_hazard;
-  //  # RFA-even RAM-block instance
-  mor1kx_dpram_en_w1st_sclk
-  #(
-    .ADDR_WIDTH     (RF_AW-1),
-    .DATA_WIDTH     (RF_DW),
-    .CLEAR_ON_INIT  (OPTION_RF_CLEAR_ON_INIT)
-  )
-  rfb_even
-  (
-    // common clock
-    .clk    (clk),
-    // port "a": Read / Write (for RW-conflict case)
-    .en_a   (rfb_even_rwp_en & ~pipeline_flush_i),
-    .we_a   (rfb_even_rwp_we),
-    .addr_a (rfb_even_rwp_addr),
-    .din_a  (write_even_data),
-    .dout_a (rfb_even_dout),
-    // port "b": Write if no RW-conflict
-    .en_b   (rfb_even_wp_en & ~pipeline_flush_i),
-    .we_b   (write_even_req),
-    .addr_b (write_even_addr[(RF_AW-1):1]),
-    .din_b  (write_even_data),
-    .dout_b ()
-  );
-
-
-  // Controls for B-odd RAM block
-  //  # read/write conflict
-  wire rfb_odd_hazard = (write_odd_req &  read_req &  (write_odd_addr == fetch_rfb_odd_addr)) |
-                        (write_odd_req & ~read_req & ((write_odd_addr == dcod_rfb1_adr_i) |
-                                                      (write_odd_addr == dcod_rfb2_adr_i)));
-  //  # signals for Read/Write port *_rwp_*
-  wire               rfb_odd_rwp_en   = rfb_odd_hazard | read_req;
-  wire               rfb_odd_rwp_we   = rfb_odd_hazard;
-  wire [(RF_AW-2):0] rfb_odd_rwp_addr = rfb_odd_hazard ? write_odd_addr[(RF_AW-1):1] : fetch_rfb_odd_addr[(RF_AW-1):1];
-  //  # signals for Write port *_wp_*
-  wire rfb_odd_wp_en = write_odd_req & ~rfb_odd_hazard;
-  //  # RFA-odd RAM-block instance
-  mor1kx_dpram_en_w1st_sclk
-  #(
-    .ADDR_WIDTH     (RF_AW-1),
-    .DATA_WIDTH     (RF_DW),
-    .CLEAR_ON_INIT  (OPTION_RF_CLEAR_ON_INIT)
-  )
-  rfb_odd
-  (
-    // common clock
-    .clk    (clk),
-    // port "a": Read / Write (for RW-conflict case)
-    .en_a   (rfb_odd_rwp_en & ~pipeline_flush_i),
-    .we_a   (rfb_odd_rwp_we),
-    .addr_a (rfb_odd_rwp_addr),
-    .din_a  (write_odd_data),
-    .dout_a (rfb_odd_dout),
-    // port "b": Write if no RW-conflict
-    .en_b   (rfb_odd_wp_en & ~pipeline_flush_i),
-    .we_b   (write_odd_req),
-    .addr_b (write_odd_addr[(RF_AW-1):1]),
-    .din_b  (write_odd_data),
-    .dout_b ()
-  );
-
-
-  //---------------//
-  // SPR interface //
-  //---------------//
-
-  // detect GPR access
-  //  !!! low bits of SPR-address are used for addressing RF !!!
-  assign spr_gpr_cs = spr_bus_stb_i & (spr_bus_addr_i[15:10] == 6'b000001); // see OR1K_SPR_GPR0_ADDR
+  // Registering SPR BUS "write strobe" and "data for write".
+  wire               spr_bus_we_l;
+  wire [(RF_DW-1):0] spr_bus_dat_l;
 
   generate
   /* verilator lint_off WIDTH */
-  if (FEATURE_DEBUGUNIT != "NONE") begin : rfspr_enabled
+  if ((FEATURE_DEBUGUNIT != "NONE") || (OPTION_RF_NUM_SHADOW_GPR > 0)) begin : spr_aux_enabled
   /* verilator lint_on WIDTH */
 
-    wire [(RF_DW-1):0] rfspr_dout;
+    // Registering SPR BUS "write strobe" and "data for write".
+    reg               spr_bus_we_r; // DBGU or SHADOW
+    reg [(RF_DW-1):0] spr_bus_dat_r; // DBGU or SHADOW
+    // ---
+    assign spr_bus_we_l  = spr_bus_we_r; // DBGU or SHADOW
+    assign spr_bus_dat_l = spr_bus_dat_r; // DBGU or SHADOW
+    // ---
+    always @(posedge cpu_clk) begin
+      spr_bus_we_r  <= spr_bus_we_i; // DBGU or SHADOW
+      spr_bus_dat_r <= spr_bus_dat_i; // DBGU or SHADOW
+    end // at clock
 
-    //  we don't expect R/W-collisions for SPRbus vs WB cycles since
-    //    SPRbus access start 1-clock later than WB
-    //    thanks to MT(F)SPR processing logic (see OMAN)
+  end
+  else begin : spr_aux_disabled
 
-    reg               spr_gpr_we_r;
-    reg               spr_gpr_re_r;
-    reg               spr_gpr_mux_r;
-    reg [(RF_DW-1):0] spr_bus_dat_gpr_r;
+    assign spr_bus_we_l  = 1'b0;          // No DBGU and No SHADOW
+    assign spr_bus_dat_l = {RF_DW{1'b0}}; // No DBGU and No SHADOW
 
-    // SPR processing cycle
-    always @(posedge clk `OR_ASYNC_RST) begin
-      if (rst) begin
-        spr_gpr_we_r      <= 1'b0;
-        spr_gpr_re_r      <= 1'b0;
-        spr_gpr_mux_r     <= 1'b0;
-        spr_bus_ack_gpr_o <= 1'b0;
-        spr_bus_dat_gpr_r <= {RF_DW{1'b0}};
+  end
+  endgenerate
+
+  //----------------------------------//
+  // SPR BUS for Group #0 GPRs access //
+  //----------------------------------//
+
+  // Group #0 GPRs chip select
+  wire spr_gpr0_cs = spr_bus_stb_r &                  // Group #0 GPRs access
+                     (spr_bus_addr_r[15:9] == 7'd2) & // Group #0 GPRs access, see OR1K_SPR_GPR0_ADDR
+                     (spr_bus_addr_r[ 8:5] == 4'd0);  // Group #0 GPRs access
+
+  // Group #0 GPRs write enables (1-hot coded)
+  wire [NUM_GPRS-1:0] spr_gpr0_we;
+
+  // We declare states or SPR BUS FSM here because some
+  // of EDA tools deprecate local parameters declaration
+  // inside of generate blocks.
+
+  localparam  [3:0] SPR_GPR0_WAITING = 4'b0001,
+                    SPR_GPR0_WE_STRB = 4'b0010,
+                    SPR_GPR0_READ_MX = 4'b0100,
+                    SPR_GPR0_ACK     = 4'b1000;
+
+  generate
+  /* verilator lint_off WIDTH */
+  if (FEATURE_DEBUGUNIT != "NONE") begin : dbgu_enabled
+  /* verilator lint_on WIDTH */
+
+    // SPR BUS FSM states
+    reg         [3:0] spr_gpr0_state;
+
+    // Particular states
+    wire              spr_gpr0_waiting_state = spr_gpr0_state[0];
+    wire              spr_gpr0_read_mx_state = spr_gpr0_state[2];
+    assign            spr_bus_ack_gpr0_o     = spr_gpr0_state[3]; // DBGU enabled
+
+    // Write enables
+    reg    [NUM_GPRS-1:0] spr_gpr0_we_r;
+    assign                spr_gpr0_we = spr_gpr0_we_r; // DBGU enabled
+
+    // Acceess address
+    wire    [RF_AW-1:0] spr_gpr0_addr = spr_bus_addr_r[RF_AW-1:0];
+
+    // Read data
+    reg     [RF_DW-1:0] spr_bus_dat_gpr0_r;
+    assign              spr_bus_dat_gpr0_o = spr_bus_dat_gpr0_r; // DBGU enabled
+
+    // SPR BUS FSM
+    always @(posedge cpu_clk) begin
+      if (cpu_rst) begin
+        spr_gpr0_we_r  <= {NUM_GPRS{1'b0}};
+        spr_gpr0_state <= SPR_GPR0_WAITING;
       end
-      else if (spr_bus_ack_gpr_o) begin
-        spr_gpr_we_r      <= 1'b0;
-        spr_gpr_re_r      <= 1'b0;
-        spr_gpr_mux_r     <= 1'b0;
-        spr_bus_ack_gpr_o <= 1'b0;
-        spr_bus_dat_gpr_r <= {RF_DW{1'b0}};
-      end
-      else if (spr_gpr_mux_r) begin
-        spr_gpr_we_r      <= 1'b0;
-        spr_gpr_re_r      <= 1'b0;
-        spr_gpr_mux_r     <= 1'b0;
-        spr_bus_ack_gpr_o <= 1'b1;
-        spr_bus_dat_gpr_r <= rfspr_dout;
-      end
-      else if (spr_gpr_re_r) begin
-        spr_gpr_we_r      <= 1'b0;
-        spr_gpr_re_r      <= 1'b0;
-        spr_gpr_mux_r     <= 1'b1;
-        spr_bus_ack_gpr_o <= 1'b0;
-        spr_bus_dat_gpr_r <= {RF_DW{1'b0}};
-      end
-      else if (spr_gpr_cs) begin
-        spr_gpr_we_r      <= spr_bus_we_i;
-        spr_gpr_re_r      <= ~spr_bus_we_i;
-        spr_gpr_mux_r     <= 1'b0;
-        spr_bus_ack_gpr_o <= spr_bus_we_i; // write on next posedge of clock and finish
-        spr_bus_dat_gpr_r <= {RF_DW{1'b0}};
+      else begin
+        // synthesis parallel_case
+        case (spr_gpr0_state)
+          // waiting Group #0 GPRs access
+          SPR_GPR0_WAITING: begin
+            if (spr_gpr0_cs) begin
+              spr_gpr0_we_r  <= {{(NUM_GPRS-1){1'b0}},spr_bus_we_l} << spr_gpr0_addr;
+              spr_gpr0_state <= spr_bus_we_l ? SPR_GPR0_WE_STRB : SPR_GPR0_READ_MX;
+            end
+          end
+
+          // write strobe
+          SPR_GPR0_WE_STRB: begin
+            spr_gpr0_we_r  <= {NUM_GPRS{1'b0}};
+            spr_gpr0_state <= SPR_GPR0_ACK;
+          end
+
+          // latch data for read
+          SPR_GPR0_READ_MX: begin
+            spr_gpr0_state <= SPR_GPR0_ACK;
+          end
+
+          // done
+          SPR_GPR0_ACK: begin
+            spr_gpr0_state <= SPR_GPR0_WAITING;
+          end
+
+          default;
+        endcase
       end
     end // @ clock
 
-    assign spr_gpr_we        = spr_gpr_we_r;
-    assign spr_bus_dat_gpr_o = spr_bus_dat_gpr_r;
+    // registered output data: valid for 1-clock only with rised ACK
+    always @(posedge cpu_clk) begin
+      spr_bus_dat_gpr0_r <= gpr0_rdata_bus[spr_gpr0_addr & {RF_AW{spr_gpr0_read_mx_state}}];
+    end
 
-    // for port #1 we write result #1 and read by debug unit
-    wire               rfspr_p1_we    = wb_rfd1_wb_i | spr_gpr_we;
-    wire [(RF_AW-1):0] rfspr_p1_addr  = wb_rfd1_wb_i ? wb_rfd1_adr_i : spr_bus_addr_i[(RF_AW-1):0];
-    wire [(RF_DW-1):0] rfspr_p1_data  = wb_rfd1_wb_i ? wb_result1_i  : spr_bus_dat_i;
+  end
+  else begin : dbgu_disabled
 
+    // Write enables
+    assign spr_gpr0_we = {NUM_GPRS{1'b0}}; // DBGU disabled
+
+    // SPR data output
+    assign spr_bus_dat_gpr0_o = {RF_DW{1'b0}}; // DBGU disabled
+
+    // make ACK
+    reg    spr_bus_ack_gpr0_r;
+    assign spr_bus_ack_gpr0_o = spr_bus_ack_gpr0_r; // DBGU disabled
     // ---
-    mor1kx_dpram_en_w1st_sclk
+    always @(posedge cpu_clk) begin
+      if (cpu_rst)
+        spr_bus_ack_gpr0_r <= 1'b0;
+      else if (spr_bus_ack_gpr0_r)
+        spr_bus_ack_gpr0_r <= 1'b0;
+      else if (spr_gpr0_cs)
+        spr_bus_ack_gpr0_r <= 1'b1;
+    end
+
+  end
+  endgenerate
+
+  //------------------//
+  // GPRs of Group #0 //
+  //------------------//
+
+  // GPR[0] is always zero.
+  assign gpr0_rdata_bus[0] = {RF_DW{1'b0}};
+  
+  generate
+  genvar ic;
+  for (ic = 1; ic < NUM_GPRS; ic = ic + 1) begin: gpr_gen
+    // GPR instances
+    single_gpr
     #(
-      .ADDR_WIDTH     (RF_AW),
+      .OPTION_OPERAND_WIDTH (OPTION_OPERAND_WIDTH) // SINGLE GPR
+    )
+    u_single_gpr
+    (
+      // clock
+      .cpu_clk          (cpu_clk), // SINGLE GPR
+      // write back D1
+      .wrbk_rfd1_we1h_i (wrbk_rfd1_we1h_i[ic] & (~pipeline_flush_i)), // SINGLE GPR
+      .wrbk_result1_i   (wrbk_result1_i), // SINGLE GPR
+      // write back D2 for FPU64
+      .wrbk_rfd2_we1h_i (wrbk_rfd2_we1h_i[ic] & (~pipeline_flush_i)), // SINGLE GPR
+      .wrbk_result2_i   (wrbk_result2_i), // SINGLE GPR
+      // write by SPR BUS access
+      .spr_gpr0_we_i    (spr_gpr0_we[ic]), // SINGLE GPR
+      .spr_gpr0_wdata_i (spr_bus_dat_l), // SINGLE GPR
+      // content
+      .gpr_o            (gpr0_rdata_bus[ic]) // SINGLE GPR
+    );
+  end // gpr_gen
+  endgenerate
+
+
+  //--------------//
+  // GPR [S]hadow //
+  //--------------//
+
+  `include "mor1kx_utils.vh"
+
+  function integer calc_shadow_addr_width;
+    input integer rf_addr_width;
+    input integer rf_num_shadow_gpr;
+    calc_shadow_addr_width  = rf_addr_width +
+                              ((rf_num_shadow_gpr == 1) ? 1 :
+                               `clog2(rf_num_shadow_gpr));
+  endfunction
+
+  localparam SHADOW_AW = calc_shadow_addr_width(OPTION_RF_ADDR_WIDTH,
+                                                OPTION_RF_NUM_SHADOW_GPR);
+
+  // GPR[S]hadow chip select
+  // low bits of SPR-address are used for addressing GPR[S]hadow
+  wire spr_gprS_cs = spr_bus_stb_r &                  // GPR[S]hadow access
+                     (spr_bus_addr_r[15:9] == 7'd2) & // GPR[S]hadow access, same to OR1K_SPR_GPR0_ADDR
+                     (spr_bus_addr_r[ 8:5] != 4'd0);  // GPR[S]hadow access
+
+  // We declare states or SPR BUS FSM here because some
+  // of EDA tools deprecate local parameters declaration
+  // inside of generate blocks.
+
+  localparam  [4:0] SPR_GPRS_WAITING = 5'b00001,
+                    SPR_GPRS_WE_STRB = 5'b00010,
+                    SPR_GPRS_RE_STRB = 5'b00100,
+                    SPR_GPRS_READ_MX = 5'b01000,
+                    SPR_GPRS_ACK     = 5'b10000;
+
+  generate
+  /* verilator lint_off WIDTH */
+  if (OPTION_RF_NUM_SHADOW_GPR > 0) begin : shadow_enabled
+  /* verilator lint_on WIDTH */
+
+    // SPR BUS FSM states
+    reg         [4:0] spr_gprS_state;
+
+    // Particular states
+    wire              spr_gprS_waiting_state = spr_gprS_state[0];
+    wire              spr_gprS_we_strb_state = spr_gprS_state[1];
+    wire              spr_gprS_re_strb_state = spr_gprS_state[2];
+    wire              spr_gprS_read_mx_state = spr_gprS_state[3];
+    assign            spr_bus_ack_gprS_o     = spr_gprS_state[4];
+
+    // Read data
+    reg [(RF_DW-1):0] spr_bus_dat_gprS_r;
+
+
+    // SPR BUS FSM
+    always @(posedge cpu_clk) begin
+      if (cpu_rst) begin
+        spr_gprS_state <= SPR_GPRS_WAITING;
+      end
+      else begin
+        // synthesis parallel_case
+        case (spr_gprS_state)
+          // waiting Shadow GPRs access
+          SPR_GPRS_WAITING: begin
+            if (spr_gprS_cs) begin
+              spr_gprS_state <= spr_bus_we_l ? SPR_GPRS_WE_STRB : SPR_GPRS_RE_STRB;
+            end
+          end
+
+          // write strobe
+          SPR_GPRS_WE_STRB: begin
+            spr_gprS_state <= SPR_GPRS_ACK;
+          end
+
+          // read strobe
+          SPR_GPRS_RE_STRB: begin
+            spr_gprS_state <= SPR_GPRS_READ_MX;
+          end
+
+          // latch data for read
+          SPR_GPRS_READ_MX: begin
+            spr_gprS_state <= SPR_GPRS_ACK;
+          end
+
+          // done
+          SPR_GPRS_ACK: begin
+            spr_gprS_state <= SPR_GPRS_WAITING;
+          end
+
+          default;
+        endcase
+      end
+    end // @ clock
+
+
+    // registered output data: valid for 1-clock only with rised ACK
+    wire [(RF_DW-1):0] rfS_dout;
+    // ---
+    always @(posedge cpu_clk) begin
+      spr_bus_dat_gprS_r <= {RF_DW{spr_gprS_read_mx_state}} & // SPR GPR[S]hadow read latch
+                            rfS_dout; // SPR GPR[S]hadow read latch
+    end
+    // ---
+    assign spr_bus_dat_gprS_o = spr_bus_dat_gprS_r; // SHADOW enabled
+
+
+    // Shadow RAM instance
+    mor1kx_spram_en_w1st
+    #(
+      .ADDR_WIDTH     (SHADOW_AW),
       .DATA_WIDTH     (RF_DW),
       .CLEAR_ON_INIT  (OPTION_RF_CLEAR_ON_INIT)
     )
-    rfspr
+    rfShadow
     (
-      // common clock
-      .clk    (clk),
-      // port "a"
-      .en_a   ((rfspr_p1_we | spr_gpr_re_r) & ~pipeline_flush_i),
-      .we_a   (rfspr_p1_we),
-      .addr_a (rfspr_p1_addr),
-      .din_a  (rfspr_p1_data),
-      .dout_a (rfspr_dout),
-      // port "b": just write result #2
-      .en_b   (wb_rfd2_wb_i & ~pipeline_flush_i),
-      .we_b   (wb_rfd2_wb_i),
-      .addr_b (wb_rfd2_adr_i),
-      .din_b  (wb_result2_i),
-      .dout_b ()
+      // clock
+      .clk    (cpu_clk),
+      // port
+      .en     (spr_gprS_we_strb_state | spr_gprS_re_strb_state),
+      .we     (spr_gprS_we_strb_state),
+      .addr   (spr_bus_addr_r[(SHADOW_AW-1):0]),
+      .din    (spr_bus_dat_l),
+      .dout   (rfS_dout)
     );
 
   end
-  else begin : rfspr_disabled
+  else begin: shadow_disabled
 
     // make ACK
-    always @(posedge clk `OR_ASYNC_RST) begin
-      if (rst)
-        spr_bus_ack_gpr_o <= 1'b0;
-      else if (spr_bus_ack_gpr_o)
-        spr_bus_ack_gpr_o <= 1'b0;
-      else if (spr_gpr_cs)
-        spr_bus_ack_gpr_o <= 1'b1;
+    reg    spr_bus_ack_gprS_r;
+    assign spr_bus_ack_gprS_o = spr_bus_ack_gprS_r; // SHADOW disabled
+    // ---
+    always @(posedge cpu_clk) begin
+      if (cpu_rst)
+        spr_bus_ack_gprS_r <= 1'b0;
+      else if (spr_bus_ack_gprS_r)
+        spr_bus_ack_gprS_r <= 1'b0;
+      else if (spr_gprS_cs)
+        spr_bus_ack_gprS_r <= 1'b1;
     end
 
     // SPR data output
-    assign spr_bus_dat_gpr_o = {RF_DW{1'b0}};
-
-    // Write by SPR-bus command
-    assign spr_gpr_we = 1'b0;
+    assign spr_bus_dat_gprS_o = {RF_DW{1'b0}}; // SHADOW disabled
 
   end
   endgenerate
@@ -433,63 +505,156 @@ module mor1kx_rf_marocchino
   // DECODE stage (dcod_*) //
   //-----------------------//
 
-  // Common WB-to-DECODE hazards detection (sorted by detsination)
-  //  # D1 related
-  assign dcod_wb2dec_eq_adr_d1a1_o = (wb_rfd1_adr_i == dcod_rfa1_adr_i);
-  wire   dcod_wb2dec_hazard_d1a1   = dcod_wb2dec_eq_adr_d1a1_o & wb_rfd1_wb_i & dcod_rfa1_req_i;
-  //---
-  assign dcod_wb2dec_eq_adr_d1b1_o = (wb_rfd1_adr_i == dcod_rfb1_adr_i);
-  wire   dcod_wb2dec_hazard_d1b1   = dcod_wb2dec_eq_adr_d1b1_o & wb_rfd1_wb_i & dcod_rfb1_req_i;
-  //---
-  assign dcod_wb2dec_eq_adr_d1a2_o = (wb_rfd1_adr_i == dcod_rfa2_adr_i);
-  wire   dcod_wb2dec_hazard_d1a2   = dcod_wb2dec_eq_adr_d1a2_o & wb_rfd1_wb_i & dcod_rfa2_req_i;
-  //---
-  assign dcod_wb2dec_eq_adr_d1b2_o = (wb_rfd1_adr_i == dcod_rfb2_adr_i);
-  wire   dcod_wb2dec_hazard_d1b2   = dcod_wb2dec_eq_adr_d1b2_o & wb_rfd1_wb_i & dcod_rfb2_req_i;
-  //  # D2 related
-  wire dcod_wb2dec_hazard_d2a1 = (wb_rfd2_adr_i == dcod_rfa1_adr_i) & wb_rfd2_wb_i & dcod_rfa1_req_i;
-  wire dcod_wb2dec_hazard_d2b1 = (wb_rfd2_adr_i == dcod_rfb1_adr_i) & wb_rfd2_wb_i & dcod_rfb1_req_i;
-  wire dcod_wb2dec_hazard_d2a2 = (wb_rfd2_adr_i == dcod_rfa2_adr_i) & wb_rfd2_wb_i & dcod_rfa2_req_i;
-  wire dcod_wb2dec_hazard_d2b2 = (wb_rfd2_adr_i == dcod_rfb2_adr_i) & wb_rfd2_wb_i & dcod_rfb2_req_i;
+  // D1A1 and D2A1 forwarding conditions
+  //  # WriteBack-to-Fetch
+  wire wrb2fth_d1a1_fwd = wrbk_rfd1_we_i & (wrbk_rfd1_adr_i == fetch_rfa1_adr_i);
+  wire wrb2fth_d2a1_fwd = wrbk_rfd2_we_i & (wrbk_rfd2_adr_i == fetch_rfa1_adr_i);
+  //  # WriteBack-to-Decode
+  wire wrb2dec_d1a1_fwd = wrbk_rfd1_we_i & (wrbk_rfd1_adr_i == dcod_rfa1_adr_i);
+  wire wrb2dec_d2a1_fwd = wrbk_rfd2_we_i & (wrbk_rfd2_adr_i == dcod_rfa1_adr_i);
+  // Registering RFA1-output
+  reg [RF_DW-1:0] dcod_rfa1_r;
+  // ---
+  always @(posedge cpu_clk) begin
+    if (padv_dcod_i) begin
+      dcod_rfa1_r <= wrb2fth_d1a1_fwd ? wrbk_result1_i :
+                     (wrb2fth_d2a1_fwd ? wrbk_result2_i :
+                                          gpr0_rdata_bus[fetch_rfa1_adr_i]);
+    end
+    else begin
+      dcod_rfa1_r <= wrb2dec_d1a1_fwd ? wrbk_result1_i :
+                     (wrb2dec_d2a1_fwd ? wrbk_result2_i :
+                                          dcod_rfa1_r);
+    end
+  end // at cpu clock
+  // Forwarding mux for RFA1-output  
+  always @(dcod_op_jal_i    or pc_decode_i    or
+           wrb2dec_d1a1_fwd or wrbk_result1_i or
+           wrb2dec_d2a1_fwd or wrbk_result2_i or
+           dcod_rfa1_r) begin
+    // synthesis parallel_case
+    casez ({dcod_op_jal_i, wrb2dec_d1a1_fwd, wrb2dec_d2a1_fwd})
+      3'b1??:  dcod_rfa1_o = pc_decode_i;
+      3'b01?:  dcod_rfa1_o = wrbk_result1_i;
+      3'b001:  dcod_rfa1_o = wrbk_result2_i;
+      default: dcod_rfa1_o = dcod_rfa1_r;
+    endcase
+  end
 
+  // D1B1 and D2B1 forwarding conditions
+  //  # WriteBack-to-Fetch
+  wire wrb2fth_d1b1_fwd = wrbk_rfd1_we_i & (wrbk_rfd1_adr_i == fetch_rfb1_adr_i);
+  wire wrb2fth_d2b1_fwd = wrbk_rfd2_we_i & (wrbk_rfd2_adr_i == fetch_rfb1_adr_i);
+  //  # WriteBack-to-Decode
+  wire wrb2dec_d1b1_fwd = wrbk_rfd1_we_i & (wrbk_rfd1_adr_i == dcod_rfb1_adr_i);
+  wire wrb2dec_d2b1_fwd = wrbk_rfd2_we_i & (wrbk_rfd2_adr_i == dcod_rfb1_adr_i);
+  // Registering RFB1-output
+  reg [RF_DW-1:0] dcod_rfb1_r;
+  // ---
+  always @(posedge cpu_clk) begin
+    if (padv_dcod_i) begin
+      dcod_rfb1_r <= wrb2fth_d1b1_fwd ? wrbk_result1_i :
+                     (wrb2fth_d2b1_fwd ? wrbk_result2_i :
+                                          gpr0_rdata_bus[fetch_rfb1_adr_i]);
+    end
+    else begin
+      dcod_rfb1_r <= wrb2dec_d1b1_fwd ? wrbk_result1_i :
+                     (wrb2dec_d2b1_fwd ? wrbk_result2_i :
+                                          dcod_rfb1_r);
+    end
+  end // at cpu clock
+  // Forwarding mux RFB1-output
+  always @(dcod_op_jal_i        or
+           dcod_immediate_sel_i or dcod_immediate_i or
+           wrb2dec_d1b1_fwd     or wrbk_result1_i   or
+           wrb2dec_d2b1_fwd     or wrbk_result2_i   or
+           dcod_rfb1_r) begin
+    // synthesis parallel_case
+    casez ({dcod_op_jal_i,    dcod_immediate_sel_i,
+            wrb2dec_d1b1_fwd, wrb2dec_d2b1_fwd})
+      4'b1???: dcod_rfb1_o = 4'd8; // (FEATURE_DELAY_SLOT == "ENABLED")
+      4'b01??: dcod_rfb1_o = dcod_immediate_i;
+      4'b001?: dcod_rfb1_o = wrbk_result1_i;
+      4'b0001: dcod_rfb1_o = wrbk_result2_i;
+      default: dcod_rfb1_o = dcod_rfb1_r;
+    endcase
+  end
 
-  // Muxing and forwarding RFA1-output
-  assign dcod_rfa1_o = dcod_op_jal_i           ? pc_decode_i  :
-                       dcod_wb2dec_hazard_d1a1 ? wb_result1_i :
-                       dcod_wb2dec_hazard_d2a1 ? wb_result2_i :
-                       dcod_rfa1_adr_i[0]      ? rfa_odd_dout :
-                                                 rfa_even_dout;
-
-  // Muxing and forwarding RFB1-output
-  assign dcod_rfb1_o = dcod_op_jal_i           ? 4'd8             : // (FEATURE_DELAY_SLOT == "ENABLED")
-                       dcod_immediate_sel_i    ? dcod_immediate_i :
-                       dcod_wb2dec_hazard_d1b1 ? wb_result1_i     :
-                       dcod_wb2dec_hazard_d2b1 ? wb_result2_i     :
-                       dcod_rfb1_adr_i[0]      ? rfb_odd_dout     :
-                                                 rfb_even_dout;
-
+  // D1A2 and D2A2 forwarding conditions
+  //  # WriteBack-to-Fetch
+  wire wrb2fth_d1a2_fwd = wrbk_rfd1_we_i & (wrbk_rfd1_adr_i == fetch_rfa2_adr_i);
+  wire wrb2fth_d2a2_fwd = wrbk_rfd2_we_i & (wrbk_rfd2_adr_i == fetch_rfa2_adr_i);
+  //  # WriteBack-to-Decode
+  wire wrb2dec_d1a2_fwd = wrbk_rfd1_we_i & (wrbk_rfd1_adr_i == dcod_rfa2_adr_i);
+  wire wrb2dec_d2a2_fwd = wrbk_rfd2_we_i & (wrbk_rfd2_adr_i == dcod_rfa2_adr_i);
+  // Registering RFA2-output
+  reg [RF_DW-1:0] dcod_rfa2_r;
+  // ---
+  always @(posedge cpu_clk) begin
+    if (padv_dcod_i) begin
+      dcod_rfa2_r <= wrb2fth_d1a2_fwd ? wrbk_result1_i :
+                     (wrb2fth_d2a2_fwd ? wrbk_result2_i :
+                                          gpr0_rdata_bus[fetch_rfa2_adr_i]);
+    end
+    else begin
+      dcod_rfa2_r <= wrb2dec_d1a2_fwd ? wrbk_result1_i :
+                     (wrb2dec_d2a2_fwd ? wrbk_result2_i :
+                                          dcod_rfa2_r);
+    end
+  end // at cpu clock
   // Muxing and forwarding RFA2-output
-  assign dcod_rfa2_o = dcod_wb2dec_hazard_d1a2 ? wb_result1_i :
-                       dcod_wb2dec_hazard_d2a2 ? wb_result2_i :
-                       dcod_rfa2_adr_i[0]      ? rfa_odd_dout :
-                                                 rfa_even_dout;
+  always @(wrb2dec_d1a2_fwd or wrbk_result1_i or
+           wrb2dec_d2a2_fwd or wrbk_result2_i or
+           dcod_rfa2_r) begin
+    // synthesis parallel_case
+    casez ({wrb2dec_d1a2_fwd, wrb2dec_d2a2_fwd})
+      2'b1?:   dcod_rfa2_o = wrbk_result1_i;
+      2'b01:   dcod_rfa2_o = wrbk_result2_i;
+      default: dcod_rfa2_o = dcod_rfa2_r;
+    endcase
+  end
 
+  // D1B2 and D2B2 forwarding conditions
+  //  # WriteBack-to-Fetch
+  wire wrb2fth_d1b2_fwd = wrbk_rfd1_we_i & (wrbk_rfd1_adr_i == fetch_rfb2_adr_i);
+  wire wrb2fth_d2b2_fwd = wrbk_rfd2_we_i & (wrbk_rfd2_adr_i == fetch_rfb2_adr_i);
+  //  # WriteBack-to-Decode
+  wire wrb2dec_d1b2_fwd = wrbk_rfd1_we_i & (wrbk_rfd1_adr_i == dcod_rfb2_adr_i);
+  wire wrb2dec_d2b2_fwd = wrbk_rfd2_we_i & (wrbk_rfd2_adr_i == dcod_rfb2_adr_i);
+  // Registering RFB2-output
+  reg [RF_DW-1:0] dcod_rfb2_r;
+  // ---
+  always @(posedge cpu_clk) begin
+    if (padv_dcod_i) begin
+      dcod_rfb2_r <= wrb2fth_d1b2_fwd ? wrbk_result1_i :
+                     (wrb2dec_d2b2_fwd ? wrbk_result2_i :
+                                          gpr0_rdata_bus[fetch_rfb2_adr_i]);
+    end
+    else begin
+      dcod_rfb2_r <= wrb2dec_d1b2_fwd ? wrbk_result1_i :
+                     (wrb2dec_d2b2_fwd ? wrbk_result2_i :
+                                          dcod_rfb2_r);
+    end
+  end // at cpu clock
   // Muxing and forwarding RFB2-output
-  assign dcod_rfb2_o = dcod_wb2dec_hazard_d1b2 ? wb_result1_i :
-                       dcod_wb2dec_hazard_d2b2 ? wb_result2_i :
-                       dcod_rfb2_adr_i[0]      ? rfb_odd_dout :
-                                                 rfb_even_dout;
+  always @(wrb2dec_d1b2_fwd or wrbk_result1_i or
+           wrb2dec_d2b2_fwd or wrbk_result2_i or
+           dcod_rfb2_r) begin
+    // synthesis parallel_case
+    casez ({wrb2dec_d1b2_fwd, wrb2dec_d2b2_fwd})
+      2'b1?:   dcod_rfb2_o = wrbk_result1_i;
+      2'b01:   dcod_rfb2_o = wrbk_result2_i;
+      default: dcod_rfb2_o = dcod_rfb2_r;
+    endcase
+  end
 
 
   // Special case for l.jr/l.jalr
-  //   (a) by default these instructions require B1 operand, so we implemented
-  //       simlified multiplexor here.
-  //   (b) the output is used next time in DECODE to form final branch target
-  //   (c) in OMAN pipeline is stalled till B1 completion
-  wire   dcod_wb2dec_hazard_d1b1_jr = dcod_wb2dec_eq_adr_d1b1_o & wb_rfd1_wb_i;
-  // ---
-  assign dcod_rfb1_jr_o = dcod_wb2dec_hazard_d1b1_jr ? wb_result1_i :
-                          dcod_rfb1_adr_i[0]         ? rfb_odd_dout :
-                                                       rfb_even_dout;
+  //   (a) By default these instructions require B1 operand,
+  //       so we implemented simlified path here
+  //   (b) The output is used next clock to DECODE to form
+  //       registered l.jr/l.jalr command
+  //   (c) IFETCH generates bubbles till B1 completion
+  assign dcod_rfb1_jr_o = dcod_rfb1_r;
 
 endmodule // mor1kx_rf_marocchino

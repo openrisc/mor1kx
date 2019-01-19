@@ -61,13 +61,13 @@ module mor1kx_store_buffer
      if (rst)
        write_pointer <= 0;
      else if (write_i)
-       write_pointer <= write_pointer + 1;
+       write_pointer <= write_pointer + 1'd1;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        read_pointer <= 0;
      else if (read_i)
-       read_pointer <= read_pointer + 1;
+       read_pointer <= read_pointer + 1'd1;
 
    mor1kx_simple_dpram_sclk
      #(

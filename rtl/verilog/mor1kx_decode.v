@@ -114,6 +114,7 @@ module mor1kx_decode
     output 			      decode_op_shift_o,
     output 			      decode_op_ffl1_o,
     output 			      decode_op_movhi_o,
+    output 			      decode_op_ext_o,
 
     // Sync operations
     output                            decode_op_msync_o,
@@ -263,6 +264,11 @@ module mor1kx_decode
 
    assign decode_op_movhi_o = opc_insn == `OR1K_OPCODE_MOVHI;
 
+   assign decode_op_ext_o = opc_insn == `OR1K_OPCODE_ALU &&
+			    (opc_alu == `OR1K_ALU_OPC_EXTBH ||
+			     opc_alu == `OR1K_ALU_OPC_EXTW) &&
+			    (FEATURE_EXT!="NONE");
+
    // FPU related
    generate
      /* verilator lint_off WIDTH */
@@ -295,7 +301,7 @@ module mor1kx_decode
    assign decode_rfa_adr_o = decode_insn_i[`OR1K_RA_SELECT];
    assign decode_rfb_adr_o = decode_insn_i[`OR1K_RB_SELECT];
 
-   assign decode_rfd_adr_o = decode_op_jal_o ? 9 :
+   assign decode_rfd_adr_o = decode_op_jal_o ? 5'd9 :
 			     decode_insn_i[`OR1K_RD_SELECT];
 
    // Immediate in l.mtspr is broken up, reassemble

@@ -96,6 +96,7 @@ module mor1kx_lsu_cappuccino
     input 			      dc_enable_i,
     input 			      dmmu_enable_i,
     input 			      supervisor_mode_i,
+    output 			      dc_hit_o,
 
     // interface to data bus
     output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
@@ -141,17 +142,17 @@ module mor1kx_lsu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0]   lsu_sdat;
    wire				     lsu_ack;
 
-   wire 			     dc_err;
    wire 			     dc_ack;
+   wire 			     dc_err;
    wire [31:0] 			     dc_ldat;
    wire [31:0] 			     dc_sdat;
    wire [31:0] 			     dc_adr;
    wire [31:0] 			     dc_adr_match;
-   wire 			     dc_req;
    wire 			     dc_we;
    wire [3:0] 			     dc_bsel;
 
    wire 			     dc_access;
+   wire 			     dc_hit;
    wire 			     dc_refill_allowed;
    wire 			     dc_refill;
    wire 			     dc_refill_req;
@@ -635,8 +636,10 @@ end else begin
    assign store_buffer_empty = 1'b1;
 
    reg store_buffer_full_r;
-   always @(posedge clk)
-     if (store_buffer_write)
+   always @(posedge clk `OR_ASYNC_RST)
+     if (rst)
+       store_buffer_full_r <= 0;
+     else if (store_buffer_write)
        store_buffer_full_r <= 1;
      else if (write_done)
        store_buffer_full_r <= 0;
@@ -662,13 +665,13 @@ endgenerate
 			 {dmmu_phys_addr[OPTION_OPERAND_WIDTH-1:2],2'b0} :
 			 {ctrl_lsu_adr_i[OPTION_OPERAND_WIDTH-1:2],2'b0};
 
-   assign dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall &
-		   !(dbus_atomic & dbus_we & !atomic_reserve);
    assign dc_refill_allowed = !(ctrl_op_lsu_store_i | state == WRITE) &
 			      !dc_snoop_hit & !snoop_valid;
 
 generate
 if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
+   wire dc_req = ctrl_op_lsu & dc_access & !access_done & !dbus_stall &
+		   !(dbus_atomic & dbus_we & !atomic_reserve);
    if (OPTION_DCACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
       assign dc_access =  ctrl_op_lsu_store_i | dc_enabled &
 			 !(dmmu_cache_inhibit & dmmu_enable_i);
@@ -693,6 +696,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .refill_o			(dc_refill),
 	    .refill_req_o		(dc_refill_req),
 	    .refill_done_o		(dc_refill_done),
+            .cache_hit_o                (dc_hit),
 	    .cpu_err_o			(dc_err),
 	    .cpu_ack_o			(dc_ack),
 	    .cpu_dat_o			(dc_ldat),
@@ -733,6 +737,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .refill_o			(dc_refill),		 // Templated
 	    .refill_req_o		(dc_refill_req),	 // Templated
 	    .refill_done_o		(dc_refill_done),	 // Templated
+	    .cache_hit_o		(dc_hit),		 // Templated
 	    .cpu_err_o			(dc_err),		 // Templated
 	    .cpu_ack_o			(dc_ack),		 // Templated
 	    .cpu_dat_o			(dc_ldat),		 // Templated
@@ -766,11 +771,13 @@ end else begin
    assign dc_refill = 0;
    assign dc_refill_done = 0;
    assign dc_refill_req = 0;
-   assign dc_err = 0;
    assign dc_ack = 0;
+   assign dc_err = 0;
    assign dc_bsel = 0;
    assign dc_we = 0;
    assign dc_snoop_hit = 0;
+   assign dc_hit_o = 0;
+   assign dc_ldat = 0;
 end
 
 endgenerate

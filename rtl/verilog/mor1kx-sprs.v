@@ -17,7 +17,7 @@
 //
 // Addresses
 //
-`define OR1K_SPR_SYS_BASE       {5'd0}
+`define OR1K_SPR_SYS_BASE       {4'd0}
 `define OR1K_SPR_VR_ADDR        {5'd0,11'd0}
 `define OR1K_SPR_UPR_ADDR       {5'd0,11'd1}
 `define OR1K_SPR_CPUCFGR_ADDR   {5'd0,11'd2}
@@ -44,7 +44,7 @@
 `define OR1K_SPR_NUMCORES_ADDR  {5'd0,11'd129}
 `define OR1K_SPR_GPR0_ADDR      {5'd0,11'd1024}
 
-`define OR1K_SPR_DMMU_BASE      {5'd1}
+`define OR1K_SPR_DMMU_BASE      {4'd1}
 `define OR1K_SPR_DMMUCR_ADDR    {5'd1,11'd0}
 `define OR1K_SPR_DMMUPR_ADDR    {5'd1,11'd1}
 `define OR1K_SPR_DTLBEIR_ADDR   {5'd1,11'd2}
@@ -59,7 +59,7 @@
 `define OR1K_SPR_DTLBW3MR0_ADDR {5'd1,11'd1280}
 `define OR1K_SPR_DTLBW3TR0_ADDR {5'd1,11'd1408}
 
-`define OR1K_SPR_IMMU_BASE      {5'd2}
+`define OR1K_SPR_IMMU_BASE      {4'd2}
 `define OR1K_SPR_IMMUCR_ADDR    {5'd2,11'd0}
 `define OR1K_SPR_IMMUPR_ADDR    {5'd2,11'd1}
 `define OR1K_SPR_ITLBEIR_ADDR   {5'd2,11'd2}
@@ -74,7 +74,7 @@
 `define OR1K_SPR_ITLBW3MR0_ADDR {5'd2,11'd1280}
 `define OR1K_SPR_ITLBW3TR0_ADDR {5'd2,11'd1408}
 
-`define OR1K_SPR_DC_BASE        {5'd3}
+`define OR1K_SPR_DC_BASE        {4'd3}
 `define OR1K_SPR_DCCR_ADDR      {5'd3,11'd0}
 `define OR1K_SPR_DCBPR_ADDR     {5'd3,11'd1}
 `define OR1K_SPR_DCBFR_ADDR     {5'd3,11'd2}
@@ -82,17 +82,17 @@
 `define OR1K_SPR_DCBWR_ADDR     {5'd3,11'd4}
 `define OR1K_SPR_DCBLR_ADDR     {5'd3,11'd5}
 
-`define OR1K_SPR_IC_BASE        {5'd4}
+`define OR1K_SPR_IC_BASE        {4'd4}
 `define OR1K_SPR_ICCR_ADDR      {5'd4,11'd0}
 `define OR1K_SPR_ICBPR_ADDR     {5'd4,11'd1}
 `define OR1K_SPR_ICBIR_ADDR     {5'd4,11'd2}
 `define OR1K_SPR_ICBLR_ADDR     {5'd4,11'd3}
 
-`define OR1K_SPR_MAC_BASE       {5'd5}
+`define OR1K_SPR_MAC_BASE       {4'd5}
 `define OR1K_SPR_MACLO_ADDR     {5'd5,11'd1}
 `define OR1K_SPR_MACHI_ADDR     {5'd5,11'd2}
 
-`define OR1K_SPR_DU_BASE        {5'd6}
+`define OR1K_SPR_DU_BASE        {4'd6}
 `define OR1K_SPR_DVR0_ADDR      {5'd6,11'd0}
 `define OR1K_SPR_DCR0_ADDR      {5'd6,11'd8}
 `define OR1K_SPR_DMR1_ADDR      {5'd6,11'd16}
@@ -101,22 +101,36 @@
 `define OR1K_SPR_DSR_ADDR       {5'd6,11'd20}
 `define OR1K_SPR_DRR_ADDR       {5'd6,11'd21}
 
-`define OR1K_SPR_PC_BASE        {5'd7}
+`define OR1K_SPR_PC_BASE        {4'd7}
 `define OR1K_SPR_PCCR0_ADDR     {5'd7,11'd0}
+`define OR1K_SPR_PCCR1_ADDR     {5'd7,11'd1}
+`define OR1K_SPR_PCCR2_ADDR     {5'd7,11'd2}
+`define OR1K_SPR_PCCR3_ADDR     {5'd7,11'd3}
+`define OR1K_SPR_PCCR4_ADDR     {5'd7,11'd4}
+`define OR1K_SPR_PCCR5_ADDR     {5'd7,11'd5}
+`define OR1K_SPR_PCCR6_ADDR     {5'd7,11'd6}
+`define OR1K_SPR_PCCR7_ADDR     {5'd7,11'd7}
 `define OR1K_SPR_PCMR0_ADDR     {5'd7,11'd8}
+`define OR1K_SPR_PCMR1_ADDR     {5'd7,11'd9}
+`define OR1K_SPR_PCMR2_ADDR     {5'd7,11'd10}
+`define OR1K_SPR_PCMR3_ADDR     {5'd7,11'd11}
+`define OR1K_SPR_PCMR4_ADDR     {5'd7,11'd12}
+`define OR1K_SPR_PCMR5_ADDR     {5'd7,11'd13}
+`define OR1K_SPR_PCMR6_ADDR     {5'd7,11'd14}
+`define OR1K_SPR_PCMR7_ADDR     {5'd7,11'd15}
 
-`define OR1K_SPR_PM_BASE        {5'd8}
+`define OR1K_SPR_PM_BASE        {4'd8}
 `define OR1K_SPR_PMR_ADDR       {5'd8,11'd0}
 
-`define OR1K_SPR_PIC_BASE       {5'd9}
+`define OR1K_SPR_PIC_BASE       {4'd9}
 `define OR1K_SPR_PICMR_ADDR     {5'd9,11'd0}
 `define OR1K_SPR_PICSR_ADDR     {5'd9,11'd2}
 
-`define OR1K_SPR_TT_BASE        {5'd10}
+`define OR1K_SPR_TT_BASE        {4'd10}
 `define OR1K_SPR_TTMR_ADDR      {5'd10,11'd0}
 `define OR1K_SPR_TTCR_ADDR      {5'd10,11'd1}
 
-`define OR1K_SPR_FPU_BASE       {5'd11}
+`define OR1K_SPR_FPU_BASE       {4'd11}
 
 //
 // Register bit defines
@@ -335,7 +349,27 @@
 `define OR1K_FPCSR_MASK_DZF   20
 // bus select
 `define OR1K_FPCSR_MASK_ALL  `OR1K_FPCSR_MASK_DZF:`OR1K_FPCSR_MASK_OVF
+// reset value.
+`define OR1K_FPCSR_MASK_RESET_VALUE `OR1K_FPCSR_ALLF_SIZE'd0
 
+// PCU PCMR bits
+`define OR1K_PCMR_CP     0
+`define OR1K_PCMR_RSVD_1 1
+`define OR1K_PCMR_CISM   2
+`define OR1K_PCMR_CIUM   3
+`define OR1K_PCMR_LA     4
+`define OR1K_PCMR_SA     5
+`define OR1K_PCMR_IF     6
+`define OR1K_PCMR_DCM    7
+`define OR1K_PCMR_ICM    8
+`define OR1K_PCMR_IFS    9
+`define OR1K_PCMR_LSUS   10
+`define OR1K_PCMR_BS     11
+`define OR1K_PCMR_DTLBM  12
+`define OR1K_PCMR_ITLBM  13
+`define OR1K_PCMR_DDS    14
+`define OR1K_PCMR_WPE    25:15
+`define OR1K_PCMR_RSVD_2 31:26
 
 // Implementation-specific SPR defines
 `define MOR1KX_SPR_SR_WIDTH 16

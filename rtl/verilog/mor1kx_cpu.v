@@ -46,6 +46,7 @@ module mor1kx_cpu
     parameter FEATURE_TIMER		= "ENABLED",
     parameter FEATURE_DEBUGUNIT		= "NONE",
     parameter FEATURE_PERFCOUNTERS	= "NONE",
+    parameter OPTION_PERFCOUNTERS_NUM	= 0,
     parameter FEATURE_MAC		= "NONE",
 
     parameter FEATURE_SYSCALL		= "ENABLED",
@@ -103,7 +104,8 @@ module mor1kx_cpu
 
     parameter FEATURE_MULTICORE = "NONE",
 
-    parameter FEATURE_TRACEPORT_EXEC = "NONE"
+    parameter FEATURE_TRACEPORT_EXEC = "NONE",
+    parameter FEATURE_BRANCH_PREDICTOR = "SIMPLE"
     )
    (
     input 			      clk,
@@ -142,12 +144,16 @@ module mor1kx_cpu
     input 			      du_stall_i,
     output 			      du_stall_o,
 
-    output 			     traceport_exec_valid_o,
-    output [31:0] 		     traceport_exec_pc_o,
+    output                            traceport_exec_valid_o,
+    output [31:0]                     traceport_exec_pc_o,
+    output                            traceport_exec_jb_o,
+    output                            traceport_exec_jal_o,
+    output                            traceport_exec_jr_o,
+    output [31:0]                     traceport_exec_jbtarget_o,
     output [`OR1K_INSN_WIDTH-1:0]     traceport_exec_insn_o,
     output [OPTION_OPERAND_WIDTH-1:0] traceport_exec_wbdata_o,
     output [OPTION_RF_ADDR_WIDTH-1:0] traceport_exec_wbreg_o,
-    output 			     traceport_exec_wben_o,
+    output                           traceport_exec_wben_o,
 
     // SPR accesses to external units (cache, mmu, etc.)
     output [15:0] 		      spr_bus_addr_o,
@@ -223,9 +229,11 @@ module mor1kx_cpu
 	     .FEATURE_TIMER(FEATURE_TIMER),
 	     .FEATURE_DEBUGUNIT(FEATURE_DEBUGUNIT),
 	     .FEATURE_PERFCOUNTERS(FEATURE_PERFCOUNTERS),
+	     .OPTION_PERFCOUNTERS_NUM(OPTION_PERFCOUNTERS_NUM),
 	     .FEATURE_MAC(FEATURE_MAC),
 	     .FEATURE_MULTICORE(FEATURE_MULTICORE),
 	     .FEATURE_TRACEPORT_EXEC(FEATURE_TRACEPORT_EXEC),
+	     .FEATURE_BRANCH_PREDICTOR(FEATURE_BRANCH_PREDICTOR),
 	     .FEATURE_SYSCALL(FEATURE_SYSCALL),
 	     .FEATURE_TRAP(FEATURE_TRAP),
 	     .FEATURE_RANGE(FEATURE_RANGE),
@@ -280,12 +288,16 @@ module mor1kx_cpu
 	    .du_dat_o			(du_dat_o[OPTION_OPERAND_WIDTH-1:0]),
 	    .du_ack_o			(du_ack_o),
 	    .du_stall_o			(du_stall_o),
-	    .traceport_exec_valid_o	(traceport_exec_valid_o),
-	    .traceport_exec_pc_o	(traceport_exec_pc_o[31:0]),
-	    .traceport_exec_insn_o	(traceport_exec_insn_o[`OR1K_INSN_WIDTH-1:0]),
-	    .traceport_exec_wbdata_o	(traceport_exec_wbdata_o[OPTION_OPERAND_WIDTH-1:0]),
-	    .traceport_exec_wbreg_o	(traceport_exec_wbreg_o[OPTION_RF_ADDR_WIDTH-1:0]),
-	    .traceport_exec_wben_o	(traceport_exec_wben_o),
+            .traceport_exec_valid_o     (traceport_exec_valid_o),
+            .traceport_exec_pc_o        (traceport_exec_pc_o[31:0]),
+            .traceport_exec_jb_o        (traceport_exec_jb_o),
+            .traceport_exec_jal_o       (traceport_exec_jal_o),
+            .traceport_exec_jr_o        (traceport_exec_jr_o),
+            .traceport_exec_jbtarget_o  (traceport_exec_jbtarget_o[31:0]),
+            .traceport_exec_insn_o      (traceport_exec_insn_o[`OR1K_INSN_WIDTH-1:0]),
+            .traceport_exec_wbdata_o    (traceport_exec_wbdata_o[OPTION_OPERAND_WIDTH-1:0]),
+            .traceport_exec_wbreg_o     (traceport_exec_wbreg_o[OPTION_RF_ADDR_WIDTH-1:0]),
+            .traceport_exec_wben_o      (traceport_exec_wben_o),
 	    .spr_bus_addr_o		(spr_bus_addr_o[15:0]),
 	    .spr_bus_we_o		(spr_bus_we_o),
 	    .spr_bus_stb_o		(spr_bus_stb_o),

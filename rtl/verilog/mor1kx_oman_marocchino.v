@@ -7,11 +7,11 @@
 //    a) collect various state signals from DECODE                 //
 //       and EXECUTE modules                                       //
 //    b) analisys of conflicts                                     //
-//    c) generate valid flags for advance DECODE and WB            //
+//    c) generate valid flags for advance DECODE and Write-Back    //
 //                                                                 //
 /////////////////////////////////////////////////////////////////////
 //                                                                 //
-//   Copyright (C) 2015 Andrey Bacherov                            //
+//   Copyright (C) 2015-2018 Andrey Bacherov                       //
 //                      avbacherov@opencores.org                   //
 //                                                                 //
 //      This Source Code Form is subject to the terms of the       //
@@ -23,1018 +23,1154 @@
 
 `include "mor1kx-defines.v"
 
+
+
+/////////////////////////////////////////////////////////////////////
+//  Single cell of [R]egisters [A]llocation [T]able                //
+/////////////////////////////////////////////////////////////////////
+
+module rat_cell
+#(
+  parameter OPTION_RF_ADDR_WIDTH =  5,
+  parameter DEST_EXTADR_WIDTH    =  3,
+  parameter GPR_ADDR             =  0
+)
+(
+  // clock & reset
+  input                                 cpu_clk,
+
+  // pipeline control
+  input                                 padv_exec_i,
+  input                                 padv_wrbk_i,
+  input                                 pipeline_flush_i,
+
+  // input allocation information
+  //  # allocated as D1
+  input                                 dcod_rfd1_we_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd1_adr_i,
+  //  # allocated as D2
+  input                                 dcod_rfd2_we_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd2_adr_i,
+  //  # allocation id
+  input         [DEST_EXTADR_WIDTH-1:0] dcod_extadr_i,
+
+  // input to clear allocation bits
+  input         [DEST_EXTADR_WIDTH-1:0] exec_extadr_i,
+
+  // output allocation information
+  output reg                            rat_rd1_alloc_o,      // allocated by D1
+  output reg                            rat_rd2_alloc_o,      // allocated by D2
+  output reg    [DEST_EXTADR_WIDTH-1:0] rat_extadr_o          // allocation ID
+);
+
+  localparam [OPTION_RF_ADDR_WIDTH-1:0] GPR_ADR = GPR_ADDR;
+
+  // set allocation flags
+  wire set_rd1_alloc = dcod_rfd1_we_i & (dcod_rfd1_adr_i == GPR_ADR);
+  wire set_rd2_alloc = dcod_rfd2_we_i & (dcod_rfd2_adr_i == GPR_ADR);
+  wire set_rdx_alloc = (set_rd1_alloc | set_rd2_alloc);
+
+  // condition to keep allocation flags at write-back
+  wire rat_alloc_at_wrbk     = (rat_extadr_o != exec_extadr_i);
+  // next values of allocation flags at write-back
+  wire rat_rd1_alloc_at_wrbk = rat_rd1_alloc_o & rat_alloc_at_wrbk;
+  wire rat_rd2_alloc_at_wrbk = rat_rd2_alloc_o & rat_alloc_at_wrbk;
+
+  // allocation flags
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i) begin
+      rat_rd1_alloc_o <= 1'b0;
+      rat_rd2_alloc_o <= 1'b0;
+    end
+    else begin
+      case ({padv_wrbk_i, padv_exec_i})
+        // keep state
+        2'b00: begin
+        end
+        // advance EXECUTE only
+        2'b01: begin
+          rat_rd1_alloc_o <= set_rdx_alloc ? set_rd1_alloc : rat_rd1_alloc_o;
+          rat_rd2_alloc_o <= set_rdx_alloc ? set_rd2_alloc : rat_rd2_alloc_o;
+        end
+        // advance WriteBack only
+        2'b10: begin
+          rat_rd1_alloc_o <= rat_rd1_alloc_at_wrbk;
+          rat_rd2_alloc_o <= rat_rd2_alloc_at_wrbk;
+        end
+        // advance EXECUTE and WriteBack simultaneously
+        2'b11: begin
+          rat_rd1_alloc_o <= set_rdx_alloc ? set_rd1_alloc : rat_rd1_alloc_at_wrbk;
+          rat_rd2_alloc_o <= set_rdx_alloc ? set_rd2_alloc : rat_rd2_alloc_at_wrbk;
+        end
+      endcase
+    end // regular update
+  end // at clock
+
+  // extention bits
+  always @(posedge cpu_clk) begin
+    if (padv_exec_i)
+      rat_extadr_o <= set_rdx_alloc ? dcod_extadr_i : rat_extadr_o;
+  end
+
+endmodule // rat_cell
+
+
+
+/////////////////////////////////////////////////////////////////////
+//  [O]rder [MAN]ager itself                                       //
+/////////////////////////////////////////////////////////////////////
+
 module mor1kx_oman_marocchino
 #(
   parameter OPTION_OPERAND_WIDTH = 32,
   parameter OPTION_RF_ADDR_WIDTH =  5,
-  parameter DEST_REG_ADDR_WIDTH  =  8, // OPTION_RF_ADDR_WIDTH + log2(Re-Ordering buffer width)
-  parameter DEST_EXT_ADDR_WIDTH  =  3  // log2(Re-Ordering buffer width)
+  parameter NUM_GPRS             = 32,  // (1 << OPTION_RF_ADDR_WIDTH)
+  parameter DEST_EXTADR_WIDTH    =  3,  // log2(Order Control Buffer depth)
+  // branch predictor parameters
+  parameter GSHARE_BITS_NUM      = 10
 )
 (
   // clock & reset
-  input                                 clk,
-  input                                 rst,
+  input                                 cpu_clk,
+  input                                 cpu_rst,
 
   // pipeline control
-  input                                 padv_decode_i,
-  input                                 padv_wb_i,
+  input                                 padv_dcod_i,
+  input                                 padv_exec_i,
+  input                                 padv_wrbk_i,
   input                                 pipeline_flush_i,
 
-  // DECODE non-latched flags to indicate next required unit
+  // fetched instruction is valid
+  input                                 fetch_valid_i,
+  input                                 fetch_delay_slot_i,
+
+  // for l.jr/l.jalr processing
+  input      [OPTION_RF_ADDR_WIDTH-1:0] fetch_rfb1_adr_i,
+
+  // DECODE flags to indicate next required unit
   // (The information is stored in order control buffer)
-  input                                 dcod_op_pass_exec_i,
-  input                                 dcod_jump_or_branch_i, // just to support IBUS error handling in CTRL
-  input                                 dcod_op_1clk_i,
+  input                                 dcod_op_push_wrbk_i,
+  input                                 fetch_op_jb_i,
   input                                 dcod_op_div_i,
   input                                 dcod_op_mul_i,
   input                                 dcod_op_fpxx_arith_i,
   input                                 dcod_op_ls_i,     // load / store (we need store for pushing LSU exceptions)
   input                                 dcod_op_rfe_i,    // l.rfe
   // for FPU3264
-  input                                 dcod_op_fp64_arith_i,
-  input                                 dcod_op_fp64_cmp_i,
+  input                                 dcod_op_fpxx_cmp_i,
 
-  // DECODE non-latched additional information related instruction
-  //  part #1: iformation stored in order control buffer
+  // DECODE additional information related instruction
+  //  part #1: information stored in order control buffer
   input      [OPTION_OPERAND_WIDTH-1:0] pc_decode_i,            // instruction virtual address
-  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd1_adr_i,        // WB address
-  input                                 dcod_rfd1_wb_i,         // instruction generates WB
-  input                                 dcod_carry_wb_i,        // instruction affects carry flag
-  input                                 dcod_flag_wb_mcycle_i,  // the multy-cycle instruction affects comparison flag
-  input                                 dcod_flag_wb_i,         // any instruction which affects comparison flag
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd1_adr_i,        // Write-Back address
+  input                                 dcod_rfd1_we_i,         // instruction generates Write-Back to D1
+  input                                 dcod_flag_we_i,         // any instruction which affects comparison flag
   input                                 dcod_delay_slot_i,      // instruction is in delay slot
-  //            for FPU64
-  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd2_adr_i,        // WB2 address
-  //  part #2: information required for data dependancy detection
-  input                                 dcod_rfa1_req_i,    // instruction requires operand A
-  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa1_adr_i,    // source of operand A
-  input                                 dcod_rfb1_req_i,    // instruction requires operand B
-  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb1_adr_i,    // source of operand B
-  //  part #3: information required for create enable for
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfd2_adr_i,        // Write-Back address for FPU64
+  input                                 dcod_rfd2_we_i,         // instruction generates Write-Back to D2
+  //  part #2: information required for create enable for
   //           for external (timer/ethernet/uart/etc) interrupts
   input                                 dcod_op_lsu_store_i,
-  input                                 dcod_op_mtspr_i,
   input                                 dcod_op_msync_i,
-  //  part #4: for MF(T)SPR processing
-  input                                 dcod_op_mfspr_i,
-  //  part #5: for FPU64, data dependancy detection
-  input                                 dcod_rfa2_req_i,
-  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa2_adr_i,
-  input                                 dcod_rfb2_req_i,
-  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb2_adr_i,
+  input                                 dcod_op_mXspr_i,
 
-  // collect busy flags from execution modules
-  input                                 op_1clk_busy_i,
-  input                                 mclk_busy_i,
-  input                                 lsu_busy_i,
-  input                                 wb_lsu_valid_miss_i,
-  input                                 wb_rfd1_wb_lsu_miss_i,
-  input                                 wb_flag_wb_lsu_miss_i,
+  // for unit hazard detection
+  input                                 dcod_op_1clk_i,
 
   // collect valid flags from execution modules
-  input                                 exec_op_1clk_i,
+  input                                 op_1clk_valid_i,
   input                                 div_valid_i,
   input                                 mul_valid_i,
   input                                 fpxx_arith_valid_i,
-  input                                 exec_op_fp64_cmp_i,
+  input                                 fpxx_cmp_valid_i,
   input                                 lsu_valid_i,
-
-  // D1 related WB-to-DECODE hazards for LSU WB miss processing
-  input                                 dcod_wb2dec_eq_adr_d1a1_i,
-  input                                 dcod_wb2dec_eq_adr_d1b1_i,
-  input                                 dcod_wb2dec_eq_adr_d1a2_i,
-  input                                 dcod_wb2dec_eq_adr_d1b2_i,
 
   // FETCH & DECODE exceptions
   input                                 fetch_except_ibus_err_i,
   input                                 fetch_except_ipagefault_i,
   input                                 fetch_except_itlb_miss_i,
-  input                                 fetch_an_except_i,
   input                                 dcod_except_illegal_i,
   input                                 dcod_except_syscall_i,
   input                                 dcod_except_trap_i,
+  input                                 dcod_an_except_fd_i,
 
   // OMAN-to-DECODE hazards
-  //  combined flag
-  output                                omn2dec_a_hazard_lsu_o,
-  output                                omn2dec_a_hazard_1clk_o,
-  output                                omn2dec_a_hazard_mclk_o,
-  //  by operands
-  output                                busy_hazard_d1a1_o,
-  output      [DEST_EXT_ADDR_WIDTH-1:0] busy_hazard_d1a1_adr_o,
-  output                                busy_hazard_d1b1_o,
-  output      [DEST_EXT_ADDR_WIDTH-1:0] busy_hazard_d1b1_adr_o,
-  output                                busy_hazard_d2a1_o,
-  output      [DEST_EXT_ADDR_WIDTH-1:0] busy_hazard_d2a1_adr_o,
-  output                                busy_hazard_d2b1_o,
-  output      [DEST_EXT_ADDR_WIDTH-1:0] busy_hazard_d2b1_adr_o,
-  output                                busy_hazard_d1a2_o,
-  output      [DEST_EXT_ADDR_WIDTH-1:0] busy_hazard_d1a2_adr_o,
-  output                                busy_hazard_d1b2_o,
-  output      [DEST_EXT_ADDR_WIDTH-1:0] busy_hazard_d1b2_adr_o,
-  output                                busy_hazard_d2a2_o,
-  output      [DEST_EXT_ADDR_WIDTH-1:0] busy_hazard_d2a2_adr_o,
-  output                                busy_hazard_d2b2_o,
-  output      [DEST_EXT_ADDR_WIDTH-1:0] busy_hazard_d2b2_adr_o,
+  //  # relative operand A1
+  input                                 dcod_rfa1_req_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa1_adr_i,
+  output                                omn2dec_hazard_d1a1_o,
+  output                                omn2dec_hazard_d2a1_o,
+  output        [DEST_EXTADR_WIDTH-1:0] omn2dec_extadr_dxa1_o,
+  //  # relative operand B1
+  input                                 dcod_rfb1_req_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb1_adr_i,
+  output                                omn2dec_hazard_d1b1_o,
+  output                                omn2dec_hazard_d2b1_o,
+  output        [DEST_EXTADR_WIDTH-1:0] omn2dec_extadr_dxb1_o,
+  //  # relative operand A2
+  input                                 dcod_rfa2_req_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfa2_adr_i,
+  output                                omn2dec_hazard_d1a2_o,
+  output                                omn2dec_hazard_d2a2_o,
+  output        [DEST_EXTADR_WIDTH-1:0] omn2dec_extadr_dxa2_o,
+  //  # relative operand B2
+  input                                 dcod_rfb2_req_i,
+  input      [OPTION_RF_ADDR_WIDTH-1:0] dcod_rfb2_adr_i,
+  output                                omn2dec_hazard_d1b2_o,
+  output                                omn2dec_hazard_d2b2_o,
+  output        [DEST_EXTADR_WIDTH-1:0] omn2dec_extadr_dxb2_o,
 
-  // EXEC-to-DECODE hazards
-  //  combined flag
-  output                                exe2dec_a_hazard_lsu_o,
-  output                                exe2dec_a_hazard_1clk_o,
-  output                                exe2dec_a_hazard_mclk_o,
-  //  by operands
-  output                                exe2dec_hazard_d1a1_o,
-  output                                exe2dec_hazard_d1b1_o,
-  output                                exe2dec_hazard_d2a1_o,
-  output                                exe2dec_hazard_d2b1_o,
-  output                                exe2dec_hazard_d1a2_o,
-  output                                exe2dec_hazard_d1b2_o,
-  output                                exe2dec_hazard_d2a2_o,
-  output                                exe2dec_hazard_d2b2_o,
-  // Data for resolving hazards by passing from DECODE to EXECUTE
-  output                                exec_rfd1_wb_o,
-  output                                exec_rfd2_wb_o,
-  output      [DEST_EXT_ADDR_WIDTH-1:0] exec_ext_adr_o,
+  // support in-1clk-unit forwarding
+  output        [DEST_EXTADR_WIDTH-1:0] dcod_extadr_o,
 
-  // Stall fetch by specific type of hazards
-  output reg                            oman_fd_an_except_o,
+  // [O]rder [C]ontrol [B]uffer statuses
+  output                                ocb_full_o,
+  output                                ocb_empty_o,
 
   // DECODE result could be processed by EXECUTE
-  output                                dcod_valid_o,
+  output                                dcod_free_o,
 
   // EXECUTE completed (desired unit is ready)
   output                                exec_valid_o,
 
-  // control WB latches of execution modules
-  output                                grant_wb_to_1clk_o,
-  output                                grant_wb_to_div_o,
-  output                                grant_wb_to_mul_o,
-  output                                grant_wb_to_fpxx_arith_o,
-  output                                grant_wb_to_lsu_o,
+  // control Write-Back latches of execution modules
+  output                                grant_wrbk_to_1clk_o,
+  output                                grant_wrbk_to_div_o,
+  output                                grant_wrbk_to_mul_o,
+  output                                grant_wrbk_to_fpxx_arith_o,
+  output                                grant_wrbk_to_lsu_o,
   // for FPU64
-  output                                grant_wb_to_fp64_cmp_o,
+  output                                grant_wrbk_to_fpxx_cmp_o,
 
   // Logic to support Jump / Branch taking
-  input                                 dcod_op_jr_i,   // l.jr/l.jalr require operand B (potentially hazard)
-  input                                 dcod_op_jimm_i, // l.j/l.jal target selector
-  input                                 dcod_op_bf_i,   // l.bf  require awaited flag
-  input                                 dcod_op_bnf_i,  // l.bnf require awaited flag
-  // pc-relative target
-  input      [OPTION_OPERAND_WIDTH-1:0] dcod_to_imm_target_i,
-  // register target
+  //  # from IFETCH
+  //    ## jump/branch variants
+  input                                 fetch_op_jimm_i,
+  input                                 fetch_op_jr_i,
+  input                                 fetch_op_bf_i,
+  input                                 fetch_op_bnf_i,
+  //    ## "to immediate driven target"
+  input      [OPTION_OPERAND_WIDTH-1:0] fetch_to_imm_target_i,
+  //  # target for l.jr / l.jalr
   input      [OPTION_OPERAND_WIDTH-1:0] dcod_rfb1_jr_i,
-  input      [OPTION_OPERAND_WIDTH-1:0] wb_result1_i,
-  // forwarding comparision flag for l.bf/l.bnf
-  output reg  [DEST_EXT_ADDR_WIDTH-1:0] dcod_ext_bits_o,
-  input                                 busy_op_1clk_cmp_i, // 1-clk flag not computed yet (stall fetch)
-  input       [DEST_EXT_ADDR_WIDTH-1:0] busy_ext_bits_1clk_i,
-  input                                 exec_wb2exe_hazard_d1xx_i,
-  input                                 exec_op_1clk_cmp_i,
-  input       [DEST_EXT_ADDR_WIDTH-1:0] exec_ext_bits_1clk_i,
-  input                                 exec_flag_set_i, // integer or fp32 comparison result
-  input                                 ctrl_flag_i,
+  input      [OPTION_OPERAND_WIDTH-1:0] wrbk_result1_i,
+  // comparision flag for l.bf/l.bnf
+  input                                 ctrl_flag_sr_i,
   // jump/branch signals to IFETCH
   output                                do_branch_o,
   output     [OPTION_OPERAND_WIDTH-1:0] do_branch_target_o,
-  output                                fetch_jr_bc_hazard_o, // jump/branch data not ready
+  output                                jr_gathering_target_o,
+  //  # branch prediction support
+  input      [OPTION_OPERAND_WIDTH-1:0] after_ds_target_i,
+  output                                predict_miss_o,
+  input                           [1:0] bc_cnt_value_i,  // current value of saturation counter
+  input           [GSHARE_BITS_NUM-1:0] bc_cnt_radr_i,   // saturation counter ID
+  output reg                            bc_cnt_we_o,     // update saturation counter
+  output reg                      [1:0] bc_cnt_wdat_o,   // new saturation counter value
+  output reg      [GSHARE_BITS_NUM-1:0] bc_cnt_wadr_o,   // saturation counter id
+  output reg                            bc_hist_taken_o, // conditional branch really taken
   // Support IBUS error handling in CTRL
-  output reg                            wb_jump_or_branch_o,
-  output reg                            wb_do_branch_o,
-  output reg [OPTION_OPERAND_WIDTH-1:0] wb_do_branch_target_o,
+  output reg                            wrbk_jump_or_branch_o,
+  output reg                            wrbk_jump_o,
+  output reg                            wrbk_op_bf_o,
+  output reg [OPTION_OPERAND_WIDTH-1:0] wrbk_jb_target_o,
 
 
   //   Flag to enabel/disable exterlal interrupts processing
   // depending on the fact is instructions restartable or not
   output                                exec_interrupts_en_o,
 
-  // pre-WB l.rfe
+  // pre-Write-Back l.rfe
   output                                exec_op_rfe_o,
-  // pre-WB output exceptions: IFETCH
+  // pre-Write-Back output exceptions: IFETCH
   output                                exec_except_ibus_err_o,
   output                                exec_except_ipagefault_o,
   output                                exec_except_itlb_miss_o,
   output                                exec_except_ibus_align_o,
-  // pre-WB output exceptions: DECODE
+  // pre-Write-Back output exceptions: DECODE
   output                                exec_except_illegal_o,
   output                                exec_except_syscall_o,
   output                                exec_except_trap_o,
+  // pre-Write-Back output exceptions: IFETCH/DECODE
+  output                                exec_an_except_fd_o,
 
-  // WB outputs
+  // Write-Back outputs
+  //  ## special Write-Back-controls for RF
+  output reg             [NUM_GPRS-1:0] wrbk_rfd1_we1h_o,
+  output reg                            wrbk_rfd1_we_o,
+  output reg [OPTION_RF_ADDR_WIDTH-1:0] wrbk_rfd1_adr_o,
+  output reg             [NUM_GPRS-1:0] wrbk_rfd2_we1h_o,
+  output reg                            wrbk_rfd2_we_o,
+  output reg [OPTION_RF_ADDR_WIDTH-1:0] wrbk_rfd2_adr_o,
   //  ## instruction related information
-  output reg [OPTION_OPERAND_WIDTH-1:0] pc_wb_o,
-  output reg                            wb_delay_slot_o,
-  output reg  [DEST_REG_ADDR_WIDTH-1:0] wb_rfd1_adr_o,
-  output                                wb_rfd1_wb_o,
-  output                                wb_flag_wb_o,
-  output reg                            wb_carry_wb_o,
-  // for FPU64
-  output reg [OPTION_RF_ADDR_WIDTH-1:0] wb_rfd2_adr_o,
-  output reg                            wb_rfd2_wb_o
+  output reg [OPTION_OPERAND_WIDTH-1:0] pc_wrbk_o,
+  output reg [OPTION_OPERAND_WIDTH-1:0] pc_nxt_wrbk_o, // pc-wrbk + 4
+  output reg [OPTION_OPERAND_WIDTH-1:0] pc_nxt2_wrbk_o, // pc-wrbk + 8
+  output reg                            wrbk_delay_slot_o,
+  // for hazards resolution in RSRVS
+  output reg    [DEST_EXTADR_WIDTH-1:0] wrbk_extadr_o
 );
 
   // [O]rder [C]ontrol [B]uffer [T]ap layout
+  //  --- [A]ttributes ---
   //  [0...5] Exceptions generated by FETCH & DECODE.
   //    (a) Doesn't include IBUS align violation.
   //        It goes through "jump/branch attributes order control buffer".
-  //    (b) LSU exceptions go to WB around any OCB
-  //  [6] Flag that external interrupt is enabled (instruction is re-startable)
-  localparam  OCBT_INTERRUPTS_EN_POS  = 6;
+  //    (b) LSU exceptions go to Write-Back around any OCB
+  //  [6] Combined IFETCH/DECODE an exception flag
+  localparam  OCBTA_AN_EXCEPT_FD_POS   =                           6;
+  //  Flag that external interrupt is enabled (instruction is re-startable)
+  localparam  OCBTA_INTERRUPTS_EN_POS  = OCBTA_AN_EXCEPT_FD_POS  + 1;
   //  Unit wise requested/ready
-  localparam  OCBT_OP_PASS_EXEC_POS   = OCBT_INTERRUPTS_EN_POS  + 1;
-  localparam  OCBT_JUMP_OR_BRANCH_POS = OCBT_OP_PASS_EXEC_POS   + 1;
-  localparam  OCBT_OP_1CLK_POS        = OCBT_JUMP_OR_BRANCH_POS + 1;
-  localparam  OCBT_OP_DIV_POS         = OCBT_OP_1CLK_POS        + 1;
-  localparam  OCBT_OP_MUL_POS         = OCBT_OP_DIV_POS         + 1;
-  localparam  OCBT_OP_FPXX_ARITH_POS  = OCBT_OP_MUL_POS         + 1; // arithmetic part only, FP comparison is 1-clock
-  localparam  OCBT_OP_FP64_ARITH_POS  = OCBT_OP_FPXX_ARITH_POS  + 1; // it is also source for *_rf_wb2
-  localparam  OCBT_OP_FP64_CMP_POS    = OCBT_OP_FP64_ARITH_POS  + 1; // source for granting write back to fp64 comparison
-  localparam  OCBT_OP_LS_POS          = OCBT_OP_FP64_CMP_POS    + 1; // load / store (we need it for pushing LSU exceptions)
-  localparam  OCBT_OP_RFE_POS         = OCBT_OP_LS_POS          + 1; // l.rfe
+  localparam  OCBTA_OP_RFE_POS         = OCBTA_INTERRUPTS_EN_POS + 1;
   //  Instruction is in delay slot
-  localparam  OCBT_DELAY_SLOT_POS     = OCBT_OP_RFE_POS         + 1;
-  //  Instruction writting comparison flag
-  localparam  OCBT_FLAG_WB_POS        = OCBT_DELAY_SLOT_POS     + 1; // any such instruction
-  localparam  OCBT_FLAG_WB_MCYCLE_POS = OCBT_FLAG_WB_POS        + 1; // such istruction is multi-cycle (l.swa, lf.sf*.d)
-  //  Instruction writting carry flag
-  localparam  OCBT_CARRY_WB_POS       = OCBT_FLAG_WB_MCYCLE_POS + 1;
-  //  Instruction generates WB to D1
-  localparam  OCBT_RFD1_WB_POS        = OCBT_CARRY_WB_POS       + 1;
-  localparam  OCBT_RFD1_ADR_LSB       = OCBT_RFD1_WB_POS        + 1;
-  localparam  OCBT_RFD1_ADR_MSB       = OCBT_RFD1_WB_POS        + OPTION_RF_ADDR_WIDTH;
-  //  Instruction generates WB to D2
-  localparam  OCBT_RFD2_ADR_LSB       = OCBT_RFD1_ADR_MSB       + 1;
-  localparam  OCBT_RFD2_ADR_MSB       = OCBT_RFD1_ADR_MSB       + OPTION_RF_ADDR_WIDTH;
-  //  Extention to address of RFD, FLAG and CARRY
-  localparam  OCBT_EXT_ADR_LSB        = OCBT_RFD2_ADR_MSB       + 1;
-  localparam  OCBT_EXT_ADR_MSB        = OCBT_RFD2_ADR_MSB       + DEST_EXT_ADDR_WIDTH;
+  localparam  OCBTA_DELAY_SLOT_POS     = OCBTA_OP_RFE_POS        + 1;
+  //  Instruction generates Write-Back to D1
+  localparam  OCBTA_RFD1_WRBK_POS      = OCBTA_DELAY_SLOT_POS    + 1;
+  localparam  OCBTA_RFD1_ADR_LSB       = OCBTA_RFD1_WRBK_POS     + 1;
+  localparam  OCBTA_RFD1_ADR_MSB       = OCBTA_RFD1_WRBK_POS     + OPTION_RF_ADDR_WIDTH;
+  //  Instruction generates Write-Back to D2
+  localparam  OCBTA_RFD2_WRBK_POS      = OCBTA_RFD1_ADR_MSB      + 1;
+  localparam  OCBTA_RFD2_ADR_LSB       = OCBTA_RFD2_WRBK_POS     + 1;
+  localparam  OCBTA_RFD2_ADR_MSB       = OCBTA_RFD2_WRBK_POS     + OPTION_RF_ADDR_WIDTH;
   //  Program counter
-  localparam  OCBT_PC_LSB             = OCBT_EXT_ADR_MSB        + 1;
-  localparam  OCBT_PC_MSB             = OCBT_EXT_ADR_MSB        + OPTION_OPERAND_WIDTH;
-  //  value of MSB of order control buffer tap
-  localparam  OCBT_MSB                = OCBT_PC_MSB;
-  localparam  OCBT_WIDTH              = OCBT_MSB                + 1;
+  localparam  OCBTA_PC_LSB             = OCBTA_RFD2_ADR_MSB      + 1;
+  localparam  OCBTA_PC_MSB             = OCBTA_RFD2_ADR_MSB      + OPTION_OPERAND_WIDTH;
+  // --- pipeline [C]ontrol flags ---
+  localparam  OCBTC_OP_PUSH_WRBK_POS   = OCBTA_PC_MSB             + 1;
+  localparam  OCBTC_JUMP_OR_BRANCH_POS = OCBTC_OP_PUSH_WRBK_POS   + 1;
+  localparam  OCBTC_OP_1CLK_POS        = OCBTC_JUMP_OR_BRANCH_POS + 1;
+  localparam  OCBTC_OP_DIV_POS         = OCBTC_OP_1CLK_POS        + 1;
+  localparam  OCBTC_OP_MUL_POS         = OCBTC_OP_DIV_POS         + 1;
+  localparam  OCBTC_OP_FPXX_ARITH_POS  = OCBTC_OP_MUL_POS         + 1; // arithmetic part only
+  localparam  OCBTC_OP_FPXX_CMP_POS    = OCBTC_OP_FPXX_ARITH_POS  + 1; // granting write back to fpxx comparison
+  localparam  OCBTC_OP_LS_POS          = OCBTC_OP_FPXX_CMP_POS    + 1; // load / store
+  // we also reset extention bits because zero value is meaningfull
+  localparam  OCBTC_EXTADR_LSB         = OCBTC_OP_LS_POS          + 1;
+  localparam  OCBTC_EXTADR_MSB         = OCBTC_OP_LS_POS          + DEST_EXTADR_WIDTH;
+  // value of MSB of order control buffer tap
+  localparam  OCBT_MSB                 = OCBTC_EXTADR_MSB;
+  localparam  OCBT_WIDTH               = OCBT_MSB                 + 1;
 
 
-  // alias for *_rf_wb2
-  localparam  OCBT_RFD2_WB_POS        = OCBT_OP_FP64_ARITH_POS;
-
-
-  // OMAN WB-request generated with taking into accaunt
-  // speculative WB for LSU load command
-  //  # WB to RF
-  reg wb_rfd1_wb_r;
-  //  # WB to FLAG
-  reg wb_flag_wb_r;
-
-
-  // --- initial value for simulations ---
- `ifndef SYNTHESIS // initial value for ext-bits-r
-  // synthesis translate_off
-  initial dcod_ext_bits_o = {DEST_EXT_ADDR_WIDTH{1'b0}};
-  // synthesis translate_on
- `endif // !synth
+  // a jump/branch instruction in DECODE
+  reg dcod_op_jb_r;
   // ---
-  always @(posedge clk) begin
-    if (padv_decode_i)
-      dcod_ext_bits_o <= dcod_ext_bits_o + 1'b1;
+  always @(posedge cpu_clk) begin
+    if (padv_dcod_i)
+      dcod_op_jb_r <= fetch_op_jb_i;
+  end // at clock
+
+  // IFETCH exceptions in DECODE
+  reg dcod_fetch_except_ibus_err_r;
+  reg dcod_fetch_except_ipagefault_r;
+  reg dcod_fetch_except_itlb_miss_r;
+  // ---
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i) begin
+      dcod_fetch_except_ibus_err_r   <= 1'b0;
+      dcod_fetch_except_ipagefault_r <= 1'b0;
+      dcod_fetch_except_itlb_miss_r  <= 1'b0;
+    end
+    else if (padv_dcod_i) begin
+      dcod_fetch_except_ibus_err_r   <= fetch_except_ibus_err_i;
+      dcod_fetch_except_ipagefault_r <= fetch_except_ipagefault_i;
+      dcod_fetch_except_itlb_miss_r  <= fetch_except_itlb_miss_i;
+    end
+    else if (padv_exec_i) begin
+      dcod_fetch_except_ibus_err_r   <= 1'b0;
+      dcod_fetch_except_ipagefault_r <= 1'b0;
+      dcod_fetch_except_itlb_miss_r  <= 1'b0;
+    end
+  end // at clock
+
+
+  // extension to DEST, FLAG or CARRY
+  // Zero value is reserved as "not used"
+  localparam [DEST_EXTADR_WIDTH-1:0] EXTADR_MAX = ((1 << DEST_EXTADR_WIDTH) - 1);
+  localparam [DEST_EXTADR_WIDTH-1:0] EXTADR_MIN = 1;
+  // ---
+  reg  [DEST_EXTADR_WIDTH-1:0] dcod_extadr_r;
+  wire [DEST_EXTADR_WIDTH-1:0] extadr_adder;
+  // ---
+  assign extadr_adder = (dcod_extadr_r == EXTADR_MAX) ? EXTADR_MIN : (dcod_extadr_r + 1'b1);
+  // ---
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i)
+      dcod_extadr_r <= {DEST_EXTADR_WIDTH{1'b0}};
+    else if (padv_dcod_i)
+      dcod_extadr_r <= fetch_valid_i ? extadr_adder : dcod_extadr_r;
   end // @clock
+  // support in-1clk-unit forwarding
+  assign dcod_extadr_o = dcod_extadr_r;
 
 
   // Flag that istruction is restrartable.
   // Instructions which are not restartable:
-  //     "invalid" (empty FETCH result)
   //     "store" - they are buffered and couldn't be removed from buffer
   //               till execution completion
   //     l.msync - it forces LSU to report "busy" till completion of
   //               all previously issued loads and stores
-  //     l.mtspr (change internal CPU control registers)
-  //     l.rfe (cause return from exception process with serious
-  //            changing CPU state).
+  //     l.mtspr - change internal CPU control registers
+  //     l.mfspr - combined with l.mtspr (_mXspr_) to reduce combinatorial logic
+  //     l.rfe   - cause return from exception process with serious
+  //               changing CPU state.
   //   Note #1 we just not run execution for "invalid" command (CTRL), so
-  // such "commands" don't achieve WB where exceptions are processed.
+  // such "commands" don't achieve Write-Back where exceptions are processed.
   //   Note #2 l.rfe is a special case. We push pipe full of rfes.
-  // The reason for this is that we need the rfe to reach WB stage
+  // The reason for this is that we need the rfe to reach Write-Back stage
   // so it will cause the branch. It will clear itself by the
   // pipeline_flush_i that the rfe will generate.
-  wire interrupts_en = ~(dcod_op_lsu_store_i | dcod_op_mtspr_i | dcod_op_msync_i | dcod_op_rfe_i);
+  wire interrupts_en = ~(dcod_op_lsu_store_i | dcod_op_msync_i | dcod_op_mXspr_i | dcod_op_rfe_i);
 
-  // take branch align exception
-  wire dcod_except_ibus_align;
 
-  // Combine DECODE related exceptions
-  wire dcod_an_except = dcod_except_ibus_align  |                     // DECODE an exception
-                        dcod_except_illegal_i   |                     // DECODE an exception
-                        dcod_except_syscall_i   | dcod_except_trap_i; // DECODE an exception
+  // Compute OCBs depth
+  localparam INSN_OCB_NUM_TAPS    = EXTADR_MAX - 1; // extention bits "0" is reserved as "not used"
+  localparam JB_ATTR_OCB_NUM_TAPS = (INSN_OCB_NUM_TAPS >> 1) + 1;
 
-  // input pack
+
+  //-------------------//
+  // INSN OCB instance //
+  //-------------------//
+
+  // --- OCB-Controls input ---
   wire  [OCBT_MSB:0] ocbi;
-  assign ocbi = { // various instruction related information
-                  pc_decode_i,            // instruction virtual address
-                  dcod_ext_bits_o,        // extension to RFD, FLAG or CARRY
-                  dcod_rfd2_adr_i,        // WB address D2
-                  dcod_rfd1_adr_i,        // WB address D1
-                  dcod_rfd1_wb_i,         // instruction generates WB
-                  dcod_carry_wb_i,        // istruction affects carry flag
-                  dcod_flag_wb_mcycle_i,  // the multy-cycle instruction affects comparison flag
-                  dcod_flag_wb_i,         // any instruction which affects comparison flag
-                  dcod_delay_slot_i,      // istruction is in delay slot
-                  // unit that must be granted for WB
-                  dcod_op_rfe_i,     // l.rfe
-                  dcod_op_ls_i,      // load / store (we need it for pushing LSU exceptions)
-                  dcod_op_fp64_cmp_i,
-                  (dcod_op_fpxx_arith_i & dcod_op_fp64_arith_i),
-                  dcod_op_fpxx_arith_i,
-                  dcod_op_mul_i,
-                  dcod_op_div_i,
-                  dcod_op_1clk_i,
-                  dcod_jump_or_branch_i,
-                  (fetch_an_except_i | dcod_an_except | dcod_op_pass_exec_i), // OMAN entrance: !!! l.rfe is in "pass exec" !!!
-                  // Flag that istruction is restartable
-                  interrupts_en,
-                  // FETCH & DECODE exceptions
-                  fetch_except_ibus_err_i,
-                  fetch_except_ipagefault_i,
-                  fetch_except_itlb_miss_i,
-                  dcod_except_illegal_i,
-                  dcod_except_syscall_i,
-                  dcod_except_trap_i };
+  assign ocbi =
+    {
+      // --- pipeline [C]ontrol flags ---
+      dcod_extadr_r, // OCB-Controls entrance
+      dcod_op_ls_i, // OCB-Controls entrance
+      dcod_op_fpxx_cmp_i, // OCB-Controls entrance
+      dcod_op_fpxx_arith_i, // OCB-Controls entrance
+      dcod_op_mul_i, // OCB-Controls entrance
+      dcod_op_div_i, // OCB-Controls entrance
+      dcod_op_1clk_i, // OCB-Controls entrance
+      dcod_op_jb_r, // OCB-Controls entrance
+      dcod_op_push_wrbk_i, // OCB-Controls entrance
+      // --- instruction [A]ttributes ---
+      pc_decode_i, // OCB-Attributes entrance
+      dcod_rfd2_adr_i, // OCB-Attributes entrance
+      dcod_rfd2_we_i, // OCB-Attributes entrance
+      dcod_rfd1_adr_i, // OCB-Attributes entrance
+      dcod_rfd1_we_i, // OCB-Attributes entrance
+      dcod_delay_slot_i, // OCB-Attributes entrance
+      dcod_op_rfe_i, // OCB-Attributes entrance
+      // Flag that istruction is restartable
+      interrupts_en, // OCB-Attributes entrance
+      // Combined IFETCH/DECODE an exception flag
+      dcod_an_except_fd_i, // OCB-Attributes entrance
+      // FETCH & DECODE exceptions
+      dcod_fetch_except_ibus_err_r, // OCB-Attributes entrance
+      dcod_fetch_except_ipagefault_r, // OCB-Attributes entrance
+      dcod_fetch_except_itlb_miss_r, // OCB-Attributes entrance
+      dcod_except_illegal_i, // OCB-Attributes entrance
+      dcod_except_syscall_i, // OCB-Attributes entrance
+      dcod_except_trap_i // OCB-Attributes entrance
+    };
 
+  // --- INSN OCB input ---
+  wire [OCBT_MSB:0] ocbo;
 
-  wire [OCBT_MSB:0] ocbo00, ocbo01, ocbo02, ocbo03,
-                    ocbo04, ocbo05, ocbo06; // 8-th is in Write-Back stage
-
-  wire ocb_full, ocb_empty;
-
-
-  //-------------------------------//
-  // Order Control Buffer instance //
-  //-------------------------------//
-
-  mor1kx_ocb_marocchino
+  // --- INSN OCB instance ---
+  mor1kx_ff_oreg_buff_marocchino
   #(
-    .NUM_TAPS   (7),          // 8-th is in Write-Back stage
-    .NUM_OUTS   (7),          // must be at least 1
-    .DATA_SIZE  (OCBT_WIDTH)
+    .NUM_TAPS         (INSN_OCB_NUM_TAPS), // INSN_OCB
+    .DATA_WIDTH       (OCBT_WIDTH), // INSN_OCB
+    .FULL_FLAG        ("ENABLED"), // INSN_OCB
+    .EMPTY_FLAG       ("ENABLED") // INSN_OCB
   )
   u_ocb
   (
-    // clocks, resets and other input controls
-    .clk              (clk),
-    .rst              (rst),
-    .pipeline_flush_i (pipeline_flush_i), // flush pipe
-    .padv_decode_i    (padv_decode_i),    // write: advance DECODE
-    .padv_wb_i        (padv_wb_i),        // read:  advance WB
-    // value at reset/flush
-    .default_value_i  ({OCBT_WIDTH{1'b0}}),
+    // clocks, resets
+    .cpu_clk          (cpu_clk), // INSN_OCB
+    // resets
+    .ini_rst          (pipeline_flush_i), // JB-ATTR-OCB
+    .ext_rst          (1'b0), // JB-ATTR-OCB
+    // RW-controls
+    .write_i          (padv_exec_i), // INSN_OCB
+    .read_i           (padv_wrbk_i), // INSN_OCB
     // data input
-    .ocbi_i           (ocbi),
+    .data_i           (ocbi), // INSN_OCB
     // "OCB is empty" flag
-    .empty_o          (ocb_empty),
+    .empty_o          (ocb_empty_o), // INSN_OCB
     // "OCB is full" flag
-    //   (a) external control logic must stop the "writing without reading"
-    //       operation if OCB is full
-    //   (b) however, the "writing + reading" is possible
-    //       because it just pushes OCB and keeps it full
-    .full_o           (ocb_full),
-    // ouput layout
-    // { out[n-1], out[n-2], ... out[0] } : DECODE (entrance) -> EXECUTE (exit)
-    .ocbo_o           ({ocbo06,ocbo05,ocbo04,ocbo03,ocbo02,ocbo01,ocbo00})
+    .full_o           (ocb_full_o), // INSN_OCB
+    // output register
+    .data_o           (ocbo) // INSN_OCB
   );
 
 
-  // Grant WB-access to units
-  assign grant_wb_to_1clk_o        = ocbo00[OCBT_OP_1CLK_POS];
-  assign grant_wb_to_div_o         = ocbo00[OCBT_OP_DIV_POS];
-  assign grant_wb_to_mul_o         = ocbo00[OCBT_OP_MUL_POS];
-  assign grant_wb_to_fpxx_arith_o  = ocbo00[OCBT_OP_FPXX_ARITH_POS];
-  assign grant_wb_to_lsu_o         = ocbo00[OCBT_OP_LS_POS];
-  assign grant_wb_to_fp64_cmp_o    = ocbo00[OCBT_OP_FP64_CMP_POS];
+  // Grant Write-Back-access to units
+  assign grant_wrbk_to_1clk_o        = ocbo[OCBTC_OP_1CLK_POS];
+  assign grant_wrbk_to_div_o         = ocbo[OCBTC_OP_DIV_POS];
+  assign grant_wrbk_to_mul_o         = ocbo[OCBTC_OP_MUL_POS];
+  assign grant_wrbk_to_fpxx_arith_o  = ocbo[OCBTC_OP_FPXX_ARITH_POS];
+  assign grant_wrbk_to_lsu_o         = ocbo[OCBTC_OP_LS_POS];
+  assign grant_wrbk_to_fpxx_cmp_o    = ocbo[OCBTC_OP_FPXX_CMP_POS];
 
 
   //--------------------------//
   // Analysis of data hazards //
   //--------------------------//
 
-  // Shorten aliases
-  wire [DEST_EXT_ADDR_WIDTH-1:0] wb_rfd1_ext = wb_rfd1_adr_o[(DEST_REG_ADDR_WIDTH-1):OPTION_RF_ADDR_WIDTH];
-
-  // We needn't WB-to-DECODE hazards for FLAG and CARRY:
+  // We needn't Write-Back-to-DECODE hazards for FLAG and CARRY:
   //  (a) we process FLAG for l.bf/.bnf in separate way
-  //  (b) only 1-clock instructions reqests FLAG/CARRY, so any case they granted with WB accees
-  //      after completion FLAG/CARRY update
+  //  (b) only 1-clock instructions request FLAG/CARRY,
+  //      however any case they granted with Write-Back accees after completion FLAG/CARRY update
+
+  // Extention bits visible at EXECUTE output
+  wire [(DEST_EXTADR_WIDTH-1):0] exec_extadr = ocbo[OCBTC_EXTADR_MSB:OCBTC_EXTADR_LSB];
+
+  // RAT outputs
+  wire          [(NUM_GPRS-1):0] rat_rd1_alloc; // allocated by D1
+  wire          [(NUM_GPRS-1):0] rat_rd2_alloc; // allocated by D2
+  wire [(DEST_EXTADR_WIDTH-1):0] rat_extadr [(NUM_GPRS-1):0]; // allocation ID
+
+  // Special case for GPR[0]
+  assign rat_rd1_alloc[0] = 1'b0;
+  assign rat_rd2_alloc[0] = 1'b0;
+  assign rat_extadr[0]    = {DEST_EXTADR_WIDTH{1'b0}};
+
+  // instances for RAT cells
+  generate
+  genvar ic;
+  for (ic = 1; ic < NUM_GPRS; ic = ic + 1) begin : rat_cell_k
+    // RAT cells instansence
+    rat_cell
+    #(
+      .OPTION_RF_ADDR_WIDTH   (OPTION_RF_ADDR_WIDTH), // RAT-CELL
+      .DEST_EXTADR_WIDTH      (DEST_EXTADR_WIDTH), // RAT-CELL
+      .GPR_ADDR               (ic) // RAT-CELL
+    )
+    u_rat_cell
+    (
+      // clock & reset
+      .cpu_clk                (cpu_clk), // RAT-CELL
+      // pipeline control
+      .padv_exec_i            (padv_exec_i), // RAT-CELL
+      .padv_wrbk_i            (padv_wrbk_i), // RAT-CELL
+      .pipeline_flush_i       (pipeline_flush_i), // RAT-CELL
+      // input allocation information
+      //  # allocated as D1
+      .dcod_rfd1_we_i         (dcod_rfd1_we_i), // RAT-CELL
+      .dcod_rfd1_adr_i        (dcod_rfd1_adr_i), // RAT-CELL
+      //  # allocated as D2
+      .dcod_rfd2_we_i         (dcod_rfd2_we_i), // RAT-CELL
+      .dcod_rfd2_adr_i        (dcod_rfd2_adr_i), // RAT-CELL
+      //  # allocation id
+      .dcod_extadr_i          (dcod_extadr_r), // RAT-CELL
+      // input to clear allocation bits
+      .exec_extadr_i          (exec_extadr), // RAT-CELL
+      // output allocation information
+      .rat_rd1_alloc_o        (rat_rd1_alloc[ic]), // RAT-CELL
+      .rat_rd2_alloc_o        (rat_rd2_alloc[ic]), // RAT-CELL
+      .rat_extadr_o           (rat_extadr[ic]) // RAT-CELL
+    );
+  end
+  endgenerate
 
 
-  // EXEC-to-DECODE hazards by operands
-  //  # D1A1
-  wire   exe2dec_hazard_d1a1   = (ocbo00[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa1_adr_i) & ocbo00[OCBT_RFD1_WB_POS];
-  assign exe2dec_hazard_d1a1_o = exe2dec_hazard_d1a1 & dcod_rfa1_req_i;
-  //  # D1B1
-  wire   exe2dec_hazard_d1b1   = (ocbo00[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb1_adr_i) & ocbo00[OCBT_RFD1_WB_POS];
-  assign exe2dec_hazard_d1b1_o = exe2dec_hazard_d1b1 & dcod_rfb1_req_i;
-  //  # D1A2
-  wire   exe2dec_hazard_d1a2   = (ocbo00[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa2_adr_i) & ocbo00[OCBT_RFD1_WB_POS];
-  assign exe2dec_hazard_d1a2_o = exe2dec_hazard_d1a2 & dcod_rfa2_req_i;
-  //  # D1B2
-  wire   exe2dec_hazard_d1b2   = (ocbo00[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb2_adr_i) & ocbo00[OCBT_RFD1_WB_POS];
-  assign exe2dec_hazard_d1b2_o = exe2dec_hazard_d1b2 & dcod_rfb2_req_i;
-  //  # D2A1
-  assign exe2dec_hazard_d2a1_o = (ocbo00[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa1_adr_i) & ocbo00[OCBT_RFD2_WB_POS] & dcod_rfa1_req_i;
-  //  # D2B1
-  assign exe2dec_hazard_d2b1_o = (ocbo00[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb1_adr_i) & ocbo00[OCBT_RFD2_WB_POS] & dcod_rfb1_req_i;
-  //  # D2A2
-  assign exe2dec_hazard_d2a2_o = (ocbo00[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa2_adr_i) & ocbo00[OCBT_RFD2_WB_POS] & dcod_rfa2_req_i;
-  //  # D2B2
-  assign exe2dec_hazard_d2b2_o = (ocbo00[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb2_adr_i) & ocbo00[OCBT_RFD2_WB_POS] & dcod_rfb2_req_i;
+  //----------------------------------//
+  // OMAN-to-DECODE hazards for RSRVS //
+  //----------------------------------//
+
+  //  # relative operand A1
+  assign omn2dec_hazard_d1a1_o = rat_rd1_alloc[dcod_rfa1_adr_i] & dcod_rfa1_req_i;
+  assign omn2dec_hazard_d2a1_o = rat_rd2_alloc[dcod_rfa1_adr_i] & dcod_rfa1_req_i;
+  assign omn2dec_extadr_dxa1_o = rat_extadr[dcod_rfa1_adr_i];
+  //  # relative operand B1
+  assign omn2dec_hazard_d1b1_o = rat_rd1_alloc[dcod_rfb1_adr_i] & dcod_rfb1_req_i;
+  assign omn2dec_hazard_d2b1_o = rat_rd2_alloc[dcod_rfb1_adr_i] & dcod_rfb1_req_i;
+  assign omn2dec_extadr_dxb1_o = rat_extadr[dcod_rfb1_adr_i];
+  //  # relative operand A2
+  assign omn2dec_hazard_d1a2_o = rat_rd1_alloc[dcod_rfa2_adr_i] & dcod_rfa2_req_i;
+  assign omn2dec_hazard_d2a2_o = rat_rd2_alloc[dcod_rfa2_adr_i] & dcod_rfa2_req_i;
+  assign omn2dec_extadr_dxa2_o = rat_extadr[dcod_rfa2_adr_i];
+  //  # relative operand B2
+  assign omn2dec_hazard_d1b2_o = rat_rd1_alloc[dcod_rfb2_adr_i] & dcod_rfb2_req_i;
+  assign omn2dec_hazard_d2b2_o = rat_rd2_alloc[dcod_rfb2_adr_i] & dcod_rfb2_req_i;
+  assign omn2dec_extadr_dxb2_o = rat_extadr[dcod_rfb2_adr_i];
 
 
-  // EXEC-to-DECODE combined flags to control reservation stations
-  // --- for all RSRVS ---
-  wire   exe2dec_a_hazard_common = exe2dec_hazard_d2b1_o | exe2dec_hazard_d2a1_o | // EXEC-to-DECODE combined flag for all RSRVS
-                                   exe2dec_hazard_d1b1_o | exe2dec_hazard_d1a1_o;  // EXEC-to-DECODE combined flag for all RSRVS
-  // --- for RSRVS-LSU ---
-  assign exe2dec_a_hazard_lsu_o  = exe2dec_a_hazard_common;
-  // --- for RSRVS-1CLK ---
-  assign exe2dec_a_hazard_1clk_o = exe2dec_a_hazard_common;
-  // --- for RSRVS-MCLK ---
-  assign exe2dec_a_hazard_mclk_o = exe2dec_hazard_d2b2_o | exe2dec_hazard_d2a2_o | // EXEC-to-DECODE combined flag for RSRVS-MCLK
-                                   exe2dec_hazard_d1b2_o | exe2dec_hazard_d1a2_o | // EXEC-to-DECODE combined flag for RSRVS-MCLK
-                                   exe2dec_a_hazard_common;                        // EXEC-to-DECODE combined flag for RSRVS-MCLK
-
-
-  // OMAN-to-DECODE hazards by operands
-
-  // D1A1
-  // OMAN-to-DECODE hazards D1A1
-  wire ocbo06_hazard_d1a1 = (ocbo06[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa1_adr_i) & ocbo06[OCBT_RFD1_WB_POS];
-  wire ocbo05_hazard_d1a1 = (ocbo05[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa1_adr_i) & ocbo05[OCBT_RFD1_WB_POS];
-  wire ocbo04_hazard_d1a1 = (ocbo04[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa1_adr_i) & ocbo04[OCBT_RFD1_WB_POS];
-  wire ocbo03_hazard_d1a1 = (ocbo03[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa1_adr_i) & ocbo03[OCBT_RFD1_WB_POS];
-  wire ocbo02_hazard_d1a1 = (ocbo02[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa1_adr_i) & ocbo02[OCBT_RFD1_WB_POS];
-  wire ocbo01_hazard_d1a1 = (ocbo01[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa1_adr_i) & ocbo01[OCBT_RFD1_WB_POS];
-  // OMAN-to-DECODE hazard D1A1: combined flag
-  wire omn2dec_hazard_d1a1 = (ocbo06_hazard_d1a1 | ocbo05_hazard_d1a1 | ocbo04_hazard_d1a1 |
-                              ocbo03_hazard_d1a1 | ocbo02_hazard_d1a1 | ocbo01_hazard_d1a1 |
-                              (dcod_wb2dec_eq_adr_d1a1_i & wb_rfd1_wb_r & wb_rfd1_wb_lsu_miss_i)) & dcod_rfa1_req_i;
-  // Reservation station busy D1A1: hazard flag
-  assign busy_hazard_d1a1_o = omn2dec_hazard_d1a1 | exe2dec_hazard_d1a1_o;
-  // Reservation station busy D1A1: ext-bits
-  assign busy_hazard_d1a1_adr_o = ocbo06_hazard_d1a1  ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo05_hazard_d1a1  ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo04_hazard_d1a1  ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo03_hazard_d1a1  ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo02_hazard_d1a1  ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo01_hazard_d1a1  ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  exe2dec_hazard_d1a1 ? ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                                        wb_rfd1_ext;
-
-
-  // D1B1
-  // OMAN-to-DECODE hazards D1B1
-  wire ocbo06_hazard_d1b1 = (ocbo06[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb1_adr_i) & ocbo06[OCBT_RFD1_WB_POS];
-  wire ocbo05_hazard_d1b1 = (ocbo05[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb1_adr_i) & ocbo05[OCBT_RFD1_WB_POS];
-  wire ocbo04_hazard_d1b1 = (ocbo04[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb1_adr_i) & ocbo04[OCBT_RFD1_WB_POS];
-  wire ocbo03_hazard_d1b1 = (ocbo03[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb1_adr_i) & ocbo03[OCBT_RFD1_WB_POS];
-  wire ocbo02_hazard_d1b1 = (ocbo02[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb1_adr_i) & ocbo02[OCBT_RFD1_WB_POS];
-  wire ocbo01_hazard_d1b1 = (ocbo01[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb1_adr_i) & ocbo01[OCBT_RFD1_WB_POS];
-  // OMAN-to-DECODE hazard D1B1: combined flag
-  wire omn2dec_hazard_d1b1 = (ocbo06_hazard_d1b1 | ocbo05_hazard_d1b1 | ocbo04_hazard_d1b1 |
-                              ocbo03_hazard_d1b1 | ocbo02_hazard_d1b1 | ocbo01_hazard_d1b1 |
-                              (dcod_wb2dec_eq_adr_d1b1_i & wb_rfd1_wb_r & wb_rfd1_wb_lsu_miss_i)) & dcod_rfb1_req_i;
-  // Reservation station busy D1B1: hazard flag
-  assign busy_hazard_d1b1_o = omn2dec_hazard_d1b1 | exe2dec_hazard_d1b1_o;
-  // Reservation station busy D1B1: ext-bits
-  assign busy_hazard_d1b1_adr_o = ocbo06_hazard_d1b1  ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo05_hazard_d1b1  ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo04_hazard_d1b1  ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo03_hazard_d1b1  ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo02_hazard_d1b1  ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo01_hazard_d1b1  ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  exe2dec_hazard_d1b1 ? ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                                        wb_rfd1_ext;
-
-
-  // D1A2
-  // OMAN-to-DECODE hazards D1A2
-  wire ocbo06_hazard_d1a2 = (ocbo06[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa2_adr_i) & ocbo06[OCBT_RFD1_WB_POS];
-  wire ocbo05_hazard_d1a2 = (ocbo05[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa2_adr_i) & ocbo05[OCBT_RFD1_WB_POS];
-  wire ocbo04_hazard_d1a2 = (ocbo04[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa2_adr_i) & ocbo04[OCBT_RFD1_WB_POS];
-  wire ocbo03_hazard_d1a2 = (ocbo03[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa2_adr_i) & ocbo03[OCBT_RFD1_WB_POS];
-  wire ocbo02_hazard_d1a2 = (ocbo02[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa2_adr_i) & ocbo02[OCBT_RFD1_WB_POS];
-  wire ocbo01_hazard_d1a2 = (ocbo01[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfa2_adr_i) & ocbo01[OCBT_RFD1_WB_POS];
-  // OMAN-to-DECODE hazard D1A2: combined flag
-  wire omn2dec_hazard_d1a2 = (ocbo06_hazard_d1a2 | ocbo05_hazard_d1a2 | ocbo04_hazard_d1a2 |
-                              ocbo03_hazard_d1a2 | ocbo02_hazard_d1a2 | ocbo01_hazard_d1a2 |
-                              (dcod_wb2dec_eq_adr_d1a2_i & wb_rfd1_wb_r & wb_rfd1_wb_lsu_miss_i)) & dcod_rfa2_req_i;
-  // Reservation station busy D1A2: hazard flag
-  assign busy_hazard_d1a2_o = omn2dec_hazard_d1a2 | exe2dec_hazard_d1a2_o;
-  // Reservation station busy D1A2: ext-bits
-  assign busy_hazard_d1a2_adr_o = ocbo06_hazard_d1a2  ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo05_hazard_d1a2  ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo04_hazard_d1a2  ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo03_hazard_d1a2  ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo02_hazard_d1a2  ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo01_hazard_d1a2  ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  exe2dec_hazard_d1a2 ? ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                                        wb_rfd1_ext;
-
-
-  // D1B2
-  // OMAN-to-DECODE hazards D1B2
-  wire ocbo06_hazard_d1b2 = (ocbo06[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb2_adr_i) & ocbo06[OCBT_RFD1_WB_POS];
-  wire ocbo05_hazard_d1b2 = (ocbo05[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb2_adr_i) & ocbo05[OCBT_RFD1_WB_POS];
-  wire ocbo04_hazard_d1b2 = (ocbo04[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb2_adr_i) & ocbo04[OCBT_RFD1_WB_POS];
-  wire ocbo03_hazard_d1b2 = (ocbo03[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb2_adr_i) & ocbo03[OCBT_RFD1_WB_POS];
-  wire ocbo02_hazard_d1b2 = (ocbo02[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb2_adr_i) & ocbo02[OCBT_RFD1_WB_POS];
-  wire ocbo01_hazard_d1b2 = (ocbo01[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB] == dcod_rfb2_adr_i) & ocbo01[OCBT_RFD1_WB_POS];
-  // OMAN-to-DECODE hazard D1B2: combined flag
-  wire omn2dec_hazard_d1b2 = (ocbo06_hazard_d1b2 | ocbo05_hazard_d1b2 | ocbo04_hazard_d1b2 |
-                              ocbo03_hazard_d1b2 | ocbo02_hazard_d1b2 | ocbo01_hazard_d1b2 |
-                              (dcod_wb2dec_eq_adr_d1b2_i & wb_rfd1_wb_r & wb_rfd1_wb_lsu_miss_i)) & dcod_rfb2_req_i;
-  // Reservation station busy D1B2: hazard flag
-  assign busy_hazard_d1b2_o = omn2dec_hazard_d1b2 | exe2dec_hazard_d1b2_o;
-  // Reservation station busy D1B2: ext-bits
-  assign busy_hazard_d1b2_adr_o = ocbo06_hazard_d1b2  ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo05_hazard_d1b2  ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo04_hazard_d1b2  ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo03_hazard_d1b2  ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo02_hazard_d1b2  ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo01_hazard_d1b2  ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  exe2dec_hazard_d1b2 ? ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                                        wb_rfd1_ext;
-
-
-  // D2A1
-  wire ocbo06_hazard_d2a1 = (ocbo06[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa1_adr_i) & ocbo06[OCBT_RFD2_WB_POS];
-  wire ocbo05_hazard_d2a1 = (ocbo05[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa1_adr_i) & ocbo05[OCBT_RFD2_WB_POS];
-  wire ocbo04_hazard_d2a1 = (ocbo04[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa1_adr_i) & ocbo04[OCBT_RFD2_WB_POS];
-  wire ocbo03_hazard_d2a1 = (ocbo03[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa1_adr_i) & ocbo03[OCBT_RFD2_WB_POS];
-  wire ocbo02_hazard_d2a1 = (ocbo02[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa1_adr_i) & ocbo02[OCBT_RFD2_WB_POS];
-  wire ocbo01_hazard_d2a1 = (ocbo01[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa1_adr_i) & ocbo01[OCBT_RFD2_WB_POS];
-  // OMAN-to-DECODE hazard D2A1
-  wire omn2dec_hazard_d2a1 = (ocbo06_hazard_d2a1 | ocbo05_hazard_d2a1 |
-                              ocbo04_hazard_d2a1 | ocbo03_hazard_d2a1 |
-                              ocbo02_hazard_d2a1 | ocbo01_hazard_d2a1) & dcod_rfa1_req_i;
-  // Reservation station busy D2A1: hazard flag
-  assign busy_hazard_d2a1_o = omn2dec_hazard_d2a1 | exe2dec_hazard_d2a1_o;
-  // Reservation station busy D2A1: ext-bits
-  assign busy_hazard_d2a1_adr_o = ocbo06_hazard_d2a1 ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo05_hazard_d2a1 ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo04_hazard_d2a1 ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo03_hazard_d2a1 ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo02_hazard_d2a1 ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo01_hazard_d2a1 ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                                       ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB];
-
-
-  // D2B1
-  wire ocbo06_hazard_d2b1 = (ocbo06[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb1_adr_i) & ocbo06[OCBT_RFD2_WB_POS];
-  wire ocbo05_hazard_d2b1 = (ocbo05[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb1_adr_i) & ocbo05[OCBT_RFD2_WB_POS];
-  wire ocbo04_hazard_d2b1 = (ocbo04[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb1_adr_i) & ocbo04[OCBT_RFD2_WB_POS];
-  wire ocbo03_hazard_d2b1 = (ocbo03[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb1_adr_i) & ocbo03[OCBT_RFD2_WB_POS];
-  wire ocbo02_hazard_d2b1 = (ocbo02[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb1_adr_i) & ocbo02[OCBT_RFD2_WB_POS];
-  wire ocbo01_hazard_d2b1 = (ocbo01[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb1_adr_i) & ocbo01[OCBT_RFD2_WB_POS];
-  // OMAN-to-DECODE hazard D2B1
-  wire omn2dec_hazard_d2b1 = (ocbo06_hazard_d2b1 | ocbo05_hazard_d2b1 |
-                              ocbo04_hazard_d2b1 | ocbo03_hazard_d2b1 |
-                              ocbo02_hazard_d2b1 | ocbo01_hazard_d2b1) & dcod_rfb1_req_i;
-  // Reservation station busy D2B1: hazard flag
-  assign busy_hazard_d2b1_o = omn2dec_hazard_d2b1 | exe2dec_hazard_d2b1_o;
-  // Reservation station busy D2B1: ext-bits
-  assign busy_hazard_d2b1_adr_o = ocbo06_hazard_d2b1 ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo05_hazard_d2b1 ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo04_hazard_d2b1 ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo03_hazard_d2b1 ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo02_hazard_d2b1 ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo01_hazard_d2b1 ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                                       ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB];
-
-
-  // D2A2
-  wire ocbo06_hazard_d2a2 = (ocbo06[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa2_adr_i) & ocbo06[OCBT_RFD2_WB_POS];
-  wire ocbo05_hazard_d2a2 = (ocbo05[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa2_adr_i) & ocbo05[OCBT_RFD2_WB_POS];
-  wire ocbo04_hazard_d2a2 = (ocbo04[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa2_adr_i) & ocbo04[OCBT_RFD2_WB_POS];
-  wire ocbo03_hazard_d2a2 = (ocbo03[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa2_adr_i) & ocbo03[OCBT_RFD2_WB_POS];
-  wire ocbo02_hazard_d2a2 = (ocbo02[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa2_adr_i) & ocbo02[OCBT_RFD2_WB_POS];
-  wire ocbo01_hazard_d2a2 = (ocbo01[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfa2_adr_i) & ocbo01[OCBT_RFD2_WB_POS];
-  // OMAN-to-DECODE hazard D2A2
-  wire omn2dec_hazard_d2a2 = (ocbo06_hazard_d2a2 | ocbo05_hazard_d2a2 |
-                              ocbo04_hazard_d2a2 | ocbo03_hazard_d2a2 |
-                              ocbo02_hazard_d2a2 | ocbo01_hazard_d2a2) & dcod_rfa2_req_i;
-  // Reservation station busy D2A2: hazard flag
-  assign busy_hazard_d2a2_o = omn2dec_hazard_d2a2 | exe2dec_hazard_d2a2_o;
-  // Reservation station busy D2A2: ext-bits
-  assign busy_hazard_d2a2_adr_o = ocbo06_hazard_d2a2 ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo05_hazard_d2a2 ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo04_hazard_d2a2 ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo03_hazard_d2a2 ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo02_hazard_d2a2 ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo01_hazard_d2a2 ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                                       ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB];
-
-
-  // D2B2
-  wire ocbo06_hazard_d2b2 = (ocbo06[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb2_adr_i) & ocbo06[OCBT_RFD2_WB_POS];
-  wire ocbo05_hazard_d2b2 = (ocbo05[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb2_adr_i) & ocbo05[OCBT_RFD2_WB_POS];
-  wire ocbo04_hazard_d2b2 = (ocbo04[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb2_adr_i) & ocbo04[OCBT_RFD2_WB_POS];
-  wire ocbo03_hazard_d2b2 = (ocbo03[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb2_adr_i) & ocbo03[OCBT_RFD2_WB_POS];
-  wire ocbo02_hazard_d2b2 = (ocbo02[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb2_adr_i) & ocbo02[OCBT_RFD2_WB_POS];
-  wire ocbo01_hazard_d2b2 = (ocbo01[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB] == dcod_rfb2_adr_i) & ocbo01[OCBT_RFD2_WB_POS];
-  // OMAN-to-DECODE hazard D2B2
-  wire omn2dec_hazard_d2b2 = (ocbo06_hazard_d2b2 | ocbo05_hazard_d2b2 |
-                              ocbo04_hazard_d2b2 | ocbo03_hazard_d2b2 |
-                              ocbo02_hazard_d2b2 | ocbo01_hazard_d2b2) & dcod_rfb2_req_i;
-  // Reservation station busy D2B2: hazard flag
-  assign busy_hazard_d2b2_o = omn2dec_hazard_d2b2 | exe2dec_hazard_d2b2_o;
-  // Reservation station busy D2B2: ext-bits
-  assign busy_hazard_d2b2_adr_o = ocbo06_hazard_d2b2 ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo05_hazard_d2b2 ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo04_hazard_d2b2 ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo03_hazard_d2b2 ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo02_hazard_d2b2 ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                  ocbo01_hazard_d2b2 ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                                       ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB];
-
-
-  // OMAN-to-DECODE combined flags
-  wire   omn2dec_a_hazard_common = omn2dec_hazard_d2b1 | omn2dec_hazard_d2a1 | // OMAN-to-DECODE for all RSRVS
-                                   omn2dec_hazard_d1b1 | omn2dec_hazard_d1a1;  // OMAN-to-DECODE for all RSRVS
-  // --- for RSRVS-LSU ---
-  assign omn2dec_a_hazard_lsu_o  = omn2dec_a_hazard_common;
-  // --- for RSRVS-1CLK ---
-  assign omn2dec_a_hazard_1clk_o = omn2dec_a_hazard_common;
-  // --- for RSRVS-MCLK ---
-  assign omn2dec_a_hazard_mclk_o = omn2dec_hazard_d2b2 | omn2dec_hazard_d2a2 | // OMAN-to-DECODE for all RSRVS-MCLK
-                                   omn2dec_hazard_d1b2 | omn2dec_hazard_d1a2 | // OMAN-to-DECODE for all RSRVS-MCLK
-                                   omn2dec_a_hazard_common;                    // OMAN-to-DECODE for all RSRVS-MCLK
-
-
-
-
-  // Data for resolving hazards by passing from DECODE to EXECUTE
-  assign exec_rfd1_wb_o  = ocbo00[OCBT_RFD1_WB_POS];
-  assign exec_rfd2_wb_o  = ocbo00[OCBT_RFD2_WB_POS];
-  assign exec_ext_adr_o  = ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB];
-
-
-  //   An execute module is ready and granted access to WB
-  //   Instructions l.mf(t)spr have got guaranted WB access because
+  //   An execute module is ready and granted access to Write-Back
+  //   Instructions l.mf(t)spr have got guaranted Write-Back access because
   // no any new instruction is issued into execution till
   // l.mf(t)spr has been completed. Pay attention that we start
   // l.mf(t)spr ecxecution after completion of all peviously
   // issued instructions only.
   //   l.rfe and FETCH/DECODE exceptions are also should
-  // push WB latches
+  // push Write-Back latches
+  // ---
+  wire   op_1clk_valid_l = op_1clk_valid_i & ocbo[OCBTC_OP_1CLK_POS];
   // ---
   //   Declaration valid flag for jump/branch attributes
-  wire   exec_jb_attr_valid;
-  // ---
   //   For l.jal/l.jalr we use adder in 1-clk to compure return address,
   // so for the cases we additionally wait "jump/branch attributes".
+  wire   exec_jb_attr_valid;
+  // ---
   assign exec_valid_o =
-    (exec_op_1clk_i     & ocbo00[OCBT_OP_1CLK_POS] & ~ocbo00[OCBT_JUMP_OR_BRANCH_POS]) | // EXEC VALID: but wait attributes for l.jal/ljalr
-    (div_valid_i        & ocbo00[OCBT_OP_DIV_POS])         | // EXEC VALID
-    (mul_valid_i        & ocbo00[OCBT_OP_MUL_POS])         | // EXEC VALID
-    (fpxx_arith_valid_i & ocbo00[OCBT_OP_FPXX_ARITH_POS])  | // EXEC VALID
-    (exec_op_fp64_cmp_i & ocbo00[OCBT_OP_FP64_CMP_POS])    | // EXEC VALID
-    (lsu_valid_i        & ocbo00[OCBT_OP_LS_POS])          | // EXEC VALID
-    (exec_jb_attr_valid & ocbo00[OCBT_JUMP_OR_BRANCH_POS]) | // EXEC VALID
-                          ocbo00[OCBT_OP_PASS_EXEC_POS];     // EXEC VALID: l.rfe and FETCH/DECODE exceptions, etc
-
-  // DECODE stall components
-  //  stall by unit usage hazard
-  //     (unit could be either busy or waiting for WB access)
-  wire stall_by_hazard_u =
-    (dcod_op_1clk_i & op_1clk_busy_i) |
-    ((dcod_op_mul_i | dcod_op_div_i | dcod_op_fpxx_arith_i | dcod_op_fp64_cmp_i) & mclk_busy_i) |
-    ((dcod_op_ls_i | dcod_op_msync_i) & lsu_busy_i);
-
-  //  stall by:
-  //    a) MF(T)SPR in decode till and OCB become empty (see here)
-  //    b) till completion MF(T)SPR (see CTRL)
-  //       this completion generates padv-wb,
-  //       in next turn padv-wb cleans up OCB and restores
-  //       instructions issue
-  wire stall_by_mXspr = (dcod_op_mtspr_i | dcod_op_mfspr_i) & ((~ocb_empty) | wb_lsu_valid_miss_i);
-
-  // combine stalls to decode-valid flag
-  assign dcod_valid_o = (~stall_by_hazard_u) & (~ocb_full) & (~stall_by_mXspr);
+    (op_1clk_valid_l          & ~ocbo[OCBTC_JUMP_OR_BRANCH_POS]) | // EXEC VALID: but wait attributes for l.jal/ljalr
+    (exec_jb_attr_valid       &  ocbo[OCBTC_JUMP_OR_BRANCH_POS]) | // EXEC VALID
+    (div_valid_i              &  ocbo[OCBTC_OP_DIV_POS])         | // EXEC VALID
+    (mul_valid_i              &  ocbo[OCBTC_OP_MUL_POS])         | // EXEC VALID
+    (fpxx_arith_valid_i       &  ocbo[OCBTC_OP_FPXX_ARITH_POS])  | // EXEC VALID
+    (fpxx_cmp_valid_i         &  ocbo[OCBTC_OP_FPXX_CMP_POS])    | // EXEC VALID
+    (lsu_valid_i              &  ocbo[OCBTC_OP_LS_POS])          | // EXEC VALID
+                                 ocbo[OCBTC_OP_PUSH_WRBK_POS];     // EXEC VALID
 
 
-  //---------------------------------------//
-  // Logic to support Jump / Branch taking //
-  //---------------------------------------//
+  //-----------------------------//
+  // Taking Jump by Register FSM //
+  //-----------------------------//
 
-  // Take branch pendings related to l.jr/l.jalr
-  reg                           op_jr_p;
-  reg [DEST_EXT_ADDR_WIDTH-1:0] op_jr_d1b1_adr_p;
-  // --- combined D1B1 potential hazards related l.jr/l.jalr ---
-  wire ocb_hazard_d1b1 = ocbo06_hazard_d1b1 | ocbo05_hazard_d1b1 |
-                         ocbo04_hazard_d1b1 | ocbo03_hazard_d1b1 |
-                         ocbo02_hazard_d1b1 | ocbo01_hazard_d1b1 |
-                         exe2dec_hazard_d1b1;
+  // --- various pendings till rB/flag computationcompletion ---
+  wire                            jr_dcd2fth_hazard_d1b1_raw; // used only inside J/B FSM
+  wire    [DEST_EXTADR_WIDTH-1:0] jr_hazard_ext_raw;
+  reg     [DEST_EXTADR_WIDTH-1:0] jb_hazard_ext_p;
+  reg  [OPTION_OPERAND_WIDTH-1:0] jr_target_p;
+  reg                             jr_gathering_target_p;
   // ---
-  wire dcod_jr_hazard = ocb_hazard_d1b1 |                                                   // l.jr/l.jalr hazard in DECODE
-                        (dcod_wb2dec_eq_adr_d1b1_i & wb_rfd1_wb_r & wb_rfd1_wb_lsu_miss_i); // l.jr/l.jalr hazard in DECODE
-  // ---
-  wire oman_jr_hazard = (op_jr_d1b1_adr_p != wb_rfd1_ext) | (wb_rfd1_wb_r & wb_rfd1_wb_lsu_miss_i); // l.jr/l.jalr hazard in OMAN
-  // ---
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      op_jr_p <= 1'b0;
-    else if (pipeline_flush_i)
-      op_jr_p <= 1'b0;
-    else if (op_jr_p)
-      op_jr_p <= oman_jr_hazard;
-    else if (padv_decode_i) begin
-      op_jr_p          <= dcod_op_jr_i & dcod_jr_hazard;
-      op_jr_d1b1_adr_p <= busy_hazard_d1b1_adr_o;
+  assign jr_dcd2fth_hazard_d1b1_raw = (dcod_rfd1_adr_i == fetch_rfb1_adr_i) & dcod_rfd1_we_i;
+  assign jr_hazard_ext_raw = rat_extadr[fetch_rfb1_adr_i];
+
+  localparam [3:0] JR_FSM_CATCHING_JR = 4'b0001, // on IFETCH output
+                   JR_FSM_GET_B1      = 4'b0010, // get rB for l.jr/ljalr if no hazard
+                   JR_FSM_WAITING_B1  = 4'b0100, // waiting rB for l.jr/ljalr if hazard
+                   JR_FSM_DOING_JR    = 4'b1000; // execute l.jr/ljalr
+
+  reg [3:0] jr_fsm_state_r;
+
+  wire jr_fsm_catching_jr      = jr_fsm_state_r[0];
+  wire jr_fsm_get_b1_state     = jr_fsm_state_r[1];
+  wire jr_fsm_waiting_b1_state = jr_fsm_state_r[2];
+  wire jr_fsm_doing_jr_state   = jr_fsm_state_r[3];
+
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i) begin
+      jr_fsm_state_r        <= JR_FSM_CATCHING_JR;
+      jr_gathering_target_p <= 1'b0;
     end
-  end // @clock
+    else begin
+      // synthesis parallel_case
+      case (jr_fsm_state_r)
+        // catching j/b on IFETCH output
+        JR_FSM_CATCHING_JR: begin
+          if (padv_dcod_i) begin
+            if (fetch_op_jr_i) begin
+              jr_gathering_target_p <= 1'b1;
+              if (jr_dcd2fth_hazard_d1b1_raw |
+                  (rat_rd1_alloc[fetch_rfb1_adr_i] &
+                   (wrbk_extadr_o != jr_hazard_ext_raw)))
+                jr_fsm_state_r <= JR_FSM_WAITING_B1;
+              else
+                jr_fsm_state_r <= JR_FSM_GET_B1;
+            end
+          end
+        end
+
+        // gathering target for l.jr/l.jalr
+        JR_FSM_GET_B1: begin
+          jr_fsm_state_r        <= JR_FSM_DOING_JR;
+          jr_gathering_target_p <= 1'b0;
+        end
+        // waiting target for l.jr/l.jalr
+        JR_FSM_WAITING_B1: begin
+          if (jb_hazard_ext_p == wrbk_extadr_o) begin
+            jr_fsm_state_r        <= JR_FSM_DOING_JR;
+            jr_gathering_target_p <= 1'b0;
+          end
+        end
+        // doing l.jr/l.jalr
+        JR_FSM_DOING_JR: begin
+          jr_fsm_state_r <= JR_FSM_CATCHING_JR;
+        end
+
+        // others
+        default:;
+      endcase
+    end
+  end // @cpu-clock
 
 
-  // Take branch pendings related to l.bf/l.bnf
-  reg                            op_bf_p, op_bnf_p, op_bc_p;
-  reg [OPTION_OPERAND_WIDTH-1:0] dcod_to_imm_target_p;
-  wire [DEST_EXT_ADDR_WIDTH-1:0] op_bc_flag_adr;
-  reg  [DEST_EXT_ADDR_WIDTH-1:0] op_bc_flag_adr_p;
-  // ---
-  wire dcod_op_bc = dcod_op_bf_i | dcod_op_bnf_i;
-  // ---
-  assign op_bc_flag_adr = ocbo06[OCBT_FLAG_WB_POS] ? ocbo06[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                          ocbo05[OCBT_FLAG_WB_POS] ? ocbo05[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                          ocbo04[OCBT_FLAG_WB_POS] ? ocbo04[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                          ocbo03[OCBT_FLAG_WB_POS] ? ocbo03[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                          ocbo02[OCBT_FLAG_WB_POS] ? ocbo02[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                          ocbo01[OCBT_FLAG_WB_POS] ? ocbo01[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                          ocbo00[OCBT_FLAG_WB_POS] ? ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB] :
-                                                     wb_rfd1_ext;
-  // --- waiting computation of multi-cycle flag (l.bf/l.bnf related) ---
-  wire ocb_flag_mcycle = ocbo06[OCBT_FLAG_WB_MCYCLE_POS] | ocbo05[OCBT_FLAG_WB_MCYCLE_POS] |
-                         ocbo04[OCBT_FLAG_WB_MCYCLE_POS] | ocbo03[OCBT_FLAG_WB_MCYCLE_POS] |
-                         ocbo02[OCBT_FLAG_WB_MCYCLE_POS] | ocbo01[OCBT_FLAG_WB_MCYCLE_POS] |
-                         ocbo00[OCBT_FLAG_WB_MCYCLE_POS];
-  reg  ocb_flag_mcycle_p; // pending
-  // ---
-  wire dcod_bc_hazard = busy_op_1clk_cmp_i |                                                  // l.bf/l.bnf hazard in DECODE
-                        (exec_op_1clk_cmp_i & exec_wb2exe_hazard_d1xx_i & (~wb_rfd1_wb_o)) |  // l.bf/l.bnf hazard in DECODE
-                        ocb_flag_mcycle | (wb_flag_wb_r & wb_flag_wb_lsu_miss_i);             // l.bf/l.bnf hazard in DECODE
-  reg  op_1clk_cmp_p;
-  // ---
-  wire oman_bc_hazard = (op_1clk_cmp_p & ((busy_op_1clk_cmp_i & (op_bc_flag_adr_p == busy_ext_bits_1clk_i)) |     // l.bf/l.bnf hazard in OMAN
-                                          (op_bc_flag_adr_p != exec_ext_bits_1clk_i) |                            // l.bf/l.bnf hazard in OMAN
-                                          (exec_op_1clk_cmp_i & exec_wb2exe_hazard_d1xx_i & (~wb_rfd1_wb_o)))) |  // l.bf/l.bnf hazard in OMAN
-                        (ocb_flag_mcycle_p & ((op_bc_flag_adr_p != wb_rfd1_ext) |                                 // l.bf/l.bnf hazard in OMAN
-                                              (wb_flag_wb_r & wb_flag_wb_lsu_miss_i)));                           // l.bf/l.bnf hazard in OMAN
-  // ---
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst) begin
-      op_bf_p           <= 1'b0;
-      op_bnf_p          <= 1'b0;
-      op_bc_p           <= 1'b0;
-      ocb_flag_mcycle_p <= 1'b0;
-      op_1clk_cmp_p     <= 1'b0;
-    end
-    else if (pipeline_flush_i) begin
-      op_bf_p           <= 1'b0;
-      op_bnf_p          <= 1'b0;
-      op_bc_p           <= 1'b0;
-      ocb_flag_mcycle_p <= 1'b0;
-      op_1clk_cmp_p     <= 1'b0;
-    end
-    else if (op_bc_p) begin
-      op_bf_p           <= oman_bc_hazard & op_bf_p;
-      op_bnf_p          <= oman_bc_hazard & op_bnf_p;
-      op_bc_p           <= oman_bc_hazard;
-      ocb_flag_mcycle_p <= oman_bc_hazard & ocb_flag_mcycle_p;
-      op_1clk_cmp_p     <= oman_bc_hazard & op_1clk_cmp_p;
-    end
-    else if (padv_decode_i) begin
-      op_bf_p              <= dcod_op_bf_i  & dcod_bc_hazard;
-      op_bnf_p             <= dcod_op_bnf_i & dcod_bc_hazard;
-      op_bc_p              <= dcod_op_bc    & dcod_bc_hazard;
-      ocb_flag_mcycle_p    <= ocb_flag_mcycle;
-      op_1clk_cmp_p        <= ~ocb_flag_mcycle;
-      dcod_to_imm_target_p <= dcod_to_imm_target_i;
-      op_bc_flag_adr_p     <= op_bc_flag_adr;
-    end
-  end // @clock
+  //--------------------------------//
+  // Tacking conditional branch FSM //
+  //--------------------------------//
+
+  // state machine for tracking Jump / Branch related hazards
+  localparam [4:0] BC_FSM_CATCHING_BC           = 5'b00001, // on IFETCH output
+                   BC_FSM_DO_INSTANT_BRANCH     = 5'b00010,
+                   BC_FSM_PREDICT_CATCHING_DS   = 5'b00100, // from conditional branch till delay slot
+                   BC_FSM_PREDICT_WAITING_FLAG  = 5'b01000, // from delay slot till periction reslolving
+                   BC_FSM_PREDICT_MISS          = 5'b10000; // restart IFETCH from mispredict target (1-clock)
+
+  reg [4:0] bc_fsm_state_r;
+
+  wire bc_fsm_catching_bc                = bc_fsm_state_r[0];
+  wire bc_fsm_do_instant_branch_state    = bc_fsm_state_r[1];
+  wire bc_fsm_predict_catching_ds_state  = bc_fsm_state_r[2];
+  wire bc_fsm_predict_waiting_flag_state = bc_fsm_state_r[3];
+  wire bc_fsm_predict_miss_state         = bc_fsm_state_r[4];
 
 
-  // Combine IFETCH hazards
-  assign fetch_jr_bc_hazard_o = (dcod_op_jr_i & dcod_jr_hazard) | (op_jr_p & oman_jr_hazard) | // IFETCH waiting rB for l.jr/l.jalr
-                                (dcod_op_bc   & dcod_bc_hazard) | (op_bc_p & oman_bc_hazard);  // IFETCH waiting flag for l.bf/l.bnf
-  // forwarded flag
-  wire fwd_flag = exec_op_1clk_cmp_i ? exec_flag_set_i : ctrl_flag_i;
+  // --- detect flag hazard for l.bf/l.bnf ---
+  wire                         flag_alloc_w;
+  reg                          flag_alloc_r;     // SR[F] allocated for write-back
+  wire [DEST_EXTADR_WIDTH-1:0] flag_alloc_ext_m; // SR[F] allocation index
+  reg  [DEST_EXTADR_WIDTH-1:0] flag_alloc_ext_r; // SR[F] allocation index
   // ---
-  assign do_branch_o = dcod_op_jr_i    | op_jr_p |                // do jump to register (B1)
-                       dcod_op_jimm_i  |                          // do jump to immediate
-                       ((dcod_op_bf_i  | op_bf_p)  &  fwd_flag) | // do branch by flag
-                       ((dcod_op_bnf_i | op_bnf_p) & ~fwd_flag);  // do branch by ~flag
+  assign flag_alloc_w    = dcod_flag_we_i | flag_alloc_r;
+  wire   keep_flag_alloc = dcod_flag_we_i | (flag_alloc_ext_r != wrbk_extadr_o);
+  // ---
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i) begin
+      flag_alloc_r <= 1'b0;
+    end
+    else begin
+      if (flag_alloc_r)
+        flag_alloc_r <= keep_flag_alloc;
+      else if (padv_exec_i)
+        flag_alloc_r <= dcod_flag_we_i;
+    end
+  end // at cpu-clock
+  // ---
+  assign flag_alloc_ext_m = dcod_flag_we_i ? dcod_extadr_r : flag_alloc_ext_r;
+  // ---
+  always @(posedge cpu_clk) begin
+    if (padv_exec_i)
+      flag_alloc_ext_r <= flag_alloc_ext_m;
+  end // at cpu-clock
+
+  // --- use / do  preticted or instant conditional branch (bc) ---
+  wire fetch_op_bc = fetch_op_bf_i | fetch_op_bnf_i;
+  reg  dcod_op_bc_r; // to WriteBack
+  reg  dcod_op_bf_r; // to WriteBack
+  reg  take_bc_r;    // to IFETCH
+  // --- prediction related registers ---
+  wire do_bc_predict_raw = bc_cnt_value_i[1];
+  reg  predict_bc_taken_r;
+  reg  predict_flag_value_r;
+  reg  predict_flag_alloc_r;
+  // --- wait completion writting to SR[F] ---
+  wire keep_predict_flag_alloc = predict_flag_alloc_r & (jb_hazard_ext_p != wrbk_extadr_o);
+  // --- compute raw hit/miss for prediction ---
+  // --- they are used only inside J/B FSM ---
+  wire predict_hit_raw  = (~predict_flag_alloc_r) &  (~(predict_flag_value_r ^ ctrl_flag_sr_i));
+  wire predict_miss_raw = (~predict_flag_alloc_r) &    (predict_flag_value_r ^ ctrl_flag_sr_i);
+  // --- complete prediction hit ---
+  wire predict_hit = (bc_fsm_predict_catching_ds_state | bc_fsm_predict_waiting_flag_state) & predict_hit_raw;
+
+  // Jump / Branch state machine
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i) begin
+      bc_fsm_state_r       <= BC_FSM_CATCHING_BC; // flush pipe
+      take_bc_r            <= 1'b0; // flush pipe
+      dcod_op_bc_r         <= 1'b0; // flush pipe
+      dcod_op_bf_r         <= 1'b0; // flush pipe
+      predict_bc_taken_r   <= 1'b0; // flush pipe
+      predict_flag_value_r <= 1'b0; // flush pipe
+      predict_flag_alloc_r <= 1'b0; // flush pipe
+    end
+    else begin
+      // synthesis parallel_case
+      case (bc_fsm_state_r)
+        // catching j/b on IFETCH output
+        BC_FSM_CATCHING_BC: begin
+          if (padv_dcod_i) begin
+            if (fetch_op_bc) begin
+              if (flag_alloc_w) begin
+                bc_fsm_state_r        <= BC_FSM_PREDICT_CATCHING_DS;
+                take_bc_r             <= do_bc_predict_raw;
+                predict_bc_taken_r    <= do_bc_predict_raw;
+                predict_flag_value_r  <= (fetch_op_bf_i  &   do_bc_predict_raw) | // PREDICTED FLAG
+                                         (fetch_op_bnf_i & (~do_bc_predict_raw)); // PREDICTED FLAG
+                predict_flag_alloc_r  <= keep_flag_alloc;
+              end
+              else begin
+                bc_fsm_state_r <= BC_FSM_DO_INSTANT_BRANCH;
+                take_bc_r      <= (fetch_op_bf_i  &   ctrl_flag_sr_i) |
+                                  (fetch_op_bnf_i & (~ctrl_flag_sr_i));
+              end
+              dcod_op_bc_r <= 1'b1;
+              dcod_op_bf_r <= fetch_op_bf_i;
+            end
+          end
+        end
+
+        // we can take branch without prediction
+        BC_FSM_DO_INSTANT_BRANCH: begin
+          bc_fsm_state_r <= BC_FSM_CATCHING_BC;
+          take_bc_r      <= 1'b0;
+          dcod_op_bc_r   <= 1'b0;
+          dcod_op_bf_r   <= 1'b0;
+        end
+
+        // catching delay slot after branch conditional
+        BC_FSM_PREDICT_CATCHING_DS: begin
+          if (predict_hit_raw) begin
+            bc_fsm_state_r <= BC_FSM_CATCHING_BC;
+          end
+          else if (padv_dcod_i) begin
+            if (fetch_delay_slot_i)
+              bc_fsm_state_r <= predict_miss_raw ? BC_FSM_PREDICT_MISS : BC_FSM_PREDICT_WAITING_FLAG;
+          end
+          predict_flag_alloc_r <= keep_predict_flag_alloc;
+          take_bc_r            <= 1'b0;
+          dcod_op_bc_r         <= 1'b0;
+          dcod_op_bf_r         <= 1'b0;
+         end
+        // waiting flag computation
+        BC_FSM_PREDICT_WAITING_FLAG: begin
+          if (predict_hit_raw) begin
+            bc_fsm_state_r <= BC_FSM_CATCHING_BC;
+          end
+          else if (predict_miss_raw) begin
+            bc_fsm_state_r <= BC_FSM_PREDICT_MISS;
+          end
+          predict_flag_alloc_r <= keep_predict_flag_alloc;
+        end
+        // miss prediction (1-clock)
+        BC_FSM_PREDICT_MISS: begin
+          bc_fsm_state_r <= BC_FSM_CATCHING_BC;
+        end
+
+        // others
+        default:;
+      endcase
+    end
+  end // @cpu-clock
+
+
+  // address extention for J/B processing
+  always @(posedge cpu_clk) begin
+    if (padv_dcod_i) begin
+      if (jr_fsm_catching_jr & fetch_op_jr_i)
+        jb_hazard_ext_p <= jr_dcd2fth_hazard_d1b1_raw ? dcod_extadr_r : jr_hazard_ext_raw;
+      else if (bc_fsm_catching_bc & fetch_op_bc)
+        jb_hazard_ext_p <= flag_alloc_ext_m;
+    end
+  end // at cpu clock
+  // store target for l.jr/l.jalr
+  always @(posedge cpu_clk) begin
+    jr_target_p <=  jr_fsm_get_b1_state     ? dcod_rfb1_jr_i :
+                   (jr_fsm_waiting_b1_state ? wrbk_result1_i   :
+                                              jr_target_p);
+  end // @cpu-clock
+
+
+  // store target for miss prediction
+  reg  [OPTION_OPERAND_WIDTH-1:0] predict_miss_target_r;
+  // ---
+  always @(posedge cpu_clk) begin
+    if (padv_dcod_i) begin
+      if (fetch_op_bc) begin
+        predict_miss_target_r <= do_bc_predict_raw ? after_ds_target_i : fetch_to_imm_target_i;
+      end
+    end
+  end // at clock
+
+
+  // latch jump-to-immediate flag for 1-clock
+  // to generate "do branch"
+  reg                             dcod_op_jimm_r;
+  reg  [OPTION_OPERAND_WIDTH-1:0] dcod_to_imm_target_r;
+  // ---
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i)
+      dcod_op_jimm_r <= 1'b0;
+    else if (padv_dcod_i)
+      dcod_op_jimm_r <= fetch_op_jimm_i;
+    else
+      dcod_op_jimm_r <= 1'b0;
+  end // at cpu clock
+  // ---
+  always @(posedge cpu_clk) begin
+    if (padv_dcod_i)
+      dcod_to_imm_target_r <= fetch_to_imm_target_i;
+  end // at cpu clock
+
+
+  // DECODE is "locked" flag.
+  //  (1) We set the flag after delay slot has passed
+  // into DECODE and till prediction resolving.
+  //  (2) For l.jr/l.jalr we use another approach:
+  // IFETCH just generates bubbles till rB1 hazard resolving.
+  // ---
+  reg  dcod_locked_r;
+  // ---
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i)
+      dcod_locked_r <= 1'b0;
+    else if (dcod_locked_r) begin
+      if ((bc_fsm_predict_waiting_flag_state & predict_hit_raw) | // UNLOCK DECODE
+          bc_fsm_predict_miss_state)                              // UNLOCK DECODE
+        dcod_locked_r <= 1'b0;
+    end
+    else if (padv_dcod_i)
+      dcod_locked_r <= fetch_delay_slot_i &                                     // LOCK DECODE
+                       (bc_fsm_predict_catching_ds_state & (~predict_hit_raw)); // LOCK DECODE
+  end // at clock
+  // ---
+  assign dcod_free_o = (~dcod_locked_r);
+
+
+
+  // --- Feedback to IFETCH --- //
+
+
+  // branch prediction missed
+  assign predict_miss_o = bc_fsm_predict_miss_state;
+
+  // "Do branch"
+  assign do_branch_o = dcod_op_jimm_r        |    // do jump to immediate
+                       take_bc_r             |    // do branch conditional
+                       jr_fsm_doing_jr_state |    // do jump to register (B1)
+                       bc_fsm_predict_miss_state; // do jump to mispredict target
   // branch target
-  assign do_branch_target_o = op_jr_p      ? wb_result1_i         : // branch target selection
-                              op_bc_p      ? dcod_to_imm_target_p : // branch target selection
-                              dcod_op_jr_i ? dcod_rfb1_jr_i       : // branch target selection
-                                             dcod_to_imm_target_i;  // branch target selection
+  assign do_branch_target_o = bc_fsm_predict_miss_state ? predict_miss_target_r :  // branch target selection
+                                   (jr_fsm_doing_jr_state ? jr_target_p :          // branch target selection
+                                                            dcod_to_imm_target_r); // branch target selection
+
+  // we execute l.jr/l.jalr after registering target only
+  assign jr_gathering_target_o = (fetch_op_jb_i & (~bc_fsm_predict_miss_state)) | jr_gathering_target_p;
 
 
-  // Detect IBUS align violation on DECODE stage.
-  // To compute "oman_fd_an_except_o" and for JB_ATTR_OCB
-  // It could happen only for l.jr/l.jalr
-  assign dcod_except_ibus_align = dcod_op_jr_i & (~dcod_jr_hazard) & (|dcod_rfb1_jr_i[1:0]);
 
-  // Detect IBUS align violation on OMAN.
-  // For JB_ATTR_OCB only.
-  wire   oman_except_ibus_align = op_jr_p & (~oman_jr_hazard) & (|wb_result1_i[1:0]);
+  // --- Feedforward to Write-Back --- //
 
 
-  // JUMP/BRANCH attributes [O]rder [C]ontrol [B]uffer (JB_ATTR_OCB)
-  localparam  JB_ATTR_TARGET_LSB            = 0;
-  localparam  JB_ATTR_TARGET_MSB            = OPTION_OPERAND_WIDTH          - 1;
-  localparam  JB_ATTR_DO_BRANCH_POS         = JB_ATTR_TARGET_MSB            + 1; // if "do" the "target" makes sence
-  localparam  JP_ATTR_EXCEPT_IBUS_ALIGN_POS = JB_ATTR_DO_BRANCH_POS         + 1;
-  localparam  JB_ATTR_VALID_POS             = JP_ATTR_EXCEPT_IBUS_ALIGN_POS + 1;
-  //---
-  localparam  JB_ATTR_MSB   = JB_ATTR_VALID_POS;
-  localparam  JB_ATTR_WIDTH = JB_ATTR_MSB + 1;
-  // --- input data fields for JB_ATTR_OCB ---
-  wire [JB_ATTR_MSB:0] jb_attr_ocbi =
-    {
-      1'b1,                                              // JB_ATTR_OCB input fields: if pushed into JB_ATTR_OCB then valid
-      (dcod_except_ibus_align | oman_except_ibus_align), // JB_ATTR_OCB input fields: align exception
-      do_branch_o,                                       // JB_ATTR_OCB input fields: jump or taken branch
-      do_branch_target_o                                 // JB_ATTR_OCB input fields
-    };
-  // --- output data fields for JB_ATTR_OCB ---
+  // JUMP/BRANCH attribute layout
+  // --- data ---
+  localparam  JB_ATTR_D_TARGET_LSB     = 0;
+  localparam  JB_ATTR_D_TARGET_MSB     = OPTION_OPERAND_WIDTH     - 1;
+  // --- control flags ---
+  localparam  JB_ATTR_C_BF_POS         = JB_ATTR_D_TARGET_MSB     + 1; // conditional
+  localparam  JB_ATTR_C_JUMP_POS       = JB_ATTR_C_BF_POS         + 1; // unconditional
+  localparam  JB_ATTR_C_IBUS_ALIGN_POS = JB_ATTR_C_JUMP_POS       + 1;
+  localparam  JB_ATTR_C_VALID_POS      = JB_ATTR_C_IBUS_ALIGN_POS + 1;
+  // --- overall --
+  localparam  JB_ATTR_MSB              = JB_ATTR_C_VALID_POS;
+  localparam  JB_ATTR_WIDTH            = JB_ATTR_MSB + 1;
+
+  // Write/Read to Jump/Branch attributes buffers
+  // !!! each case is 1-clock length
+  wire jb_attr_ocb_write = jr_fsm_doing_jr_state | dcod_op_jimm_r | dcod_op_bc_r;
+  wire jb_attr_ocb_read  = padv_wrbk_i & ocbo[OCBTC_JUMP_OR_BRANCH_POS];
+
+  // --- JB-ATTR-OCB output / input ---
   wire [JB_ATTR_MSB:0] jb_attr_ocbo;
-  // --- push new data to JB_ATTR_OCB ---
-  wire push_jb_attr_ocb = (padv_decode_i & ( dcod_op_jimm_i                  |    // PUSH JB_ATTR_OCB from DECODE
-                                            (dcod_op_jr_i & ~dcod_jr_hazard) |    // PUSH JB_ATTR_OCB from DECODE
-                                            (dcod_op_bc   & ~dcod_bc_hazard))) |  // PUSH JB_ATTR_OCB from DECODE
-                          (op_jr_p & ~oman_jr_hazard) |                           // PUSH JB_ATTR_OCB from OMAN
-                          (op_bc_p & ~oman_bc_hazard);                            // PUSH JB_ATTR_OCB from OMAN
-  // --- "read" buffer output ---
-  wire read_jb_attr_ocb = padv_wb_i & ocbo00[OCBT_JUMP_OR_BRANCH_POS];
-  // --- JB_ATTR_OCB instance ---
-  mor1kx_ocb_marocchino
+  wire [JB_ATTR_MSB:0] jb_attr_ocbi;
+  // ---
+  assign jb_attr_ocbi =
+    {
+      // --- control flags ---
+      1'b1, // JB ATTR-C VALID
+      (jr_fsm_doing_jr_state & (|jr_target_p[1:0])), // JB ATTR-C IBUS ALIGN
+      (jr_fsm_doing_jr_state | dcod_op_jimm_r), // JB ATTR-C JUMP (uncoditional)
+      dcod_op_bf_r, // JB ATTR-C BRANCH BY FLAG (conditional)
+      // --- data ---
+      (jr_fsm_doing_jr_state ? jr_target_p : dcod_to_imm_target_r) // JB ATTR-D TARGET
+    };
+
+  // --- JB-ATTR-OCB instance ---
+  mor1kx_ff_oreg_buff_marocchino
   #(
-    .NUM_TAPS   (4), // half of regular OCB (second half is delay slots)
-    .NUM_OUTS   (1), // only "EXECUTE" level is intresting
-    .DATA_SIZE  (JB_ATTR_WIDTH)
+    .NUM_TAPS         (JB_ATTR_OCB_NUM_TAPS), // JB-ATTR-OCB: extention bits "0" is reserved as "not used"
+    .DATA_WIDTH       (JB_ATTR_WIDTH), // JB-ATTR-OCB
+    .FULL_FLAG        ("NONE"), // JB-ATTR-OCB
+    .EMPTY_FLAG       ("NONE") // JB-ATTR-OCB
   )
   u_jb_attr_ocb
   (
-    // clocks and resets
-    .clk                (clk), // JB_ATTR_OCB
-    .rst                (rst), // JB_ATTR_OCB
-    // pipe controls
-    .pipeline_flush_i   (pipeline_flush_i), // JB_ATTR_OCB
-    .padv_decode_i      (push_jb_attr_ocb), // JB_ATTR_OCB
-    .padv_wb_i          (read_jb_attr_ocb), // JB_ATTR_OCB
-    // value at reset/flush
-    .default_value_i    ({JB_ATTR_WIDTH{1'b0}}), // JB_ATTR_OCB
+    // clocks, resets
+    .cpu_clk          (cpu_clk), // JB-ATTR-OCB
+    // resets
+    .ini_rst          (pipeline_flush_i), // JB-ATTR-OCB
+    .ext_rst          (1'b0), // JB-ATTR-OCB
+    // RW-controls
+    .write_i          (jb_attr_ocb_write), // JB-ATTR-OCB
+    .read_i           (jb_attr_ocb_read), // JB-ATTR-OCB
     // data input
-    .ocbi_i             (jb_attr_ocbi), // JB_ATTR_OCB
+    .data_i           (jb_attr_ocbi), // JB-ATTR-OCB
     // "OCB is empty" flag
-    .empty_o            (), // JB_ATTR_OCB
+    .empty_o          (), // JB-ATTR-OCB
     // "OCB is full" flag
-    .full_o             (), // JB_ATTR_OCB
-    // data ouputs
-    .ocbo_o             (jb_attr_ocbo) // JB_ATTR_OCB
+    .full_o           (), // JB-ATTR-OCB
+    // output register
+    .data_o           (jb_attr_ocbo) // JB-ATTR-OCB
   );
-  // --- JB_ATTR_OCB output unpack ---
-  assign exec_jb_attr_valid = jb_attr_ocbo[JB_ATTR_VALID_POS];
 
-  // WB JUMP or BRANCH attributes
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst) begin
-      wb_jump_or_branch_o <= 1'b0;
-      wb_do_branch_o      <= 1'b0;
+  // --- JB-ATTR-OCB valid unpack ---
+  assign exec_jb_attr_valid = jb_attr_ocbo[JB_ATTR_C_VALID_POS];
+
+
+
+  //----------------------------------------//
+  // Saturation counter as branch predictor //
+  //----------------------------------------//
+  //  (a) We update counter only after completion
+  //      all previous updates of SR[F]
+  //  (b) They are 1-clock length to prevent multiple
+  //      updates of counter
+
+  // --- pending values for update saturation counters and branch history ---
+  reg                    [1:0] bc_cnt_value_up_p;
+  reg                    [1:0] bc_cnt_value_dn_p;
+  reg  [(GSHARE_BITS_NUM-1):0] bc_cnt_radr_p;
+  // --- pre-computed up and down next values of saturation counter ---
+  wire [1:0] bc_cnt_value_up = (bc_cnt_value_i == 2'b11) ? bc_cnt_value_i : (bc_cnt_value_i + 1'b1);
+  wire [1:0] bc_cnt_value_dn = (bc_cnt_value_i == 2'b00) ? bc_cnt_value_i : (bc_cnt_value_i - 1'b1);
+  // --- data for update saturation counters and branch history ---
+  always @(posedge cpu_clk) begin
+    if (padv_dcod_i & (fetch_op_bf_i | fetch_op_bnf_i)) begin // PENDING FOR SATURATION COUNTERS
+      bc_cnt_value_up_p <= bc_cnt_value_up; // PENDING FOR SATURATION COUNTERS
+      bc_cnt_value_dn_p <= bc_cnt_value_dn; // PENDING FOR SATURATION COUNTERS
+      bc_cnt_radr_p     <= bc_cnt_radr_i;   // PENDING FOR SATURATION COUNTERS
     end
-    else if (pipeline_flush_i) begin
-      wb_jump_or_branch_o <= 1'b0;
-      wb_do_branch_o      <= 1'b0;
+  end
+
+  // --- write to saturation counters and branch history (1-clock) ---
+  //     !!! use-bc-instant-p couldn't be overlapped by predict
+  //     !!! resolving events (from prev. l.bf/l.bnf) because
+  //     !!! DECODE is locked till prediction resolving
+  always @(posedge cpu_clk) begin
+    if (cpu_rst)
+      bc_cnt_we_o <= 1'b0;
+    else if (bc_fsm_do_instant_branch_state | predict_hit | bc_fsm_predict_miss_state)
+      bc_cnt_we_o <= 1'b1;
+    else
+      bc_cnt_we_o <= 1'b0;
+  end // at clock
+  // --- saturation counter update address ---
+  always @(posedge cpu_clk) begin
+    if (bc_fsm_do_instant_branch_state | predict_hit | bc_fsm_predict_miss_state)
+      bc_cnt_wadr_o <= bc_cnt_radr_p;
+  end // at clock
+  // --- data for saturation counters and branch history ---
+  always @(posedge cpu_clk) begin
+    if (bc_fsm_do_instant_branch_state) begin
+      bc_hist_taken_o <= take_bc_r;
+      bc_cnt_wdat_o   <= take_bc_r ? bc_cnt_value_up_p : bc_cnt_value_dn_p;
     end
-    else if (padv_wb_i) begin
-      wb_jump_or_branch_o   <= ocbo00[OCBT_JUMP_OR_BRANCH_POS];
-      wb_do_branch_o        <= jb_attr_ocbo[JB_ATTR_DO_BRANCH_POS];
-      wb_do_branch_target_o <= jb_attr_ocbo[JB_ATTR_TARGET_MSB:JB_ATTR_TARGET_LSB];
+    else if (predict_hit) begin
+      bc_hist_taken_o <= predict_bc_taken_r;
+      bc_cnt_wdat_o   <= predict_bc_taken_r ? bc_cnt_value_up_p : bc_cnt_value_dn_p;
+    end
+    else if (bc_fsm_predict_miss_state) begin
+      bc_hist_taken_o <= (~predict_bc_taken_r);
+      bc_cnt_wdat_o   <= (~predict_bc_taken_r) ? bc_cnt_value_up_p : bc_cnt_value_dn_p;
+    end
+  end // at clock
+
+
+
+  //--------------------//
+  // Write Back latches //
+  //--------------------//
+
+  // Write-Back JUMP or BRANCH attributes
+  //  # flags (all 1-clock length)
+  always @(posedge cpu_clk) begin
+    if (padv_wrbk_i) begin
+      wrbk_jump_or_branch_o <= ocbo[OCBTC_JUMP_OR_BRANCH_POS];
+      wrbk_jump_o           <= jb_attr_ocbo[JB_ATTR_C_JUMP_POS];
+      wrbk_op_bf_o          <= jb_attr_ocbo[JB_ATTR_C_BF_POS];
     end
     else begin
-      wb_jump_or_branch_o <= 1'b0; // 1-clock length
-      wb_do_branch_o      <= 1'b0;
+      wrbk_jump_or_branch_o <= 1'b0;
+      wrbk_jump_o           <= 1'b0;
+      wrbk_op_bf_o          <= 1'b0;
     end
+  end // @clock
+  //  # target
+  always @(posedge cpu_clk) begin
+    if (padv_wrbk_i)
+      wrbk_jb_target_o <= jb_attr_ocbo[JB_ATTR_D_TARGET_MSB:JB_ATTR_D_TARGET_LSB];
   end // @clock
 
 
-  // ---
-  // Stall DECODE advancing (see also CTRL) when l.rfe or ecxeptions are in EXECUTE stage.
-  // The main purpose of this is waiting till l.rfe/exceptions propagate up to WB stage.
-  // ---
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      oman_fd_an_except_o <= 1'b0;
-    else if (pipeline_flush_i)
-      oman_fd_an_except_o <= 1'b0;
-    else if (padv_decode_i)
-      oman_fd_an_except_o <= (fetch_an_except_i | dcod_an_except  | dcod_op_rfe_i);
-  end
 
   //   Flag to enabel/disable exterlal interrupts processing
   // depending on the fact is instructions restartable or not
-  assign exec_interrupts_en_o     = ocbo00[OCBT_INTERRUPTS_EN_POS];
+  assign exec_interrupts_en_o     = ocbo[OCBTA_INTERRUPTS_EN_POS];
 
-  // pre-WB l.rfe
-  assign exec_op_rfe_o            = ocbo00[OCBT_OP_RFE_POS];
+  // pre-Write-Back l.rfe
+  assign exec_op_rfe_o            = ocbo[OCBTA_OP_RFE_POS];
+  // IFETCH/DECODE an exception
+  assign exec_an_except_fd_o      = ocbo[OCBTA_AN_EXCEPT_FD_POS];
   // IFETCH exceptions
-  assign exec_except_ibus_err_o   = ocbo00[5];
-  assign exec_except_ipagefault_o = ocbo00[4];
-  assign exec_except_itlb_miss_o  = ocbo00[3];
-  assign exec_except_ibus_align_o = jb_attr_ocbo[JP_ATTR_EXCEPT_IBUS_ALIGN_POS];
+  assign exec_except_ibus_err_o   = ocbo[5];
+  assign exec_except_ipagefault_o = ocbo[4];
+  assign exec_except_itlb_miss_o  = ocbo[3];
+  assign exec_except_ibus_align_o = jb_attr_ocbo[JB_ATTR_C_IBUS_ALIGN_POS];
   // DECODE exceptions
-  assign exec_except_illegal_o    = ocbo00[2];
-  assign exec_except_syscall_o    = ocbo00[1];
-  assign exec_except_trap_o       = ocbo00[0];
+  assign exec_except_illegal_o    = ocbo[2];
+  assign exec_except_syscall_o    = ocbo[1];
+  assign exec_except_trap_o       = ocbo[0];
 
   // PC at EXECUTE (moslty for debugging)
-  wire [OPTION_OPERAND_WIDTH-1:0] pc_exec = ocbo00[OCBT_PC_MSB:OCBT_PC_LSB];
+  wire [OPTION_OPERAND_WIDTH-1:0] pc_exec = ocbo[OCBTA_PC_MSB:OCBTA_PC_LSB];
+
+  // instuction requests write-back
+  wire exec_rfd1_we = ocbo[OCBTA_RFD1_WRBK_POS];
+  wire exec_rfd2_we = ocbo[OCBTA_RFD2_WRBK_POS];
+
+  // destiny addresses
+  wire [OPTION_RF_ADDR_WIDTH-1:0] exec_rfd1_adr = ocbo[OCBTA_RFD1_ADR_MSB:OCBTA_RFD1_ADR_LSB];
+  wire [OPTION_RF_ADDR_WIDTH-1:0] exec_rfd2_adr = ocbo[OCBTA_RFD2_ADR_MSB:OCBTA_RFD2_ADR_LSB];
 
 
-
-  // D1 WB-to-RF request generated with taking
-  // into accaunt speculative WB for LSU load command
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      wb_rfd1_wb_r <= 1'b0;
-    else if (pipeline_flush_i)
-      wb_rfd1_wb_r <= 1'b0;
-    else if (padv_wb_i)
-      wb_rfd1_wb_r <= ocbo00[OCBT_RFD1_WB_POS];
-    else if (~wb_rfd1_wb_lsu_miss_i)
-      wb_rfd1_wb_r <= 1'b0;
+  // 1-hot Write-Back-controls for RF
+  //  if A(B)'s address is odd than A2(B2)=A(B)+1 is even and vise verse
+  //  1-clock Write-Back-pulses
+  always @(posedge cpu_clk) begin
+    if (padv_wrbk_i) begin
+      wrbk_rfd1_we1h_o <= {{(NUM_GPRS-1){1'b0}},exec_rfd1_we} << exec_rfd1_adr;
+      wrbk_rfd1_we_o   <= exec_rfd1_we;
+      wrbk_rfd2_we1h_o <= {{(NUM_GPRS-1){1'b0}},exec_rfd2_we} << exec_rfd2_adr;
+      wrbk_rfd2_we_o   <= exec_rfd2_we;
+    end
+    else begin
+      wrbk_rfd1_we1h_o <= {NUM_GPRS{1'b0}};
+      wrbk_rfd1_we_o   <= 1'b0;
+      wrbk_rfd2_we1h_o <= {NUM_GPRS{1'b0}};
+      wrbk_rfd2_we_o   <= 1'b0;
+    end
   end // @clock
-  // ---
-  assign wb_rfd1_wb_o = wb_rfd1_wb_r & (~wb_rfd1_wb_lsu_miss_i);
+  // latch write-back addresses without reset
+  always @(posedge cpu_clk) begin
+    if (padv_wrbk_i) begin
+      wrbk_rfd1_adr_o <= exec_rfd1_adr;
+      wrbk_rfd2_adr_o <= exec_rfd2_adr;
+    end
+  end // @clock
 
 
-  // D2 WB-to-RF request (1-clock length)
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      wb_rfd2_wb_o <= 1'b0;
-    else if (pipeline_flush_i)
-      wb_rfd2_wb_o <= 1'b0;
-    else if (padv_wb_i)
-      wb_rfd2_wb_o <= ocbo00[OCBT_RFD2_WB_POS];
+
+  // Write-Back delay slot
+  always @(posedge cpu_clk) begin
+    if (padv_wrbk_i)
+      wrbk_delay_slot_o <= ocbo[OCBTA_DELAY_SLOT_POS];
     else
-      wb_rfd2_wb_o <= 1'b0;
+      wrbk_delay_slot_o <= 1'b0;
   end // @clock
 
 
-  // OMAN WB-to-FLAG-request generated with taking
-  // into accaunt speculative WB for LSU load command
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      wb_flag_wb_r <= 1'b0;
-    else if (pipeline_flush_i)
-      wb_flag_wb_r <= 1'b0;
-    else if (padv_wb_i)
-      wb_flag_wb_r <= ocbo00[OCBT_FLAG_WB_POS];
-    else if (~wb_flag_wb_lsu_miss_i)
-      wb_flag_wb_r <= 1'b0;
-  end // @clock
-  // ---
-  assign wb_flag_wb_o = wb_flag_wb_r & (~wb_flag_wb_lsu_miss_i);
-
-
-  // WB-to-CARRY-request (1-clock to prevent extra writes)
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      wb_carry_wb_o <= 1'b0;
-    else if (pipeline_flush_i)
-      wb_carry_wb_o <= 1'b0;
-    else if (padv_wb_i)
-      wb_carry_wb_o <= ocbo00[OCBT_CARRY_WB_POS];
+  // extention bits: valid for 1-clock
+  // to reolve hazards in rezervation stations
+  always @(posedge cpu_clk) begin
+    if (padv_wrbk_i)
+      wrbk_extadr_o <= exec_extadr;
     else
-      wb_carry_wb_o <= 1'b0;
+      wrbk_extadr_o <= {DEST_EXTADR_WIDTH{1'b0}};
   end // @clock
 
 
-  // WB delay slot
-  always @(posedge clk `OR_ASYNC_RST) begin
-    if (rst)
-      wb_delay_slot_o <= 1'b0;
-    else if (pipeline_flush_i)
-      wb_delay_slot_o <= 1'b0;
-    else if (padv_wb_i)
-      wb_delay_slot_o <= ocbo00[OCBT_DELAY_SLOT_POS];
-  end // @clock
-
-
-  // address of D1 end D2 PC
-  always @(posedge clk) begin
-    if (padv_wb_i & ~pipeline_flush_i) begin
-      wb_rfd1_adr_o <= {ocbo00[OCBT_EXT_ADR_MSB:OCBT_EXT_ADR_LSB], ocbo00[OCBT_RFD1_ADR_MSB:OCBT_RFD1_ADR_LSB]};
-      wb_rfd2_adr_o <=  ocbo00[OCBT_RFD2_ADR_MSB:OCBT_RFD2_ADR_LSB];
-      pc_wb_o       <=  pc_exec;
+  // PC
+  always @(posedge cpu_clk) begin
+    if (padv_wrbk_i) begin
+      pc_wrbk_o      <= pc_exec;
+      pc_nxt_wrbk_o  <= pc_exec + 3'd4;
+      pc_nxt2_wrbk_o <= pc_exec + 4'd8;
     end
   end // @clock
 
