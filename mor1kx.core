@@ -27,6 +27,7 @@ filesets:
       - rtl/verilog/mor1kx_decode_execute_cappuccino.v
       - rtl/verilog/mor1kx_decode.v
       - rtl/verilog/mor1kx_dmmu.v
+      - rtl/verilog/mor1kx_dpram_en_w1st.v
       - rtl/verilog/mor1kx_execute_alu.v
       - rtl/verilog/mor1kx_execute_ctrl_cappuccino.v
       - rtl/verilog/mor1kx_fetch_cappuccino.v

@@ -348,7 +348,7 @@ module mor1kx_top_marocchino
     .FEATURE_PSYNC                    (FEATURE_PSYNC), // CPU
     .FEATURE_CSYNC                    (FEATURE_CSYNC) // CPU
   )
-  u_cpu_marocchino
+  mor1kx_cpu
   (
     // Wishbone clock and reset
     .wb_clk                   (wb_clk), // CPU
