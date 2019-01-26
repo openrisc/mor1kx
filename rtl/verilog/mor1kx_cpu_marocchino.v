@@ -564,20 +564,20 @@ module mor1kx_cpu_marocchino
   reg  wrbk_an_except_r;
 
   // Bench monitoring
-  wire [`OR1K_INSN_WIDTH-1:0] 	     monitor_execute_insn/* verilator public */;
-  wire 				     monitor_execute_advance/* verilator public */;
-  wire 				     monitor_flag_set/* verilator public */;
-  wire 				     monitor_flag_clear/* verilator public */;
-  wire 				     monitor_flag_sr/* verilator public */;
-  wire 				     monitor_flag/* verilator public */;
-  wire [OPTION_OPERAND_WIDTH-1:0]    monitor_spr_sr/* verilator public */;
-  wire [OPTION_OPERAND_WIDTH-1:0]    monitor_execute_pc/* verilator public */;
-  wire [OPTION_OPERAND_WIDTH-1:0]    monitor_rf_result_in/* verilator public */;
-  wire 				     monitor_clk/* verilator public */;
-  wire [OPTION_OPERAND_WIDTH-1:0]    monitor_spr_epcr/* verilator public */;
-  wire [OPTION_OPERAND_WIDTH-1:0]    monitor_spr_eear/* verilator public */;
-  wire [OPTION_OPERAND_WIDTH-1:0]    monitor_spr_esr/* verilator public */;
-  wire 				     monitor_branch_mispredict/* verilator public */;
+  wire     [`OR1K_INSN_WIDTH-1:0] monitor_execute_insn/* verilator public */;
+  wire                            monitor_execute_advance/* verilator public */;
+  wire                            monitor_flag_set/* verilator public */;
+  wire                            monitor_flag_clear/* verilator public */;
+  wire                            monitor_flag_sr/* verilator public */;
+  wire                            monitor_flag/* verilator public */;
+  wire [OPTION_OPERAND_WIDTH-1:0] monitor_spr_sr/* verilator public */;
+  wire [OPTION_OPERAND_WIDTH-1:0] monitor_execute_pc/* verilator public */;
+  wire [OPTION_OPERAND_WIDTH-1:0] monitor_rf_result_in/* verilator public */;
+  wire                            monitor_clk/* verilator public */;
+  wire [OPTION_OPERAND_WIDTH-1:0] monitor_spr_epcr/* verilator public */;
+  wire [OPTION_OPERAND_WIDTH-1:0] monitor_spr_eear/* verilator public */;
+  wire [OPTION_OPERAND_WIDTH-1:0] monitor_spr_esr/* verilator public */;
+  wire                            monitor_branch_mispredict/* verilator public */;
 
   //----------------------------//
   // Instruction FETCH instance //
@@ -761,62 +761,64 @@ module mor1kx_cpu_marocchino
     .dcod_rfb1_jr_o                   (dcod_rfb1_jr) // RF
   );
 
-`ifndef SYNTHESIS
-// synthesis translate_off
-/* Debug signals required for the debug monitor */
+
+ `ifndef SYNTHESIS
+  // synthesis translate_off
+  /* Debug signals required for the debug monitor */
   assign monitor_flag = monitor_flag_set ? 1 :
-			monitor_flag_clear ? 0 :
-			monitor_flag_sr;
-  assign monitor_clk = cpu_clk;
-  assign monitor_execute_insn =u_fetch.fetch_insn_o;
-  assign monitor_execute_advance = u_oman.exec_valid_o;
-  assign monitor_flag_set = u_ctrl.wrbk_1clk_flag_set_i; 
-  assign monitor_flag_clear = u_ctrl.wrbk_1clk_flag_clear_i;
-  assign monitor_flag_sr = u_ctrl.ctrl_flag_sr_o;
-  assign monitor_spr_sr = {16'd0,u_ctrl.spr_sr[15:`OR1K_SPR_SR_F+1],
-			  // Use the locally calculated flag value
-			  monitor_flag,
-			  u_ctrl.spr_sr[`OR1K_SPR_SR_F-1:0]};
-  assign monitor_execute_pc = u_ctrl.spr_ppc;
-  assign monitor_rf_result_in = wrbk_result1;
-  assign monitor_spr_esr = {16'd0,u_ctrl.spr_esr};
-  assign monitor_spr_epcr = u_ctrl.spr_epcr;
-  assign monitor_spr_eear = u_ctrl.spr_eear;
+                        monitor_flag_clear ? 0 :
+                        monitor_flag_sr;
+
+  assign monitor_clk               = cpu_clk;
+  assign monitor_execute_insn      = u_fetch.fetch_insn_o;
+  assign monitor_execute_advance   = u_oman.exec_valid_o;
+  assign monitor_flag_set          = u_ctrl.wrbk_1clk_flag_set_i;
+  assign monitor_flag_clear        = u_ctrl.wrbk_1clk_flag_clear_i;
+  assign monitor_flag_sr           = u_ctrl.ctrl_flag_sr_o;
+  assign monitor_spr_sr            = {16'd0,u_ctrl.spr_sr[15:`OR1K_SPR_SR_F+1],
+                                      // Use the locally calculated flag value
+                                      monitor_flag,
+                                      u_ctrl.spr_sr[`OR1K_SPR_SR_F-1:0]};
+  assign monitor_execute_pc        = u_ctrl.spr_ppc;
+  assign monitor_rf_result_in      = wrbk_result1;
+  assign monitor_spr_esr           = {16'd0,u_ctrl.spr_esr};
+  assign monitor_spr_epcr          = u_ctrl.spr_epcr;
+  assign monitor_spr_eear          = u_ctrl.spr_eear;
   assign monitor_branch_mispredict = 0;
 
-`include "mor1kx_utils.vh"
-   localparam RF_ADDR_WIDTH = calc_rf_addr_width(OPTION_RF_ADDR_WIDTH,
-                                                 OPTION_RF_NUM_SHADOW_GPR);
+  `include "mor1kx_utils.vh"
+  localparam RF_ADDR_WIDTH = calc_rf_addr_width(OPTION_RF_ADDR_WIDTH,
+                                                OPTION_RF_NUM_SHADOW_GPR);
 
-   function [OPTION_OPERAND_WIDTH-1:0] get_gpr;
-      // verilator public
-      input [RF_ADDR_WIDTH-1:0] gpr_num;
-      begin
-	 // TODO: handle load ops
-	 if ((wrbk_rfd1_adr == gpr_num[4:0]) & wrbk_rfd1_we)
-	   get_gpr = wrbk_result1;
-	 else if ((wrbk_rfd2_adr == gpr_num[4:0]) & wrbk_rfd2_we)
-	   get_gpr = wrbk_result2;
-	 else
-	   get_gpr = u_rf.gpr0_rdata_bus[gpr_num];
-      end
-   endfunction //
+  function [OPTION_OPERAND_WIDTH-1:0] get_gpr;
+  // verilator public
+  input [RF_ADDR_WIDTH-1:0] gpr_num;
+  begin
+    // TODO: handle load ops
+    if ((wrbk_rfd1_adr == gpr_num[4:0]) & wrbk_rfd1_we)
+      get_gpr = wrbk_result1;
+    else if ((wrbk_rfd2_adr == gpr_num[4:0]) & wrbk_rfd2_we)
+      get_gpr = wrbk_result2;
+    else
+      get_gpr = u_rf.gpr0_rdata_bus[gpr_num];
+    end
+  endfunction // get_gpr
 
+  task set_gpr;
+    // verilator public
+    input        [RF_ADDR_WIDTH-1:0] gpr_num;
+    input [OPTION_OPERAND_WIDTH-1:0] gpr_value;
+    begin
+      $display("Error: MAROCCHINO pipeline does not support set_gpr");
+      $finish();
+      // This doesnt work you can address a element generated in a for
+      // loop.
+      //u_rf.u_single_gpr[gpr_num].gpr_r = gpr_value;
+    end
+  endtask
+  // synthesis translate_on
+ `endif
 
-   task set_gpr;
-      // verilator public
-      input [RF_ADDR_WIDTH-1:0] gpr_num;
-      input [OPTION_OPERAND_WIDTH-1:0] gpr_value;
-      begin
-	 $display("Error: MAROCCHINO pipeline does not support set_gpr");
-	 $finish();
-	 // This doesnt work you can address a element generated in a for
-	 // loop.
-	 //u_rf.u_single_gpr[gpr_num].gpr_r = gpr_value;
-      end
-   endtask
-// synthesis translate_on
-`endif
 
   //--------//
   // DECODE //
@@ -1181,7 +1183,7 @@ module mor1kx_cpu_marocchino
   wire                            exec_adder_do_carry;
   wire                            exec_opc_ffl1;
   wire                      [3:0] exec_opc_shift; // {SLL, SRL, SRA, ROR}
-  wire                      [3:0] exec_opc_extsz; 
+  wire                      [3:0] exec_opc_extsz;
   wire                      [3:0] exec_lut_logic;
   wire [`OR1K_COMP_OPC_WIDTH-1:0] exec_opc_setflag;
   // attributes include all of earlier components:
