@@ -1,0 +1,122 @@
+CAPI=2:
+
+name : ::mor1kx:5.0-r3
+#description : mor1kx - an OpenRISC processor IP core
+
+filesets:
+  core:
+    files:
+      - rtl/verilog/mor1kx-defines.v : {is_include_file : true}
+      - rtl/verilog/mor1kx-sprs.v : {is_include_file : true}
+      - rtl/verilog/mor1kx_utils.vh : {is_include_file : true}
+      - rtl/verilog/mor1kx_branch_predictor_gshare.v
+      - rtl/verilog/mor1kx_branch_predictor_simple.v
+      - rtl/verilog/mor1kx_branch_predictor_saturation_counter.v
+      - rtl/verilog/mor1kx_branch_prediction.v
+      - rtl/verilog/mor1kx_bus_if_wb32.v
+      - rtl/verilog/mor1kx_cache_lru.v
+      - rtl/verilog/mor1kx_cfgrs.v
+      - rtl/verilog/mor1kx_cpu_cappuccino.v
+      - rtl/verilog/mor1kx_cpu_espresso.v
+      - rtl/verilog/mor1kx_cpu_prontoespresso.v
+      - rtl/verilog/mor1kx_cpu.v
+      - rtl/verilog/mor1kx_ctrl_cappuccino.v
+      - rtl/verilog/mor1kx_ctrl_espresso.v
+      - rtl/verilog/mor1kx_ctrl_prontoespresso.v
+      - rtl/verilog/mor1kx_dcache.v
+      - rtl/verilog/mor1kx_decode_execute_cappuccino.v
+      - rtl/verilog/mor1kx_decode.v
+      - rtl/verilog/mor1kx_dmmu.v
+      - rtl/verilog/mor1kx_dpram_en_w1st.v
+      - rtl/verilog/mor1kx_execute_alu.v
+      - rtl/verilog/mor1kx_execute_ctrl_cappuccino.v
+      - rtl/verilog/mor1kx_fetch_cappuccino.v
+      - rtl/verilog/mor1kx_fetch_espresso.v
+      - rtl/verilog/mor1kx_fetch_prontoespresso.v
+      - rtl/verilog/mor1kx_fetch_tcm_prontoespresso.v
+      - rtl/verilog/mor1kx_icache.v
+      - rtl/verilog/mor1kx_immu.v
+      - rtl/verilog/mor1kx_lsu_cappuccino.v
+      - rtl/verilog/mor1kx_lsu_espresso.v
+      - rtl/verilog/mor1kx_pcu.v
+      - rtl/verilog/mor1kx_pic.v
+      - rtl/verilog/mor1kx_rf_cappuccino.v
+      - rtl/verilog/mor1kx_rf_espresso.v
+      - rtl/verilog/mor1kx_simple_dpram_sclk.v
+      - rtl/verilog/mor1kx_store_buffer.v
+      - rtl/verilog/mor1kx_ticktimer.v
+      - rtl/verilog/mor1kx_true_dpram_sclk.v
+      - rtl/verilog/mor1kx.v
+      - rtl/verilog/mor1kx_wb_mux_cappuccino.v
+      - rtl/verilog/mor1kx_wb_mux_espresso.v
+      - rtl/verilog/mor1kx_bus_if_wb32_marocchino.v
+      - rtl/verilog/mor1kx_cache_lru_marocchino.v
+      - rtl/verilog/mor1kx_cpu_marocchino.v
+      - rtl/verilog/mor1kx_ctrl_marocchino.v
+      - rtl/verilog/mor1kx_dcache_marocchino.v
+      - rtl/verilog/mor1kx_decode_marocchino.v
+      - rtl/verilog/mor1kx_dmmu_marocchino.v
+      - rtl/verilog/mor1kx_execute_marocchino.v
+      - rtl/verilog/mor1kx_fetch_marocchino.v
+      - rtl/verilog/mor1kx_icache_marocchino.v
+      - rtl/verilog/mor1kx_immu_marocchino.v
+      - rtl/verilog/mor1kx_lsu_marocchino.v
+      - rtl/verilog/mor1kx_ocb_marocchino.v
+      - rtl/verilog/mor1kx_oman_marocchino.v
+      - rtl/verilog/mor1kx_pic_marocchino.v
+      - rtl/verilog/mor1kx_rf_marocchino.v
+      - rtl/verilog/mor1kx_ticktimer_marocchino.v
+      - rtl/verilog/mor1kx_top_marocchino.v
+    file_type : verilogSource
+
+  fpu:
+    files:
+      - rtl/verilog/pfpu32/pfpu32_addsub.v
+      - rtl/verilog/pfpu32/pfpu32_cmp.v
+      - rtl/verilog/pfpu32/pfpu32_f2i.v
+      - rtl/verilog/pfpu32/pfpu32_i2f.v
+      - rtl/verilog/pfpu32/pfpu32_muldiv.v
+      - rtl/verilog/pfpu32/pfpu32_rnd.v
+      - rtl/verilog/pfpu32/pfpu32_top.v
+    file_type : verilogSource
+
+  fpu_maroccino:
+    files:
+      - rtl/verilog/pfpu_marocchino/pfpu_addsub_marocchino.v
+      - rtl/verilog/pfpu_marocchino/pfpu_cmp_marocchino.v
+      - rtl/verilog/pfpu_marocchino/pfpu_div_marocchino.v
+      - rtl/verilog/pfpu_marocchino/pfpu_f2i_marocchino.v
+      - rtl/verilog/pfpu_marocchino/pfpu_i2f_marocchino.v
+      - rtl/verilog/pfpu_marocchino/pfpu_muldiv_marocchino.v
+      - rtl/verilog/pfpu_marocchino/pfpu_mul_marocchino.v
+      - rtl/verilog/pfpu_marocchino/pfpu_rnd_marocchino.v
+      - rtl/verilog/pfpu_marocchino/pfpu_top_marocchino.v
+    file_type : verilogSource
+
+  monitor:
+    files : [bench/verilog/mor1kx_monitor.v]
+    file_type : verilogSource
+
+parameters:
+  trace_enable:
+    datatype    : bool
+    description : Enable mor1kx instruction trace
+    paramtype   : plusarg
+
+  trace_to_screen:
+    datatype    : bool
+    description : Output mor1kx instruction trace to screen
+    paramtype   : plusarg
+
+targets:
+  default:
+    filesets:
+      - core
+      - fpu
+      - fpu_maroccino
+      - "tool_icarus? (monitor)"
+      - "tool_isim? (monitor)"
+      - "tool_modelsim? (monitor)"
+      - "tool_rivierapro? (monitor)"
+      - "tool_xsim? (monitor)"
+    parameters: [trace_enable, trace_to_screen]

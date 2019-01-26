@@ -25,15 +25,14 @@
 `ifndef CPU_WRAPPER
  `define CPU_WRAPPER `MOR1KX_INST.mor1kx_cpu
 `endif
-`define CPU_INST `CPU_WRAPPER.`MOR1KX_CPU_PIPELINE.mor1kx_cpu
 `define EXECUTE_STAGE_INSN `CPU_WRAPPER.monitor_execute_insn
 `define EXECUTE_STAGE_ADV `CPU_WRAPPER.monitor_execute_advance
 `define CPU_clk `CPU_WRAPPER.monitor_clk
 `define CPU_FLAG `CPU_WRAPPER.monitor_flag
 `define CPU_SR `CPU_WRAPPER.monitor_spr_sr
 `define EXECUTE_PC `CPU_WRAPPER.monitor_execute_pc
-`define GPR_GET(x) `CPU_INST.get_gpr(x)
-`define GPR_SET(x, y) `CPU_INST.set_gpr(x, y)
+`define GPR_GET(x) `CPU_WRAPPER.get_gpr(x)
+`define GPR_SET(x, y) `CPU_WRAPPER.set_gpr(x, y)
 
 `include "mor1kx-defines.v"
 
