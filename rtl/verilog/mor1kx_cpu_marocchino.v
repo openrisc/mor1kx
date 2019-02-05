@@ -564,8 +564,11 @@ module mor1kx_cpu_marocchino
   reg  wrbk_an_except_r;
 
   // Bench monitoring
+  localparam MONITOR_INSN_MEM_WIDTH = `OR1K_INSN_WIDTH + OPTION_OPERAND_WIDTH;
+  localparam MONITOR_NUM_EXTADR     = (1 << DEST_EXTADR_WIDTH);
+
   wire     [`OR1K_INSN_WIDTH-1:0] monitor_execute_insn/* verilator public */;
-  wire                            monitor_execute_advance/* verilator public */;
+  reg                             monitor_execute_advance/* verilator public */;
   wire                            monitor_flag_set/* verilator public */;
   wire                            monitor_flag_clear/* verilator public */;
   wire                            monitor_flag_sr/* verilator public */;
@@ -578,6 +581,9 @@ module mor1kx_cpu_marocchino
   wire [OPTION_OPERAND_WIDTH-1:0] monitor_spr_eear/* verilator public */;
   wire [OPTION_OPERAND_WIDTH-1:0] monitor_spr_esr/* verilator public */;
   wire                            monitor_branch_mispredict/* verilator public */;
+
+  // Register array to store what is in the OCB.
+  reg  [MONITOR_INSN_MEM_WIDTH-1:0] monitor_insn_mem [0:MONITOR_NUM_EXTADR-1];
 
   //----------------------------//
   // Instruction FETCH instance //
@@ -764,14 +770,27 @@ module mor1kx_cpu_marocchino
 
  `ifndef SYNTHESIS
   // synthesis translate_off
-  /* Debug signals required for the debug monitor */
+  // Debug signals required for the debug monitor
+
+  // The write back signal retires an instruction from the execution stage.
+  // We want to report the insn executed inline with the next stage,
+  // register write back, so delay by 1 clock.
+  always @(posedge cpu_clk) begin
+    monitor_execute_advance <= padv_wrbk;
+  end
+
+  // Store the executing PC and INSN for extracting later.
+  always @(posedge cpu_clk) begin
+   if (padv_exec)
+     monitor_insn_mem[dcod_extadr] <= { u_fetch.pc_fetch_p, u_fetch.fetch_insn_p };
+  end
+
   assign monitor_flag = monitor_flag_set ? 1 :
                         monitor_flag_clear ? 0 :
                         monitor_flag_sr;
 
   assign monitor_clk               = cpu_clk;
-  assign monitor_execute_insn      = u_fetch.fetch_insn_o;
-  assign monitor_execute_advance   = u_oman.exec_valid_o;
+  assign monitor_execute_insn      = monitor_insn_mem[wrbk_extadr][`OR1K_INSN_WIDTH-1:0];
   assign monitor_flag_set          = u_ctrl.wrbk_1clk_flag_set_i;
   assign monitor_flag_clear        = u_ctrl.wrbk_1clk_flag_clear_i;
   assign monitor_flag_sr           = u_ctrl.ctrl_flag_sr_o;
@@ -779,7 +798,7 @@ module mor1kx_cpu_marocchino
                                       // Use the locally calculated flag value
                                       monitor_flag,
                                       u_ctrl.spr_sr[`OR1K_SPR_SR_F-1:0]};
-  assign monitor_execute_pc        = u_ctrl.spr_ppc;
+  assign monitor_execute_pc        = monitor_insn_mem[wrbk_extadr][MONITOR_INSN_MEM_WIDTH-1:MONITOR_INSN_MEM_WIDTH-OPTION_OPERAND_WIDTH];
   assign monitor_rf_result_in      = wrbk_result1;
   assign monitor_spr_esr           = {16'd0,u_ctrl.spr_esr};
   assign monitor_spr_epcr          = u_ctrl.spr_epcr;
@@ -818,7 +837,6 @@ module mor1kx_cpu_marocchino
   endtask
   // synthesis translate_on
  `endif
-
 
   //--------//
   // DECODE //
