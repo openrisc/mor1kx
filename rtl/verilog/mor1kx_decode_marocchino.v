@@ -180,8 +180,6 @@ module mor1kx_decode_marocchino
   output reg                            dcod_op_mXspr_o, // (l.mfspr | l.mtspr)
 
   // Exceptions detected on decode stage flags
-  //  ## enable l.trap exception
-  input                                 du_trap_enable_i,
   //  ## outcome exception flags
   output reg                            dcod_except_illegal_o,
   output reg                            dcod_except_syscall_o,
@@ -432,7 +430,7 @@ module mor1kx_decode_marocchino
 
   wire except_trap = (opc_insn == `OR1K_OPCODE_SYSTRAPSYNC) &
                       (fetch_insn_i[`OR1K_SYSTRAPSYNC_OPC_SELECT] ==
-                       `OR1K_SYSTRAPSYNC_OPC_TRAP) & du_trap_enable_i;
+                       `OR1K_SYSTRAPSYNC_OPC_TRAP);
 
 
 

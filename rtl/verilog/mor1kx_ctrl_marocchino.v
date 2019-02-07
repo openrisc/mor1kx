@@ -120,8 +120,6 @@ module mor1kx_ctrl_marocchino
   // Stall control from debug interface
   input                                 du_stall_i,
   output                                du_stall_o,
-  // Enable l.trap exception
-  output                                du_trap_enable_o,
 
   // SPR accesses to external units (cache, mmu, etc.)
   output reg                     [15:0] spr_bus_addr_o,
@@ -298,6 +296,7 @@ module mor1kx_ctrl_marocchino
   wire                              du_npc_we;
   wire                              du_npc_hold; // till restart command from Debug System
   // stall / unstall
+  wire                              du_trap_enable; // l.trap is software breakpoint
   wire                              du_cpu_flush;
   wire                              du_cpu_stall;
   wire                              du_cpu_unstall;
@@ -405,7 +404,7 @@ module mor1kx_ctrl_marocchino
         6'b1?????: spr_epcr <= epcr_default;  // ITLB miss, IPAGE fault, IBUS error, Illegal, DBUS align, IBUS align
         6'b01????: spr_epcr <= wrbk_delay_slot_i ? spr_ppc : pc_nxt_wrbk_i; // syscall
         6'b001???: spr_epcr <= epcr_default;  // DTLB miss, DPAGE fault
-        6'b0001??: spr_epcr <= spr_epcr;      // software breakpoint
+        6'b0001??: spr_epcr <= du_trap_enable ? spr_epcr : epcr_default; // software breakpoint / l.trap
         6'b00001?: spr_epcr <= sbuf_epcr_i;   // Store buffer error
         6'b000001: spr_epcr <= epcr_default;  // load or atomic load/store
         default  : spr_epcr <= epcr_default;  // by default
@@ -1409,7 +1408,7 @@ module mor1kx_ctrl_marocchino
     end // @ clock
 
     // Pick the traps-cause-stall bit out of the DSR
-    assign du_trap_enable_o = spr_dsr_te;
+    assign du_trap_enable = spr_dsr_te; // DU enabled
 
 
     /* DRR */
@@ -1431,7 +1430,7 @@ module mor1kx_ctrl_marocchino
     //
     wire du_cpu_stall_by_cmd      = wrbk_spr_we_r & du_stall_i;
     wire du_cpu_stall_by_stepping = wrbk_spr_we_r & stepping;
-    wire du_cpu_stall_by_trap     = wrbk_except_trap_i;
+    wire du_cpu_stall_by_trap     = wrbk_except_trap_i & du_trap_enable;
 
     //
     // Generate 1-clok length pipe flusing signal from DU
@@ -1602,7 +1601,7 @@ module mor1kx_ctrl_marocchino
 
     // stall / unstall
     assign du_stall_o       = 1'b0; // DU disabled
-    assign du_trap_enable_o = 1'b0; // DU disabled
+    assign du_trap_enable   = 1'b0; // DU disabled
     // ---
     assign du_npc_hold    = 1'b0; // DU disabled
     assign du_cpu_flush   = 1'b0; // DU disabled
