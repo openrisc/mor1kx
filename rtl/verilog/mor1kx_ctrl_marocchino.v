@@ -377,6 +377,9 @@ module mor1kx_ctrl_marocchino
 
   // Exception PC
 
+  // declaration for IBUS error processing
+  reg [OPTION_OPERAND_WIDTH-1:0] pc_last_jump_or_branch;
+
   // default EPCR (for most exception cases)
   // If exception is in delay slot than we use PC of last jump/branch instruction.
   // In fact the PC is already stored in PPC.
@@ -392,22 +395,24 @@ module mor1kx_ctrl_marocchino
       spr_epcr <= {OPTION_OPERAND_WIDTH{1'b0}};
     else if (wrbk_an_except_i) begin
       // synthesis parallel_case
-      casez({(wrbk_except_itlb_miss_i | wrbk_except_ipagefault_i |
-              wrbk_except_ibus_err_i  |
-              wrbk_except_illegal_i   | wrbk_except_dbus_align_i | wrbk_except_ibus_align_i),
+      casez({(wrbk_except_itlb_miss_i | wrbk_except_ipagefault_i),
+             wrbk_except_ibus_err_i,
+             (wrbk_except_illegal_i   | wrbk_except_dbus_align_i | wrbk_except_ibus_align_i),
              wrbk_except_syscall_i,
              (wrbk_except_dtlb_miss_i | wrbk_except_dpagefault_i),
              wrbk_except_trap_i,
              sbuf_err_i,
              wrbk_except_dbus_err_i
             })
-        6'b1?????: spr_epcr <= epcr_default;  // ITLB miss, IPAGE fault, IBUS error, Illegal, DBUS align, IBUS align
-        6'b01????: spr_epcr <= wrbk_delay_slot_i ? spr_ppc : pc_nxt_wrbk_i; // syscall
-        6'b001???: spr_epcr <= epcr_default;  // DTLB miss, DPAGE fault
-        6'b0001??: spr_epcr <= du_trap_enable ? spr_epcr : epcr_default; // software breakpoint / l.trap
-        6'b00001?: spr_epcr <= sbuf_epcr_i;   // Store buffer error
-        6'b000001: spr_epcr <= epcr_default;  // load or atomic load/store
-        default  : spr_epcr <= epcr_default;  // by default
+        8'b1???????: spr_epcr <= epcr_default;  // ITLB miss, IPAGE fault
+        8'b01??????: spr_epcr <= pc_last_jump_or_branch; // IBUS error
+        8'b001?????: spr_epcr <= epcr_default; // Illegal, DBUS align, IBUS align
+        8'b0001????: spr_epcr <= wrbk_delay_slot_i ? spr_ppc : pc_nxt_wrbk_i; // syscall
+        8'b00001???: spr_epcr <= epcr_default;  // DTLB miss, DPAGE fault
+        8'b000001??: spr_epcr <= du_trap_enable ? spr_epcr : epcr_default; // software breakpoint / l.trap
+        8'b0000001?: spr_epcr <= sbuf_epcr_i;   // Store buffer error
+        8'b00000001: spr_epcr <= epcr_default;  // load or atomic load/store
+        default    : spr_epcr <= epcr_default;  // by default
       endcase
     end
     else if ((`SPR_OFFSET(spr_sys_group_wadr_r) == `SPR_OFFSET(`OR1K_SPR_EPCR0_ADDR)) &
@@ -811,10 +816,14 @@ module mor1kx_ctrl_marocchino
   reg [OPTION_OPERAND_WIDTH-1:0] pc_next_to_delay_slot;
   // !!! don't flush it because it is used for stepped_into_delay_slot !!!
   always @(posedge cpu_clk) begin
-    if (cpu_rst)
-      pc_next_to_delay_slot <= {OPTION_OPERAND_WIDTH{1'b0}};
-    else if (wrbk_spr_we_r & wrbk_jump_or_branch_i) // PC next to delay slot
-      pc_next_to_delay_slot <= (wrbk_jump_i | wb_bc_taken) ? wrbk_jb_target_i : pc_nxt2_wrbk_i;
+    if (cpu_rst) begin
+      pc_next_to_delay_slot  <= {OPTION_OPERAND_WIDTH{1'b0}};
+      pc_last_jump_or_branch <= {OPTION_OPERAND_WIDTH{1'b0}};
+    end
+    else if (wrbk_spr_we_r & wrbk_jump_or_branch_i) begin // PC next to delay slot
+      pc_next_to_delay_slot  <= (wrbk_jump_i | wb_bc_taken) ? wrbk_jb_target_i : pc_nxt2_wrbk_i;
+      pc_last_jump_or_branch <= pc_wrbk_i;
+    end
   end // @ clock
 
 
