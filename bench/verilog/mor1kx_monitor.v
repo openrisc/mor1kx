@@ -339,6 +339,19 @@ module mor1kx_monitor #(parameter LOG_DIR= "../out") ();
 	     `OR1K_OPCODE_ALU,
 	     `OR1K_OPCODE_SHRTI:
 	       rD_used = 1;
+	   `OR1K_OPCODE_FPU:
+	     case(insn[`OR1K_FPUOP_SELECT])
+	       `OR1K_FPUOP_ADD,
+		 `OR1K_FPUOP_SUB,
+		 `OR1K_FPUOP_MUL,
+		 `OR1K_FPUOP_DIV,
+		 `OR1K_FPUOP_ITOF,
+		 `OR1K_FPUOP_FTOI,
+		 `OR1K_FPUOP_REM:
+		   rD_used = 1;
+	       default:
+		 rD_used = 0;
+	     endcase
 	   default:
 	     rD_used=0;
 	 endcase // case (opcode)
@@ -354,7 +367,8 @@ module mor1kx_monitor #(parameter LOG_DIR= "../out") ();
 	     `OR1K_OPCODE_SYSTRAPSYNC,
 	     `OR1K_OPCODE_RFE,
 	     `OR1K_OPCODE_JR,
-	     `OR1K_OPCODE_JALR:
+	     `OR1K_OPCODE_JALR,
+	     `OR1K_OPCODE_FPU:
 	     /*
 	      rD of store insns, is in rA field
 	     `OR1K_OPCODE_SD,
@@ -388,6 +402,14 @@ module mor1kx_monitor #(parameter LOG_DIR= "../out") ();
 	       default:
 		 rB_used = 1;
 	     endcase // case (insn[`OR1K_ALU_OPC_SELECT])
+	   `OR1K_OPCODE_FPU:
+	     case(insn[`OR1K_FPUOP_SELECT])
+	       `OR1K_FPUOP_ITOF,
+		 `OR1K_FPUOP_FTOI:
+		   rB_used = 0;
+	       default:
+		 rB_used = 1;
+	     endcase
 	   default:
 	     rB_used = 0;
 	 endcase // case (opcode)
@@ -543,6 +565,8 @@ module mor1kx_monitor #(parameter LOG_DIR= "../out") ();
 	     else
 	      */
 	       num_chars = 6;
+	   `OR1K_OPCODE_FPU:
+	     num_chars = 6;
 
 	   default:
 	     num_chars = 0;
@@ -579,10 +603,6 @@ module mor1kx_monitor #(parameter LOG_DIR= "../out") ();
       end
    endtask // mor1k_insn_info
    
-     
-
-   
-
    task mor1k_insn_to_string;
       input [31:0] insn;
       output [80*8:1] insnstring;
@@ -809,6 +829,72 @@ module mor1kx_monitor #(parameter LOG_DIR= "../out") ();
 		    
 		endcase // case (alu_op)
 		//$sformat(insnstring, "r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+	     end
+
+	   `OR1K_OPCODE_FPU:
+	     begin
+	       if (insn[`OR1K_FPUOP_DOUBLE_BIT])
+		 case(insn[`OR1K_FPUOP_SELECT] ^ 5'b1_0000)
+		   `OR1K_FPUOP_ADD:
+		     $sformat(insnstring, "lf.add.d  r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+		   `OR1K_FPUOP_SUB:
+		     $sformat(insnstring, "lf.sub.d  r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+		   `OR1K_FPUOP_MUL:
+		     $sformat(insnstring, "lf.mul.d  r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+		   `OR1K_FPUOP_DIV:
+		     $sformat(insnstring, "lf.div.d  r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+		   `OR1K_FPUOP_ITOF:
+		     $sformat(insnstring, "lf.itof.d r%0d,r%0d",rD_num,rA_num);
+		   `OR1K_FPUOP_FTOI:
+		     $sformat(insnstring, "lf.ftoi.d r%0d,r%0d",rD_num,rA_num);
+		   `OR1K_FPUOP_REM:
+		     $sformat(insnstring, "lf.rem.d  r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+		   `OR1K_FPCOP_SFEQ:
+		     $sformat(insnstring, "lf.sfeq.d r%0d,r%0d",rA_num,rB_num);
+		   `OR1K_FPCOP_SFNE:
+		     $sformat(insnstring, "lf.sfne.d r%0d,r%0d",rA_num,rB_num);
+		   `OR1K_FPCOP_SFGT:
+		     $sformat(insnstring, "lf.sfgt.d r%0d,r%0d",rA_num,rB_num);
+		   `OR1K_FPCOP_SFGE:
+		     $sformat(insnstring, "lf.sfge.d r%0d,r%0d",rA_num,rB_num);
+		   `OR1K_FPCOP_SFLT:
+		     $sformat(insnstring, "lf.sflt.d r%0d,r%0d",rA_num,rB_num);
+		   `OR1K_FPCOP_SFLE:
+		     $sformat(insnstring, "lf.sfle.d r%0d,r%0d",rA_num,rB_num);
+		   default:
+		     $sformat(insnstring, "Oops cant decode lf.*.d FPUOP:0x%x", insn[`OR1K_FPUOP_SELECT]);
+		 endcase
+	       else
+		 case(insn[`OR1K_FPUOP_SELECT])
+		   `OR1K_FPUOP_ADD:
+		     $sformat(insnstring, "lf.add.s  r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+		   `OR1K_FPUOP_SUB:
+		     $sformat(insnstring, "lf.sub.s  r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+		   `OR1K_FPUOP_MUL:
+		     $sformat(insnstring, "lf.mul.s  r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+		   `OR1K_FPUOP_DIV:
+		     $sformat(insnstring, "lf.div.s  r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+		   `OR1K_FPUOP_ITOF:
+		     $sformat(insnstring, "lf.itof.s r%0d,r%0d",rD_num,rA_num);
+		   `OR1K_FPUOP_FTOI:
+		     $sformat(insnstring, "lf.ftoi.s r%0d,r%0d",rD_num,rA_num);
+		   `OR1K_FPUOP_REM:
+		     $sformat(insnstring, "lf.rem.s  r%0d,r%0d,r%0d",rD_num,rA_num,rB_num);
+		   `OR1K_FPCOP_SFEQ:
+		     $sformat(insnstring, "lf.sfeq.s r%0d,r%0d",rA_num,rB_num);
+		   `OR1K_FPCOP_SFNE:
+		     $sformat(insnstring, "lf.sfne.s r%0d,r%0d",rA_num,rB_num);
+		   `OR1K_FPCOP_SFGT:
+		     $sformat(insnstring, "lf.sfgt.s r%0d,r%0d",rA_num,rB_num);
+		   `OR1K_FPCOP_SFGE:
+		     $sformat(insnstring, "lf.sfge.s r%0d,r%0d",rA_num,rB_num);
+		   `OR1K_FPCOP_SFLT:
+		     $sformat(insnstring, "lf.sflt.s r%0d,r%0d",rA_num,rB_num);
+		   `OR1K_FPCOP_SFLE:
+		     $sformat(insnstring, "lf.sfle.s r%0d,r%0d",rA_num,rB_num);
+		   default:
+		     $sformat(insnstring, "Oops cant decode lf.*.s FPUOP:0x%x", insn[`OR1K_FPUOP_SELECT]);
+		 endcase
 	     end
 	   
 	   `OR1K_OPCODE_SHRTI:
