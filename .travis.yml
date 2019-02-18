@@ -5,18 +5,23 @@ addons:
   apt:
     packages:
     - build-essential
+    - git
+    - curl
+    - libelf-dev
+    - flex
+    - bison
     - autoconf
+    - python3-pip
 
 before_install:
-  - cd /tmp
-  - git clone http://git.veripool.org/git/verilator
-  - cd verilator
-  - git checkout verilator_3_902
-  - autoconf
-  - ./configure
-  - make
-  - sudo make install
-  - cd $TRAVIS_BUILD_DIR
+  - sudo pip3 install --upgrade pip setuptools
+  - sudo pip3 install --ignore-installed six
+  - sudo pip3 install fusesoc
+
+install:
+  - .travis/install-verilator.sh
+  - .travis/install-fusesoc.sh
 
 script:
   - verilator --lint-only rtl/verilog/*.v +incdir+rtl/verilog
+  - .travis/run-or1k-tests.sh

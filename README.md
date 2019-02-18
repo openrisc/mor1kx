@@ -141,3 +141,24 @@ as running Linux) requires a setting different than the default value.*
 |FEATURE_CUST6|Enable the `l.cust*` custom instruction|`NONE`|`ENABLED` `NONE`| |
 |FEATURE_CUST7|Enable the `l.cust*` custom instruction|`NONE`|`ENABLED` `NONE`| |
 |FEATURE_CUST8|Enable the `l.cust*` custom instruction|`NONE`|`ENABLED` `NONE`| |
+
+## Testing and CI
+
+A CPU core cannot be trusted without a full set of verification testing.  The `mor1kx`
+pipelines are constantly verified for correctness with the CI suite.  This currently
+covers:
+
+ - source linting - a verilator lint check is run on each commit to ensure there
+   are no code quality issues.
+ - [or1k-tests](https://github.com/openrisc/or1k-tests) - the `or1k-tests` test suite
+   is run against each pipeline to check most major instructions, exception handling,
+   caching, timers, interrupts and other features.
+
+In the future we are working on bringing more tests including:
+
+  - softfloat, fpu verification (may not be feasable in CI due to long run times)
+  - CPU pipeline debugging verification via GDB/OpenOCD
+  - Resource utilization regression tests
+  - Formal verification with fusoc
+
+Results should be listed here.
