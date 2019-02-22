@@ -21,7 +21,7 @@ curl --remote-name --location \
 tar xf verilog-10.2.tar.gz
 cd verilog-10.2
 ./configure
-make
+make -j2
 sudo make install
 
 export PATH
@@ -29,7 +29,7 @@ export PATH
 cd $HOME/src/tools
 git clone https://github.com/openrisc/or1k-tests.git ;\
 cd or1k-tests/native
-make
+make -j2
 
 # Get the cores for our test to run (in the future these should be in fusesoc)
 cd $HOME/src/cores
