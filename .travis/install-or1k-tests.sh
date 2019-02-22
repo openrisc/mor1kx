@@ -37,6 +37,7 @@ git clone https://github.com/stffrdhrn/mor1kx-generic.git
 git clone https://github.com/stffrdhrn/intgen.git
 
 # Setup fusesoc
+sudo pip3 install fusesoc
 fusesoc init -y
 
 echo '[main]' >> $HOME/.config/fusesoc/fusesoc.conf

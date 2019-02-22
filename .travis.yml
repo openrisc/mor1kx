@@ -16,12 +16,20 @@ addons:
 before_install:
   - sudo pip3 install --upgrade pip setuptools
   - sudo pip3 install --ignore-installed six
-  - sudo pip3 install fusesoc
 
 install:
-  - .travis/install-verilator.sh
-  - .travis/install-fusesoc.sh
+  - .travis/install-${JOB}.sh
 
 script:
-  - verilator --lint-only rtl/verilog/*.v +incdir+rtl/verilog
-  - .travis/run-or1k-tests.sh
+  - .travis/run-${JOB}.sh
+
+jobs:
+  fail_fast: true
+
+  include:
+    - stage: verilator
+      env: JOB=verilator
+    - stage: or1k-tests
+      env: JOB=or1k-tests PIPELINE=CAPPUCCINO
+    - stage: or1k-tests
+      env: JOB=or1k-tests PIPELINE=ESPRESSO
