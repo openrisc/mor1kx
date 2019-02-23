@@ -75,6 +75,7 @@ module mor1kx_ctrl_marocchino
   input                                 dcod_free_i,
   input                                 ocb_full_i,
   input                                 ocb_empty_i,
+  input                                 wrbk_rfdx_we_i,       // stall DECODE, EXECUTE and WRITE-BACK till writting D2 completion
   input                                 dcod_op_1clk_i,
   input                                 op_1clk_free_i,
   output                                padv_1clk_rsrvs_o,
@@ -652,11 +653,12 @@ module mor1kx_ctrl_marocchino
   wire ena_dcod = ena_1clk_rsrvs | ena_muldiv_rsrvs | ena_fpxx_rsrvs | // DECODE could be updated
                   ena_lsu_rsrvs  | ena_op_push_exec; // DECODE could be updated
   // Advance DECODE
-  assign padv_dcod_o = padv_all &  // ADV. DECODE
+  assign padv_dcod_o = padv_all & (~wrbk_rfdx_we_i) & // ADV. DECODE
     (((~stepping) & dcod_free_i & (dcod_empty_i | ena_dcod)) | // ADV. DECODE
        (stepping  & dcod_empty_i & pstep[0])); // ADV. DECODE
   // Pass step from DECODE to EXEC
   wire   pass_step_to_exec = (~dcod_empty_i) & pstep[0];
+
 
   // When we process l.mf(t)spr we stall pipeline.
   // DECODE's flags will be just cleaned up.
@@ -664,7 +666,7 @@ module mor1kx_ctrl_marocchino
   // EXECUTE could be updated
   wire ena_exec              = ena_dcod | ena_op_mXspr;
   // Common part of advance for all execution uints
-  wire padv_an_exec_unit     = padv_all & ((~stepping) | pstep[1]);
+  wire padv_an_exec_unit     = padv_all & (~wrbk_rfdx_we_i) & ((~stepping) | pstep[1]);
   // Advance EXECUTE (push OCB & clean up  DECODE)
   assign padv_exec_o         = ena_exec         & padv_an_exec_unit;
   // Per execution unit (or reservation station) advance
@@ -679,7 +681,7 @@ module mor1kx_ctrl_marocchino
 
   // Advance Write Back latches
   wire   exec_valid_l = exec_valid_i | op_mXspr_valid;
-  assign padv_wrbk_o  = exec_valid_l & padv_all & ((~stepping) | pstep[2]);
+  assign padv_wrbk_o  = exec_valid_l & padv_all & (~wrbk_rfdx_we_i) & ((~stepping) | pstep[2]);
   // Complete the step
   wire   pass_step_to_stall = padv_wrbk_o; // for DU: must be equal to padv-wrbk
 

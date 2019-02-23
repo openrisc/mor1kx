@@ -270,11 +270,10 @@ module mor1kx_cpu_marocchino
 
 
   // Write-Back-controls for RF
-  wire             [NUM_GPRS-1:0] wrbk_rfd1_we1h;
   wire                            wrbk_rfd1_we;
   wire [OPTION_RF_ADDR_WIDTH-1:0] wrbk_rfd1_adr;
   // for FPU64:
-  wire             [NUM_GPRS-1:0] wrbk_rfd2_we1h;
+  wire                            wrbk_rfdx_we;
   wire                            wrbk_rfd2_we;
   wire [OPTION_RF_ADDR_WIDTH-1:0] wrbk_rfd2_adr;
 
@@ -746,21 +745,21 @@ module mor1kx_cpu_marocchino
     .dcod_immediate_sel_i             (dcod_immediate_sel), // RF
     .dcod_rfa1_adr_i                  (dcod_rfa1_adr), // RF
     .dcod_rfb1_adr_i                  (dcod_rfb1_adr), // RF
+    // # for FPU64
     .dcod_rfa2_adr_i                  (dcod_rfa2_adr), // RF
     .dcod_rfb2_adr_i                  (dcod_rfb2_adr), // RF
     // from Write-Back
-    .wrbk_rfd1_we1h_i                 (wrbk_rfd1_we1h), // RF
     .wrbk_rfd1_we_i                   (wrbk_rfd1_we), // RF
     .wrbk_rfd1_adr_i                  (wrbk_rfd1_adr), // RF
     .wrbk_result1_i                   (wrbk_result1), // RF
-    // for FPU64
-    .wrbk_rfd2_we1h_i                 (wrbk_rfd2_we1h), // RF
+    // # for FPU64
     .wrbk_rfd2_we_i                   (wrbk_rfd2_we), // RF
     .wrbk_rfd2_adr_i                  (wrbk_rfd2_adr), // RF
     .wrbk_result2_i                   (wrbk_result2), // RF
     // Operands
     .dcod_rfa1_o                      (dcod_rfa1), // RF
     .dcod_rfb1_o                      (dcod_rfb1), // RF
+    // # for FPU64
     .dcod_rfa2_o                      (dcod_rfa2), // RF
     .dcod_rfb2_o                      (dcod_rfb2), // RF
     // we use adder for l.jl/l.jalr to compute return address: (pc+8)
@@ -827,7 +826,7 @@ module mor1kx_cpu_marocchino
     else if ((wrbk_rfd2_adr == gpr_num[4:0]) & wrbk_rfd2_we)
       get_gpr = wrbk_result2;
     else
-      get_gpr = u_rf.gpr0_rdata_bus[gpr_num];
+      get_gpr = u_rf.u_ram_a1.mem[gpr_num];
     end
   endfunction // get_gpr
 
@@ -1169,10 +1168,9 @@ module mor1kx_cpu_marocchino
 
     // Write-Back outputs
     //  ## special Write-Back-controls for RF
-    .wrbk_rfd1_we1h_o           (wrbk_rfd1_we1h), // OMAN
     .wrbk_rfd1_we_o             (wrbk_rfd1_we), // OMAN
     .wrbk_rfd1_adr_o            (wrbk_rfd1_adr), // OMAN
-    .wrbk_rfd2_we1h_o           (wrbk_rfd2_we1h), // OMAN
+    .wrbk_rfdx_we_o             (wrbk_rfdx_we), // OMAN
     .wrbk_rfd2_we_o             (wrbk_rfd2_we), // OMAN
     .wrbk_rfd2_adr_o            (wrbk_rfd2_adr), // OMAN
     //  ## instruction related information
@@ -2099,6 +2097,7 @@ module mor1kx_cpu_marocchino
     .dcod_free_i                      (dcod_free), // CTRL
     .ocb_full_i                       (ocb_full), // CTRL
     .ocb_empty_i                      (ocb_empty), // CTRL
+    .wrbk_rfdx_we_i                   (wrbk_rfdx_we), // CTRL
     .dcod_op_1clk_i                   (dcod_op_1clk), // CTRL
     .op_1clk_free_i                   (op_1clk_free), // CTRL
     .padv_1clk_rsrvs_o                (padv_1clk_rsrvs), // CTRL

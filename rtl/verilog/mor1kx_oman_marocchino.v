@@ -296,10 +296,9 @@ module mor1kx_oman_marocchino
 
   // Write-Back outputs
   //  ## special Write-Back-controls for RF
-  output reg             [NUM_GPRS-1:0] wrbk_rfd1_we1h_o,
   output reg                            wrbk_rfd1_we_o,
   output reg [OPTION_RF_ADDR_WIDTH-1:0] wrbk_rfd1_adr_o,
-  output reg             [NUM_GPRS-1:0] wrbk_rfd2_we1h_o,
+  output reg                            wrbk_rfdx_we_o,
   output reg                            wrbk_rfd2_we_o,
   output reg [OPTION_RF_ADDR_WIDTH-1:0] wrbk_rfd2_adr_o,
   //  ## instruction related information
@@ -526,15 +525,10 @@ module mor1kx_oman_marocchino
   wire          [(NUM_GPRS-1):0] rat_rd2_alloc; // allocated by D2
   wire [(DEST_EXTADR_WIDTH-1):0] rat_extadr [(NUM_GPRS-1):0]; // allocation ID
 
-  // Special case for GPR[0]
-  assign rat_rd1_alloc[0] = 1'b0;
-  assign rat_rd2_alloc[0] = 1'b0;
-  assign rat_extadr[0]    = {DEST_EXTADR_WIDTH{1'b0}};
-
   // instances for RAT cells
   generate
   genvar ic;
-  for (ic = 1; ic < NUM_GPRS; ic = ic + 1) begin : rat_cell_k
+  for (ic = 0; ic < NUM_GPRS; ic = ic + 1) begin : rat_cell_k
     // RAT cells instansence
     rat_cell
     #(
@@ -1119,23 +1113,31 @@ module mor1kx_oman_marocchino
   wire [OPTION_RF_ADDR_WIDTH-1:0] exec_rfd2_adr = ocbo[OCBTA_RFD2_ADR_MSB:OCBTA_RFD2_ADR_LSB];
 
 
-  // 1-hot Write-Back-controls for RF
-  //  if A(B)'s address is odd than A2(B2)=A(B)+1 is even and vise verse
-  //  1-clock Write-Back-pulses
+  // 1-clock Write-Back-pulses
+  //  # for D1
   always @(posedge cpu_clk) begin
-    if (padv_wrbk_i) begin
-      wrbk_rfd1_we1h_o <= {{(NUM_GPRS-1){1'b0}},exec_rfd1_we} << exec_rfd1_adr;
-      wrbk_rfd1_we_o   <= exec_rfd1_we;
-      wrbk_rfd2_we1h_o <= {{(NUM_GPRS-1){1'b0}},exec_rfd2_we} << exec_rfd2_adr;
-      wrbk_rfd2_we_o   <= exec_rfd2_we;
-    end
-    else begin
-      wrbk_rfd1_we1h_o <= {NUM_GPRS{1'b0}};
-      wrbk_rfd1_we_o   <= 1'b0;
-      wrbk_rfd2_we1h_o <= {NUM_GPRS{1'b0}};
-      wrbk_rfd2_we_o   <= 1'b0;
-    end
+    if (padv_wrbk_i)
+      wrbk_rfd1_we_o <= exec_rfd1_we;
+    else
+      wrbk_rfd1_we_o <= 1'b0;
   end // @clock
+  //  # for D2 we delay WriteBack for 1-clock
+  //    to split write into RF from D1
+  always @(posedge cpu_clk) begin
+    if (pipeline_flush_i) begin
+      wrbk_rfdx_we_o <= 1'b0; // flush
+      wrbk_rfd2_we_o <= 1'b0; // flush
+    end
+    else if (wrbk_rfd2_we_o) begin
+      wrbk_rfdx_we_o <= 1'b0; // D2 write done
+      wrbk_rfd2_we_o <= 1'b0; // D2 write done
+    end
+    else if (wrbk_rfdx_we_o)
+      wrbk_rfd2_we_o <= 1'b1; // do D2 write
+    else if (padv_wrbk_i)
+      wrbk_rfdx_we_o <= exec_rfd2_we;
+  end // @clock
+
   // latch write-back addresses without reset
   always @(posedge cpu_clk) begin
     if (padv_wrbk_i) begin
