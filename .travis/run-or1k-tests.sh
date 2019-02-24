@@ -12,7 +12,9 @@ if [ -z $OR1K_TESTS_ROOT ] ; then
 fi
 
 cd $OR1K_TESTS_ROOT/native
-./runtests.sh $PIPELINE
+export CORE_ARGS="--pipeline=$PIPELINE"
+export SIM_ARGS="--sim=$SIM"
+./runtests.sh $@
 
 if [ $? != 0 ] ; then
   cat runtests.log

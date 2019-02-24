@@ -6,6 +6,9 @@ mkdir -p $HOME/src/cores
 mkdir -p $HOME/src/tools
 mkdir -p $HOME/tools
 
+# Install the required sim
+$TRAVIS_BUILD_DIR/.travis/install-${SIM}.sh
+
 # Get our toolchain
 cd $HOME/src/tools
 curl --remote-name --location \
@@ -13,19 +16,9 @@ curl --remote-name --location \
 tar xC $HOME/tools -f $HOME/src/tools/or1k-elf-9.0.0-20181112.tar.xz
 
 PATH="$HOME/tools/or1k-elf/bin:${PATH}"
-
-# Get iverilog latest source, the version in trusty is no good
-cd $HOME/src/tools
-curl --remote-name --location \
-  http://shorne.noip.me/downloads/verilog-10.2.tar.gz
-tar xf verilog-10.2.tar.gz
-cd verilog-10.2
-./configure
-make -j2
-sudo make install
-
 export PATH
 
+# Download and compile or1k-tests
 cd $HOME/src/tools
 git clone https://github.com/openrisc/or1k-tests.git ;\
 cd or1k-tests/native
@@ -37,7 +30,6 @@ git clone https://github.com/stffrdhrn/mor1kx-generic.git
 git clone https://github.com/stffrdhrn/intgen.git
 
 # Setup fusesoc
-sudo pip3 install fusesoc
 fusesoc init -y
 
 echo '[main]' >> $HOME/.config/fusesoc/fusesoc.conf

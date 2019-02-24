@@ -16,6 +16,7 @@ addons:
 before_install:
   - sudo pip3 install --upgrade pip setuptools
   - sudo pip3 install --ignore-installed six
+  - sudo pip3 install fusesoc
 
 install:
   - .travis/install-${JOB}.sh
@@ -29,7 +30,7 @@ jobs:
   include:
     - stage: verilator
       env: JOB=verilator
-    - stage: or1k-tests
-      env: JOB=or1k-tests PIPELINE=CAPPUCCINO
-    - stage: or1k-tests
-      env: JOB=or1k-tests PIPELINE=ESPRESSO
+    - stage: testing
+      env: JOB=or1k-tests SIM=icarus PIPELINE=CAPPUCCINO
+    - stage: testing
+      env: JOB=or1k-tests SIM=icarus PIPELINE=ESPRESSO

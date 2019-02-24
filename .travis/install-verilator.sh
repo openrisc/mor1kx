@@ -1,14 +1,19 @@
 #!/bin/sh
 
-cd /tmp
+set -x
+
+mkdir -p $HOME/src/tools
+mkdir -p $HOME/tools
+
+# Get required version of verilator
+cd $HOME/src/tools
 
 git clone http://git.veripool.org/git/verilator
 cd verilator
 git checkout verilator_3_902
 
 autoconf
-./configure
+./configure --prefix=$HOME/tools
 make -j2
-sudo make install
+make install
 
-cd $TRAVIS_BUILD_DIR
