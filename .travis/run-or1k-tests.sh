@@ -15,7 +15,9 @@ cd $OR1K_TESTS_ROOT/native
 export CORE_ARGS="--pipeline=$PIPELINE"
 export SIM_ARGS="--sim=$SIM"
 ./runtests.sh $@
+result=$?
 
-if [ $? != 0 ] ; then
+if [ $result != 0 ] ; then
   cat runtests.log
 fi
+exit $result
