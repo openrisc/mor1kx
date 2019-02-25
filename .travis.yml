@@ -1,3 +1,5 @@
+language: c
+cache: ccache
 sudo: true
 dist: trusty
 
@@ -25,12 +27,14 @@ script:
   - .travis/run-${JOB}.sh
 
 jobs:
-  fail_fast: true
-
+  fast_finish: true
+  allow_failures:
+    - env: JOB=or1k-tests SIM=icarus PIPELINE=ESPRESSO
   include:
     - stage: verilator
       env: JOB=verilator
     - stage: testing
-      env: JOB=or1k-tests SIM=icarus PIPELINE=CAPPUCCINO
+      env: JOB=or1k-tests SIM=icarus PIPELINE=CAPPUCCINO EXPECTED_FAILURES="or1k-cy"
     - stage: testing
       env: JOB=or1k-tests SIM=icarus PIPELINE=ESPRESSO
+
