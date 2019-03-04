@@ -761,7 +761,45 @@ module mor1kx_ctrl_cappuccino
        end
      else if (spr_we && spr_access[`OR1K_SPR_SYS_BASE] &&
               `SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_ESR0_ADDR))
-       spr_esr <= spr_write_dat[SPR_SR_WIDTH-1:0];
+       begin
+	  spr_esr[`OR1K_SPR_SR_SM  ] <= spr_write_dat[`OR1K_SPR_SR_SM  ];
+
+	  spr_esr[`OR1K_SPR_SR_F  ] <= spr_write_dat[`OR1K_SPR_SR_F  ];
+
+	  if (FEATURE_TIMER!="NONE")
+	    spr_esr[`OR1K_SPR_SR_TEE ] <= spr_write_dat[`OR1K_SPR_SR_TEE ];
+
+	  if (FEATURE_PIC!="NONE")
+	    spr_esr[`OR1K_SPR_SR_IEE ] <= spr_write_dat[`OR1K_SPR_SR_IEE ];
+
+	  if (FEATURE_DATACACHE!="NONE")
+	    spr_esr[`OR1K_SPR_SR_DCE ] <= spr_write_dat[`OR1K_SPR_SR_DCE ];
+
+	  if (FEATURE_INSTRUCTIONCACHE!="NONE")
+	    spr_esr[`OR1K_SPR_SR_ICE ] <= spr_write_dat[`OR1K_SPR_SR_ICE ];
+
+	  if (FEATURE_DMMU!="NONE")
+	    spr_esr[`OR1K_SPR_SR_DME ] <= spr_write_dat[`OR1K_SPR_SR_DME ];
+
+	  if (FEATURE_IMMU!="NONE")
+	    spr_esr[`OR1K_SPR_SR_IME ] <= spr_write_dat[`OR1K_SPR_SR_IME ];
+
+	  if (FEATURE_FASTCONTEXTS!="NONE")
+	    spr_esr[`OR1K_SPR_SR_CE  ] <= spr_write_dat[`OR1K_SPR_SR_CE  ];
+
+	  if (FEATURE_CARRY_FLAG!="NONE")
+	    spr_esr[`OR1K_SPR_SR_CY] <= spr_write_dat[`OR1K_SPR_SR_CY];
+
+	  if (FEATURE_OVERFLOW!="NONE") begin
+	     spr_esr[`OR1K_SPR_SR_OV  ] <= spr_write_dat[`OR1K_SPR_SR_OV  ];
+	     spr_esr[`OR1K_SPR_SR_OVE ] <= spr_write_dat[`OR1K_SPR_SR_OVE ];
+	  end
+
+	  if (FEATURE_DSX!="NONE")
+	    spr_esr[`OR1K_SPR_SR_DSX ] <= spr_write_dat[`OR1K_SPR_SR_DSX ];
+
+	  spr_esr[`OR1K_SPR_SR_EPH ] <= spr_write_dat[`OR1K_SPR_SR_EPH ];
+       end
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
