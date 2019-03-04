@@ -818,8 +818,9 @@ module mor1kx_ctrl_cappuccino
 	  spr_epcr <= ctrl_delay_slot ? ctrl_epcr_o : pc_ctrl_i + 4;
 	else if (store_buffer_err_i)
 	  spr_epcr <= store_buffer_epcr_i;
-	// Don't update EPCR on software breakpoint
-	else if (!(stall_on_trap & except_trap_i))
+	// Update EPCR unless we are handing over to the debug unit hardware
+	// i.e. single stepping.
+	else if (!(except_trap_i & stall_on_trap))
 	  spr_epcr <= ctrl_epcr_o;
      end else if (spr_we && spr_access[`OR1K_SPR_SYS_BASE] &&
                   `SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_EPCR0_ADDR)) begin
@@ -1488,6 +1489,7 @@ module mor1kx_ctrl_cappuccino
 	   assign du_restart_from_stall = 0;
            assign spr_access_ack[`OR1K_SPR_DU_BASE] = 0;
            assign spr_internal_read_dat[`OR1K_SPR_DU_BASE] = 0;
+	   assign stall_on_trap = 0;
 	   always @(posedge clk)
 	     begin
 		spr_dmr1 <= 0;
