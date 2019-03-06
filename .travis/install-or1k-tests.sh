@@ -2,7 +2,6 @@
 
 set -x
 
-mkdir -p $HOME/src/cores
 mkdir -p $HOME/src/tools
 mkdir -p $HOME/tools
 
@@ -24,15 +23,9 @@ git clone https://github.com/openrisc/or1k-tests.git ;\
 cd or1k-tests/native
 make -j2
 
-# Get the cores for our test to run (in the future these should be in fusesoc)
-cd $HOME/src/cores
-git clone https://github.com/stffrdhrn/mor1kx-generic.git
-git clone https://github.com/stffrdhrn/intgen.git
-
-# Setup fusesoc
+# Setup fusesoc and add the cores required by or1k-tests
 fusesoc init -y
-
-echo '[main]' >> $HOME/.config/fusesoc/fusesoc.conf
-echo "cores_root = $HOME/src/cores" >> $HOME/.config/fusesoc/fusesoc.conf
-echo "  $TRAVIS_BUILD_DIR" >> $HOME/.config/fusesoc/fusesoc.conf
+fusesoc library add mor1kx-generic https://github.com/stffrdhrn/mor1kx-generic.git
+fusesoc library add intgen https://github.com/stffrdhrn/intgen.git
+fusesoc library add mor1kx $TRAVIS_BUILD_DIR
 
