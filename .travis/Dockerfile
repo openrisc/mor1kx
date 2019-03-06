@@ -1,4 +1,4 @@
-# dockerfile to simulator the travis environment, for testing purposes
+# dockerfile to simulate the travis environment only for testing purposes,
 # this is not actually used in travis
 #
 # to use:
