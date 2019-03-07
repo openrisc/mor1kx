@@ -469,7 +469,7 @@ module mor1kx_ctrl_espresso
      if (rst)
        take_exception <= 0;
      else
-       take_exception <= (exception_pending | exception_r | doing_rfe_r) &
+       take_exception <= (exception_pending | exception_r) &
                          (fetch_advance |
                           // Cause exception to always be 'taken' if stepping
                           (stepping & execute_done)

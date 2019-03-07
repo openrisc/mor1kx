@@ -141,3 +141,37 @@ as running Linux) requires a setting different than the default value.*
 |FEATURE_CUST6|Enable the `l.cust*` custom instruction|`NONE`|`ENABLED` `NONE`| |
 |FEATURE_CUST7|Enable the `l.cust*` custom instruction|`NONE`|`ENABLED` `NONE`| |
 |FEATURE_CUST8|Enable the `l.cust*` custom instruction|`NONE`|`ENABLED` `NONE`| |
+
+## Testing and Continuous Integration
+
+A CPU core cannot be trusted without a full set of verification testing.  The `mor1kx`
+pipelines are constantly verified for correctness with the or1k Continuous
+Integration (CI) suite running in [travis ci](travis-ci.org).  This currently covers:
+
+ - source linting - a `verilator --lint-only` check is run on each commit to
+   ensure there are no code quality issues.
+ - [or1k-tests](https://github.com/openrisc/or1k-tests) - the `or1k-tests` test suite
+   is run against each pipeline to check most major instructions, exception handling,
+   caching, timers, interrupts and other features.
+
+   Status: [![Build Status](https://travis-ci.org/openrisc/mor1kx.svg?branch=master)](https://travis-ci.org/openrisc/mor1kx)
+
+In the future we are working on bringing more tests including:
+
+  - softfloat, fpu verification (may not be feasable in CI due to long run times)
+  - CPU pipeline debugging verification via GDB/OpenOCD
+  - Resource utilization regression with yosys synth_intel synth_xilinx
+  - Formal verification with yosys
+  - Verification that each revision can boot differnt OS's **Linux**, **RTMES**
+  - Golden reference `or1ksim` trace comparisons vs verilog model using constrained
+    random inputs.
+
+Verification status of mor1kx pipelines:
+
+|Pipeline|Testing Support|Comments|
+|--------|---------------|--------|
+|`CAPPUCCINO`|`Linting` `or1k-tests`|All supported tests passing|
+|`ESPRESSO`|`linting` `or1k-tests` |Still many pipeline failures, see issue #71|
+|`PRONTO_ESPRESSO`|`linting`|No toolchain support for no-delayslot c code|
+|`MAROCCHINO`|`linting` `or1k-tests`|See [marocchino](https://github.com/openrisc/or1k_marocchino) project.|
+
