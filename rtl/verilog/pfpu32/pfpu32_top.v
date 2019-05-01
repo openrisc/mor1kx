@@ -48,7 +48,8 @@
 
 module pfpu32_top
 #(
-  parameter OPTION_OPERAND_WIDTH = 32
+  parameter OPTION_OPERAND_WIDTH = 32,
+  parameter OPTION_FTOI_ROUNDING = "CPP" // "CPP" / "IEEE"
 )
 (
   input clk,
@@ -373,7 +374,11 @@ pfpu32_f2i u_f2i_cnv
 
 
 // multiplexing and rounding
-pfpu32_rnd u_f32_rnd
+pfpu32_rnd
+#(
+  .OPTION_FTOI_ROUNDING (OPTION_FTOI_ROUNDING) // rounding instance
+)
+u_f32_rnd
 (
   // clocks, resets and other controls
   .clk             (clk),
