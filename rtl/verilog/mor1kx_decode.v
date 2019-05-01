@@ -274,7 +274,9 @@ module mor1kx_decode
      /* verilator lint_off WIDTH */
      if (FEATURE_FPU!="NONE") begin : fpu_decode_ena
      /* verilator lint_on WIDTH */
-       assign decode_op_fpu_o  = { (opc_insn == `OR1K_OPCODE_FPU), 
+       // Only single precision FP-instructions are supported
+       assign decode_op_fpu_o  = { ((opc_insn == `OR1K_OPCODE_FPU) &
+                                    ~decode_insn_i[`OR1K_FPUOP_DOUBLE_BIT]), 
                                    decode_insn_i[`OR1K_FPUOP_WIDTH-2:0] };
      end
      else begin : fpu_decode_none
@@ -290,12 +292,11 @@ module mor1kx_decode
 			   // All '10????' opcodes except l.sfxxi
 			   (decode_insn_i[31:30] == 2'b10 &
 			    !(opc_insn == `OR1K_OPCODE_SFIMM)) |
-			   // All '11????' opcodes except l.sfxx and l.mtspr
+			   // All '11????' opcodes except l.sfxx and l.mtspr and lf.sfxx.s
 			   (decode_insn_i[31:30] == 2'b11 &
 			    !(opc_insn == `OR1K_OPCODE_SF |
 			      decode_op_mtspr_o | decode_op_lsu_store_o) &
-          !((FEATURE_FPU != "NONE") &
-            (opc_insn == `OR1K_OPCODE_FPU) & decode_insn_i[3]));
+          !(decode_op_fpu_o[`OR1K_FPUOP_WIDTH-1] & decode_insn_i[3]));
 
    // Register file addresses
    assign decode_rfa_adr_o = decode_insn_i[`OR1K_RA_SELECT];
@@ -427,7 +428,8 @@ module mor1kx_decode
        `OR1K_OPCODE_CUST8:
 	 decode_except_illegal_o = (FEATURE_CUST8=="NONE");
        `OR1K_OPCODE_FPU:
-	 decode_except_illegal_o = (FEATURE_FPU=="NONE");
+	 decode_except_illegal_o = (FEATURE_FPU=="NONE") |
+                             decode_insn_i[`OR1K_FPUOP_DOUBLE_BIT];
 
        `OR1K_OPCODE_LD,
 	 `OR1K_OPCODE_SD:
