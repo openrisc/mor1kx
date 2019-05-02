@@ -153,7 +153,8 @@ wire cmp_result, cmp_ready,
 pfpu32_fcmp u_f32_cmp
 (
   .fpu_op_is_comp_i(op_cmp),
-  .cmp_type_i(op_fpu),
+  .cmp_any_opc_i(op_fpu[`OR1K_FPUOP_CMP_ANY_SELECT]),
+  .cmp_urd_bit_i(op_fpu[`OR1K_FPUOP_CMP_URD_BIT]),
   // operand 'a' related inputs
   .signa_i(in_signa),
   .exp10a_i(in_exp10a),
