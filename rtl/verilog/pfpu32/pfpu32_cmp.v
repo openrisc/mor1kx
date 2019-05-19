@@ -45,9 +45,9 @@
 
 module pfpu32_fcmp
 (
-  input                                 fpu_op_is_comp_i,
-  input [`OR1K_FPUOP_CMP_ANY_WIDTH-1:0] cmp_any_opc_i, // ordered/unordered
-  input                                 cmp_urd_bit_i, // is unorderd
+  input                                     fpu_op_is_comp_i,
+  input [`OR1K_FPUOP_GENERIC_CMP_WIDTH-1:0] generic_cmp_opc_i, // ordered/unordered
+  input                                     unordered_cmp_bit_i, // is unorderd
   // operand 'a' related inputs
   input        signa_i,
   input  [9:0] exp10a_i,
@@ -80,12 +80,12 @@ localparam [`OR1K_FPUOP_WIDTH-1:0] FPCOP_SFLT = `OR1K_FPCOP_SFLT;
 localparam [`OR1K_FPUOP_WIDTH-1:0] FPCOP_SFLE = `OR1K_FPCOP_SFLE;
 
 // For ordered / unordered comparison
-localparam [`OR1K_FPUOP_CMP_ANY_WIDTH-1:0] ANY_SFEQ = FPCOP_SFEQ[`OR1K_FPUOP_CMP_ANY_SELECT];
-localparam [`OR1K_FPUOP_CMP_ANY_WIDTH-1:0] ANY_SFNE = FPCOP_SFNE[`OR1K_FPUOP_CMP_ANY_SELECT];
-localparam [`OR1K_FPUOP_CMP_ANY_WIDTH-1:0] ANY_SFGT = FPCOP_SFGT[`OR1K_FPUOP_CMP_ANY_SELECT];
-localparam [`OR1K_FPUOP_CMP_ANY_WIDTH-1:0] ANY_SFGE = FPCOP_SFGE[`OR1K_FPUOP_CMP_ANY_SELECT];
-localparam [`OR1K_FPUOP_CMP_ANY_WIDTH-1:0] ANY_SFLT = FPCOP_SFLT[`OR1K_FPUOP_CMP_ANY_SELECT];
-localparam [`OR1K_FPUOP_CMP_ANY_WIDTH-1:0] ANY_SFLE = FPCOP_SFLE[`OR1K_FPUOP_CMP_ANY_SELECT];
+localparam [`OR1K_FPUOP_GENERIC_CMP_WIDTH-1:0] GENERIC_SFEQ = FPCOP_SFEQ[`OR1K_FPUOP_GENERIC_CMP_SELECT];
+localparam [`OR1K_FPUOP_GENERIC_CMP_WIDTH-1:0] GENERIC_SFNE = FPCOP_SFNE[`OR1K_FPUOP_GENERIC_CMP_SELECT];
+localparam [`OR1K_FPUOP_GENERIC_CMP_WIDTH-1:0] GENERIC_SFGT = FPCOP_SFGT[`OR1K_FPUOP_GENERIC_CMP_SELECT];
+localparam [`OR1K_FPUOP_GENERIC_CMP_WIDTH-1:0] GENERIC_SFGE = FPCOP_SFGE[`OR1K_FPUOP_GENERIC_CMP_SELECT];
+localparam [`OR1K_FPUOP_GENERIC_CMP_WIDTH-1:0] GENERIC_SFLT = FPCOP_SFLT[`OR1K_FPUOP_GENERIC_CMP_SELECT];
+localparam [`OR1K_FPUOP_GENERIC_CMP_WIDTH-1:0] GENERIC_SFLE = FPCOP_SFLE[`OR1K_FPUOP_GENERIC_CMP_SELECT];
 
 ////////////////////////////////////////////////////////////////////////
 //
@@ -98,12 +98,13 @@ wire snan = snana_i | snanb_i;
 wire anan = qnan | snan;
 
 //  Comparison is ordered/unordered EQ/NE
-wire eqne = (cmp_any_opc_i == ANY_SFEQ) | (cmp_any_opc_i == ANY_SFNE);
+wire eqne = (generic_cmp_opc_i == GENERIC_SFEQ) |
+            (generic_cmp_opc_i == GENERIC_SFNE);
 
 // Comparison is invalid if:
 //  1) sNaN is an operand of ordered/unordered EQ/NE comparison
 //  2)  NaN is an operand of ordered LT/LE/GT/GE comparison
-wire inv_cmp = (eqne & snan) | ((~eqne) & anan & (~cmp_urd_bit_i));
+wire inv_cmp = (eqne & snan) | ((~eqne) & anan & (~unordered_cmp_bit_i));
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -171,19 +172,19 @@ always @( qnan or snan or infa_i or infb_i or signa_i or signb_i or
 
 ////////////////////////////////////////////////////////////////////////
 // Comparison cmp_flag generation
-reg  cmp_any_flag; // ordered / unordered part
-wire cmp_flag = (cmp_urd_bit_i & anan) | cmp_any_flag;
+reg  generic_cmp_flag; // ordered / unordered
+wire cmp_flag = (unordered_cmp_bit_i & anan) | generic_cmp_flag;
 // ---
-always @(altb or blta or aeqb or cmp_any_opc_i) begin
+always @(altb or blta or aeqb or generic_cmp_opc_i) begin
   // synthesis parallel_case
-  case (cmp_any_opc_i)
-    ANY_SFEQ: cmp_any_flag = aeqb;
-    ANY_SFNE: cmp_any_flag = ~aeqb;
-    ANY_SFGT: cmp_any_flag = blta & ~aeqb;
-    ANY_SFGE: cmp_any_flag = blta | aeqb;
-    ANY_SFLT: cmp_any_flag = altb & ~aeqb;
-    ANY_SFLE: cmp_any_flag = altb | aeqb;
-    default:  cmp_any_flag = 1'b0;
+  case (generic_cmp_opc_i)
+    GENERIC_SFEQ: generic_cmp_flag = aeqb;
+    GENERIC_SFNE: generic_cmp_flag = ~aeqb;
+    GENERIC_SFGT: generic_cmp_flag = blta & ~aeqb;
+    GENERIC_SFGE: generic_cmp_flag = blta | aeqb;
+    GENERIC_SFLT: generic_cmp_flag = altb & ~aeqb;
+    GENERIC_SFLE: generic_cmp_flag = altb | aeqb;
+    default:      generic_cmp_flag = 1'b0;
   endcase
 end // always@ *
 

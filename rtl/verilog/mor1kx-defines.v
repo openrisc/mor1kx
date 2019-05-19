@@ -214,10 +214,10 @@
 `define OR1K_FPUOP_WIDTH	8
 `define OR1K_FPUOP_SELECT 7:0
 // Select bits for Ordered/Unordered comparison
-`define OR1K_FPUOP_CMP_ANY_WIDTH 3
-`define OR1K_FPUOP_CMP_ANY_SELECT 2:0
+`define OR1K_FPUOP_GENERIC_CMP_WIDTH 3
+`define OR1K_FPUOP_GENERIC_CMP_SELECT 2:0
 // Unordered comparison bit
-`define OR1K_FPUOP_CMP_URD_BIT 5
+`define OR1K_FPUOP_UNORDERED_CMP_BIT 5
 // FP instruction is double precision if bit 4 is set. We're a 32-bit 
 // implementation thus do not support double precision FP 
 `define OR1K_FPUOP_DOUBLE_BIT 4
