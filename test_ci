@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+docker build -t mor1k-test ci
+docker run --rm -v `pwd`:/src -w /src mor1k-test /src/ci/test.sh
