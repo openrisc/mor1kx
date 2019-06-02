@@ -5,9 +5,6 @@ set -x
 mkdir -p $HOME/src/tools
 mkdir -p $HOME/tools
 
-# Install the required sim
-$TRAVIS_BUILD_DIR/.travis/install-${SIM}.sh
-
 # Get our toolchain
 cd $HOME/src/tools
 curl --remote-name --location \

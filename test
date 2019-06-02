@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-
-docker run --rm -v `pwd`:/src librecores/librecores-ci-dev /src/run_test.sh

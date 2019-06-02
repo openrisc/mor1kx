@@ -3,6 +3,9 @@ cache: ccache
 sudo: true
 dist: trusty
 
+services:
+  - docker 
+
 addons:
   apt:
     packages:
@@ -16,12 +19,11 @@ addons:
     - python3-pip
 
 before_install:
-  - sudo pip3 install --upgrade pip setuptools
-  - sudo pip3 install --ignore-installed six
-  - sudo pip3 install fusesoc
+  -  docker pull librecores/librecores-ci-dev
 
 install:
-  - .travis/install-${JOB}.sh
+  -  docker run --rm librecores/librecores-ci-dev
+  - .travis/install-or1k-tests.sh
 
 script:
   - export PIPELINE=${P}
