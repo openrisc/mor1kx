@@ -19,10 +19,10 @@ addons:
     - python3-pip
 
 before_install:
-  -  docker pull librecores/librecores-ci-dev
+  -  docker pull librecores/librecores-ci
 
 install:
-  -  docker run --rm librecores/librecores-ci-dev
+  -  docker run --rm librecores/librecores-ci
   - .travis/install-or1k-tests.sh
 
 script:
