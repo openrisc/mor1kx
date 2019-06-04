@@ -12,7 +12,7 @@
 #  'RUN .travis/install-verilator.sh' to this dockerfile to have an image
 #  with the full environment already installed.
 #
-FROM librecores/librecores-ci-dev:latest
+FROM librecores/librecores-ci:latest
 RUN apt-get update && apt-get install -y \
  build-essential \
  autoconf \
