@@ -12,7 +12,7 @@
 #  'RUN .travis/install-verilator.sh' to this dockerfile to have an image
 #  with the full environment already installed.
 #
-FROM ubuntu:trusty
+FROM librecores/librecores-ci:latest
 RUN apt-get update && apt-get install -y \
  build-essential \
  autoconf \
@@ -21,10 +21,6 @@ RUN apt-get update && apt-get install -y \
  python3-pip \
  libelf-dev \
  flex bison
-
-RUN sudo pip3 install --upgrade pip setuptools
-RUN sudo pip3 install --ignore-installed six
-RUN sudo pip3 install fusesoc
 
 RUN groupadd -g 999 travis && \
     useradd -m -r -u 999 -g travis travis
