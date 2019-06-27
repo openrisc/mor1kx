@@ -1,60 +1,141 @@
-pipeline {
+pipeline{
     agent any
 
-    environment{
-        JOB= '$JOB'
-        SIM= '$SIM'
-        PIPELINE= '$PIPELINE'
-        EXPECTED_FAILURES= '$EXPECTED_FAILURES'
-        EXTRA_CORE_ARGS= '$EXTRA_CORE_ARGS'
-    }
-    stages {
-        stage('Build') {
-            steps {
+    stages{
+        stage("Docker pull"){
+            steps{
                 sh 'docker pull librecores/librecores-ci:0.2.0'
                 sh 'docker images'
             }
         }
-        stage('Run') {
-            steps {
-                sh 'docker run --rm -v $(pwd):/src -e JOB -e SIM -e PIPELINE -e EXPECTED_FAILURES -e EXTRA_CORE_ARGS librecores/librecores-ci /src/.travis/test.sh'
-            }
-        }
-        stage('run-parallel-jobs') {
-            steps {
-                parallel(
-                    verilator:{
-                        export $JOB='verilator'
+
+        stage("Docker run"){
+            parallel{
+                stage("verilator"){
+                    environment{
+                        JOB = 'verilator'
                     }
-                    testing:{  
-                        export $JOB='or1k-tests' $SIM='icarus' $PIPELINE='CAPPUCCINO' $EXPECTED_FAILURES="or1k-cy"
-                    },
-                    testing:{
-                        export $JOB='or1k-tests' $SIM='icarus' $PIPELINE='CAPPUCCINO' $EXPECTED_FAILURES="or1k-cy" $EXTRA_CORE_ARGS="--feature_dmmu NONE"
+                    steps{
+                        dockerrun()
                     }
-                    testing:{
-                        export $JOB='or1k-tests' $SIM='icarus' $PIPELINE='CAPPUCCINO' $EXPECTED_FAILURES="or1k-cy or1k-dsxinsn" $EXTRA_CORE_ARGS="--feature_immu NONE"
+                }
+                stage("testing 1"){
+                    environment{
+                        JOB = 'or1k-tests'
+                        SIM = 'icarus'
+                        PIPELINE = 'CAPPUCCINO'
+                        EXPECTED_FAILURES="or1k-cy"
                     }
-                    testing:{
-                        export $JOB='or1k-tests' $SIM='icarus' $PIPELINE='CAPPUCCINO' $EXPECTED_FAILURES="or1k-cy" $EXTRA_CORE_ARGS="--feature_datacache NONE" 
+                    steps{
+                        dockerrun()
                     }
-                    testing:{
-                        export $JOB='or1k-tests' $SIM='icarus' $PIPELINE='CAPPUCCINO' $EXPECTED_FAILURES="or1k-cy" $EXTRA_CORE_ARGS="--feature_instructioncache NONE"
+                }
+                stage("testing 2"){
+                    environment{
+                        JOB = 'or1k-tests'
+                        SIM = 'icarus'
+                        PIPELINE = 'CAPPUCCINO'
+                        EXPECTED_FAILURES="or1k-cy" 
+                        EXTRA_CORE_ARGS="--feature_dmmu NONE"
                     }
-                    testing:{
-                        export $JOB='or1k-tests' $SIM='icarus' $PIPELINE='CAPPUCCINO' $EXPECTED_FAILURES="or1k-cy" $EXTRA_CORE_ARGS="--feature_debugunit NONE"
+                    steps{
+                        dockerrun()
                     }
-                    testing:{
-                        export $JOB='or1k-tests' $SIM='icarus' $PIPELINE='CAPPUCCINO' $EXPECTED_FAILURES="or1k-cy or1k-cmov" EXTRA_CORE_ARGS="--feature_cmov NONE"
+                }
+                stage("testing 3"){
+                    environment{
+                        JOB = 'or1k-tests' 
+                        SIM = 'icarus' 
+                        PIPELINE = 'CAPPUCCINO' 
+                        EXPECTED_FAILURES = "or1k-cy or1k-dsxinsn" 
+                        EXTRA_CORE_ARGS = "--feature_immu NONE"
                     }
-                    testing:{
-                        export $JOB='or1k-tests' $SIM='icarus' $PIPELINE='CAPPUCCINO' $EXPECTED_FAILURES="or1k-cy or1k-ext" EXTRA_CORE_ARGS="--feature_ext NONE"
+                    steps{
+                        dockerrun()
                     }
-                    testing:{
-                        export $JOB='or1k-tests' $SIM='icarus' $PIPELINE='ESPRESSO'
+                }
+                stage("testing 4"){
+                    environment{
+                        JOB = 'or1k-tests' 
+                        SIM = 'icarus' 
+                        PIPELINE = 'CAPPUCCINO' 
+                        EXPECTED_FAILURES = "or1k-cy" 
+                        EXTRA_CORE_ARGS = "--feature_datacache NONE"
                     }
-                    )
+                    steps{
+                        dockerrun()
+                    }
+                }
+                stage("testing 5"){
+                    environment{
+                        JOB = 'or1k-tests' 
+                        SIM = 'icarus' 
+                        PIPELINE = 'CAPPUCCINO' 
+                        EXPECTED_FAILURES = "or1k-cy" 
+                        EXTRA_CORE_ARGS = "--feature_instructioncache NONE"
+                    }
+                    steps{
+                        dockerrun()
+                    }
+                }
+                stage("testing 6"){
+                    environment{
+                        JOB = 'or1k-tests' 
+                        SIM = 'icarus' 
+                        PIPELINE = 'CAPPUCCINO' 
+                        EXPECTED_FAILURES = "or1k-cy" 
+                        EXTRA_CORE_ARGS = "--feature_debugunit NONE"
+                    }
+                    steps{
+                        dockerrun()
+                    }
+                }
+                stage("testing 7"){
+                    environment{
+                        JOB = 'or1k-tests' 
+                        SIM = 'icarus' 
+                        PIPELINE = 'CAPPUCCINO' 
+                        EXPECTED_FAILURES = "or1k-cy or1k-cmov" 
+                        EXTRA_CORE_ARGS = "--feature_cmov NONE"
+                    }
+                    steps{
+                        dockerrun()
+                    }
+                }
+                stage("testing 8"){
+                    environment{
+                        JOB = 'or1k-tests' 
+                        SIM = 'icarus' 
+                        PIPELINE = 'CAPPUCCINO' 
+                        EXPECTED_FAILURES = "or1k-cy or1k-ext" 
+                        EXTRA_CORE_ARGS = "--feature_ext NONE"
+                    }
+                    steps{
+                        dockerrun()
+                    }
+                }
+                stage("testing 9"){
+                    environment{
+                        JOB = 'or1k-tests' 
+                        SIM = 'icarus' 
+                        PIPELINE = 'ESPRESSO' 
+                    }
+                    steps{
+                        script{
+                            try{
+                            dockerrun()
+                        }
+                        catch(Exception e){
+                             echo "Allowed Failure"
+                        }
+                        }                     
+                    }
+                }
             }
         }
     }
+}
+
+void dockerrun() {
+    sh 'docker run --rm -v $(pwd):/src -e "JOB=$JOB" -e "SIM=$SIM" -e "PIPELINE=$PIPELINE" -e "EXPECTED_FAILURES=$EXPECTED_FAILURES" -e "EXTRA_CORE_ARGS=$EXTRA_CORE_ARGS" librecores/librecores-ci /src/.travis/test.sh'
 }
