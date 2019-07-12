@@ -87,3 +87,12 @@ targets:
       - "tool_rivierapro? (monitor)"
       - "tool_xsim? (monitor)"
     parameters: [trace_enable, trace_to_screen]
+
+  tinyfpga_bx:
+    default_tool : icestorm
+    filesets : [core, tinyfpga_bx]
+    tools:
+      icestorm:
+        nextpnr_options : [--lp8k, --pcf-allow-unconstrained, --package, cm81, --freq, 32]
+        pnr: next
+    toplevel : mor1kx

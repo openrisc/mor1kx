@@ -1,0 +1,25 @@
+# Map pins for mor1kx toplevel module to the tinyfpga
+#
+# NOTE
+# Most pins we don't actually assign as we are just trying to get
+# synthesis to work and really don't care about PNR at the moment.
+
+set_io rst A6
+set_io clk B2
+
+# These are sb_io pins and must be mapped
+
+set_io traceport_exec_wbdata_o[12] A1
+set_io du_dat_i[22]                A7
+set_io iwbm_cti_o[0]               A8
+set_io multicore_numcores_i[18]    A9
+
+set_io du_stall_o                  B1
+# B2 used above
+set_io iwbm_dat_i[6]               B3
+set_io dwbm_dat_o[2]               B4
+set_io traceport_exec_insn_o[7]    B5
+set_io snoop_adr_i[21]             B6
+set_io dwbm_adr_o[30]              B7
+set_io snoop_adr_i[19]             B8
+set_io traceport_exec_wbdata_o[10] B9
