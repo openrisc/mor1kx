@@ -163,6 +163,11 @@ Integration (CI) suite running in [travis ci](travis-ci.org).  This currently co
    caching, timers, interrupts and other features.
 
    Status: [![Build Status](https://travis-ci.org/openrisc/mor1kx.svg?branch=master)](https://travis-ci.org/openrisc/mor1kx)
+   
+   
+The or1k Continuous Integration (CI) suite is running in a librecores-ci-openrisc docker container in Travis CI. Parallel execution of tests runs in librecores-ci-openrisc docker environment.
+ - [librecores-ci-openrisc](https://github.com/librecores/docker-images/tree/master/librecores-ci-openrisc) docker image is based on the standard [librecores/librecores-ci](https://github.com/librecores/docker-images/tree/master/librecores-ci) docker image and it largely target the [FuseSoC](https://github.com/olofk/fusesoc) use cases.  
+ - The base image includes installation of common EDA tools such as Icarus Verilog, Verilator and       Yosys that is required by CI suite for testing. librecores/libreocres-ci-openrisc docker image gets the toolchain required, downloads and compiles the or1k-tests.
 
 In the future we are working on bringing more tests including:
 
