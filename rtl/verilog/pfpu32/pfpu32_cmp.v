@@ -176,8 +176,7 @@ reg  generic_cmp_flag; // ordered / unordered
 wire cmp_flag = (unordered_cmp_bit_i & anan) | generic_cmp_flag;
 // ---
 always @(altb or blta or aeqb or generic_cmp_opc_i) begin
-  // synthesis parallel_case
-  case (generic_cmp_opc_i)
+  case (generic_cmp_opc_i) // synthesis parallel_case
     GENERIC_SFEQ: generic_cmp_flag = aeqb;
     GENERIC_SFNE: generic_cmp_flag = ~aeqb;
     GENERIC_SFGT: generic_cmp_flag = blta & ~aeqb;
