@@ -21,4 +21,7 @@ result=$?
 if [ $result != 0 ] ; then
   cat runtests.log
 fi
+
+cp $HOME/src/tools/or1k-tests/native/report.tap /src
+
 exit $result
