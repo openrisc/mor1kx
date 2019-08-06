@@ -17,7 +17,6 @@ pipeline {
                     }
                     steps {
                         dockerrun()
-                        tapReporting()
                     }
                 }
                 stage("testing 1") {
@@ -146,10 +145,12 @@ pipeline {
     }
 }
 
+// data of test.sh is persisted in docker container librecores-ci-openrisc 
 void dockerrun() {
     sh 'docker run --rm -v $(pwd):/src -e "JOB=$JOB" -e "SIM=$SIM" -e "PIPELINE=$PIPELINE" -e "EXPECTED_FAILURES=$EXPECTED_FAILURES" -e "EXTRA_CORE_ARGS=$EXTRA_CORE_ARGS" librecores/librecores-ci-openrisc /src/.travis/test.sh'
 }
 
+// TAP Plugin is used which adds the support to TAP test result files to Jenkins which can be seen at https://ci.librecores.org/job/Projects/job/OpenRISC/
 void tapReporting() {
     step([$class: "TapPublisher", testResults: "report.tap"])
 }
