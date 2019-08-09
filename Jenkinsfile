@@ -28,6 +28,7 @@ pipeline {
                     }
                     steps {
                         dockerrun()
+                        tapReporting()
                     }
                 }
                 stage("testing 2") {
@@ -40,6 +41,7 @@ pipeline {
                     }
                     steps {
                         dockerrun()
+                        tapReporting()
                     }
                 }
                 stage("testing 3") {
@@ -52,6 +54,7 @@ pipeline {
                     }
                     steps {
                         dockerrun()
+                        tapReporting()
                     }
                 }
                 stage("testing 4") {
@@ -64,6 +67,7 @@ pipeline {
                     }
                     steps {
                         dockerrun()
+                        tapReporting()
                     }
                 }
                 stage("testing 5") {
@@ -76,6 +80,7 @@ pipeline {
                     }
                     steps {
                         dockerrun()
+                        tapReporting()
                     }
                 }
                 stage("testing 6") {
@@ -88,6 +93,7 @@ pipeline {
                     }
                     steps {
                         dockerrun()
+                        tapReporting()
                     }
                 }
                 stage("testing 7") {
@@ -100,6 +106,7 @@ pipeline {
                     }
                     steps {
                         dockerrun()
+                        tapReporting()
                     }
                 }
                 stage("testing 8") {
@@ -112,6 +119,7 @@ pipeline {
                     }
                     steps {
                         dockerrun()
+                        tapReporting()
                     }
                 }
                 stage("testing 9") {
@@ -125,6 +133,7 @@ pipeline {
                             //TODO: remove try/catch once the failing test is fixed (https://github.com/openrisc/mor1kx/issues/71)
                             try {
                                 dockerrun()
+                                tapReporting()
                             } catch (Exception e) {
                                 echo "Allowed failure"
                             }
@@ -136,6 +145,12 @@ pipeline {
     }
 }
 
+// data of test.sh is persisted in docker container librecores-ci-openrisc 
 void dockerrun() {
     sh 'docker run --rm -v $(pwd):/src -e "JOB=$JOB" -e "SIM=$SIM" -e "PIPELINE=$PIPELINE" -e "EXPECTED_FAILURES=$EXPECTED_FAILURES" -e "EXTRA_CORE_ARGS=$EXTRA_CORE_ARGS" librecores/librecores-ci-openrisc /src/.travis/test.sh'
+}
+
+// TAP Plugin is used which adds the support to TAP test result files to Jenkins which can be seen at https://ci.librecores.org/job/Projects/job/OpenRISC/
+void tapReporting() {
+    step([$class: "TapPublisher", testResults: "report.tap"])
 }

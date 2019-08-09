@@ -21,4 +21,8 @@ result=$?
 if [ $result != 0 ] ; then
   cat runtests.log
 fi
+
+# copy the report.tap (which has TAP test result) for or1k-tests to /src location 
+cp $HOME/src/tools/or1k-tests/native/report.tap /src
+
 exit $result
