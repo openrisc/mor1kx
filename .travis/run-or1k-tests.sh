@@ -22,7 +22,8 @@ if [ $result != 0 ] ; then
   cat runtests.log
 fi
 
-# copy the report.tap (which has TAP test result) for or1k-tests to /src location 
-cp $HOME/src/tools/or1k-tests/native/report.tap /src
+# copy the report.tap (which has TAP test result) for or1k-tests to /src location
+mv $HOME/src/tools/or1k-tests/native/report.tap $HOME/src/tools/or1k-tests/native/$SIM$PIPELINE$EXTRA_CORE_ARGS$EXPECTED_FAILURES$EXTRA_CORE_ARGS.tap 
+cp $HOME/src/tools/or1k-tests/native/$SIM$PIPELINE$EXTRA_CORE_ARGS$EXPECTED_FAILURES$EXTRA_CORE_ARGS.tap /src
 
 exit $result
