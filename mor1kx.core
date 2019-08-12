@@ -88,11 +88,10 @@ targets:
       - "tool_xsim? (monitor)"
     parameters: [trace_enable, trace_to_screen]
 
-  tinyfpga_bx:
+  synth:
     default_tool : icestorm
-    filesets : [core, tinyfpga_bx]
+    filesets : [core]
     tools:
       icestorm:
-        nextpnr_options : [--lp8k, --pcf-allow-unconstrained, --package, cm81, --freq, 32]
-        pnr: next
+        pnr: none
     toplevel : mor1kx
