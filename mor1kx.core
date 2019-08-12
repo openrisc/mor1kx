@@ -90,7 +90,7 @@ targets:
 
   synth:
     default_tool : icestorm
-    filesets : [core]
+    filesets : [core , fpu]
     tools:
       icestorm:
         pnr: none
