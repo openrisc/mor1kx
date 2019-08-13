@@ -14,7 +14,7 @@ pipeline {
                 docker { image 'librecores/librecores-ci:0.3.0' }
             }
             steps{
-                sh 'docker run --rm -v $(pwd):/src librecores/librecores-ci:0.3.0 /src/yosys.sh'
+                sh 'docker run --rm -v $(pwd):/src librecores/librecores-ci:0.4.0 /src/.jenkins/yosys.sh'
             }
         }
 
