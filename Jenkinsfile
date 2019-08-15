@@ -10,12 +10,11 @@ pipeline {
         }
 
        stage("Yosys synthesis"){
-            environment {
-                TOPLEVEL = "mor1kx"
-  		        VERSION = "5.0-r3"
-             }
-            steps{
-               sh 'docker run --rm -v $(pwd):/src -e "TOPLEVEL=$TOPLEVEL" -e "VERSION=$VERSION" librecores/librecores-ci-openrisc  /yosys-scripts/yosys.sh'
+            steps {
+               sh 'docker run --rm -v $(pwd):/src -w /src librecores/librecores-ci:0.4.0 /bin/bash -c \
+               "fusesoc library add mor1kx /src; \
+                fusesoc run --target=synth mor1kx; \
+                /test-scripts/extract-yosys-stats.py < build/mor1kx_*/synth-icestorm/yosys.log"'
             }
         }
 
