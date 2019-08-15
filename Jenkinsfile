@@ -9,19 +9,20 @@ pipeline {
             }
         }
 
-        stage("Yosys synthesis"){
-            agent {
-                docker { image 'librecores/librecores-ci:0.3.0' }
-            }
+       stage("Yosys synthesis"){
+            environment {
+                TOPLEVEL = "mor1kx"
+  		        VERSION = "5.0-r3"
+             }
             steps{
-                sh 'docker run --rm -v $(pwd):/src librecores/librecores-ci:0.4.0 /src/.jenkins/yosys.sh'
+               sh 'docker run --rm -v $(pwd):/src -e "TOPLEVEL=$TOPLEVEL" -e "VERSION=$VERSION" librecores/librecores-ci-openrisc  /yosys-scripts/yosys.sh'
             }
         }
 
         stage('Performance tests') {
             steps {
                 echo "-=- execute performance tests -=-"
-                perfReport 'result.csv'
+                perfReport 'output.csv'
             }
         }
 
