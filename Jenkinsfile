@@ -18,7 +18,7 @@ pipeline {
             }
         }
 
-        stage('Performance tests') {
+        stage('Resource Usage Report Generation') {
             steps {
                 echo "-=- execute performance tests -=-"
                 perfReport 'output.csv'
