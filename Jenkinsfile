@@ -9,9 +9,25 @@ pipeline {
             }
         }
 
+       stage("Yosys synthesis"){
+            steps {
+               sh 'docker run --rm -v $(pwd):/src -w /src librecores/librecores-ci:0.4.0 /bin/bash -c \
+               "fusesoc library add mor1kx /src; \
+                fusesoc run --target=synth mor1kx; \
+                /test-scripts/extract-yosys-stats.py < build/mor1kx_*/synth-icestorm/yosys.log"'
+            }
+        }
+
+        stage('Resource Usage Report Generation') {
+            steps {
+                echo "-=- execute performance tests -=-"
+                perfReport 'output.csv'
+            }
+        }
+
         stage("Docker run") {
             parallel {
-                stage("verilator") { 
+                stage("verilator") {
                     environment{
                         JOB = 'verilator'
                     }
@@ -35,7 +51,7 @@ pipeline {
                         JOB = 'or1k-tests'
                         SIM = 'icarus'
                         PIPELINE = 'CAPPUCCINO'
-                        EXPECTED_FAILURES="or1k-cy" 
+                        EXPECTED_FAILURES="or1k-cy"
                         EXTRA_CORE_ARGS="--feature_dmmu NONE"
                     }
                     steps {
@@ -44,10 +60,10 @@ pipeline {
                 }
                 stage("testing 3") {
                     environment {
-                        JOB = 'or1k-tests' 
-                        SIM = 'icarus' 
-                        PIPELINE = 'CAPPUCCINO' 
-                        EXPECTED_FAILURES = "or1k-cy or1k-dsxinsn" 
+                        JOB = 'or1k-tests'
+                        SIM = 'icarus'
+                        PIPELINE = 'CAPPUCCINO'
+                        EXPECTED_FAILURES = "or1k-cy or1k-dsxinsn"
                         EXTRA_CORE_ARGS = "--feature_immu NONE"
                     }
                     steps {
@@ -56,10 +72,10 @@ pipeline {
                 }
                 stage("testing 4") {
                     environment {
-                        JOB = 'or1k-tests' 
-                        SIM = 'icarus' 
-                        PIPELINE = 'CAPPUCCINO' 
-                        EXPECTED_FAILURES = "or1k-cy" 
+                        JOB = 'or1k-tests'
+                        SIM = 'icarus'
+                        PIPELINE = 'CAPPUCCINO'
+                        EXPECTED_FAILURES = "or1k-cy"
                         EXTRA_CORE_ARGS = "--feature_datacache NONE"
                     }
                     steps {
@@ -68,10 +84,10 @@ pipeline {
                 }
                 stage("testing 5") {
                     environment {
-                        JOB = 'or1k-tests' 
-                        SIM = 'icarus' 
-                        PIPELINE = 'CAPPUCCINO' 
-                        EXPECTED_FAILURES = "or1k-cy" 
+                        JOB = 'or1k-tests'
+                        SIM = 'icarus'
+                        PIPELINE = 'CAPPUCCINO'
+                        EXPECTED_FAILURES = "or1k-cy"
                         EXTRA_CORE_ARGS = "--feature_instructioncache NONE"
                     }
                     steps {
@@ -80,10 +96,10 @@ pipeline {
                 }
                 stage("testing 6") {
                     environment {
-                        JOB = 'or1k-tests' 
-                        SIM = 'icarus' 
-                        PIPELINE = 'CAPPUCCINO' 
-                        EXPECTED_FAILURES = "or1k-cy" 
+                        JOB = 'or1k-tests'
+                        SIM = 'icarus'
+                        PIPELINE = 'CAPPUCCINO'
+                        EXPECTED_FAILURES = "or1k-cy"
                         EXTRA_CORE_ARGS = "--feature_debugunit NONE"
                     }
                     steps {
@@ -92,10 +108,10 @@ pipeline {
                 }
                 stage("testing 7") {
                     environment {
-                        JOB = 'or1k-tests' 
-                        SIM = 'icarus' 
-                        PIPELINE = 'CAPPUCCINO' 
-                        EXPECTED_FAILURES = "or1k-cy or1k-cmov" 
+                        JOB = 'or1k-tests'
+                        SIM = 'icarus'
+                        PIPELINE = 'CAPPUCCINO'
+                        EXPECTED_FAILURES = "or1k-cy or1k-cmov"
                         EXTRA_CORE_ARGS = "--feature_cmov NONE"
                     }
                     steps {
@@ -104,10 +120,10 @@ pipeline {
                 }
                 stage("testing 8") {
                     environment {
-                        JOB = 'or1k-tests' 
-                        SIM = 'icarus' 
-                        PIPELINE = 'CAPPUCCINO' 
-                        EXPECTED_FAILURES = "or1k-cy or1k-ext" 
+                        JOB = 'or1k-tests'
+                        SIM = 'icarus'
+                        PIPELINE = 'CAPPUCCINO'
+                        EXPECTED_FAILURES = "or1k-cy or1k-ext"
                         EXTRA_CORE_ARGS = "--feature_ext NONE"
                     }
                     steps {
@@ -116,9 +132,9 @@ pipeline {
                 }
                 stage("testing 9") {
                     environment {
-                        JOB = 'or1k-tests' 
-                        SIM = 'icarus' 
-                        PIPELINE = 'ESPRESSO' 
+                        JOB = 'or1k-tests'
+                        SIM = 'icarus'
+                        PIPELINE = 'ESPRESSO'
                     }
                     steps {
                         script {
@@ -128,7 +144,7 @@ pipeline {
                             } catch (Exception e) {
                                 echo "Allowed failure"
                             }
-                        }                   
+                        }
                     }
                 }
             }

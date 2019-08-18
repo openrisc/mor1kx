@@ -87,3 +87,11 @@ targets:
       - "tool_rivierapro? (monitor)"
       - "tool_xsim? (monitor)"
     parameters: [trace_enable, trace_to_screen]
+
+  synth:
+    default_tool : icestorm
+    filesets : [core , fpu]
+    tools:
+      icestorm:
+        pnr: none
+    toplevel : mor1kx
