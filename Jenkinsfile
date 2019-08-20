@@ -1,157 +1,76 @@
-pipeline {
-    agent any
-
-    stages {
-        stage("Docker pull") {
-            steps {
-                sh 'docker pull librecores/librecores-ci-openrisc'
-                sh 'docker images'
-            }
-        }
-
-       stage("Yosys synthesis"){
-            steps {
-               sh 'docker run --rm -v $(pwd):/src -w /src librecores/librecores-ci:0.4.0 /bin/bash -c \
-               "fusesoc library add mor1kx /src; \
-                fusesoc run --target=synth mor1kx; \
-                /test-scripts/extract-yosys-stats.py < build/mor1kx_*/synth-icestorm/yosys.log"'
-            }
-        }
-
-        stage('Resource Usage Report Generation') {
-            steps {
-                echo "-=- execute performance tests -=-"
-                perfReport 'output.csv'
-            }
-        }
-
-        stage("Docker run") {
-            parallel {
-                stage("verilator") {
-                    environment{
-                        JOB = 'verilator'
-                    }
-                    steps {
-                        dockerrun()
-                    }
-                }
-                stage("testing 1") {
-                    environment {
-                        JOB = 'or1k-tests'
-                        SIM = 'icarus'
-                        PIPELINE = 'CAPPUCCINO'
-                        EXPECTED_FAILURES="or1k-cy"
-                    }
-                    steps {
-                        dockerrun()
-                    }
-                }
-                stage("testing 2") {
-                    environment {
-                        JOB = 'or1k-tests'
-                        SIM = 'icarus'
-                        PIPELINE = 'CAPPUCCINO'
-                        EXPECTED_FAILURES="or1k-cy"
-                        EXTRA_CORE_ARGS="--feature_dmmu NONE"
-                    }
-                    steps {
-                        dockerrun()
-                    }
-                }
-                stage("testing 3") {
-                    environment {
-                        JOB = 'or1k-tests'
-                        SIM = 'icarus'
-                        PIPELINE = 'CAPPUCCINO'
-                        EXPECTED_FAILURES = "or1k-cy or1k-dsxinsn"
-                        EXTRA_CORE_ARGS = "--feature_immu NONE"
-                    }
-                    steps {
-                        dockerrun()
-                    }
-                }
-                stage("testing 4") {
-                    environment {
-                        JOB = 'or1k-tests'
-                        SIM = 'icarus'
-                        PIPELINE = 'CAPPUCCINO'
-                        EXPECTED_FAILURES = "or1k-cy"
-                        EXTRA_CORE_ARGS = "--feature_datacache NONE"
-                    }
-                    steps {
-                        dockerrun()
-                    }
-                }
-                stage("testing 5") {
-                    environment {
-                        JOB = 'or1k-tests'
-                        SIM = 'icarus'
-                        PIPELINE = 'CAPPUCCINO'
-                        EXPECTED_FAILURES = "or1k-cy"
-                        EXTRA_CORE_ARGS = "--feature_instructioncache NONE"
-                    }
-                    steps {
-                        dockerrun()
-                    }
-                }
-                stage("testing 6") {
-                    environment {
-                        JOB = 'or1k-tests'
-                        SIM = 'icarus'
-                        PIPELINE = 'CAPPUCCINO'
-                        EXPECTED_FAILURES = "or1k-cy"
-                        EXTRA_CORE_ARGS = "--feature_debugunit NONE"
-                    }
-                    steps {
-                        dockerrun()
-                    }
-                }
-                stage("testing 7") {
-                    environment {
-                        JOB = 'or1k-tests'
-                        SIM = 'icarus'
-                        PIPELINE = 'CAPPUCCINO'
-                        EXPECTED_FAILURES = "or1k-cy or1k-cmov"
-                        EXTRA_CORE_ARGS = "--feature_cmov NONE"
-                    }
-                    steps {
-                        dockerrun()
-                    }
-                }
-                stage("testing 8") {
-                    environment {
-                        JOB = 'or1k-tests'
-                        SIM = 'icarus'
-                        PIPELINE = 'CAPPUCCINO'
-                        EXPECTED_FAILURES = "or1k-cy or1k-ext"
-                        EXTRA_CORE_ARGS = "--feature_ext NONE"
-                    }
-                    steps {
-                        dockerrun()
-                    }
-                }
-                stage("testing 9") {
-                    environment {
-                        JOB = 'or1k-tests'
-                        SIM = 'icarus'
-                        PIPELINE = 'ESPRESSO'
-                    }
-                    steps {
-                        script {
-                            //TODO: remove try/catch once the failing test is fixed (https://github.com/openrisc/mor1kx/issues/71)
-                            try {
-                                dockerrun()
-                            } catch (Exception e) {
-                                echo "Allowed failure"
-                            }
-                        }
-                    }
-                }
-            }
-        }
+openriscPipeline {
+    job('verilator') {
+        job 'verilator'
     }
-}
 
-void dockerrun() {
-    sh 'docker run --rm -v $(pwd):/src -e "JOB=$JOB" -e "SIM=$SIM" -e "PIPELINE=$PIPELINE" -e "EXPECTED_FAILURES=$EXPECTED_FAILURES" -e "EXTRA_CORE_ARGS=$EXTRA_CORE_ARGS" librecores/librecores-ci-openrisc /src/.travis/test.sh'
+    job('icarus-cappuccino') {
+        job 'or1k-tests'
+        sim 'icarus'
+        pipeline 'CAPPUCCINO'
+        expectedFailures 'or1k-cy'
+    }
+
+    job('icarus-cappuccino-dmmu-none') {
+        job 'or1k-tests'
+        sim 'icarus'
+        pipeline 'CAPPUCCINO'
+        expectedFailures 'or1k-cy'
+        extraCoreArgs '--feature_dmmu NONE'
+    }
+
+    job('icarus-cappuccino-immu-none') {
+        job 'or1k-tests'
+        sim 'icarus'
+        pipeline 'CAPPUCCINO'
+        expectedFailures 'or1k-cy or1k-dsxinsn'
+        extraCoreArgs '--feature_immu NONE'
+    }
+
+    job('icarus-cappuccino-datacache-none') {
+        job 'or1k-tests'
+        sim 'icarus'
+        pipeline 'CAPPUCCINO'
+        expectedFailures 'or1k-cy'
+        extraCoreArgs '--feature_datacache NONE'
+    }
+
+    job('icarus-cappuccino-instructioncache-none') {
+        job 'or1k-tests'
+        sim 'icarus'
+        pipeline 'CAPPUCCINO'
+        expectedFailures 'or1k-cy'
+        extraCoreArgs '--feature_instructioncache NONE'
+    }
+
+    job('icarus-cappuccino-debugunit-none') {
+        job 'or1k-tests'
+        sim 'icarus'
+        pipeline 'CAPPUCCINO'
+        expectedFailures 'or1k-cy'
+        extraCoreArgs '--feature_debugunit NONE'
+    }
+
+    job('icarus-cappuccino-cmov-none') {
+        job 'or1k-tests'
+        sim 'icarus'
+        pipeline 'CAPPUCCINO'
+        expectedFailures 'or1k-cy or1k-cmov'
+        extraCoreArgs '--feature_cmov NONE'
+    }
+
+    job('icarus-cappuccino-ext-none') {
+        job 'or1k-tests'
+        sim 'icarus'
+        pipeline 'CAPPUCCINO'
+        expectedFailures 'or1k-cy or1k-ext'
+        extraCoreArgs '--feature_ext NONE'
+    }
+
+//    TODO: Fix failing Job
+//
+//    job('icarus-espresso') {
+//        job 'or1k-tests'
+//        sim 'icarus'
+//        pipeline 'ESPRESSO'
+//    }
 }
