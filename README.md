@@ -173,7 +173,7 @@ The or1k Continuous Integration (CI) suite is running in a librecores-ci-openris
 The Continous Integration suite also runs in [Jenkins](https://ci.librecores.org/) supported by [Librecores-CI](https://github.com/librecores/librecores-ci-jenkins-server). As similar to Travis, `mor1kx` pipelines are also constantly verified. In addition to that, it also supports:
 
  - Yosys synthesis for monitoring resource usages. [Fusesoc](https://github.com/olofk/fusesoc/blob/master/doc/icestorm.adoc) provides the icestorm backend.
- - [LibreCores CI](https://github.com/librecores/docker-images/tree/master/librecores-ci) Docker image provides Yosys synthesis metrics parser which outputs 'Printing Statistics'. Results are parsed to graphs with Performance Plugin, which can be seen at [ci.librecores.org](https://ci.librecores.org/job/Projects/job/OpenRISC/job/mor1kx/)
+ - [LibreCores CI](https://github.com/librecores/docker-images/tree/master/librecores-ci) Docker image provides Yosys synthesis metrics parser which outputs 'Printing Statistics'. Results are parsed to graphs with Plot Plugin, which can be seen at [ci.librecores.org](https://ci.librecores.org/job/Projects/job/OpenRISC/job/mor1kx/)
 
 
 Status : [![Build Status](https://ci.librecores.org/job/Projects/job/OpenRISC/job/mor1kx/job/master/badge/icon)](https://ci.librecores.org/job/Projects/job/OpenRISC/job/mor1kx/job/master/)
