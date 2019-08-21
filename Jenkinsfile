@@ -9,26 +9,52 @@ pipeline {
             }
         }
 
-       stage("Yosys synthesis"){
+        stage("Yosys synthesis") {
             steps {
-               sh 'docker run --rm -v $(pwd):/src -w /src librecores/librecores-ci:0.4.0 /bin/bash -c \
+                sh 'docker run --rm -v $(pwd):/src -w /src librecores/librecores-ci:0.5.0 /bin/bash -c \
                "fusesoc library add mor1kx /src; \
                 fusesoc run --target=synth mor1kx; \
                 /test-scripts/extract-yosys-stats.py < build/mor1kx_*/synth-icestorm/yosys.log"'
             }
         }
 
-        stage('Resource Usage Report Generation') {
+        stage('Generate Resource Usage Report') {
             steps {
-                echo "-=- execute performance tests -=-"
-                perfReport 'output.csv'
+                echo "-=- report metrics -=-"
+                plot csvFileName: 'plot-yosys-stats.csv', csvSeries: [
+                        [
+                                file: 'yosys-stats.csv',
+                                url: ''
+                        ]
+                ], exclZero: true,
+                        group: 'Resource Usage',
+                        numBuilds: '15',
+                        style: 'line',
+                        title: 'Resource Usage',
+                        useDescr: true,
+                        yaxis: 'Values'
+
+                echo "-=- report metrics -=-"
+
+                plot csvFileName: 'plot-yosys-cell-stats.csv', csvSeries: [
+                        [
+                                file: 'yosys-cell-stats.csv',
+                                url: ''
+                        ]
+                ], exclZero: true,
+                        group: 'Cell Count',
+                        numBuilds: '15',
+                        style: 'line',
+                        title: 'Cell Count',
+                        useDescr: true,
+                        yaxis: 'Values'
             }
         }
 
         stage("Docker run") {
             parallel {
                 stage("verilator") {
-                    environment{
+                    environment {
                         JOB = 'verilator'
                     }
                     steps {
@@ -40,7 +66,7 @@ pipeline {
                         JOB = 'or1k-tests'
                         SIM = 'icarus'
                         PIPELINE = 'CAPPUCCINO'
-                        EXPECTED_FAILURES="or1k-cy"
+                        EXPECTED_FAILURES = "or1k-cy"
                     }
                     steps {
                         dockerrun()
@@ -51,8 +77,8 @@ pipeline {
                         JOB = 'or1k-tests'
                         SIM = 'icarus'
                         PIPELINE = 'CAPPUCCINO'
-                        EXPECTED_FAILURES="or1k-cy"
-                        EXTRA_CORE_ARGS="--feature_dmmu NONE"
+                        EXPECTED_FAILURES = "or1k-cy"
+                        EXTRA_CORE_ARGS = "--feature_dmmu NONE"
                     }
                     steps {
                         dockerrun()
