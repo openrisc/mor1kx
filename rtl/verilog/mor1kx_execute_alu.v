@@ -422,20 +422,6 @@ endgenerate
       end
    endgenerate
 
-   // One signed overflow detection for all multiplication implmentations
-   assign mul_signed_overflow = (FEATURE_MULTIPLIER=="NONE") ||
-				(FEATURE_MULTIPLIER=="PIPELINED") ? 1'b0 :
-				// Same signs, check for negative result
-				// (should be positive)
-				((a[OPTION_OPERAND_WIDTH-1] ==
-				  b[OPTION_OPERAND_WIDTH-1]) &&
-				 mul_result[OPTION_OPERAND_WIDTH-1]) ||
-				// Differring signs, check for positive result
-				// (should be negative)
-				((a[OPTION_OPERAND_WIDTH-1] ^
-				  b[OPTION_OPERAND_WIDTH-1]) &&
-				 !mul_result[OPTION_OPERAND_WIDTH-1]);
-
    assign mul_result_o = mul_result;
 
    generate
