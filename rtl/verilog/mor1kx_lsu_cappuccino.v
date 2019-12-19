@@ -232,7 +232,7 @@ module mor1kx_lsu_cappuccino
    assign align_err = (ctrl_lsu_length_i == 2'b10) & align_err_word |
 		      (ctrl_lsu_length_i == 2'b01) & align_err_short;
 
-   assign except_align = ctrl_op_lsu & align_err;
+   assign except_align = ctrl_op_lsu & align_err & !(ctrl_op_lsu_store_i & ctrl_op_lsu_atomic_i & !(atomic_reserve & ctrl_lsu_adr_i == atomic_addr));
 
    assign lsu_except_align_o = except_align & !pipeline_flush_i;
 
