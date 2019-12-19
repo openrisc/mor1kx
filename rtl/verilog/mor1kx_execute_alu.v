@@ -141,8 +141,8 @@ module mor1kx_execute_alu
    wire 				  adder_unsigned_overflow;
    wire 				  adder_result_sign;
 
-   wire [OPTION_OPERAND_WIDTH-1:0]        b_neg;
-   wire [OPTION_OPERAND_WIDTH-1:0]        b_mux;
+   wire [OPTION_OPERAND_WIDTH:0]        b_neg;
+   wire [OPTION_OPERAND_WIDTH:0]        b_mux;
    wire                                   carry_in;
 
    wire                                   a_eq_b;
@@ -203,9 +203,9 @@ endgenerate
    assign opc_alu_ext = opc_alu_secondary_i[`OR1K_ALU_OPC_SECONDARY_WIDTH-1:0];
 
    // Adder/subtractor inputs
-   assign b_neg = ~b;
+   assign b_neg = ~{{1{1'b0}}, b};
    assign carry_in = adder_do_sub_i | adder_do_carry_i & carry_i;
-   assign b_mux = adder_do_sub_i ? b_neg : b;
+   assign b_mux = adder_do_sub_i ? b_neg : {{1{1'b0}}, b};
    // Adder
    assign {adder_carryout, adder_result} = a + b_mux +
                                            {{OPTION_OPERAND_WIDTH-1{1'b0}},
