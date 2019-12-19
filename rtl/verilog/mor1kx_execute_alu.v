@@ -611,7 +611,7 @@ endgenerate
    // Signed compare
    assign a_lts_b = !(adder_result_sign == adder_signed_overflow);
    // Unsigned compare
-   assign a_ltu_b = !adder_carryout;
+   assign a_ltu_b = adder_carryout;
 
    generate
       /* verilator lint_off WIDTH */
