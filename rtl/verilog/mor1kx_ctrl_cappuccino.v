@@ -833,9 +833,9 @@ module mor1kx_ctrl_cappuccino
        spr_eear <= {OPTION_OPERAND_WIDTH{1'b0}};
      else if (/*padv_ctrl & exception*/ exception_re)
        begin
-	  if (except_ibus_err_i | except_itlb_miss_i | except_ipagefault_i)
+	  if (except_ibus_err_i | except_itlb_miss_i | except_ipagefault_i | except_illegal_i)
 	    spr_eear <= pc_ctrl_i;
-	  else
+	  else if (except_dbus_i | except_dtlb_miss_i | except_dpagefault_i | except_align_i)
 	    spr_eear <= ctrl_lsu_adr_i;
        end
 
