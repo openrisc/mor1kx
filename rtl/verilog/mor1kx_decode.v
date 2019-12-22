@@ -259,7 +259,9 @@ module mor1kx_decode
 			      opc_alu == `OR1K_ALU_OPC_SHRT ||
 			      opc_insn == `OR1K_OPCODE_SHRTI;
 
+   /* check bit 9 to verify valid l.fl1/l.ff1 instruction */
    assign decode_op_ffl1_o = opc_insn == `OR1K_OPCODE_ALU &&
+                             (decode_insn_i[9:8] == 2'b00 || decode_insn_i[9:8] == 2'b01) &&
 			     opc_alu == `OR1K_ALU_OPC_FFL1;
 
    assign decode_op_movhi_o = opc_insn == `OR1K_OPCODE_MOVHI;
