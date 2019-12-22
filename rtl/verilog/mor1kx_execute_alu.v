@@ -258,20 +258,6 @@ endgenerate
 	 // Can't detect unsigned overflow in this implementation
 	 assign mul_unsigned_overflow = 0;
 
-         // One signed overflow detection for all multiplication implmentations
-         assign mul_signed_overflow = (FEATURE_MULTIPLIER=="NONE") ||
-      				(FEATURE_MULTIPLIER=="PIPELINED") ? 1'b0 :
-      				// Same signs, check for negative result
-      				// (should be positive)
-      				((a[OPTION_OPERAND_WIDTH-1] ==
-      				  b[OPTION_OPERAND_WIDTH-1]) &&
-      				 mul_result[OPTION_OPERAND_WIDTH-1]) ||
-      				// Differring signs, check for positive result
-      				// (should be negative)
-      				((a[OPTION_OPERAND_WIDTH-1] ^
-      				  b[OPTION_OPERAND_WIDTH-1]) &&
-      				 !mul_result[OPTION_OPERAND_WIDTH-1]);
-
       end // if (FEATURE_MULTIPLIER=="THREESTAGE")
       /* verilator lint_off WIDTH */
       else if (FEATURE_MULTIPLIER=="PIPELINED") begin : pipelinedmultiply
@@ -360,8 +346,6 @@ endgenerate
 					 |mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:
 						     OPTION_OPERAND_WIDTH];
 
-         assign mul_signed_overflow = (mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH] == 32'h0 || mul_prod_r[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH] == 32'hffffffff) ? 0:1;
-
 	 // synthesis translate_off
 	 `ifndef verilator
 	 always @(posedge mul_valid)
@@ -389,20 +373,6 @@ endgenerate
 	 assign mul_unsigned_overflow =  OPTION_OPERAND_WIDTH==64 ? 0 :
 	       |mul_full_result[(OPTION_OPERAND_WIDTH*2)-1:OPTION_OPERAND_WIDTH];
 
-         // One signed overflow detection for all multiplication implmentations
-         assign mul_signed_overflow = (FEATURE_MULTIPLIER=="NONE") ||
-      				(FEATURE_MULTIPLIER=="PIPELINED") ? 1'b0 :
-      				// Same signs, check for negative result
-      				// (should be positive)
-      				((a[OPTION_OPERAND_WIDTH-1] ==
-      				  b[OPTION_OPERAND_WIDTH-1]) &&
-      				 mul_result[OPTION_OPERAND_WIDTH-1]) ||
-      				// Differring signs, check for positive result
-      				// (should be negative)
-      				((a[OPTION_OPERAND_WIDTH-1] ^
-      				  b[OPTION_OPERAND_WIDTH-1]) &&
-      				 !mul_result[OPTION_OPERAND_WIDTH-1]);
-
          assign mul_valid = 1;
       end
       else if (FEATURE_MULTIPLIER=="NONE") begin
@@ -421,6 +391,23 @@ endgenerate
          end
       end
    endgenerate
+
+    // One signed overflow detection for all multiplication implmentations
+    assign mul_signed_overflow = (FEATURE_MULTIPLIER=="NONE") ||
+ 				(FEATURE_MULTIPLIER=="PIPELINED") ? 1'b0 :
+                                // When either a or b is 0, result should not
+                                // be negative
+                                ((a == 0 || b == 0) && mul_result[OPTION_OPERAND_WIDTH-1]) ||
+ 				// Same signs, check for negative result
+ 				// (should be positive)
+ 				((a[OPTION_OPERAND_WIDTH-1] ==
+ 				  b[OPTION_OPERAND_WIDTH-1]) &&
+ 				 mul_result[OPTION_OPERAND_WIDTH-1]) ||
+ 				// Differring signs, check for positive result
+ 				// (should be negative)
+ 				((a[OPTION_OPERAND_WIDTH-1] ^
+ 				  b[OPTION_OPERAND_WIDTH-1]) &&
+ 				 !mul_result[OPTION_OPERAND_WIDTH-1]);
 
    assign mul_result_o = mul_result;
 
