@@ -82,7 +82,6 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_ATOMIC = "ENABLED",
 
     parameter FEATURE_FPU   = "NONE", // ENABLED|NONE
-    parameter OPTION_FTOI_ROUNDING = "CPP", // "CPP" / "IEEE"
 
     parameter FEATURE_CUST1 = "NONE",
     parameter FEATURE_CUST2 = "NONE",
@@ -861,7 +860,6 @@ module mor1kx_cpu_cappuccino
        .FEATURE_CUST7(FEATURE_CUST7),
        .FEATURE_CUST8(FEATURE_CUST8),
        .FEATURE_FPU(FEATURE_FPU), // pipeline cappuccino: execute_alu instance
-       .OPTION_FTOI_ROUNDING(OPTION_FTOI_ROUNDING), // pipeline cappuccino: execute_alu instance
        .OPTION_SHIFTER(OPTION_SHIFTER),
        .CALCULATE_BRANCH_DEST("FALSE")
        )

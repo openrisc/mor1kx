@@ -88,7 +88,6 @@ module mor1kx
     parameter FEATURE_CUST8		= "NONE",
 
     parameter FEATURE_FPU     = "NONE", // ENABLED|NONE: actual for cappuccino pipeline only
-    parameter OPTION_FTOI_ROUNDING = "CPP", // "CPP" (force toward zero; default) / "IEEE" (by rounding mode bits from FPCSR)
     
     parameter OPTION_SHIFTER		= "BARREL",
 
@@ -392,7 +391,6 @@ module mor1kx
 	     .FEATURE_FFL1(FEATURE_FFL1),
 	     .FEATURE_ATOMIC(FEATURE_ATOMIC),
 	     .FEATURE_FPU(FEATURE_FPU), // mor1kx_cpu instance
-	     .OPTION_FTOI_ROUNDING(OPTION_FTOI_ROUNDING), // mor1kx_cpu instance       
 	     .FEATURE_CUST1(FEATURE_CUST1),
 	     .FEATURE_CUST2(FEATURE_CUST2),
 	     .FEATURE_CUST3(FEATURE_CUST3),

@@ -89,7 +89,6 @@ module mor1kx_cpu
     parameter FEATURE_ATOMIC		= "ENABLED",
 
     parameter FEATURE_FPU		= "NONE", // ENABLED|NONE
-    parameter OPTION_FTOI_ROUNDING = "CPP", // "CPP" / "IEEE"
 
     parameter FEATURE_CUST1		= "NONE",
     parameter FEATURE_CUST2		= "NONE",
@@ -314,7 +313,6 @@ module mor1kx_cpu
 	     .FEATURE_CSYNC(FEATURE_CSYNC),
 	     .FEATURE_ATOMIC(FEATURE_ATOMIC),
 	     .FEATURE_FPU(FEATURE_FPU),
-       .OPTION_FTOI_ROUNDING(OPTION_FTOI_ROUNDING),
 	     .FEATURE_CUST1(FEATURE_CUST1),
 	     .FEATURE_CUST2(FEATURE_CUST2),
 	     .FEATURE_CUST3(FEATURE_CUST3),

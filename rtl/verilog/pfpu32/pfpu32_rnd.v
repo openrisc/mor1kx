@@ -38,9 +38,6 @@
 `include "mor1kx-defines.v"
 
 module pfpu32_rnd
-#(
-  parameter OPTION_FTOI_ROUNDING = "CPP" // "CPP" / "IEEE"
-)
 (
   // clocks, resets and other controls
   input        clk,
@@ -339,25 +336,10 @@ module pfpu32_rnd
 
 
   // integer output (f2i)
-  wire        s2t_i32_carry_rnd;
-  wire        s2t_i32_inv;
-  wire [31:0] s2t_i32_int32;
-  generate
-  /* verilator lint_on WIDTH */
-  if (OPTION_FTOI_ROUNDING == "CPP") begin : ftoi_cpp_truncate
-  /* verilator lint_off WIDTH */
-    assign s2t_i32_carry_rnd = s1o_fract32[31];
-    assign s2t_i32_inv = ((~s1o_sign) & s2t_i32_carry_rnd) | s1o_f2i_ovf;
-    // two's complement for negative number
-    assign s2t_i32_int32 = (s1o_fract32 ^ {32{s1o_sign}}) + {31'd0,s1o_sign};
-  end
-  else begin : ftoi_ieee_rounding
-    assign s2t_i32_carry_rnd = s2t_fract32_rnd[31];
-    assign s2t_i32_inv = ((~s1o_sign) & s2t_i32_carry_rnd) | s1o_f2i_ovf;
-    // two's complement for negative number
-    assign s2t_i32_int32 = (s2t_fract32_rnd ^ {32{s1o_sign}}) + {31'd0,s1o_sign};
-  end
-  endgenerate
+  wire s2t_i32_carry_rnd = s1o_fract32[31];
+  wire s2t_i32_inv = ((~s1o_sign) & s2t_i32_carry_rnd) | s1o_f2i_ovf;
+  // two's complement for negative number
+  wire [31:0] s2t_i32_int32 = (s1o_fract32 ^ {32{s1o_sign}}) + {31'd0,s1o_sign};
   // zero
   wire s2t_i32_int32_00 = (~s2t_i32_inv) & (~(|s2t_i32_int32));
   // int32 output

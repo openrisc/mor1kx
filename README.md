@@ -100,15 +100,12 @@ as running Linux) requires a setting different than the default value.*
 |FEATURE_FASTCONTEXTS|Enable fast context switching of register sets|`NONE`|`ENABLED` `NONE`| |
 |FEATURE_MULTICORE|Enable the `coreid` and `numcores` SPR registers|`NONE`|`ENABLED` `NONE`|Linux SMP|
 |FEATURE_FPU|Enable the FPU, for cappuccino pipeline only|`NONE`|`ENABLED` `NONE`| |
-|OPTION_FTOI_ROUNDING|Select rounding behavior for `lf.ftoi.s` instruction|`CPP`|`CPP` `IEEE`|GCC9|
 |FEATURE_BRANCH_PREDICTOR|Select the branch predictor implementation|`SIMPLE`|`SIMPLE` `GSHARE` `SAT_COUNTER`| |
 
-**Note:** *C/C++ double to integer conversion assumes truncation (rounding `toward zero`).
-The default (`CPP`) value of OPTION_FTOI_ROUNDING forces `toward zero` rounding mode exclusively for
-`lf.ftoi.s` instruction regardless of `rounding mode` bits of FPCSR. While with `IEEE` value
-`lf.ftoi.s` performs conversion in according with `rounding mode` bits of FPCSR. And these bits are
-`nearest-even` rounding mode by default. All other floating point instructions always perform rounding
-in according with `rounding mode` bits of FPCSR.*
+**Note:** *C/C++ float to integer conversion assumes truncation (rounding `toward zero`).
+`lf.ftoi.s` instruction performes such rouning regardless of `rounding mode` bits of FPCSR.
+All other floating point instructions always perform rounding in according with
+`rounding mode` bits of FPCSR.*
 
 ### Exception handling options
 

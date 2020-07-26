@@ -43,7 +43,6 @@ module mor1kx_execute_alu
     parameter FEATURE_CUST8 = "NONE",
 
     parameter FEATURE_FPU    = "NONE", // ENABLED|NONE
-    parameter OPTION_FTOI_ROUNDING = "CPP", // "CPP" / "IEEE"
     parameter OPTION_SHIFTER = "BARREL",
 
     // Pipeline specific internal parameters
@@ -516,11 +515,7 @@ endgenerate
     if (FEATURE_FPU!="NONE") begin :  fpu_alu_ena
     /* verilator lint_on WIDTH */
       // fpu32 instance
-      pfpu32_top
-      #(
-        .OPTION_FTOI_ROUNDING(OPTION_FTOI_ROUNDING) // fpu32 instance
-      )
-      u_pfpu32
+      pfpu32_top  u_pfpu32
       (
         .clk(clk),
         .rst(rst),
