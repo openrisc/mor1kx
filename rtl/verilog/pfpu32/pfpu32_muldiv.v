@@ -65,10 +65,8 @@ module pfpu32_muldiv
    // MUL/DIV common outputs
    output reg        muldiv_rdy_o,       // ready
    output reg        muldiv_sign_o,      // signum
-   output reg  [4:0] muldiv_shr_o,       // do right shift in align stage
-   output reg  [9:0] muldiv_exp10shr_o,  // exponent for right shift align
+   output reg  [9:0] muldiv_shr_o,       // do right shift in align stage
    output reg        muldiv_shl_o,       // do left shift in align stage
-   output reg  [9:0] muldiv_exp10shl_o,  // exponent for left shift align
    output reg  [9:0] muldiv_exp10sh0_o,  // exponent for no shift in align
    output reg [27:0] muldiv_fract28_o,   // fractional with appended {r,s} bits
    output reg        muldiv_inv_o,       // invalid operation flag
@@ -314,25 +312,16 @@ module pfpu32_muldiv
 
 
   // rigt shift value
-  // and appropriatelly corrected exponent
-  wire s1o_exp10c_0             = ~(|s1o_exp10c);
-  wire [9:0] s2t_shr_of_neg_exp = 11'h401 - {1'b0,s1o_exp10c}; // 1024-v+1
   // variants:
-  wire [9:0] s2t_shr_t;
-  wire [9:0] s2t_exp10rx;
-  assign {s2t_shr_t,s2t_exp10rx} =
-    // force zero result
-    s1o_opc_0     ? {10'd0,10'd0} :
-    // negative exponent sum
+  wire [9:0] s2t_shrx =
+    // negative exponent sum: (-e+1) = (~e + 2)
     //   (!) takes 1x.xx case into account automatically
-    s1o_exp10c[9] ? {s2t_shr_of_neg_exp,10'd1} :
+    s1o_exp10c[9] ? ((~s1o_exp10c) + 10'd2) :
     // (a) zero exponent sum (denorm. result potentially)
     //   (!) takes 1x.xx case into account automatically
     // (b) normal case
     //   (!) 1x.xx case is processed in next stage
-                    {{9'd0,s1o_exp10c_0},(s1o_exp10c | {9'd0,s1o_exp10c_0})};
-  // limited by 31 and forced result to zero
-  wire [4:0] s2t_shrx = s2t_shr_t[4:0] | {5{|s2t_shr_t[9:5]}};
+                    {9'd0, (~(|s1o_exp10c) & ~s1o_opc_0)};
 
 
   // Support Goldshmidt iteration
@@ -425,9 +414,8 @@ module pfpu32_muldiv
   reg        s2o_opc_0;
   reg        s2o_signc;
   reg  [9:0] s2o_exp10c;
-  reg  [4:0] s2o_shrx;
+  reg  [9:0] s2o_shrx;
   reg        s2o_is_shrx;
-  reg  [9:0] s2o_exp10rx;
   //   multipliers
   reg [31:0] s2o_fract32_albl;
   reg [31:0] s2o_fract32_albh;
@@ -451,7 +439,6 @@ module pfpu32_muldiv
       s2o_exp10c  <= s1o_exp10c;
       s2o_shrx    <= s2t_shrx;
       s2o_is_shrx <= (|s2t_shrx);
-      s2o_exp10rx <= s2t_exp10rx;
         // multipliers
       s2o_fract32_albl <= s1o_mul16_al * s1o_mul16_bl;
       s2o_fract32_albh <= s1o_mul16_al * s1o_mul16_bh;
@@ -486,6 +473,9 @@ module pfpu32_muldiv
                        {16'd0, s2o_fract32_ahbl} +
                        {16'd0, s2o_fract32_albh} +
                        {32'd0, s2o_fract32_albl[31:16]};
+                       
+  // multiplier shift right value
+  wire [9:0] s3t_shrx = s2o_is_shrx ? s2o_shrx : {9'd0,s3t_fract48[47]};
 
   // stage #3 outputs (for division support)
   
@@ -510,9 +500,8 @@ module pfpu32_muldiv
   reg        s3o_opc_0;
   reg        s3o_signc;
   reg  [9:0] s3o_exp10c;
-  reg  [4:0] s3o_shrx;
+  reg  [9:0] s3o_shrx;
   reg        s3o_is_shrx;
-  reg  [9:0] s3o_exp10rx;
   // registering
   always @(posedge clk) begin
     if(adv_i) begin
@@ -530,7 +519,6 @@ module pfpu32_muldiv
       s3o_exp10c   <= s2o_exp10c;
       s3o_shrx     <= s2o_shrx;
       s3o_is_shrx  <= s2o_is_shrx;
-      s3o_exp10rx  <= s2o_exp10rx;
     end // advance pipe
   end // @clock
   
@@ -599,17 +587,12 @@ module pfpu32_muldiv
   //   and the result is non-zero
   //   the '1' is maximum number of leading zeros in the quotient.
   wire s4t_nlz = ~s3o_res_qtnt26[25];
-  wire [9:0] s4t_exp10_m1 = s3o_exp10c - 10'd1;
   // left shift flag and corrected exponent
-  wire       s4t_shlx;
-  wire [9:0] s4t_exp10lx;
-  assign {s4t_shlx,s4t_exp10lx} =
+  wire s4t_shlx =
       // shift isn't needed (includes zero result)
-    (~s4t_nlz)            ? {1'b0,s3o_exp10c} :
-      // normalization is possible
-    (s3o_exp10c >  10'd1) ? {1'b1,s4t_exp10_m1} :
-      // denormalized and zero cases
-                            {1'b0,{9'd0,~s3o_opc_0}};
+    (~s4t_nlz)            ? 1'b0 :
+      // normalization is possible / denormalized and zero cases
+    (s3o_exp10c >  10'd1) ? 1'b1 : 1'b0;
 
   // check if quotient is denormalized
   wire s4t_denorm = s3o_is_shrx |
@@ -636,10 +619,8 @@ module pfpu32_muldiv
       muldiv_anan_sign_o <= s3o_div_ready ? s3o_anan_i_sign : s2o_anan_i_sign;
         // computation related
       muldiv_sign_o     <= s3o_div_ready ? s3o_signc : s2o_signc;
-      muldiv_shr_o      <= s3o_div_ready ? s3o_shrx : s2o_shrx;
-      muldiv_exp10shr_o <= s3o_div_ready ? s3o_exp10rx : s2o_exp10rx;
+      muldiv_shr_o      <= s3o_div_ready ? s3o_shrx : s3t_shrx;
       muldiv_shl_o      <= s3o_div_ready & s4t_shlx;          // makes sense for DIV only
-      muldiv_exp10shl_o <= {10{s3o_div_ready}} & s4t_exp10lx; // makes sense for DIV only
       muldiv_exp10sh0_o <= s3o_div_ready ? s3o_exp10c : s2o_exp10c;
       muldiv_fract28_o  <= s3o_div_ready ?
                            {1'b0,s4t_qtnt26,~s4t_qtnt_exact} :      // quotient

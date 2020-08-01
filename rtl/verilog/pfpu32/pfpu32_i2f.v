@@ -45,10 +45,7 @@ module pfpu32_i2f
    output reg        i2f_rdy_o,       // i2f is ready
    output reg        i2f_sign_o,      // i2f signum
    output reg  [3:0] i2f_shr_o,
-   output reg  [7:0] i2f_exp8shr_o,
    output reg  [4:0] i2f_shl_o,
-   output reg  [7:0] i2f_exp8shl_o,
-   output reg  [7:0] i2f_exp8sh0_o,
    output reg [31:0] i2f_fract32_o
 );
 
@@ -123,10 +120,7 @@ module pfpu32_i2f
         // computation related
       i2f_sign_o    <= s1t_signa;
       i2f_shr_o     <= s1t_shrx;
-      i2f_exp8shr_o <= 8'd150 + {4'd0,s1t_shrx};      // 150=127+23
       i2f_shl_o     <= s1t_shlx;
-      i2f_exp8shl_o <= 8'd150 - {3'd0,s1t_shlx};
-      i2f_exp8sh0_o <= {8{s1t_fract32[23]}} & 8'd150; // "1" is in [23] / zero
       i2f_fract32_o <= s1t_fract32;
     end // advance
   end // posedge clock
