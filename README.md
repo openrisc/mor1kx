@@ -162,16 +162,30 @@ Integration (CI) suite running in [travis ci](travis-ci.org).  This currently co
    Status: [![Build Status](https://travis-ci.org/openrisc/mor1kx.svg?branch=master)](https://travis-ci.org/openrisc/mor1kx)
 
 
-The or1k Continuous Integration (CI) suite is running in a librecores-ci-openrisc docker container in Travis CI. Parallel execution of tests runs in librecores-ci-openrisc docker environment.
- - [librecores-ci-openrisc](https://github.com/librecores/docker-images/tree/master/librecores-ci-openrisc) docker image is based on the standard [librecores/librecores-ci](https://github.com/librecores/docker-images/tree/master/librecores-ci) docker image and it largely target the [FuseSoC](https://github.com/olofk/fusesoc) use cases.
- - The base image includes installation of common EDA tools such as Icarus Verilog, Verilator and       Yosys that is required by CI suite for testing. librecores/libreocres-ci-openrisc docker image gets the toolchain required, downloads and compiles the or1k-tests.
+The or1k Continuous Integration (CI) suite is running in a `librecores-ci-openrisc`
+docker container in Travis CI. Parallel execution of tests runs in `librecores-ci-openrisc`
+docker environment.
 
+ - [librecores-ci-openrisc](https://github.com/librecores/docker-images/tree/master/librecores-ci-openrisc)
+   docker image is based on the standard [librecores/librecores-ci](https://github.com/librecores/docker-images/tree/master/librecores-ci)
+   docker image and it largely target the [FuseSoC](https://github.com/olofk/fusesoc) use cases.
+ - The base image includes installation of common EDA tools such as Icarus
+   Verilog, Verilator and Yosys that is required by the CI suite for testing.
+   `librecores/libreocres-ci-openrisc` docker image gets the toolchain required,
+   downloads and compiles the `or1k-tests` test scripts.
 
-The Continous Integration suite also runs in [Jenkins](https://ci.librecores.org/) supported by [Librecores-CI](https://github.com/librecores/librecores-ci-jenkins-server). As similar to Travis, `mor1kx` pipelines are also constantly verified. In addition to that, it also supports:
+The Continous Integration suite also runs in [Librecores Jenkins](https://ci.librecores.org/)
+supported by [Librecores-CI](https://github.com/librecores/librecores-ci-jenkins-server).
+Similar to Travis, `mor1kx` pipelines are also constantly verified. In addition
+to that, it also supports:
 
- - Yosys synthesis for monitoring resource usages. [Fusesoc](https://github.com/olofk/fusesoc/blob/master/doc/icestorm.adoc) provides the icestorm backend.
- - [LibreCores CI](https://github.com/librecores/docker-images/tree/master/librecores-ci) Docker image provides Yosys synthesis metrics parser which outputs 'Printing Statistics'. Results are parsed to graphs with Performance Plugin, which can be seen at [ci.librecores.org](https://ci.librecores.org/job/Projects/job/OpenRISC/job/mor1kx/)
-
+ - Yosys synthesis for monitoring resource usages.
+   [Fusesoc](https://github.com/olofk/fusesoc/blob/master/doc/icestorm.adoc)
+   provides the icestorm backend.
+ - [LibreCores CI](https://github.com/librecores/docker-images/tree/master/librecores-ci)
+   Docker image provides Yosys synthesis metrics parser which outputs `Printing Statistics`.
+   Results are parsed to graphs with Performance Plugin, which can be seen at
+   [ci.librecores.org](https://ci.librecores.org/job/Projects/job/OpenRISC/job/mor1kx/)
 
 Status : [![Build Status](https://ci.librecores.org/job/Projects/job/OpenRISC/job/mor1kx/job/master/badge/icon)](https://ci.librecores.org/job/Projects/job/OpenRISC/job/mor1kx/job/master/)
 
