@@ -1,7 +1,4 @@
 language: c
-cache: ccache
-sudo: true
-dist: trusty
 
 services:
   - docker
@@ -11,10 +8,7 @@ before_install:
   -  docker images
 
 script:
-  - docker run --rm -v $(pwd):/src -e "JOB=$JOB" -e "SIM=$SIM" -e "PIPELINE=$PIPELINE" -e "EXPECTED_FAILURES=$EXPECTED_FAILURES" -e "EXTRA_CORE_ARGS=$EXTRA_CORE_ARGS" librecores/librecores-ci-openrisc /src/.travis/test.sh
-
-matrix:
-  fast_finish: true
+  - .travis/run-docker.sh
 
 jobs:
   allow_failures:
