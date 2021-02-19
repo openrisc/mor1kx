@@ -5,6 +5,7 @@ export HOME=/tmp
 # Setup fusesoc and add the cores required by or1k-tests
 fusesoc init -y
 fusesoc library add mor1kx-generic https://github.com/stffrdhrn/mor1kx-generic.git
+fusesoc library add elf-loader https://github.com/fusesoc/elf-loader.git
 fusesoc library add intgen https://github.com/stffrdhrn/intgen.git
 fusesoc library add mor1kx /src
 
