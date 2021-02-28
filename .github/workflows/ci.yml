@@ -1,0 +1,100 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  verilator-lint:
+    runs-on: ubuntu-18.04
+    steps:
+      # Checkout Repository
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      # Install OS and Python Tools
+      - name: Install Tools
+        run: |
+          sudo apt-get install verilator
+
+      # Run verilator lint
+      - name: Verilator lint
+        run: |
+          verilator --lint-only rtl/verilog/*.v +incdir+rtl/verilog
+
+  or1k-tests:
+    runs-on: ubuntu-18.04
+    env:
+      LD_LIBRARY_PATH: "/tmp/tools/lib"
+      EXPECTED_FAILURES: ${{ matrix.env.EXPECTED_FAILURES }}
+      EXTRA_CORE_ARGS: ${{ matrix.env.EXTRA_CORE_ARGS }}
+    steps:
+      # Checkout Repository
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      # Install OS and Python Tools
+      - name: Install Tools
+        run: |
+          sudo apt-get install build-essential python3 xz-utils git iverilog libelf-dev
+          pip3 install setuptools wheel
+          pip3 install fusesoc
+          export PATH=$PATH:$HOME/.local/bin
+          fusesoc --version
+          fusesoc init -y
+
+      # Install Toolchain
+      - name: Install Toolchain
+        run: |
+          mkdir -p /tmp/tools/lib
+          cd /tmp/tools
+          curl --remote-name --location \
+            https://github.com/stffrdhrn/gcc/releases/download/or1k-10.0.0-20190723/or1k-elf-10.0.0-20190723.tar.xz
+          tar xC /tmp/tools -f or1k-elf-10.0.0-20190723.tar.xz
+          ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /tmp/tools/lib/libmpfr.so.4
+          export PATH=$PATH:/tmp/tools/or1k-elf/bin/
+          or1k-elf-gcc --version
+
+      # Setup or1k-tests
+      - name: Setup or1k-tests
+        run: |
+          export PATH=$PATH:/tmp/tools/or1k-elf/bin:$HOME/.local/bin
+          mkdir -p /tmp/tools
+          cd /tmp/tools
+          git clone --depth 1 https://github.com/openrisc/or1k-tests.git -b v1.0.2
+          cd or1k-tests/native
+          make -j8
+          fusesoc library add mor1kx-generic https://github.com/openrisc/mor1kx-generic.git
+          fusesoc library add intgen https://github.com/openrisc/intgen.git
+          fusesoc library add elf-loader https://github.com/fusesoc/elf-loader.git
+          fusesoc library add mor1kx $GITHUB_WORKSPACE
+
+      # Run tests
+      - name: Run tests
+        shell: bash {0}
+        run: |
+          export PATH=$PATH:/tmp/tools/or1k-elf/bin:$HOME/.local/bin
+          mkdir -p /tmp/tools
+          export TEST_TIMEOUT="10m"
+          export PIPELINE=CAPPUCCINO
+          export TARGET=mor1kx_tb
+          export TARGET_ARGS="--tool=icarus"
+          export CORE_ARGS="--pipeline=$PIPELINE $EXTRA_CORE_ARGS"
+          cd /tmp/tools/or1k-tests/native
+          ./runtests.sh
+          result=$?
+          if [ $result != 0 ] ; then
+            cat runtests.log
+          fi
+          exit $result
+
+    strategy:
+      matrix:
+        env:
+          - { EXPECTED_FAILURES: "or1k-cy" }
+          - { EXPECTED_FAILURES: "or1k-cy or1k-mmu", EXTRA_CORE_ARGS: "--feature_dmmu NONE" } # Issue #117, dmmu cause immu test results to change
+          - { EXPECTED_FAILURES: "or1k-cy or1k-dsxinsn", EXTRA_CORE_ARGS: "--feature_immu NONE" }
+          - { EXPECTED_FAILURES: "or1k-cy", EXTRA_CORE_ARGS: "--feature_datacache NONE" }
+          - { EXPECTED_FAILURES: "or1k-cy", EXTRA_CORE_ARGS: "--feature_instructioncache NONE" }
+          - { EXPECTED_FAILURES: "or1k-cy", EXTRA_CORE_ARGS: "--feature_debugunit NONE" }
+          - { EXPECTED_FAILURES: "or1k-cy or1k-cmov", EXTRA_CORE_ARGS: "--feature_cmov NONE" }
+          - { EXPECTED_FAILURES: "or1k-cy or1k-ext", EXTRA_CORE_ARGS: "--feature_ext NONE" }
+
