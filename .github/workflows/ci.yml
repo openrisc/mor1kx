@@ -3,7 +3,23 @@ name: ci
 on: [push, pull_request]
 
 jobs:
-  #verilator-lint:
+  verilator-lint:
+    runs-on: ubuntu-18.04
+    steps:
+      # Checkout Repository
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      # Install OS and Python Tools
+      - name: Install Tools
+        run: |
+          sudo apt-get install verilator
+
+      # Run verilator lint
+      - name: Verilator lint
+        run: |
+          verilator --lint-only rtl/verilog/*.v +incdir+rtl/verilog
+
   or1k-tests:
     runs-on: ubuntu-18.04
     env:
