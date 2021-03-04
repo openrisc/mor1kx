@@ -61,6 +61,9 @@ module mor1kx_icache
    localparam REFILL		= 4'b0100;
    localparam INVALIDATE	= 4'b1000;
 
+   // Number of data bits per way
+   localparam WAY_DATA_WIDTH = (1 << (OPTION_ICACHE_BLOCK_WIDTH)) * 8;
+
    // Address space in bytes for a way
    localparam WAY_WIDTH = OPTION_ICACHE_BLOCK_WIDTH + OPTION_ICACHE_SET_WIDTH;
    /*
@@ -134,11 +137,14 @@ module mor1kx_icache
    wire [TAG_WIDTH-1:0] 	      tag_tag;
 
    // Access to the way memories
-   wire [WAY_WIDTH-3:0] 	      way_raddr[OPTION_ICACHE_WAYS-1:0];
-   wire [WAY_WIDTH-3:0] 	      way_waddr[OPTION_ICACHE_WAYS-1:0];
-   wire [OPTION_OPERAND_WIDTH-1:0]    way_din[OPTION_ICACHE_WAYS-1:0];
-   wire [OPTION_OPERAND_WIDTH-1:0]    way_dout[OPTION_ICACHE_WAYS-1:0];
+   wire [OPTION_ICACHE_SET_WIDTH-1:0] 	      way_raddr[OPTION_ICACHE_WAYS-1:0];
+   wire [OPTION_ICACHE_SET_WIDTH-1:0] 	      way_waddr[OPTION_ICACHE_WAYS-1:0];
+   wire [WAY_DATA_WIDTH-1:0]    way_din[OPTION_ICACHE_WAYS-1:0];
+   wire [WAY_DATA_WIDTH-1:0]    way_dout[OPTION_ICACHE_WAYS-1:0];
    reg [OPTION_ICACHE_WAYS-1:0]       way_we;
+
+   // The block to select from the way
+   wire [OPTION_ICACHE_BLOCK_WIDTH+2:0] block_index;
 
    // Does any way hit?
    wire 			      hit;
@@ -195,8 +201,8 @@ module mor1kx_icache
       end
 
       for (i = 0; i < OPTION_ICACHE_WAYS; i=i+1) begin : ways
-	 assign way_raddr[i] = cpu_adr_i[WAY_WIDTH-1:2];
-	 assign way_waddr[i] = wradr_i[WAY_WIDTH-1:2];
+	 assign way_raddr[i] = cpu_adr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
+	 assign way_waddr[i] = wradr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
 	 assign way_din[i] = wrdat_i;
 
 	 // compare stored tag with incoming tag and check valid bit
@@ -212,6 +218,9 @@ module mor1kx_icache
       end
    endgenerate
 
+   // Get block index bit position aligned to word
+   assign block_index = cpu_adr_i[OPTION_ICACHE_BLOCK_WIDTH-1:2] << 3;
+
    assign hit = |way_hit;
    assign cache_hit_o = hit;
 
@@ -222,7 +231,8 @@ module mor1kx_icache
       // Put correct way on the data port
       for (w0 = 0; w0 < OPTION_ICACHE_WAYS; w0 = w0 + 1) begin
          if (way_hit[w0] | (refill_hit & tag_save_lru[w0])) begin
-            cpu_dat_o = way_dout[w0];
+            // Select the correct block
+            cpu_dat_o = way_dout[w0][block_index+OPTION_OPERAND_WIDTH-1:block_index];
          end
       end
    end
@@ -415,21 +425,21 @@ module mor1kx_icache
       for (i = 0; i < OPTION_ICACHE_WAYS; i=i+1) begin : way_memories
 	 mor1kx_simple_dpram_sclk
 	       #(
-		 .ADDR_WIDTH(WAY_WIDTH-2),
-		 .DATA_WIDTH(OPTION_OPERAND_WIDTH),
+		 .ADDR_WIDTH(OPTION_ICACHE_SET_WIDTH),
+		 .DATA_WIDTH(WAY_DATA_WIDTH),
 		 .ENABLE_BYPASS(0)
 		 )
 	 way_data_ram
 	       (/*AUTOINST*/
 		// Outputs
-		.dout			(way_dout[i][OPTION_OPERAND_WIDTH-1:0]), // Templated
+		.dout			(way_dout[i][WAY_DATA_WIDTH-1:0]), // Templated
 		// Inputs
 		.clk			(clk),
-		.raddr			(way_raddr[i][WAY_WIDTH-3:0]), // Templated
+		.raddr			(way_raddr[i][OPTION_ICACHE_SET_WIDTH-1:0]), // Templated
 		.re			(1'b1),			 // Templated
-		.waddr			(way_waddr[i][WAY_WIDTH-3:0]), // Templated
+		.waddr			(way_waddr[i][OPTION_ICACHE_SET_WIDTH-1:0]), // Templated
 		.we			(way_we[i]),		 // Templated
-		.din			(way_din[i][31:0]));	 // Templated
+		.din			(way_din[i][WAY_DATA_WIDTH-1:0]));	 // Templated
 
       end // block: way_memories
 
