@@ -105,11 +105,7 @@ module mor1kx_icache
    wire				      invalidate;
 
    reg [WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH] invalidate_adr;
-   wire [31:0] 			      next_refill_adr;
    wire 			      refill_done;
-   wire 			      refill_hit;
-   reg [(1<<(OPTION_ICACHE_BLOCK_WIDTH-2))-1:0] refill_valid;
-   reg [(1<<(OPTION_ICACHE_BLOCK_WIDTH-2))-1:0] refill_valid_r;
 
    // The index we read and write from tag memory
    wire [OPTION_ICACHE_SET_WIDTH-1:0] tag_rindex;
@@ -177,8 +173,7 @@ module mor1kx_icache
    // exposes a bug somewhere, causing the Linux kernel to end up with a
    // bus error UNHANDLED EXCEPTION.
    // Until that is sorted out, disable it.
-   assign cpu_ack_o = (read /*| refill & ic_access_i*/) & hit |
-		      refill_hit & ic_access_i;
+   assign cpu_ack_o = (read /*| refill & ic_access_i*/) & hit;
 
    assign tag_rindex = cpu_adr_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
    /*
@@ -230,25 +225,15 @@ module mor1kx_icache
 
       // Put correct way on the data port
       for (w0 = 0; w0 < OPTION_ICACHE_WAYS; w0 = w0 + 1) begin
-         if (way_hit[w0] | (refill_hit & tag_save_lru[w0])) begin
+         if (way_hit[w0]) begin
             // Select the correct block
             cpu_dat_o = way_dout[w0][block_index+OPTION_OPERAND_WIDTH-1:block_index];
          end
       end
    end
 
-   assign next_refill_adr = (OPTION_ICACHE_BLOCK_WIDTH == 5) ?
-			    {wradr_i[31:5], wradr_i[4:0] + 5'd4} : // 32 byte
-			    {wradr_i[31:4], wradr_i[3:0] + 4'd4};  // 16 byte
-
    assign refill_done_o = refill_done;
-   assign refill_done = refill_valid[next_refill_adr[OPTION_ICACHE_BLOCK_WIDTH-1:2]];
-   assign refill_hit = refill_valid_r[cpu_adr_match_i[OPTION_ICACHE_BLOCK_WIDTH-1:2]] &
-		       cpu_adr_match_i[OPTION_ICACHE_LIMIT_WIDTH-1:
-				       OPTION_ICACHE_BLOCK_WIDTH] ==
-		       wradr_i[OPTION_ICACHE_LIMIT_WIDTH-1:
-			       OPTION_ICACHE_BLOCK_WIDTH] &
-		       refill;
+   assign refill_done = we_i;
 
    assign refill = (state == REFILL);
    assign read = (state == READ);
@@ -269,7 +254,6 @@ module mor1kx_icache
     */
    integer w1;
    always @(posedge clk `OR_ASYNC_RST) begin
-      refill_valid_r <= refill_valid;
       spr_bus_ack_o <= 0;
       case (state)
 	IDLE: begin
@@ -282,8 +266,6 @@ module mor1kx_icache
 	      if (hit) begin
 		 state <= READ;
 	      end else if (cpu_req_i) begin
-		 refill_valid <= 0;
-		 refill_valid_r <= 0;
 
 		 // Store the LRU information for correct replacement
                  // on refill. Always one when only one way.
@@ -301,10 +283,7 @@ module mor1kx_icache
 	end
 
 	REFILL: begin
-	   if (we_i) begin
-	      refill_valid[wradr_i[OPTION_ICACHE_BLOCK_WIDTH-1:2]] <= 1;
-
-	      if (refill_done)
+	   if (refill_done) begin
 		state <= IDLE;
 	   end
 	end
@@ -367,17 +346,6 @@ module mor1kx_icache
 
 	      // Access pattern
 	      access = tag_save_lru;
-
-	      /* Invalidate the way on the first write */
-	      if (refill_valid == 0) begin
-		 for (w2 = 0; w2 < OPTION_ICACHE_WAYS; w2 = w2 + 1) begin
-                    if (tag_save_lru[w2]) begin
-                       tag_way_in[w2][TAGMEM_WAY_VALID] = 1'b0;
-                    end
-                 end
-
-		 tag_we = 1'b1;
-	      end
 
               // After refill update the tag memory entry of the
               // filled way with the LRU history, the tag and set
