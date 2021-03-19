@@ -269,6 +269,9 @@ assign invalidate_o = spr_bus_stb_i & spr_bus_we_i &
  */
 integer w1;
 always @(posedge clk `OR_ASYNC_RST) begin
+    if (rst) begin
+        tag_save_lru <= 4'b0;
+    end
     spr_bus_ack_o <= 0;
     case (state)
         IDLE: begin

@@ -1633,6 +1633,8 @@ module mor1kx_cpu_cappuccino
 
    // TODO: dcache
    assign transducer_l15_amo_op = 1'b0;
+   assign transducer_l15_data = 64'b0;
+   assign transducer_l15_nc = 1'b0;
 
    // unused?
    assign transducer_l15_prefetch = 1'b0;
