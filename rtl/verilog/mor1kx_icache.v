@@ -34,6 +34,12 @@ module mor1kx_icache
             output 			      invalidate_o,
             output 			      cache_hit_o,
 
+            // TRI related signals
+            // request
+            output [1:0]         transducer_l15_l1rplway,
+            
+            // response
+            input                l15_transducer_nc,
             
 
             // CPU Interface
@@ -44,7 +50,7 @@ module mor1kx_icache
             input 			      cpu_req_i,
 
             input [OPTION_OPERAND_WIDTH-1:0]  wradr_i,
-            input [`OR1K_INSN_WIDTH-1:0]      wrdat_i,
+            input [255:0]      wrdat_i,                           // hardcoded the input to be 32B
             input 			      we_i,
 
             // SPR interface
@@ -229,10 +235,18 @@ always @(*) begin
     for (w0 = 0; w0 < OPTION_ICACHE_WAYS; w0 = w0 + 1) begin
         if (way_hit[w0]) begin
             // Select the correct block
-            cpu_dat_o = way_dout[w0][block_index+OPTION_OPERAND_WIDTH-1:block_index];
+            wire [31:0] data_from_cache;
+            assign data_from_cache = way_dout[w0][block_index + OPTION_OPERAND_WIDTH-1:block_index];
+            cpu_dat_o = (l15_transducer_nc) ? wrdat_i[31:0] : data_from_cache;
         end
     end
 end
+
+assign transducer_l15_l1rplway = 
+   (tag_save_lru == 4'b0001) ? 2'd0 : 
+   (tag_save_lru == 4'b0010) ? 2'd1 :
+   (tag_save_lru == 4'b0100) ? 2'd2 :
+   (tag_save_lru == 4'b1000) ? 2'd3 : 2'd0; 
 
 assign refill_done_o = refill_done;
 assign refill_done = we_i;
@@ -344,7 +358,7 @@ always @(*) begin
             if (we_i) begin
                 // Write the data to the way that is replaced (which is
                 // the LRU)
-                way_we = tag_save_lru;
+                way_we = (l15_transducer_nc) ? 4'b0 : tag_save_lru;
 
                 // Access pattern
                 access = tag_save_lru;
@@ -361,7 +375,7 @@ always @(*) begin
                     end
                     tag_lru_in = next_lru_history;
 
-                    tag_we = 1'b1;
+                    tag_we = !l15_transducer_nc;
                 end
             end
         end
