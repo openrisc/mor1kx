@@ -1662,7 +1662,7 @@ module mor1kx_cpu_cappuccino
    wire wake_up_d;
    reg wake_up_q;
    
-   assign wake_up_d = wake_up_q || ((l15_transducer_returntype == CPX_RESTYPE_INTERRUPT) && transducer_l15_val_ungated && 
+   assign wake_up_d = wake_up_q || ((l15_transducer_returntype == `CPX_RESTYPE_INTERRUPT) && transducer_l15_val_ungated && 
    (l15_transducer_data_0[17:16] == 2'b01) && (l15_transducer_data_0[5:0] == 6'b000001));
 
    assign transducer_l15_val = transducer_l15_val_ungated && wake_up_q;
