@@ -13,7 +13,7 @@
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
-`include "piton-defines.v"
+`include "l15.tmp.h"
 
 module mor1kx_cpu_cappuccino
   #(
@@ -524,7 +524,7 @@ module mor1kx_cpu_cappuccino
       .pipeline_flush_i                 (pipeline_flush_o),      // Templated
       .doing_rfe_i                      (doing_rfe_o),           // Templated
       // TRI
-      .transducer_l15_val                         (transducer_l15_val),
+      .transducer_l15_val                         (transducer_l15_val_ungated),
       .transducer_l15_rqtype                      (transducer_l15_rqtype),
       .transducer_l15_amo_op                      (transducer_l15_amo_op),
       .transducer_l15_nc                          (transducer_l15_nc),
@@ -543,7 +543,7 @@ module mor1kx_cpu_cappuccino
       .l15_transducer_header_ack                  (l15_transducer_header_ack),
       .l15_transducer_ack                         (l15_transducer_ack),
 
-      .l15_transducer_val                         (l15_transducer_val_gated),
+      .l15_transducer_val                         (l15_transducer_val),
       .l15_transducer_returntype                  (l15_transducer_returntype),
       .l15_transducer_l2miss                      (l15_transducer_l2miss),
       .l15_transducer_error                       (l15_transducer_error),
@@ -1122,7 +1122,7 @@ module mor1kx_cpu_cappuccino
       .snoop_adr_i                      (snoop_adr_i[31:0]),
       .snoop_en_i                       (snoop_en_i),
       // TRI
-      .transducer_l15_val                         (transducer_l15_val),
+      .transducer_l15_val                         (transducer_l15_val_ungated),
       .transducer_l15_rqtype                      (transducer_l15_rqtype),
       .transducer_l15_amo_op                      (transducer_l15_amo_op),
       .transducer_l15_nc                          (transducer_l15_nc),
@@ -1141,7 +1141,7 @@ module mor1kx_cpu_cappuccino
       .l15_transducer_header_ack                  (l15_transducer_header_ack),
       .l15_transducer_ack                         (l15_transducer_ack),
 
-      .l15_transducer_val                         (l15_transducer_val_gated),
+      .l15_transducer_val                         (l15_transducer_val),
       .l15_transducer_returntype                  (l15_transducer_returntype),
       .l15_transducer_l2miss                      (l15_transducer_l2miss),
       .l15_transducer_error                       (l15_transducer_error),
@@ -1658,14 +1658,14 @@ module mor1kx_cpu_cappuccino
 
    reg                        traceport_waitexec;
 
-   wire l15_transducer_val_gated;
+   wire transducer_l15_val_ungated;
    wire wake_up_d;
    reg wake_up_q;
    
-   assign wake_up_d = wake_up_q || ((l15_transducer_returntype == L15_INT_RET) && l15_transducer_val && 
+   assign wake_up_d = wake_up_q || ((l15_transducer_returntype == CPX_RESTYPE_INTERRUPT) && transducer_l15_val_ungated && 
    (l15_transducer_data_0[17:16] == 2'b01) && (l15_transducer_data_0[5:0] == 6'b000001));
 
-   assign l15_transducer_val_gated = l15_transducer_val && wake_up_q;
+   assign transducer_l15_val = transducer_l15_val_ungated && wake_up_q;
 
    always @(posedge clk) begin
       if (rst) begin
