@@ -18,6 +18,7 @@
 
 `include "mor1kx-defines.v"
 `include "define.tmp.h"
+`include "l15.tmp.h"
 
 module mor1kx_fetch_cappuccino
   #(
@@ -199,11 +200,12 @@ module mor1kx_fetch_cappuccino
    reg 					  exception_while_tlb_reload;
    wire 				  except_ipagefault_clear;
 
+   reg [OPTION_OPERAND_WIDTH-1:0] ibus_adr;
    reg transducer_l15_val_r = 0;
    assign transducer_l15_val = transducer_l15_val_r;
 
    wire l15_refill_ack;
-   assign l15_refill_ack = l15_transducer_val & (l15_transducer_returntype == PCX_REQTYPE_IFILL);
+   assign l15_refill_ack = l15_transducer_val & (l15_transducer_returntype == `PCX_REQTYPE_IFILL);
 
    assign transducer_l15_address = {{(40-OPTION_OPERAND_WIDTH){1'b0}},ibus_adr};
 
@@ -378,7 +380,6 @@ module mor1kx_fetch_cappuccino
 
    reg [2:0] state;
 
-   reg [OPTION_OPERAND_WIDTH-1:0] ibus_adr;
    wire [OPTION_OPERAND_WIDTH-1:0] next_ibus_adr;
    reg [255:0] 	ibus_dat;
    reg 				  ibus_req;
@@ -387,7 +388,7 @@ module mor1kx_fetch_cappuccino
    wire 			  ibus_access;
 
    wire block_index;
-   assign block_index = cpu_adr_i[OPTION_ICACHE_BLOCK_WIDTH-1:2] << 3;
+   assign block_index = ic_addr[OPTION_ICACHE_BLOCK_WIDTH-1:2] << 3;
 
    //
    // Under certain circumstances, there is a need to insert an nop
@@ -608,10 +609,10 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
       .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
       .spr_bus_we_i			(spr_bus_we_i),
       .spr_bus_stb_i			(spr_bus_stb_i),
-      .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
+      .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0])
       // TRI
-      output [1:0]         transducer_l15_l1rplway,
-      input                l15_transducer_nc,
+      .transducer_l15_l1rplway          (transducer_l15_l1rplway),
+      .l15_transducer_nc                (l15_transducer_nc));
 end else begin // block: icache_gen
    assign ic_access = 0;
    assign ic_refill = 0;

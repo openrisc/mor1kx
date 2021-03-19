@@ -219,6 +219,7 @@ module mor1kx_cpu_cappuccino
     input 			     snoop_en_i
     );
 
+   wire transducer_l15_val_ungated;
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_fetch_to_decode;
    wire [`OR1K_INSN_WIDTH-1:0] 	     insn_fetch_to_decode;
    wire [OPTION_OPERAND_WIDTH-1:0]   pc_decode_to_execute;
@@ -1615,7 +1616,6 @@ module mor1kx_cpu_cappuccino
 
    reg                        traceport_waitexec;
 
-   wire transducer_l15_val_ungated;
    wire wake_up_d;
    reg wake_up_q;
    
@@ -1640,13 +1640,13 @@ module mor1kx_cpu_cappuccino
    assign transducer_l15_blockstore = 1'b0;
    assign transducer_l15_blockinitstore = 1'b0;
    assign transducer_l15_data_next_entry = 64'b0;
-   assign transducer_l15_csm_data = {{`TLB_CSM_WIDTH-1}1'b0};
+   assign transducer_l15_csm_data = {`TLB_CSM_WIDTH{1'b0}};
 
    always @(posedge clk) begin
       if (rst) begin
          wake_up_q <= 0;
       end else begin
-         wake_up_q <= wake_up_d
+         wake_up_q <= wake_up_d;
       end
       if (FEATURE_TRACEPORT_EXEC != "NONE") begin
          if (rst) begin

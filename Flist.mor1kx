@@ -1,6 +1,6 @@
++incdir+rtl/verilog/mor1kx_utils.vh
 rtl/verilog/mor1kx-defines.v
 rtl/verilog/mor1kx-sprs.v
-rtl/verilog/mor1kx_utils.v
 rtl/verilog/mor1kx_branch_predictor_gshare.v
 rtl/verilog/mor1kx_branch_predictor_simple.v
 rtl/verilog/mor1kx_branch_predictor_saturation_counter.v
@@ -9,7 +9,6 @@ rtl/verilog/mor1kx_bus_if_wb32.v
 rtl/verilog/mor1kx_cache_lru.v
 rtl/verilog/mor1kx_cfgrs.v
 rtl/verilog/mor1kx_cpu_cappuccino.v
-rtl/verilog/mor1kx_cpu.v
 rtl/verilog/mor1kx_ctrl_cappuccino.v
 rtl/verilog/mor1kx_dcache.v
 rtl/verilog/mor1kx_decode_execute_cappuccino.v
@@ -37,4 +36,3 @@ rtl/verilog/pfpu32/pfpu32_i2f.v
 rtl/verilog/pfpu32/pfpu32_muldiv.v
 rtl/verilog/pfpu32/pfpu32_rnd.v
 rtl/verilog/pfpu32/pfpu32_top.v
-bench/verilog/mor1kx_monitor.v
