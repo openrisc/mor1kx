@@ -415,7 +415,7 @@ module mor1kx_fetch_cappuccino
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
    assign imem_dat = (nop_ack | except_itlb_miss | except_ipagefault) ?
 		     {`OR1K_OPCODE_NOP,26'd0} :
-		     ibus_access ? ibus_dat[block_index + OPTION_OPERAND_WIDTH-1:block_index] : ic_dat;
+		     ibus_access ? ibus_dat[block_index +: OPTION_OPERAND_WIDTH] : ic_dat;
 
    assign next_ibus_adr = (OPTION_ICACHE_BLOCK_WIDTH == 5) ?
 			  {ibus_adr[31:5], ibus_adr[4:0] + 5'd4} : // 32 byte
@@ -609,7 +609,7 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
       .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
       .spr_bus_we_i			(spr_bus_we_i),
       .spr_bus_stb_i			(spr_bus_stb_i),
-      .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0])
+      .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
       // TRI
       .transducer_l15_l1rplway          (transducer_l15_l1rplway),
       .l15_transducer_nc                (l15_transducer_nc));
@@ -625,193 +625,85 @@ end else begin // block: icache_gen
    assign spr_bus_dat_ic_o = 0;
    assign spr_bus_ack_ic_o = 0;
 end
-
-
-assign ic_addr = (addr_valid | du_restart_i) ? pc_addr : pc_fetch;
-assign ic_addr_match = immu_enable_i ? immu_phys_addr : pc_fetch;
+endgenerate
 
 generate
-    if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
-        reg 					  ic_enable_r;
-        always @(posedge clk `OR_ASYNC_RST)
-            if (rst)
-                ic_enable_r <= 0;
-            else if (ic_enable & !ibus_req)
-                ic_enable_r <= 1;
-            else if (!ic_enable & !ic_refill)
-                ic_enable_r <= 0;
-        wire ic_enabled = ic_enable & ic_enable_r;
-        wire ic_refill_allowed = (!((tlb_miss | pagefault) & immu_enable_i) &
-                                  !ctrl_branch_exception_i & !pipeline_flush_i &
-                                  !mispredict_stall | doing_rfe_i) &
-             !tlb_reload_busy & !immu_busy;
-        wire ic_req = padv_i & !decode_except_ibus_err_o &
-             !decode_except_itlb_miss_o & !except_itlb_miss &
-             !decode_except_ipagefault_o & !except_ipagefault &
-             ic_access & ic_refill_allowed;
+if (FEATURE_IMMU!="NONE") begin : immu_gen
+    wire  [OPTION_OPERAND_WIDTH-1:0] virt_addr = ic_addr;
+    wire 			    immu_spr_bus_stb;
+    wire 			    immu_enable;
+    // small hack to delay immu spr reads by one cycle
+    // ideally the spr accesses should work so that the address is presented
+    // in execute stage and the delayed data should be available in control
+    // stage, but this is not how things currently work.
+    assign immu_spr_bus_stb = spr_bus_stb_i & (!padv_ctrl_i | spr_bus_we_i);
 
-        if (OPTION_ICACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
-            assign ic_access = ic_enabled &
-                   !(immu_cache_inhibit & immu_enable_i);
-        end else if (OPTION_ICACHE_LIMIT_WIDTH < OPTION_OPERAND_WIDTH) begin
-            assign ic_access = ic_enabled &
-                   ic_addr_match[OPTION_OPERAND_WIDTH-1:
-                                 OPTION_ICACHE_LIMIT_WIDTH] == 0 &
-                   !(immu_cache_inhibit & immu_enable_i);
-        end else begin
-            initial begin
-                $display("ERROR: OPTION_ICACHE_LIMIT_WIDTH > OPTION_OPERAND_WIDTH");
-                $finish();
-            end
-        end
+    assign immu_enable = immu_enable_i & !pipeline_flush_i & !mispredict_stall;
 
-        /* mor1kx_icache AUTO_TEMPLATE (
-         // Outputs
-         .cpu_ack_o			(ic_ack),
-         .cpu_dat_o			(ic_dat[OPTION_OPERAND_WIDTH-1:0]),
-         .spr_bus_dat_o		(spr_bus_dat_ic_o),
-         .spr_bus_ack_o		(spr_bus_ack_ic_o),
-         .refill_o			(ic_refill),
-         .refill_req_o		(ic_refill_req),
-         .refill_done_o		(ic_refill_done),
-         .invalidate_o		(ic_invalidate),
-         // Inputs
-         .rst			(rst),
-         .ic_imem_err_i      (imem_err),
-         .ic_access_i		(ic_access),
-         .cpu_adr_i			(ic_addr),
-         .cpu_adr_match_i		(ic_addr_match),
-         .cpu_req_i			(ic_req),
-         .wradr_i			(ibus_adr),
-         .wrdat_i			(ibus_dat_i),
-         .we_i			(ibus_ack_i),
-         );*/
+    /* mor1kx_immu AUTO_TEMPLATE (
+      .enable_i				(immu_enable),
+      .busy_o				(immu_busy),
+      .phys_addr_o			(immu_phys_addr),
+      .cache_inhibit_o			(immu_cache_inhibit),
+      .tlb_miss_o				(tlb_miss),
+      .tlb_reload_req_o			(tlb_reload_req),
+      .tlb_reload_addr_o			(tlb_reload_addr),
+      .tlb_reload_pagefault_o		(tlb_reload_pagefault),
+      .tlb_reload_ack_i			(tlb_reload_ack),
+      .tlb_reload_data_i			(tlb_reload_data),
+      .tlb_reload_busy_o			(tlb_reload_busy),
+      .tlb_reload_pagefault_clear_i	(except_ipagefault_clear),
+      .pagefault_o			(pagefault),
+      .spr_bus_dat_o			(spr_bus_dat_immu_o),
+      .spr_bus_ack_o			(spr_bus_ack_immu_o),
+      .spr_bus_stb_i			(immu_spr_bus_stb),
+      .virt_addr_i			(virt_addr),
+      .virt_addr_match_i			(pc_fetch),
+      ); */
+    mor1kx_immu
+        #(
+            .FEATURE_IMMU_HW_TLB_RELOAD(FEATURE_IMMU_HW_TLB_RELOAD),
+            .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+            .OPTION_IMMU_SET_WIDTH(OPTION_IMMU_SET_WIDTH),
+            .OPTION_IMMU_WAYS(OPTION_IMMU_WAYS)
+        )
+        mor1kx_immu
+        (/*AUTOINST*/
+            // Outputs
+            .busy_o				(immu_busy),		 // Templated
+            .phys_addr_o			(immu_phys_addr),	 // Templated
+            .cache_inhibit_o			(immu_cache_inhibit),	 // Templated
+            .tlb_miss_o			(tlb_miss),		 // Templated
+            .pagefault_o			(pagefault),		 // Templated
+            .tlb_reload_req_o			(tlb_reload_req),	 // Templated
+            .tlb_reload_addr_o		(tlb_reload_addr),	 // Templated
+            .tlb_reload_pagefault_o		(tlb_reload_pagefault),	 // Templated
+            .tlb_reload_busy_o		(tlb_reload_busy),	 // Templated
+            .spr_bus_dat_o			(spr_bus_dat_immu_o),	 // Templated
+            .spr_bus_ack_o			(spr_bus_ack_immu_o),	 // Templated
+            // Inputs
+            .clk				(clk),
+            .rst				(rst),
+            .enable_i				(immu_enable),		 // Templated
+            .virt_addr_i			(virt_addr),		 // Templated
+            .virt_addr_match_i		(pc_fetch),		 // Templated
+            .supervisor_mode_i		(supervisor_mode_i),
+            .tlb_reload_ack_i			(tlb_reload_ack),	 // Templated
+            .tlb_reload_data_i		(tlb_reload_data),	 // Templated
+            .tlb_reload_pagefault_clear_i	(except_ipagefault_clear), // Templated
+            .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
+            .spr_bus_we_i			(spr_bus_we_i),
+            .spr_bus_stb_i			(immu_spr_bus_stb),	 // Templated
+            .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
+end else begin
+    assign immu_cache_inhibit = 0;
+    assign immu_busy = 0;
+    assign tlb_miss = 0;
+    assign pagefault = 0;
+    assign tlb_reload_busy = 0;
+    assign tlb_reload_req = 0;
+    assign tlb_reload_pagefault = 0;
+end
+endgenerate
 
-        mor1kx_icache
-            #(
-                .OPTION_ICACHE_BLOCK_WIDTH(OPTION_ICACHE_BLOCK_WIDTH),
-                .OPTION_ICACHE_SET_WIDTH(OPTION_ICACHE_SET_WIDTH),
-                .OPTION_ICACHE_WAYS(OPTION_ICACHE_WAYS),
-                .OPTION_ICACHE_LIMIT_WIDTH(OPTION_ICACHE_LIMIT_WIDTH)
-            )
-            mor1kx_icache
-            (/*AUTOINST*/
-                // Outputs
-                .refill_o				(ic_refill),		 // Templated
-                .refill_req_o			(ic_refill_req),	 // Templated
-                .refill_done_o			(ic_refill_done),	 // Templated
-                .invalidate_o			(ic_invalidate),	 // Templated
-                .cpu_ack_o			(ic_ack),		 // Templated
-                .cpu_dat_o			(ic_dat[OPTION_OPERAND_WIDTH-1:0]), // Templated
-                .spr_bus_dat_o			(spr_bus_dat_ic_o),	 // Templated
-                .spr_bus_ack_o			(spr_bus_ack_ic_o),	 // Templated
-                .cache_hit_o			(ic_hit_o),
-                // Inputs
-                .clk				(clk),
-                .rst				(rst),		 // Templated
-                .ic_imem_err_i    (imem_err),
-                .ic_access_i			(ic_access),		 // Templated
-                .cpu_adr_i			(ic_addr),		 // Templated
-                .cpu_adr_match_i			(ic_addr_match),	 // Templated
-                .cpu_req_i			(ic_req),		 // Templated
-                .wradr_i				(ibus_adr),		 // Templated
-                .wrdat_i				(ibus_dat_i),		 // Templated
-                .we_i				(ibus_ack_i),		 // Templated
-                .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
-                .spr_bus_we_i			(spr_bus_we_i),
-                .spr_bus_stb_i			(spr_bus_stb_i),
-                .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
-    end else begin // block: icache_gen
-        assign ic_access = 0;
-        assign ic_refill = 0;
-        assign ic_refill_req = 1'b0;
-        assign ic_refill_done = 0;
-        assign ic_ack = 0;
-        assign ic_hit_o = 0;
-        assign ic_dat = 0;
-        assign ic_invalidate = 0;
-        assign spr_bus_dat_ic_o = 0;
-        assign spr_bus_ack_ic_o = 0;
-    end
-    endgenerate
-
-        generate
-        if (FEATURE_IMMU!="NONE") begin : immu_gen
-            wire  [OPTION_OPERAND_WIDTH-1:0] virt_addr = ic_addr;
-            wire 			    immu_spr_bus_stb;
-            wire 			    immu_enable;
-            // small hack to delay immu spr reads by one cycle
-            // ideally the spr accesses should work so that the address is presented
-            // in execute stage and the delayed data should be available in control
-            // stage, but this is not how things currently work.
-            assign immu_spr_bus_stb = spr_bus_stb_i & (!padv_ctrl_i | spr_bus_we_i);
-
-            assign immu_enable = immu_enable_i & !pipeline_flush_i & !mispredict_stall;
-
-            /* mor1kx_immu AUTO_TEMPLATE (
-             .enable_i				(immu_enable),
-             .busy_o				(immu_busy),
-             .phys_addr_o			(immu_phys_addr),
-             .cache_inhibit_o			(immu_cache_inhibit),
-             .tlb_miss_o				(tlb_miss),
-             .tlb_reload_req_o			(tlb_reload_req),
-             .tlb_reload_addr_o			(tlb_reload_addr),
-             .tlb_reload_pagefault_o		(tlb_reload_pagefault),
-             .tlb_reload_ack_i			(tlb_reload_ack),
-             .tlb_reload_data_i			(tlb_reload_data),
-             .tlb_reload_busy_o			(tlb_reload_busy),
-             .tlb_reload_pagefault_clear_i	(except_ipagefault_clear),
-             .pagefault_o			(pagefault),
-             .spr_bus_dat_o			(spr_bus_dat_immu_o),
-             .spr_bus_ack_o			(spr_bus_ack_immu_o),
-             .spr_bus_stb_i			(immu_spr_bus_stb),
-             .virt_addr_i			(virt_addr),
-             .virt_addr_match_i			(pc_fetch),
-             ); */
-            mor1kx_immu
-                #(
-                    .FEATURE_IMMU_HW_TLB_RELOAD(FEATURE_IMMU_HW_TLB_RELOAD),
-                    .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-                    .OPTION_IMMU_SET_WIDTH(OPTION_IMMU_SET_WIDTH),
-                    .OPTION_IMMU_WAYS(OPTION_IMMU_WAYS)
-                )
-                mor1kx_immu
-                (/*AUTOINST*/
-                    // Outputs
-                    .busy_o				(immu_busy),		 // Templated
-                    .phys_addr_o			(immu_phys_addr),	 // Templated
-                    .cache_inhibit_o			(immu_cache_inhibit),	 // Templated
-                    .tlb_miss_o			(tlb_miss),		 // Templated
-                    .pagefault_o			(pagefault),		 // Templated
-                    .tlb_reload_req_o			(tlb_reload_req),	 // Templated
-                    .tlb_reload_addr_o		(tlb_reload_addr),	 // Templated
-                    .tlb_reload_pagefault_o		(tlb_reload_pagefault),	 // Templated
-                    .tlb_reload_busy_o		(tlb_reload_busy),	 // Templated
-                    .spr_bus_dat_o			(spr_bus_dat_immu_o),	 // Templated
-                    .spr_bus_ack_o			(spr_bus_ack_immu_o),	 // Templated
-                    // Inputs
-                    .clk				(clk),
-                    .rst				(rst),
-                    .enable_i				(immu_enable),		 // Templated
-                    .virt_addr_i			(virt_addr),		 // Templated
-                    .virt_addr_match_i		(pc_fetch),		 // Templated
-                    .supervisor_mode_i		(supervisor_mode_i),
-                    .tlb_reload_ack_i			(tlb_reload_ack),	 // Templated
-                    .tlb_reload_data_i		(tlb_reload_data),	 // Templated
-                    .tlb_reload_pagefault_clear_i	(except_ipagefault_clear), // Templated
-                    .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
-                    .spr_bus_we_i			(spr_bus_we_i),
-                    .spr_bus_stb_i			(immu_spr_bus_stb),	 // Templated
-                    .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
-        end else begin
-            assign immu_cache_inhibit = 0;
-            assign immu_busy = 0;
-            assign tlb_miss = 0;
-            assign pagefault = 0;
-            assign tlb_reload_busy = 0;
-            assign tlb_reload_req = 0;
-            assign tlb_reload_pagefault = 0;
-        end
-        endgenerate
-
-            endmodule // mor1kx_fetch_cappuccino
+endmodule // mor1kx_fetch_cappuccino

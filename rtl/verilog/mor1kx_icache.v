@@ -145,6 +145,7 @@ wire [OPTION_ICACHE_SET_WIDTH-1:0] 	      way_waddr[OPTION_ICACHE_WAYS-1:0];
 wire [WAY_DATA_WIDTH-1:0]    way_din[OPTION_ICACHE_WAYS-1:0];
 wire [WAY_DATA_WIDTH-1:0]    way_dout[OPTION_ICACHE_WAYS-1:0];
 reg [OPTION_ICACHE_WAYS-1:0]       way_we;
+reg [OPTION_OPERAND_WIDTH-1:0] data_from_cache;
 
 // The block to select from the way
 wire [OPTION_ICACHE_BLOCK_WIDTH+2:0] block_index;
@@ -234,8 +235,7 @@ always @(*) begin
     for (w0 = 0; w0 < OPTION_ICACHE_WAYS; w0 = w0 + 1) begin
         if (way_hit[w0]) begin
             // Select the correct block
-            wire [31:0] data_from_cache;
-            assign data_from_cache = way_dout[w0][block_index + OPTION_OPERAND_WIDTH-1:block_index];
+            data_from_cache = way_dout[w0][block_index +: OPTION_OPERAND_WIDTH];
             cpu_dat_o = (l15_transducer_nc) ? wrdat_i[31:0] : data_from_cache;
         end
     end

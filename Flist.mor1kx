@@ -1,4 +1,4 @@
-+incdir+rtl/verilog/mor1kx_utils.vh
++incdir+rtl/verilog/
 rtl/verilog/mor1kx-defines.v
 rtl/verilog/mor1kx-sprs.v
 rtl/verilog/mor1kx_branch_predictor_gshare.v
