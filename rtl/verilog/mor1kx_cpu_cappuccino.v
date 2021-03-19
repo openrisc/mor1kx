@@ -159,16 +159,17 @@ module mor1kx_cpu_cappuccino
    //  output 			      ibus_req_o,
    //  output 			      ibus_burst_o,
 
-   // Data bus
-   //  input 			      dbus_err_i,
-   //  input 			      dbus_ack_i,
-   //  input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
-   //  output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
-   //  output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
-   //  output 			      dbus_req_o,
-   //  output [3:0] 		      dbus_bsel_o,
-   //  output 			      dbus_we_o,
-   //  output 			      dbus_burst_o,
+   // Data bus 
+   // TODO: remove
+    input 			      dbus_err_i,
+    input 			      dbus_ack_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
+    output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
+    output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
+    output 			      dbus_req_o,
+    output [3:0] 		      dbus_bsel_o,
+    output 			      dbus_we_o,
+    output 			      dbus_burst_o,
 
     // Interrupts
     input [31:0] 		      irq_i,
@@ -1082,12 +1083,12 @@ module mor1kx_cpu_cappuccino
       .spr_bus_ack_dc_o                 (spr_bus_ack_dc_i),      // Templated
       .spr_bus_dat_dmmu_o               (spr_bus_dat_dmmu_i[OPTION_OPERAND_WIDTH-1:0]), // Templated
       .spr_bus_ack_dmmu_o               (spr_bus_ack_dmmu_i),    // Templated
-      // .dbus_adr_o                       (dbus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
-      // .dbus_req_o                       (dbus_req_o),
-      // .dbus_dat_o                       (dbus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
-      // .dbus_bsel_o                      (dbus_bsel_o[3:0]),
-      // .dbus_we_o                        (dbus_we_o),
-      // .dbus_burst_o                     (dbus_burst_o),
+      .dbus_adr_o                       (dbus_adr_o[OPTION_OPERAND_WIDTH-1:0]),
+      .dbus_req_o                       (dbus_req_o),
+      .dbus_dat_o                       (dbus_dat_o[OPTION_OPERAND_WIDTH-1:0]),
+      .dbus_bsel_o                      (dbus_bsel_o[3:0]),
+      .dbus_we_o                        (dbus_we_o),
+      .dbus_burst_o                     (dbus_burst_o),
       .dc_hit_o                         (dcache_hit_o),
       // Inputs
       .clk                              (clk),

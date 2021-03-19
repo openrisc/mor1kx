@@ -143,15 +143,16 @@ module mor1kx_lsu_cappuccino
 
     output          transducer_l15_req_ack,
     
-    // output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
-    // output reg			      dbus_req_o,
-    // output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
-    // output reg [3:0] 		      dbus_bsel_o,
-    // output 			      dbus_we_o,
-    // output 			      dbus_burst_o,
-    // input 			      dbus_err_i,
-    // input 			      dbus_ack_i,
-    // input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
+    // TODO: remove
+    output [OPTION_OPERAND_WIDTH-1:0] dbus_adr_o,
+    output reg			      dbus_req_o,
+    output [OPTION_OPERAND_WIDTH-1:0] dbus_dat_o,
+    output reg [3:0] 		      dbus_bsel_o,
+    output 			      dbus_we_o,
+    output 			      dbus_burst_o,
+    input 			      dbus_err_i,
+    input 			      dbus_ack_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  dbus_dat_i,
 
     input 			      pipeline_flush_i,
 
