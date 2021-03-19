@@ -17,6 +17,7 @@
 ***************************************************************************** */
 
 `include "mor1kx-defines.v"
+`include "define.tmp.h"
 
 module mor1kx_fetch_cappuccino
   #(
@@ -55,46 +56,45 @@ module mor1kx_fetch_cappuccino
 
     // TRI interface
     output          transducer_l15_val,
-    output [4:0]    transducer_l15_rqtype,
-    output [3:0]    transducer_l15_amo_op,
+    // output [4:0]    transducer_l15_rqtype,
+    // output [3:0]    transducer_l15_amo_op,
     output          transducer_l15_nc,
-    output [2:0]    transducer_l15_size,
-    output          transducer_l15_threadid,
-    output          transducer_l15_prefetch,
-    output          transducer_l15_invalidate_cacheline,
-    output          transducer_l15_blockstore,
-    output          transducer_l15_blockinitstore,
+    // output [2:0]    transducer_l15_size,
+    // output          transducer_l15_prefetch,
+    // output          transducer_l15_invalidate_cacheline,
+    // output          transducer_l15_blockstore,
+    // output          transducer_l15_blockinitstore,
     output [1:0]    transducer_l15_l1rplway,
     output [39:0]   transducer_l15_address,
     output [63:0]   transducer_l15_data,
-    output [63:0]   transducer_l15_data_next_entry,
-    output [32:0]   transducer_l15_csm_data,
+    // output [63:0]   transducer_l15_data_next_entry,
+    // output [32:0]   transducer_l15_csm_data,
 
     input          l15_transducer_header_ack,
     input          l15_transducer_ack,
 
     input          l15_transducer_val,
     input [3:0]    l15_transducer_returntype,
-    input          l15_transducer_l2miss,
+    // input          l15_transducer_l2miss,
     input [1:0]    l15_transducer_error,
     input          l15_transducer_noncacheable,
-    input          l15_transducer_atomic,
-    input          l15_transducer_threadid,
-    input          l15_transducer_prefetch,
-    input          l15_transducer_f4b,
+    // input          l15_transducer_atomic,
+    // input          l15_transducer_threadid,
+    // input          l15_transducer_prefetch,
+    // input          l15_transducer_f4b,
     input [63:0]   l15_transducer_data_0,
     input [63:0]   l15_transducer_data_1,
     input [63:0]   l15_transducer_data_2,
     input [63:0]   l15_transducer_data_3,
-    input          l15_transducer_inval_icache_all_way,
-    input          l15_transducer_inval_dcache_all_way,
-    input [15:4]   l15_transducer_inval_address_15_4,
-    input          l15_transducer_cross_invalidate,
-    input [1:0]    l15_transducer_cross_invalidate_way,
-    input          l15_transducer_inval_dcache_inval,
-    input          l15_transducer_inval_icache_inval,
-    input [1:0]    l15_transducer_inval_way,
-    input          l15_transducer_blockinitstore,
+    // input          l15_transducer_inval_icache_all_way,
+    // input          l15_transducer_inval_dcache_all_way,
+    // input [15:4]   l15_transducer_inval_address_15_4,
+    // input          l15_transducer_cross_invalidate,
+    // input [1:0]    l15_transducer_cross_invalidate_way,
+    // input          l15_transducer_inval_dcache_inval,
+    // input          l15_transducer_inval_icache_inval,
+    // input [1:0]    l15_transducer_inval_way,
+    // input          l15_transducer_blockinitstore,
 
     output          transducer_l15_req_ack,
 
@@ -198,6 +198,14 @@ module mor1kx_fetch_cappuccino
 
    reg 					  exception_while_tlb_reload;
    wire 				  except_ipagefault_clear;
+
+   reg transducer_l15_val_r = 0;
+   assign transducer_l15_val = transducer_l15_val_r;
+
+   wire l15_refill_ack;
+   assign l15_refill_ack = l15_transducer_val & (l15_transducer_returntype == PCX_REQTYPE_IFILL);
+
+   assign transducer_l15_address = {{(40-OPTION_OPERAND_WIDTH){1'b0}},ibus_adr};
 
    assign bus_access_done = (imem_ack | imem_err | nop_ack) & !immu_busy &
 			    !tlb_reload_busy;
@@ -372,11 +380,14 @@ module mor1kx_fetch_cappuccino
 
    reg [OPTION_OPERAND_WIDTH-1:0] ibus_adr;
    wire [OPTION_OPERAND_WIDTH-1:0] next_ibus_adr;
-   reg [`OR1K_INSN_WIDTH-1:0] 	  ibus_dat;
+   reg [255:0] 	ibus_dat;
    reg 				  ibus_req;
    reg 				  ibus_ack;
 
    wire 			  ibus_access;
+
+   wire block_index;
+   assign block_index = cpu_adr_i[OPTION_ICACHE_BLOCK_WIDTH-1:2] << 3;
 
    //
    // Under certain circumstances, there is a need to insert an nop
@@ -403,10 +414,7 @@ module mor1kx_fetch_cappuccino
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
    assign imem_dat = (nop_ack | except_itlb_miss | except_ipagefault) ?
 		     {`OR1K_OPCODE_NOP,26'd0} :
-		     ibus_access ? ibus_dat : ic_dat;
-   assign ibus_adr_o = ibus_adr;
-   assign ibus_req_o = ibus_req;
-   assign ibus_burst_o = !ibus_access & ic_refill & !ic_refill_done;
+		     ibus_access ? ibus_dat[block_index + OPTION_OPERAND_WIDTH-1:block_index] : ic_dat;
 
    assign next_ibus_adr = (OPTION_ICACHE_BLOCK_WIDTH == 5) ?
 			  {ibus_adr[31:5], ibus_adr[4:0] + 5'd4} : // 32 byte
@@ -416,7 +424,7 @@ module mor1kx_fetch_cappuccino
      if (rst)
        imem_err <= 0;
      else
-       imem_err <= ibus_err_i;
+      imem_err <= l15_transducer_error;
 
    always @(posedge clk) begin
       ibus_ack <= 0;
@@ -443,6 +451,7 @@ module mor1kx_fetch_cappuccino
 		 state <= READ;
 	      end
 	   end else if (ic_refill_req) begin
+        transducer_l15_val_r <= 1;
 	      ibus_adr <= ic_addr_match;
 	      ibus_req <= 1;
 	      state <= IC_REFILL;
@@ -451,23 +460,27 @@ module mor1kx_fetch_cappuccino
 
 	IC_REFILL: begin
 	   ibus_req <= 1;
-	   if (ibus_ack_i) begin
+	   if (l15_refill_ack) begin
 	      ibus_adr <= next_ibus_adr;
 	      if (ic_refill_done) begin
 		 ibus_req <= 0;
 		 state <= IDLE;
 	      end
 	   end
-	   if (ibus_err_i) begin
+     if (l15_transducer_header_ack) begin
+       transducer_l15_val_r <= 0;
+     end
+	   if (l15_transducer_error) begin
 	      ibus_req <= 0;
 	      state <= IDLE;
 	   end
 	end
 
 	READ: begin
-	   ibus_ack <= ibus_ack_i;
-	   ibus_dat <= ibus_dat_i;
-	   if (ibus_ack_i | ibus_err_i) begin
+	   ibus_ack <= l15_refill_ack;
+	   ibus_dat <= 
+      {l15_transducer_data_3, l15_transducer_data_2, l15_transducer_data_1, l15_transducer_data_0};
+	   if (l15_refill_ack | l15_transducer_error) begin
 	      ibus_req <= 0;
 	      state <= IDLE;
 	   end
@@ -477,15 +490,16 @@ module mor1kx_fetch_cappuccino
 	   if (ctrl_branch_exception_i)
 	     exception_while_tlb_reload <= 1;
 
+     // TODO: handle TLB
 	   ibus_adr <= tlb_reload_addr;
-	   tlb_reload_data <= ibus_dat_i;
-	   tlb_reload_ack <= ibus_ack_i & tlb_reload_req;
+	   tlb_reload_data <= {(OPTION_OPERAND_WIDTH-1){1'b0}};
+	   tlb_reload_ack <= 1'b0 & tlb_reload_req;
 
 	   if (!tlb_reload_req)
 	     state <= IDLE;
 
 	   ibus_req <= tlb_reload_req;
-	   if (ibus_ack_i | tlb_reload_ack)
+	   if (l15_refill_ack | tlb_reload_ack)
 	     ibus_req <= 0;
 	end
 
@@ -588,12 +602,16 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
       .cpu_adr_match_i			(ic_addr_match),	 // Templated
       .cpu_req_i			(ic_req),		 // Templated
       .wradr_i				(ibus_adr),		 // Templated
-      .wrdat_i				(ibus_dat_i),		 // Templated
-      .we_i				(ibus_ack_i),		 // Templated
+      .wrdat_i				(
+        {l15_transducer_data_3, l15_transducer_data_2, l15_transducer_data_1, l15_transducer_data_0}),		 // Templated
+      .we_i				(l15_refill_ack),		 // Templated
       .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
       .spr_bus_we_i			(spr_bus_we_i),
       .spr_bus_stb_i			(spr_bus_stb_i),
       .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
+      // TRI
+      output [1:0]         transducer_l15_l1rplway,
+      input                l15_transducer_nc,
 end else begin // block: icache_gen
    assign ic_access = 0;
    assign ic_refill = 0;

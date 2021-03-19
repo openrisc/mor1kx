@@ -37,7 +37,6 @@ module mor1kx_icache
             // TRI related signals
             // request
             output [1:0]         transducer_l15_l1rplway,
-            
             // response
             input                l15_transducer_nc,
             
