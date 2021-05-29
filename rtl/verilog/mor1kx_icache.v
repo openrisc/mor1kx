@@ -483,4 +483,43 @@ module mor1kx_icache
       .we				(tag_we),		 // Templated
       .din				(tag_din));		 // Templated
 
+
+
+`ifdef FORMAL
+/*
+   always @(posedge clk) begin
+
+      //Asserting that if cache hits, only one way is matched and if miss, way_hit equals zero.
+      if ($past(rst)) 
+          assert ($onehot(way_hit) || way_hit==0);
+     end
+*/
+
+   always @(posedge clk) begin
+      // Asserting number of ways in a set is greater than one. 
+      assert (OPTION_ICACHE_WAYS>0);
+
+      //Checking if any unknown state is explored.
+      assert ($onehot(state));
+
+      if ($past(rst)) begin
+      
+          // If on any write, cache hits for address wradr_i, then refill should write wrdat_i at that location in memory.
+          if (we_i && refill_hit && refill_done_o) 
+             assert (wrdat_i == mem[wradr_i[WAY_WIDTH-1:2]]);
+             
+         // If on any read, cache hits for address cpu_adr_i, assume data cpu_adr_i in memory and assert if cpu gets the same data on read request.
+          assume (mem[cpu_adr_i[WAY_WIDTH-1:2]]== 32'hA321);
+          if (hit && !we_i && cpu_ack_o && cpu_req_i ) 
+                 assert (cpu_dat_o==32'hA321);             
+      end
+      
+      if (invalidate) begin
+         for (w0=0; w0<OPTION_ICACHE_WAYS; w0=w0+1)
+             assert (tag_way_out[w0][TAGMEM_WAY_VALID]==1'b0);
+      end
+  end
+
+`endif
+
 endmodule
