@@ -1,0 +1,14 @@
+[options]
+mode bmc
+depth 50
+
+[engines]
+smtbmc 
+
+[script]
+
+read -formal mor1kx_cache_lru.v
+prep -top mor1kx_cache_lru
+
+[files]
+mor1kx_cache_lru.v

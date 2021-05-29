@@ -1,0 +1,15 @@
+[options]
+mode prove
+depth 50
+wait on
+
+[engines]
+smtbmc yices
+
+[script]
+
+read -formal mor1kx_simple_dpram_sclk.v
+prep -top mor1kx_simple_dpram_sclk
+
+[files]
+mor1kx_simple_dpram_sclk.v
