@@ -69,4 +69,38 @@ endgenerate
 	rdata <= mem[raddr];
    end
 
+/*-----Formal checking------*/ 
+`define ASSUME assume
+`define ASSUME assert
+
+`ifdef Formal
+
+always @(posedge clk)begin
+
+//On clear, all memory contents should be initialized to zero
+if (CLEAR_ON_INIT)
+  assert (mem==0); 
+  
+//When no bypass and no clear, normal read or write properties must satisfy  
+if (CLEAR_ON_INIT==0 && ENABLE_BYPASS==0 ) begin
+     
+  if (we)
+      assert (din==mem[waddr]);
+      
+  if (re) begin
+// Assume some random data at raddr and check if same data is put on data port during read operation.  
+      assume (mem[raddr]==32'h1200);
+      assert (dout==32'h1200);
+   end
+end      
+
+//On bypass, data has to be read and written at the same address
+if (ENABLE_BYPASS && re && we && (waddr==raddr))
+  assume (din==32'ha321);
+  assert ((din==dout) && (32'ha321==mem[waddr]) && (dout==mem[raddr]));
+    
+   end
+ `endif
+
+
 endmodule
