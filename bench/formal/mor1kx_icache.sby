@@ -1,9 +1,9 @@
 [options]
 mode prove
-depth 60
+depth 50
 
 [engines]
-smtbmc boolector
+smtbmc 
 
 [script]
 
