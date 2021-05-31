@@ -3,7 +3,7 @@ mode prove
 depth 50
 
 [engines]
-smtbmc 
+smtbmc
 
 [script]
 
@@ -15,8 +15,8 @@ read_verilog -formal mor1kx-sprs.v
 prep  -top mor1kx_icache
 
 [files]
-mor1kx_icache.v
-mor1kx-defines.v
-mor1kx-sprs.v
-mor1kx_cache_lru.v
-mor1kx_simple_dpram_sclk.v
+../../rtl/verilog/mor1kx_icache.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v
+../../rtl/verilog/mor1kx_cache_lru.v
+../../rtl/verilog/mor1kx_simple_dpram_sclk.v
