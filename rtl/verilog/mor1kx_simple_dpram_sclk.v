@@ -71,7 +71,7 @@ endgenerate
 
 /*-----Formal checking------*/ 
 
-`ifdef Formal
+`ifdef FORMAL
 
    always @(posedge clk)begin
        //On clear, all memory contents should be initialized to zero
