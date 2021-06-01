@@ -1,5 +1,5 @@
 [options]
-mode bmc
+mode prove
 depth 50
 
 [engines]

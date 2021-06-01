@@ -486,7 +486,7 @@ module mor1kx_icache
 `ifdef FORMAL
 
    always @(posedge clk) begin
-       if (!rst) begin
+       if (!rst & $past(rst,2)) begin
            //Asserting that if cache hits, only one way is matched and if miss, way_hit equals zero.
            assert ($onehot(way_hit) || way_hit == 0);
        end
