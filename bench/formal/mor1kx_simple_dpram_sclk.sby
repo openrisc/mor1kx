@@ -12,4 +12,4 @@ read -formal mor1kx_simple_dpram_sclk.v
 prep -top mor1kx_simple_dpram_sclk
 
 [files]
-mor1kx_simple_dpram_sclk.v
+../../rtl/verilog/mor1kx_simple_dpram_sclk.v
