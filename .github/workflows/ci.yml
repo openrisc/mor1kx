@@ -59,7 +59,7 @@ jobs:
           export PATH=$PATH:/tmp/tools/or1k-elf/bin:$HOME/.local/bin
           mkdir -p /tmp/tools
           cd /tmp/tools
-          git clone --depth 1 https://github.com/openrisc/or1k-tests.git -b v1.0.2
+          git clone --depth 1 https://github.com/openrisc/or1k-tests.git -b v1.0.3
           cd or1k-tests/native
           make -j8
           fusesoc library add mor1kx-generic https://github.com/openrisc/mor1kx-generic.git
