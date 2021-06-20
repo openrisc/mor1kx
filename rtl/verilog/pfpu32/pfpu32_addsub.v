@@ -73,8 +73,8 @@ module pfpu32_addsub
    output reg        add_rdy_o,       // ready
    output reg        add_sign_o,      // signum
    output reg        add_sub_0_o,     // flag that actual substruction is performed and result is zero
+   output reg        add_shr_o,       // do right shift in align stage
    output reg  [4:0] add_shl_o,       // do left shift in align stage
-   output reg  [9:0] add_exp10shl_o,  // exponent for left shift align
    output reg  [9:0] add_exp10sh0_o,  // exponent for no shift in align
    output reg [27:0] add_fract28_o,   // fractional with appended {r,s} bits
    output reg        add_inv_o,       // invalid operation flag
@@ -290,20 +290,13 @@ module pfpu32_addsub
   end // always
 
   // left shift amount and corrected exponent
-  wire [4:0] s3t_nlz_m1    = (s3t_nlz - 5'd1);
-  wire [9:0] s3t_exp10c_m1 = s2o_exp10c - 10'd1;
-  wire [9:0] s3t_exp10c_mz = s2o_exp10c - {5'd0,s3t_nlz};
-  wire [4:0] s3t_shl;
-  wire [9:0] s3t_exp10shl;
-  assign {s3t_shl,s3t_exp10shl} =
+  wire [4:0] s3t_shl =
       // shift isn't needed or impossible
-    (~(|s3t_nlz) | (s2o_exp10c == 10'd1)) ?
-                              {5'd0,s2o_exp10c} :
+    (~(|s3t_nlz) | s2o_sub_0 | (s2o_exp10c == 10'd1)) ? 5'd0 :
       // normalization is possible
-    (s2o_exp10c >  s3t_nlz) ? {s3t_nlz,s3t_exp10c_mz} :
+    (s2o_exp10c >  s3t_nlz) ? s3t_nlz :
       // denormalized cases
-    (s2o_exp10c == s3t_nlz) ? {s3t_nlz_m1,10'd1} :
-                              {s3t_exp10c_m1[4:0],10'd1};
+    (s2o_exp10c == s3t_nlz) ? (s3t_nlz - 5'd1) : (s2o_exp10c[4:0] - 5'd1);
 
 
   // registering output
@@ -318,8 +311,8 @@ module pfpu32_addsub
         // computation related
       add_sign_o      <= s2o_signc;
       add_sub_0_o     <= s2o_sub_0;
+      add_shr_o       <= s2o_fract27[26];
       add_shl_o       <= s3t_shl;
-      add_exp10shl_o  <= s3t_exp10shl;
       add_exp10sh0_o  <= s2o_exp10c;
       add_fract28_o   <= {s2o_fract27,s2o_sticky};
     end // advance

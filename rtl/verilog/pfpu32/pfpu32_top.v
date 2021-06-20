@@ -190,8 +190,8 @@ wire add_start = op_add &
 wire        add_rdy_o;       // add/sub is ready
 wire        add_sign_o;      // add/sub signum
 wire        add_sub_0_o;     // flag that actual substruction is performed and result is zero
+wire        add_shr_o;       // do right shift in align stage
 wire  [4:0] add_shl_o;       // do left shift in align stage
-wire  [9:0] add_exp10shl_o;  // exponent for left shift align
 wire  [9:0] add_exp10sh0_o;  // exponent for no shift in align
 wire [27:0] add_fract28_o;   // fractional with appended {r,s} bits
 wire        add_inv_o;       // add/sub invalid operation flag
@@ -228,8 +228,8 @@ pfpu32_addsub u_f32_addsub
   .add_rdy_o       (add_rdy_o),       // add/sub is ready
   .add_sign_o      (add_sign_o),      // add/sub signum
   .add_sub_0_o     (add_sub_0_o),     // flag that actual substruction is performed and result is zero
+  .add_shr_o       (add_shr_o),       // do right shift in align stage
   .add_shl_o       (add_shl_o),       // do left shift in align stage
-  .add_exp10shl_o  (add_exp10shl_o),  // exponent for left shift align
   .add_exp10sh0_o  (add_exp10sh0_o),  // exponent for no shift in align
   .add_fract28_o   (add_fract28_o),   // fractional with appended {r,s} bits
   .add_inv_o       (add_inv_o),       // add/sub invalid operation flag
@@ -248,10 +248,8 @@ wire mul_start = (op_mul | op_div) &
 // MUL/DIV common outputs
 wire        mul_rdy_o;       // mul is ready
 wire        mul_sign_o;      // mul signum
-wire  [4:0] mul_shr_o;       // do right shift in align stage
-wire  [9:0] mul_exp10shr_o;  // exponent for right shift align
+wire  [9:0] mul_shr_o;       // do right shift in align stage
 wire        mul_shl_o;       // do left shift in align stage
-wire  [9:0] mul_exp10shl_o;  // exponent for left shift align
 wire  [9:0] mul_exp10sh0_o;  // exponent for no shift in align
 wire [27:0] mul_fract28_o;   // fractional with appended {r,s} bits
 wire        mul_inv_o;       // mul invalid operation flag
@@ -292,9 +290,7 @@ pfpu32_muldiv u_f32_muldiv
   .muldiv_rdy_o       (mul_rdy_o),       // mul is ready
   .muldiv_sign_o      (mul_sign_o),      // mul signum
   .muldiv_shr_o       (mul_shr_o),       // do right shift in align stage
-  .muldiv_exp10shr_o  (mul_exp10shr_o),  // exponent for right shift align
   .muldiv_shl_o       (mul_shl_o),       // do left shift in align stage
-  .muldiv_exp10shl_o  (mul_exp10shl_o),  // exponent for left shift align
   .muldiv_exp10sh0_o  (mul_exp10sh0_o),  // exponent for no shift in align
   .muldiv_fract28_o   (mul_fract28_o),   // fractional with appended {r,s} bits
   .muldiv_inv_o       (mul_inv_o),       // mul invalid operation flag
@@ -316,28 +312,22 @@ wire i2f_start  = op_i2f_cnv &
 wire        i2f_rdy_o;       // i2f is ready
 wire        i2f_sign_o;      // i2f signum
 wire  [3:0] i2f_shr_o;
-wire  [7:0] i2f_exp8shr_o;
 wire  [4:0] i2f_shl_o;
-wire  [7:0] i2f_exp8shl_o;
-wire  [7:0] i2f_exp8sh0_o;
 wire [31:0] i2f_fract32_o;
 //   i2f module instance
 pfpu32_i2f u_i2f_cnv
 (
-  .clk         (clk),
-  .rst         (rst),
-  .flush_i     (flush_i),        // flush pipe
-  .adv_i       (padv_fpu_units), // advance pipe
-  .start_i     (i2f_start),      // start conversion
-  .opa_i       (rfa_i),
-  .i2f_rdy_o     (i2f_rdy_o),     // i2f is ready
-  .i2f_sign_o    (i2f_sign_o),    // i2f signum
-  .i2f_shr_o     (i2f_shr_o),
-  .i2f_exp8shr_o (i2f_exp8shr_o),
-  .i2f_shl_o     (i2f_shl_o),
-  .i2f_exp8shl_o (i2f_exp8shl_o),
-  .i2f_exp8sh0_o (i2f_exp8sh0_o),
-  .i2f_fract32_o (i2f_fract32_o)
+  .clk            (clk),
+  .rst            (rst),
+  .flush_i        (flush_i),        // flush pipe
+  .adv_i          (padv_fpu_units), // advance pipe
+  .start_i        (i2f_start),      // start conversion
+  .opa_i          (rfa_i),
+  .i2f_rdy_o      (i2f_rdy_o),     // i2f is ready
+  .i2f_sign_o     (i2f_sign_o),    // i2f signum
+  .i2f_shr_o      (i2f_shr_o),
+  .i2f_shl_o      (i2f_shl_o),
+  .i2f_fract32_o  (i2f_fract32_o)
 );
 //   f2i signals
 wire op_f2i_cnv = (~a_cmp) & (op_arith_conv == 3'd5);
@@ -386,8 +376,8 @@ pfpu32_rnd  u_f32_rnd
   .add_rdy_i       (add_rdy_o),       // add/sub is ready
   .add_sign_i      (add_sign_o),      // add/sub signum
   .add_sub_0_i     (add_sub_0_o),     // flag that actual substruction is performed and result is zero
+  .add_shr_i       (add_shr_o),       // do right shift in align stage
   .add_shl_i       (add_shl_o),       // do left shift in align stage
-  .add_exp10shl_i  (add_exp10shl_o),  // exponent for left shift align
   .add_exp10sh0_i  (add_exp10sh0_o),  // exponent for no shift in align
   .add_fract28_i   (add_fract28_o),   // fractional with appended {r,s} bits
   .add_inv_i       (add_inv_o),       // add/sub invalid operation flag
@@ -399,9 +389,7 @@ pfpu32_rnd  u_f32_rnd
   .mul_rdy_i       (mul_rdy_o),       // mul is ready
   .mul_sign_i      (mul_sign_o),      // mul signum
   .mul_shr_i       (mul_shr_o),       // do right shift in align stage
-  .mul_exp10shr_i  (mul_exp10shr_o),  // exponent for right shift align
   .mul_shl_i       (mul_shl_o),       // do left shift in align stage
-  .mul_exp10shl_i  (mul_exp10shl_o),  // exponent for left shift align
   .mul_exp10sh0_i  (mul_exp10sh0_o),  // exponent for no shift in align
   .mul_fract28_i   (mul_fract28_o),   // fractional with appended {r,s} bits
   .mul_inv_i       (mul_inv_o),       // mul invalid operation flag
@@ -416,10 +404,7 @@ pfpu32_rnd  u_f32_rnd
   .i2f_rdy_i       (i2f_rdy_o),       // i2f is ready
   .i2f_sign_i      (i2f_sign_o),      // i2f signum
   .i2f_shr_i       (i2f_shr_o),
-  .i2f_exp8shr_i   (i2f_exp8shr_o),
   .i2f_shl_i       (i2f_shl_o),
-  .i2f_exp8shl_i   (i2f_exp8shl_o),
-  .i2f_exp8sh0_i   (i2f_exp8sh0_o),
   .i2f_fract32_i   (i2f_fract32_o),
   // from f2i
   .f2i_rdy_i       (f2i_rdy_o),       // f2i is ready
