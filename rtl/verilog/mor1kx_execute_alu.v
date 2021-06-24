@@ -55,8 +55,7 @@ module mor1kx_execute_alu
     // pipeline control signal in
     input 			      padv_decode_i,
     input 			      padv_execute_i,
-    input 			      padv_ctrl_i,
-    
+
     input 			      pipeline_flush_i ,// flush pipelined fpu
 
     // inputs to ALU

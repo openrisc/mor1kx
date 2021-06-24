@@ -799,7 +799,6 @@ module mor1kx_cpu_cappuccino
    /* mor1kx_execute_alu AUTO_TEMPLATE (
     .padv_decode_i			(padv_decode_o),
     .padv_execute_i			(padv_execute_o),
-    .padv_ctrl_i			(padv_ctrl_o),
     .opc_alu_i			        (execute_opc_alu_o),
     .opc_alu_secondary_i		(execute_opc_alu_secondary_o),
     .imm16_i				(execute_imm16_o),
@@ -883,7 +882,6 @@ module mor1kx_cpu_cappuccino
       .rst                              (rst),
       .padv_decode_i                    (padv_decode_o),         // Templated
       .padv_execute_i                   (padv_execute_o),        // Templated
-      .padv_ctrl_i                      (padv_ctrl_o),           // Templated
       .pipeline_flush_i                 (pipeline_flush_o),
       .opc_alu_i                        (execute_opc_alu_o),     // Templated
       .opc_alu_secondary_i              (execute_opc_alu_secondary_o), // Templated
@@ -928,7 +926,6 @@ module mor1kx_cpu_cappuccino
    /* mor1kx_lsu_cappuccino AUTO_TEMPLATE (
     .padv_execute_i			(padv_execute_o),
     .padv_ctrl_i			(padv_ctrl_o),
-    .decode_valid_i			(decode_valid_o),
     .exec_lsu_adr_i			(adder_result_o),
     .ctrl_lsu_adr_i			(ctrl_lsu_adr_o),
     .ctrl_rfb_i				(ctrl_rfb_o),
@@ -1002,7 +999,6 @@ module mor1kx_cpu_cappuccino
       .rst                              (rst),
       .padv_execute_i                   (padv_execute_o),        // Templated
       .padv_ctrl_i                      (padv_ctrl_o),           // Templated
-      .decode_valid_i                   (decode_valid_o),        // Templated
       .exec_lsu_adr_i                   (adder_result_o),        // Templated
       .ctrl_lsu_adr_i                   (ctrl_lsu_adr_o),        // Templated
       .ctrl_rfb_i                       (ctrl_rfb_o),            // Templated
@@ -1063,7 +1059,6 @@ module mor1kx_cpu_cappuccino
 
    /* mor1kx_rf_cappuccino AUTO_TEMPLATE (
     .padv_decode_i			(padv_decode_o),
-    .padv_execute_i			(padv_execute_o),
     .padv_ctrl_i			(padv_ctrl_o),
     .fetch_rf_adr_valid_i		(fetch_rf_adr_valid_o),
     .fetch_rfa_adr_i			(fetch_rfa_adr_o),
@@ -1108,7 +1103,6 @@ module mor1kx_cpu_cappuccino
       .clk                              (clk),
       .rst                              (rst),
       .padv_decode_i                    (padv_decode_o),         // Templated
-      .padv_execute_i                   (padv_execute_o),        // Templated
       .padv_ctrl_i                      (padv_ctrl_o),           // Templated
       .decode_valid_i                   (decode_valid_o),        // Templated
       .fetch_rf_adr_valid_i             (fetch_rf_adr_valid_o),  // Templated

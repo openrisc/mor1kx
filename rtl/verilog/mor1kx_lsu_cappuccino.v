@@ -41,7 +41,6 @@ module mor1kx_lsu_cappuccino
 
     input 			      padv_execute_i,
     input 			      padv_ctrl_i, // needed for dmmu spr
-    input 			      decode_valid_i,
     // calculated address from ALU
     input [OPTION_OPERAND_WIDTH-1:0]  exec_lsu_adr_i,
     input [OPTION_OPERAND_WIDTH-1:0]  ctrl_lsu_adr_i,

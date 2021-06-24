@@ -32,7 +32,6 @@ module mor1kx_rf_cappuccino
 
     // pipeline control signal in
     input 			      padv_decode_i,
-    input 			      padv_execute_i,
     input 			      padv_ctrl_i,
 
 

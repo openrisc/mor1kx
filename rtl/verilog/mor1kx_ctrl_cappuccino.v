@@ -293,8 +293,6 @@ module mor1kx_ctrl_cappuccino
 
    wire [15:0] 			     spr_addr;
 
-   wire [OPTION_OPERAND_WIDTH-1:0]   b;
-
    wire 			     deassert_decode_execute_halt;
 
    /* Debug SPRs */
@@ -344,8 +342,6 @@ module mor1kx_ctrl_cappuccino
    wire [31:0] 			     spr_dcfgr;
    wire [31:0] 			     spr_pccfgr;
    wire [31:0] 			     spr_isr [0:7];
-
-   assign  b = ctrl_rfb_i;
 
    assign ctrl_branch_exception_o = (exception_r | ctrl_op_rfe_i | doing_rfe) &
 				    !exception_taken;
@@ -1213,7 +1209,7 @@ module mor1kx_ctrl_cappuccino
    assign spr_read_access = (ctrl_op_mfspr_i | (du_access & !du_we_i));
    assign spr_write_access = (ctrl_op_mtspr_i | (du_access & du_we_i));
 
-   assign spr_write_dat = du_access ? du_dat_i : b;
+   assign spr_write_dat = du_access ? du_dat_i : ctrl_rfb_i;
    assign spr_we = spr_write_access & spr_access_valid;
    assign spr_read = spr_read_access & spr_access_valid;
 
