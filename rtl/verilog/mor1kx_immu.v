@@ -174,13 +174,13 @@ endgenerate
          if (itlb_match_reload_we & !tlb_reload_huge)
            itlb_match_we[j] = 1;
          if (j[WAYS_WIDTH-1:0] == spr_way_idx)
-           itlb_match_we[j] = itlb_match_spr_cs & spr_bus_we_i & !spr_bus_ack;
+           itlb_match_we[j] = itlb_match_spr_cs & spr_bus_we_i & !itlb_match_spr_cs_r;
 
          itlb_trans_we[j] = 0;
          if (itlb_trans_reload_we & !tlb_reload_huge)
            itlb_trans_we[j] = 1;
          if (j[WAYS_WIDTH-1:0] == spr_way_idx)
-           itlb_trans_we[j] = itlb_trans_spr_cs & spr_bus_we_i & !spr_bus_ack;
+           itlb_trans_we[j] = itlb_trans_spr_cs & spr_bus_we_i & !itlb_trans_spr_cs_r;
       end
    end
 
@@ -231,16 +231,16 @@ endgenerate
    assign itlb_trans_spr_cs = spr_bus_stb_i & (spr_bus_addr_i[15:11] == 5'd2) &
                               |spr_bus_addr_i[10:9] & spr_bus_addr_i[7];
 
-   assign itlb_match_addr = itlb_match_spr_cs & !spr_bus_ack ?
+   assign itlb_match_addr = itlb_match_spr_cs & !itlb_match_spr_cs_r ?
 			    spr_bus_addr_i[OPTION_IMMU_SET_WIDTH-1:0] :
 			    virt_addr_i[13+(OPTION_IMMU_SET_WIDTH-1):13];
-   assign itlb_trans_addr = itlb_trans_spr_cs & !spr_bus_ack ?
+   assign itlb_trans_addr = itlb_trans_spr_cs & !itlb_trans_spr_cs_r ?
 			    spr_bus_addr_i[OPTION_IMMU_SET_WIDTH-1:0] :
 			    virt_addr_i[13+(OPTION_IMMU_SET_WIDTH-1):13];
 
-   assign itlb_match_din = itlb_match_spr_cs & spr_bus_we_i & !spr_bus_ack ?
+   assign itlb_match_din = itlb_match_spr_cs & spr_bus_we_i & !itlb_match_spr_cs_r ?
 			   spr_bus_dat_i : itlb_match_reload_din;
-   assign itlb_trans_din = itlb_trans_spr_cs & spr_bus_we_i & !spr_bus_ack ?
+   assign itlb_trans_din = itlb_trans_spr_cs & spr_bus_we_i & !itlb_trans_spr_cs_r ?
 			   spr_bus_dat_i : itlb_trans_reload_din;
 
    assign itlb_match_huge_addr = virt_addr_i[24+(OPTION_IMMU_SET_WIDTH-1):24];
