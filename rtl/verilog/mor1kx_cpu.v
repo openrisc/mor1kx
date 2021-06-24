@@ -220,7 +220,7 @@ module mor1kx_cpu
             cappuccino.mor1kx_cpu.set_gpr(gpr_num, gpr_value);
          endtask
       end
-      if (OPTION_CPU=="ESPRESSO") begin : monitor
+      else if (OPTION_CPU=="ESPRESSO") begin : monitor
          function [OPTION_OPERAND_WIDTH-1:0] get_gpr;
             // verilator public
             input [15:0] gpr_num;
@@ -234,7 +234,7 @@ module mor1kx_cpu
          endtask
       end
       /* verilator lint_off WIDTH */
-      if (OPTION_CPU=="PRONTO_ESPRESSO") begin : monitor
+      else if (OPTION_CPU=="PRONTO_ESPRESSO") begin : monitor
          function [OPTION_OPERAND_WIDTH-1:0] get_gpr;
             // verilator public
             input [15:0] gpr_num;
