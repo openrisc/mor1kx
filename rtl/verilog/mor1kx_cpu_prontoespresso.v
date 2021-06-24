@@ -479,7 +479,6 @@ module mor1kx_cpu_prontoespresso
    /* mor1kx_execute_alu AUTO_TEMPLATE (
     .padv_decode_i			(padv_decode_o),
     .padv_execute_i			(padv_execute_o),
-    .padv_ctrl_i			(1'b1),
     .pipeline_flush_i			(pipeline_flush_o),
     .opc_alu_i			        (decode_opc_alu_o),
     .opc_alu_secondary_i		(decode_opc_alu_secondary_o),
@@ -561,7 +560,6 @@ module mor1kx_cpu_prontoespresso
       .rst				(rst),
       .padv_decode_i			(padv_decode_o),	 // Templated
       .padv_execute_i			(padv_execute_o),	 // Templated
-      .padv_ctrl_i			(1'b1),			 // Templated
       .pipeline_flush_i			(pipeline_flush_o),	 // Templated
       .opc_alu_i			(decode_opc_alu_o),	 // Templated
       .opc_alu_secondary_i		(decode_opc_alu_secondary_o), // Templated
