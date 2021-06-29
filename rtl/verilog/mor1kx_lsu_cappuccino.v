@@ -151,7 +151,6 @@ module mor1kx_lsu_cappuccino
    wire [3:0] 			     dc_bsel;
 
    wire 			     dc_access;
-   wire 			     dc_hit;
    wire 			     dc_refill_allowed;
    wire 			     dc_refill;
    wire 			     dc_refill_req;
@@ -736,7 +735,7 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .refill_o			(dc_refill),		 // Templated
 	    .refill_req_o		(dc_refill_req),	 // Templated
 	    .refill_done_o		(dc_refill_done),	 // Templated
-	    .cache_hit_o		(dc_hit),		 // Templated
+	    .cache_hit_o		(dc_hit_o),		 // Templated
 	    .cpu_err_o			(dc_err),		 // Templated
 	    .cpu_ack_o			(dc_ack),		 // Templated
 	    .cpu_dat_o			(dc_ldat),		 // Templated
