@@ -195,6 +195,7 @@ module mor1kx_lsu_cappuccino
    reg 				     dbus_atomic;
 
    reg 				     last_write;
+   // write_done indicates the store buffer has been flushed
    reg 				     write_done;
 
    // Atomic operations
@@ -363,11 +364,12 @@ module mor1kx_lsu_cappuccino
    assign store_buffer_ack = (FEATURE_STORE_BUFFER!="NONE") ?
 			     store_buffer_write :
 			     write_done;
-
+			     
+   // If we are writing we wait for the store buffer ack and
+   // in case of dcache being busy we wait for data cache ack too
    assign lsu_ack = (ctrl_op_lsu_store_i | state == WRITE) ?
-		    (store_buffer_ack & !ctrl_op_lsu_atomic_i |
-		     write_done & ctrl_op_lsu_atomic_i) :
-		    (dbus_access ? dbus_ack : dc_ack);
+                     (ctrl_op_lsu_atomic_i ? write_done : store_buffer_ack) :
+		     (dbus_access ? dbus_ack : dc_ack);
 
    assign lsu_ldat = dbus_access ? dbus_dat : dc_ldat;
    assign dbus_adr_o = dbus_adr;
