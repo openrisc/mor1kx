@@ -342,6 +342,9 @@ module mor1kx_dcache
     */
    integer w1;
    always @(posedge clk `OR_ASYNC_RST) begin
+      // The default is (of course) not to acknowledge the invalidate
+      invalidate_ack <= 1'b0;
+
       if (rst) begin
 	 state <= IDLE;
 	 write_pending <= 0;
@@ -377,7 +380,7 @@ module mor1kx_dcache
 		 // Store address in invalidate_adr that is muxed to the tag
 		 // memory write address
 		 invalidate_adr <= spr_bus_dat_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
-
+		 invalidate_ack <= 1'b1;
 		 // Change to invalidate state that actually accesses
 		 // the tag memory
 		 state <= INVALIDATE;
@@ -440,8 +443,10 @@ module mor1kx_dcache
 		 // Store address in invalidate_adr that is muxed to the tag
 		 // memory write address
 		 invalidate_adr <= spr_bus_dat_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
-
+		 invalidate_ack <= 1'b1;
 		 state <= INVALIDATE;
+	      end else if (cpu_we_i | write_pending) begin
+		 state <= WRITE;
 	      end else begin
 		 state <= IDLE;
 	      end
@@ -472,9 +477,6 @@ module mor1kx_dcache
 
       way_wr_dat = wrdat_i;
 
-      // The default is (of course) not to acknowledge the invalidate
-      invalidate_ack = 1'b0;
-
       if (snoop_hit) begin
 	 // This is the write access
 	 tag_we = 1'b1;
@@ -497,16 +499,6 @@ module mor1kx_dcache
 		      wradr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 
 	 case (state)
-	   IDLE: begin
-	      //
-	      // When idle we can always acknowledge the invalidate as it
-	      // has the highest priority in handling. When something is
-	      // changed on the state machine handling above this needs
-	      // to be changed.
-	      //
-	      invalidate_ack = 1'b1;
-	   end
-
 	   READ: begin
 	      if (hit) begin
 		 //
@@ -525,7 +517,7 @@ module mor1kx_dcache
 
 	   WRITE: begin
 	      way_wr_dat = cpu_dat_i;
-	      if (hit & cpu_req_i) begin
+	      if (hit & (cpu_req_i | write_pending)) begin
 		 /* Mux cache output with write data */
 		 if (!cpu_bsel_i[3])
 		   way_wr_dat[31:24] = cpu_dat_o[31:24];
@@ -536,9 +528,9 @@ module mor1kx_dcache
 		 if (!cpu_bsel_i[0])
 		   way_wr_dat[7:0] = cpu_dat_o[7:0];
 
-	      way_we = way_hit;
+		 way_we = way_hit;
 
-	      tag_lru_in = next_lru_history;
+		 tag_lru_in = next_lru_history;
 
 		 tag_we = 1'b1;
 	      end
@@ -586,8 +578,6 @@ module mor1kx_dcache
 	   end
 
 	   INVALIDATE: begin
-	      invalidate_ack = 1'b1;
-
 	      // Lazy invalidation, invalidate everything that matches tag address
               tag_lru_in = 0;
               for (w2 = 0; w2 < OPTION_DCACHE_WAYS; w2 = w2 + 1) begin
