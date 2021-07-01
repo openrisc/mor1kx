@@ -59,7 +59,7 @@ jobs:
           export PATH=$PATH:/tmp/tools/or1k-elf/bin:$HOME/.local/bin
           mkdir -p /tmp/tools
           cd /tmp/tools
-          git clone --depth 1 https://github.com/openrisc/or1k-tests.git -b v1.0.3
+          git clone --depth 1 https://github.com/openrisc/or1k-tests.git -b v1.0.4
           cd or1k-tests/native
           make -j8
           fusesoc library add mor1kx-generic https://github.com/openrisc/mor1kx-generic.git
@@ -90,7 +90,7 @@ jobs:
       matrix:
         env:
           - { EXPECTED_FAILURES: "or1k-cy" }
-          - { EXPECTED_FAILURES: "or1k-cy or1k-mmu", EXTRA_CORE_ARGS: "--feature_dmmu NONE" } # Issue #117, dmmu cause immu test results to change
+          - { EXPECTED_FAILURES: "or1k-cy", EXTRA_CORE_ARGS: "--feature_dmmu NONE" }
           - { EXPECTED_FAILURES: "or1k-cy or1k-dsxinsn", EXTRA_CORE_ARGS: "--feature_immu NONE" }
           - { EXPECTED_FAILURES: "or1k-cy", EXTRA_CORE_ARGS: "--feature_datacache NONE" }
           - { EXPECTED_FAILURES: "or1k-cy", EXTRA_CORE_ARGS: "--feature_instructioncache NONE" }
