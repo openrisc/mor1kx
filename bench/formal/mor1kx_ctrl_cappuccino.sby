@@ -1,0 +1,35 @@
+[options]
+mode prove
+depth 25
+
+[engines]
+smtbmc
+
+[script]
+
+read -formal -D CTRL mor1kx_ctrl_cappuccino.v
+read -formal mor1kx_ticktimer.v
+read -formal mor1kx_pic.v
+read -formal mor1kx_pcu.v
+read_verilog mor1kx_cfgrs.v
+
+chparam -set FEATURE_IMMU "ENABLED" mor1kx_ctrl_cappuccino
+chparam -set FEATURE_DMMU "ENABLED" mor1kx_ctrl_cappuccino
+chparam -set FEATURE_TIMER "ENABLED" mor1kx_ctrl_cappuccino
+chparam -set FEATURE_PIC "ENABLED" mor1kx_ctrl_cappuccino
+chparam -set FEATURE_DSX "ENABLED" mor1kx_ctrl_cappuccino
+chparam -set FEATURE_OVERFLOW "ENABLED" mor1kx_ctrl_cappuccino
+chparam -set FEATURE_RANGE "ENABLED" mor1kx_ctrl_cappuccino
+chparam -set FEATURE_PERFCOUNTERS "ENABLED" mor1kx_ctrl_cappuccino
+chparam -set FEATURE_DEBUGUNIT "ENABLED" mor1kx_ctrl_cappuccino
+
+prep -top mor1kx_ctrl_cappuccino
+
+[files]
+../../rtl/verilog/mor1kx_ctrl_cappuccino.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v
+../../rtl/verilog/mor1kx_cfgrs.v
+../../rtl/verilog/mor1kx_pcu.v
+../../rtl/verilog/mor1kx_pic.v
+../../rtl/verilog/mor1kx_ticktimer.v

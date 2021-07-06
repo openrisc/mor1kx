@@ -1,0 +1,25 @@
+[tasks]
+prv
+cvr
+
+[options]
+prv: mode prove
+cvr: mode cover
+depth 15
+
+[engines]
+smtbmc
+
+[script]
+
+read -formal -D ICACHE mor1kx_icache.v
+read -formal mor1kx_cache_lru.v
+read -formal mor1kx_simple_dpram_sclk.v
+prep -top mor1kx_icache
+
+[files]
+../../rtl/verilog/mor1kx_icache.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v
+../../rtl/verilog/mor1kx_cache_lru.v
+../../rtl/verilog/mor1kx_simple_dpram_sclk.v

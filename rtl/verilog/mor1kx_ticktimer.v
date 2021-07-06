@@ -87,4 +87,43 @@ module mor1kx_ticktimer
      else if (ttcr_run)
        spr_ttcr <= spr_ttcr + 1;
 
+/*----------------Formal Checking------------------*/
+
+`ifdef FORMAL
+
+`ifdef TICKTIMER
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
+   reg f_past_valid = 0;
+   initial f_past_valid = 0;
+   initial assume(rst);
+   always @(posedge clk)
+      f_past_valid <= 1;
+   always @(*)
+      if (!f_past_valid)
+         assume (rst);
+
+   always @*
+      `ASSUME ($onehot0(spr_access_i));
+
+   always @* begin
+      if (spr_ttmr_access)
+         assert (!spr_ttcr_access);
+      assert (spr_bus_ack == spr_access_i);
+   end
+
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && !$past(spr_we_i)
+          && $past(spr_ttcr[27:0]) != $past(spr_ttmr[27:0]))
+         assert ($stable(spr_ttmr_o));
+
+      if (f_past_valid && !$past(rst) && !$past(spr_we_i)
+         && $past(spr_ttmr[31:30]) == 2'b01 && !$past(spr_ttmr[31:30] != 2'b11))
+         assert ($stable(spr_ttcr_o));
+   end
+
+`endif
 endmodule // mor1kx_ticktimer

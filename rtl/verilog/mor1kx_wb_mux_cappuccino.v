@@ -52,4 +52,47 @@ module mor1kx_wb_mux_cappuccino
    always @(posedge clk)
      wb_op_mul <= op_mul_i;
 
+/*-------------------Formal Checking-------------*/
+
+`ifdef FORMAL
+
+`ifdef MUX
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
+   reg f_not_unknown = (^alu_result_i !== 1'bx && ^lsu_result_i !== 1'bx &&
+                        ^mul_result_i !== 1'bx && ^spr_i !== 1'bx &&
+                        op_mul_i !== 1'bx && op_lsu_load_i !== 1'bx &&
+                        op_mfspr_i !== 1'bx);
+   initial f_not_unknown = 1'b0;
+
+   always @*
+      if (f_not_unknown)
+         assert (^rf_result_o !== 1'bx);
+
+   reg f_past_valid;
+   initial f_past_valid = 0;
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+   always @(*)
+      if (!f_past_valid)
+         assume (rst);
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst))
+         `ASSUME ($onehot0({op_mul_i, op_lsu_load_i, op_mfspr_i}));
+
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && !$past(op_mul_i)) begin
+         if ($past(op_mfspr_i))
+            assert (rf_result_o == $past(spr_i));
+         else if ($past(op_lsu_load_i))
+            assert (rf_result_o == $past(lsu_result_i));
+         else
+            assert (rf_result_o == $past(alu_result_i));
+      end
+   end
+
+`endif
 endmodule // mor1kx_wb_mux_cappuccino

@@ -28,4 +28,15 @@ module mor1kx_branch_predictor_simple
    assign predicted_flag_o = op_bf_i & immjbr_upper_i[9] |
                              op_bnf_i & !immjbr_upper_i[9];
 
+/*--------Formal Checking---------*/
+
+`ifdef FORMAL
+   reg f_not_unknown = (op_bf_i !== 1'bx &&
+                        ^immjbr_upper_i !== 1'bx &&
+                        op_bnf_i !== 1'bx);
+   initial f_not_unknown = 1'b0;
+   always @(*)
+      if (f_not_unknown)
+         assert (predicted_flag_o !== 1'bx);
+`endif
 endmodule

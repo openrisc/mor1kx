@@ -1,0 +1,32 @@
+[tasks]
+simple
+gshare
+sat_counter
+
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+
+read -formal mor1kx_branch_prediction.v
+read -formal mor1kx_branch_predictor_simple.v
+read -formal mor1kx_branch_predictor_gshare.v
+read -formal mor1kx_branch_predictor_saturation_counter.v
+
+simple: chparam -set FEATURE_BRANCH_PREDICTOR "SIMPLE" mor1kx_branch_prediction
+gshare: chparam -set FEATURE_BRANCH_PREDICTOR "GSHARE" mor1kx_branch_prediction
+sat_counter: chparam -set FEATURE_BRANCH_PREDICTOR "SAT_COUNTER" mor1kx_branch_prediction
+
+prep -top mor1kx_branch_prediction
+
+[files]
+../../rtl/verilog/mor1kx_branch_prediction.v
+../../rtl/verilog/mor1kx_branch_predictor_gshare.v
+../../rtl/verilog/mor1kx_branch_predictor_saturation_counter.v
+../../rtl/verilog/mor1kx_branch_predictor_simple.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v

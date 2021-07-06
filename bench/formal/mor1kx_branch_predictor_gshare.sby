@@ -1,0 +1,16 @@
+[options]
+mode prove
+depth 30
+
+[engines]
+smtbmc yices
+
+[script]
+
+read -formal mor1kx_branch_predictor_gshare.v
+prep -top mor1kx_branch_predictor_gshare
+
+[files]
+../../rtl/verilog/mor1kx_branch_predictor_gshare.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v
