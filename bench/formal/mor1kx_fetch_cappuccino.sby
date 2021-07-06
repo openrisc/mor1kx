@@ -1,0 +1,29 @@
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal mor1kx_immu.v
+read -formal mor1kx_simple_dpram_sclk.v
+read -formal mor1kx_true_dpram_sclk.v
+read -formal -D FETCH mor1kx_fetch_cappuccino.v
+read -formal mor1kx_icache.v
+read -formal mor1kx_cache_lru.v
+
+chparam -set FEATURE_IMMU "ENABLED" mor1kx_fetch_cappuccino
+chparam -set FEATURE_INSTRUCTIONCACHE "ENABLED" mor1kx_fetch_cappuccino
+
+prep -top mor1kx_fetch_cappuccino
+
+[files]
+../../rtl/verilog/mor1kx_fetch_cappuccino.v
+../../rtl/verilog/mor1kx_icache.v
+../../rtl/verilog/mor1kx_simple_dpram_sclk.v
+../../rtl/verilog/mor1kx_immu.v
+../../rtl/verilog/mor1kx_true_dpram_sclk.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v
+../../rtl/verilog/mor1kx_cache_lru.v

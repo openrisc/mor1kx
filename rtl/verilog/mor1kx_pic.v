@@ -139,4 +139,45 @@ module mor1kx_pic
        spr_picmr <= {spr_dat_i[31:OPTION_PIC_NMI_WIDTH],
 		     {OPTION_PIC_NMI_WIDTH{1'b1}}};
 
+/*-----------------Formal Checking--------------*/
+
+`ifdef FORMAL
+
+`ifdef PIC
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
+   reg f_past_valid = 0;
+   initial f_past_valid = 0;
+   initial assume(rst);
+   always @(posedge clk)
+      f_past_valid <= 1;
+   always @(*)
+      if (!f_past_valid)
+         assume (rst);
+
+   always @*
+      `ASSUME ($onehot0(spr_access_i));
+
+   always @(*) begin
+      assert (spr_bus_ack == spr_access_i);
+
+      if (spr_picmr_access)
+         assert (!spr_picsr_access);
+   end
+
+   reg f_not_unknown = spr_access_i !== 1'bx;
+   initial f_not_unknown = 0;
+   always @*
+      if (f_not_unknown)
+         assert (^spr_dat_o !== 1'bx);
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(spr_picmr_access))
+         assert ($stable(spr_picmr_o));
+
+`endif
+
 endmodule // mor1kx_pic

@@ -1,0 +1,16 @@
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+
+read -formal mor1kx_ticktimer.v
+prep -top mor1kx_ticktimer
+
+[files]
+../../rtl/verilog/mor1kx_ticktimer.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v

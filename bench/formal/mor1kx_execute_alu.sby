@@ -1,0 +1,19 @@
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal -D ALU mor1kx_execute_alu.v
+chparam -set FEATURE_MULTIPLIER "PIPELINED" mor1kx_execute_alu
+chparam -set FEATURE_DIVIDER "SIMULATION" mor1kx_execute_alu
+chparam -set OPTION_SHIFTER "BARREL" mor1kx_execute_alu
+chparam -set FEATURE_OVERFLOW "ENABLED" mor1kx_execute_alu
+prep -top mor1kx_execute_alu
+
+[files]
+../../rtl/verilog/mor1kx_execute_alu.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v

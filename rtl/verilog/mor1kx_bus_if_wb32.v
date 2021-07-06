@@ -180,4 +180,80 @@ module mor1kx_bus_if_wb32
       end // else: !if(BUS_IF_TYPE=="READ_B3_BURSTING")
    endgenerate
 
+/*------------------Formal Checking----------------*/
+
+`ifdef FORMAL
+
+
+   reg f_past_valid = 0;
+   initial f_past_valid = 0;
+   initial assume(rst);
+   always @(posedge clk)
+      f_past_valid <= 1;
+   always @(*)
+      if (!f_past_valid)
+         assume (rst);
+
+   always @(*)
+      if (BUS_IF_TYPE == "B3_REGISTERED_FEEDBACK") begin
+         assert (wbm_adr_o == cpu_adr_i);
+         assert (wbm_stb_o == cpu_req_i);
+         assert (wbm_sel_o == cpu_bsel_i);
+         assert (wbm_dat_o == cpu_dat_i);
+         assert (cpu_err_o == wbm_err_i);
+         assert (cpu_ack_o == wbm_ack_i);
+      end
+
+    always @(posedge clk) begin
+       if (BUS_IF_TYPE != "B3_REGISTERED_FEEDBACK" && BUS_IF_TYPE != "B3_READ_BURSTING") begin
+          if (f_past_valid && $past(rst))
+             assert (!wbm_stb_o);
+          if (f_past_valid && !$past(rst) && ($past(cpu_ack_o) | $past(cpu_err_o)))
+              assert (!wbm_stb_o);
+          if (f_past_valid && !$past(rst) && (!$past(cpu_ack_o) & !$past(cpu_err_o)) && cpu_req_i)
+             assert (wbm_stb_o);
+       end
+    end
+
+    always @* begin
+       if (BUS_IF_TYPE != "B3_REGISTERED_FEEDBACK" && BUS_IF_TYPE != "B3_READ_BURSTING") begin
+          assert (!wbm_cti_o);
+          assert (!wbm_bte_o);
+          assert (wbm_dat_o == cpu_dat_i);
+          assert (wbm_adr_o == cpu_adr_i);
+          assert (wbm_sel_o == cpu_bsel_i);
+          assert (wbm_cyc_o == cpu_req_i);
+          assert (cpu_err_o == wbm_err_i);
+          assert (cpu_ack_o == wbm_ack_i);
+          assert (wbm_we_o == cpu_we_i);
+       end
+   end
+
+   always @(posedge clk)
+      if (f_past_valid && ($past(rst) || $past(wbm_err_i)))
+         assert (wbm_adr_o == cpu_adr_i);
+
+   reg f_not_unknown = (^cpu_adr_i !== 1'bx && ^cpu_dat_i !== 1'bx &&
+                        cpu_req_i !== 1'bx && ^cpu_bsel_i !== 1'bx &&
+                        cpu_we_i !== 1'bx && cpu_burst_i !== 1'bx &&
+                        wbm_err_i !== 1'bx && wbm_ack_i !== 1'bx &&
+                        ^wbm_dat_i !== 1'bx && wbm_rty_i !== 1'bx);
+
+   initial f_not_unknown = 0;
+   always @*
+      if (f_not_unknown) begin
+         assert (cpu_err_o !== 1'bx);
+         assert (cpu_ack_o !== 1'bx);
+         assert (^cpu_dat_o !== 1'bx);
+         assert (^wbm_adr_o !== 1'bx);
+         assert (^wbm_stb_o !== 1'bx);
+         assert (wbm_cyc_o !== 1'bx);
+         assert (^wbm_sel_o !== 1'bx);
+         assert (wbm_we_o !== 1'bx);
+         assert (^wbm_cti_o !== 1'bx);
+         assert (^wbm_bte_o !== 1'bx);
+         assert (^wbm_dat_o !== 1'bx);
+      end
+
+`endif
 endmodule // mor1kx_bus_if_wb
