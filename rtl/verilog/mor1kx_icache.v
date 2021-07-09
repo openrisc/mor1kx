@@ -309,16 +309,17 @@ module mor1kx_icache
 	  state <= IDLE;
       endcase
 
-      if (invalidate_o & !refill) begin
+      if (rst) begin
+	 state <= IDLE;
+	 spr_bus_ack_o <= 0;
+      end else if (ic_imem_err_i)
+	 state <= IDLE;
+      else if (invalidate_o & !refill) begin
 	 invalidate_adr <= spr_bus_dat_i[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH];
 	 spr_bus_ack_o <= 1;
 	 state <= INVALIDATE;
       end
 
-      if (rst)
-	state <= IDLE;
-      else if(ic_imem_err_i)
-	state <= IDLE;
    end
 
    integer w2;
