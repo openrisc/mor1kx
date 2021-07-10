@@ -1,0 +1,25 @@
+[tasks]
+BYPASS bypass
+NO_BYPASS no_bypass
+
+[options]
+mode prove
+depth 20
+wait on
+
+[engines]
+smtbmc yices
+
+[script]
+
+read -formal -D SDPRAM mor1kx_simple_dpram_sclk.v
+--pycode-begin--
+cmd = "hierarchy -top mor1kx_simple_dpram_sclk"
+cmd+= " -chparam ENABLE_BYPASS %d" % (1 if "bypass" in tags else 0)
+output(cmd)
+--pycode-end--
+
+prep  -top mor1kx_simple_dpram_sclk
+
+[files]
+../../rtl/verilog/mor1kx_simple_dpram_sclk.v

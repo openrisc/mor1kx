@@ -851,4 +851,192 @@ endgenerate
 
    assign alu_valid_o = !alu_stall;
 
+/*-------------------Formal Checking------------------*/
+
+`ifdef FORMAL
+
+`ifdef ALU
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
+
+   reg f_not_unknown = (^rfa_i !== 1'bx &&
+                        ^rfb_i !== 1'bx &&
+                        ^immediate_i !== 1'bx);
+   initial f_not_unknown = 0;
+
+   reg f_past_valid;
+   initial f_past_valid = 1'b0;
+
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+
+   always @(*)
+      if (!f_past_valid)
+         assume (rst);
+
+   reg [9:0]f_exec_opcodes = {op_alu_i, op_add_i,
+                              op_mul_i, op_div_i,
+                              op_shift_i, op_ffl1_i,
+                              op_mtspr_i, op_mfspr_i,
+                              op_ext_i, op_fpu_i};
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst))
+         `ASSUME ($onehot0(f_exec_opcodes));
+
+`ifdef ALU
+   //Three stage Multiplier takes 3clks to output the result
+   always @(posedge clk) begin
+      if (FEATURE_MULTIPLIER == "THREESTAGE" &&
+          $past(op_mul_i,3) && f_past_valid &&
+          !$past(rst) && !$past(rst,2) && !$past(rst,3))
+         //Assume multiplication opcode is valid for three clock cycles
+         assume ($past(op_mul_i) && $past(op_mul_i,2));
+   end
+
+   always @(posedge clk) begin
+      if (!$past(op_mul_i,4) && $past(op_mul_i,3) &&
+          f_past_valid && f_not_unknown
+          && FEATURE_MULTIPLIER == "THREESTAGE" && !$past(rst) 
+          && !$past(rst,2) && !$past(rst,3) && mul_valid &&
+          $past(decode_valid_i,4) && !$past(rst,4)) begin
+         assert ($past(alu_stall));
+         assert (!mul_unsigned_overflow);
+      end
+   end
+`endif
+
+   //Pipelined Multiplication
+   always @(posedge clk) begin
+      if ($past(decode_op_mul_i,3) && $past(padv_decode_i,3) &&
+          $past(padv_execute_i,2) && f_past_valid &&
+          FEATURE_MULTIPLIER == "PIPELINED" && !$past(rst)
+          && op_mul_i && !$past(rst,2) && !$past(rst,3)) begin
+         assert (!mul_unsigned_overflow);
+         assert (mul_valid);
+      end
+   end
+
+   //Simulation based multiplier
+   always @(*) begin
+      if (FEATURE_MULTIPLIER == "SIMULATION" &&
+          FEATURE_DIVIDER == "NONE" && FEATURE_FFL1 == "NONE"
+          && FEATURE_FPU == "NONE") begin
+         //No stall for simulation based multiplier
+         assert (!alu_stall);
+         assert (mul_valid);
+      end
+   end
+
+   always @(*) begin
+      if (FEATURE_MULTIPLIER == "NONE") begin
+         assert (!mul_result);
+         assert (!mul_unsigned_overflow);
+      end
+   end
+
+   //SIMULATION DIVIDER
+   always @(*) begin
+      if (FEATURE_DIVIDER == "SIMULATION" &&
+         (opc_alu_i == `OR1K_ALU_OPC_DIV ||
+         opc_alu_i == `OR1K_ALU_OPC_DIVU)) begin
+         assert (div_valid);
+         //Divide by zero testing
+         if (b==0)
+            assert (div_by_zero);
+       end
+
+       if (FEATURE_DIVIDER == "NONE") begin
+          assert (!div_result);
+          assert (!div_by_zero);
+       end
+   end
+
+   // Barrel Shifter
+   (* anyconst *) reg [4:0] f_b;
+   reg [OPTION_OPERAND_WIDTH-1:0] f_sll = a << f_b;
+   reg [OPTION_OPERAND_WIDTH-1:0] f_srl = a >> f_b;
+
+   always @(*) begin
+      if (OPTION_SHIFTER == "BARREL" && f_not_unknown) begin
+         //Logical shifts
+         if (opc_alu_shr == `OR1K_ALU_OPC_SECONDARY_SHRT_SLL && b == f_b)
+            assert (shift_result == f_sll);
+         if (opc_alu_shr == `OR1K_ALU_OPC_SECONDARY_SHRT_SRL && b == f_b)
+            assert (shift_result == f_srl);
+      end
+   end
+
+//-----------------ALU PROPERTIES------------------
+
+   //ALU output interface check
+   always @(*)
+      if (f_not_unknown) begin
+         assert (^alu_result_o !== 1'bx);
+         assert (^adder_result_o !== 1'bx);
+         assert (^mul_result_o !== 1'bx);
+         assert (alu_valid_o !== 1'bx);
+         assert (flag_set_o !== 1'bx && flag_clear_o !== 1'bx);
+         assert (carry_set_o !== 1'bx && carry_clear_o !== 1'bx);
+         assert (overflow_set_o !== 1'bx && overflow_clear_o !== 1'bx);
+      end
+
+   always @(*) begin
+
+      if (!op_logic && !op_cmov && !op_movhi_i &&
+          !op_ext_i && !op_mul_i && !fpu_arith_valid
+          && !op_shift_i && !op_div_i && !op_ffl1_i)
+         assert (alu_result_o == adder_result_o);
+
+      //If adder result is zero than a must be equal to b.
+      if ((adder_result == 0) && !adder_carryout && f_not_unknown && op_add_i)
+         assert (carry_clear_o && a_eq_b);
+
+      //If carry is generated then carry flag has to be set
+      if (adder_carryout & op_add_i)
+         assert (carry_set_o);
+
+      //Overflow set conditions
+      if (op_add_i && adder_signed_overflow && FEATURE_OVERFLOW != "NONE")
+         assert (overflow_set_o);
+      if (FEATURE_OVERFLOW != "NONE" && adder_signed_overflow && op_add_i)
+         assert (overflow_set_o);
+
+      //Stall is observed while executing insn like mul, div, fpu, shift, ffl1.
+      if (!op_div_i && !op_mul_i && !fpu_op_is_arith &&
+          !fpu_op_is_cmp && !op_shift_i && !op_ffl1_i)
+         assert (!alu_stall);
+
+      //No stall when alu valid is set.
+      if (alu_valid_o)
+         assert (!alu_stall);
+
+   end
+
+   reg [OPTION_OPERAND_WIDTH-1:0] f_logic_and = a & b;
+   reg [OPTION_OPERAND_WIDTH-1:0] f_logic_or = a | b;
+   reg [OPTION_OPERAND_WIDTH-1:0] f_logic_xor = a ^ b;
+
+   always @(*) begin
+      //No stall when alu result is valid
+      if (alu_valid_o)
+         assert (!alu_stall);
+
+      //Logical Operations
+      if (opc_alu_i == `OR1K_ALU_OPC_AND && op_alu_i
+          && !op_mtspr_i && !op_mfspr_i)
+         assert (logic_result == f_logic_and);
+      else if (opc_alu_i == `OR1K_ALU_OPC_OR
+               && (op_alu_i || op_mtspr_i || op_mfspr_i))
+         assert (logic_result == f_logic_or);
+      else if (opc_alu_i == `OR1K_ALU_OPC_XOR
+               && op_alu_i && !op_mtspr_i && !op_mfspr_i)
+         assert (logic_result == f_logic_xor);
+
+   end
+
+`endif
 endmodule // mor1kx_execute_alu

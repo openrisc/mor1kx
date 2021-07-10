@@ -1,0 +1,16 @@
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+
+read -formal -DMUX mor1kx_wb_mux_cappuccino.v
+prep -top mor1kx_wb_mux_cappuccino
+
+[files]
+../../rtl/verilog/mor1kx_wb_mux_cappuccino.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v

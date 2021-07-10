@@ -113,4 +113,26 @@ module mor1kx_branch_predictor_gshare
          end
       end
    end
+
+/*------Formal Checking-------*/
+
+`ifdef FORMAL
+
+   reg f_not_unknown = (execute_op_bf_i !== 1'bx &&
+                        execute_op_bnf_i !== 1'bx &&
+                        op_bf_i !== 1'bx &&
+                        op_bnf_i !== 1'bx &&
+                        padv_decode_i !== 1'bx &&
+                        flag_i !== 1'bx &&
+                        prev_op_brcond_i !== 1'bx &&
+                        branch_mispredict_i !== 1'bx &&
+                        ^brn_pc_i !== 1'bx);
+
+   initial f_not_unknown = 0;
+
+   always @(*)
+      if (f_not_unknown)
+         assert (predicted_flag_o !== 1'bx);
+
+`endif
 endmodule

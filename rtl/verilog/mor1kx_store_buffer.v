@@ -86,4 +86,95 @@ module mor1kx_store_buffer
       .din			(fifo_din)
       );
 
+/*--------------Formal Checking--------------*/
+
+`ifdef FORMAL
+
+   reg f_past_valid;
+   initial f_past_valid = 1'b0;
+   always @(posedge clk)
+      if (f_past_valid)
+         assume (rst);
+
+   localparam f_total_fifo_entries = 2 ** DEPTH_WIDTH;
+   reg f_curr_fifo_entries;
+
+   always @(posedge clk)
+      if (rst)
+         f_curr_fifo_entries <= 1'b0;
+      else if (write_i && !full_o)
+         f_curr_fifo_entries <= f_curr_fifo_entries + 1;
+      else if (read_i && !empty_o)
+         f_curr_fifo_entries <= f_curr_fifo_entries - 1;
+
+   //Reset Assertions---------------->
+   always @(posedge clk)
+      if ($past(rst) && f_past_valid)
+         assert ((write_pointer == 0) && (read_pointer == 0)
+                 && (empty_o == 1) && (full_o == 0) &&
+                 (f_curr_fifo_entries == 0));
+
+   //Full FIFO Assertions------------>
+   //1. When FIFO is full, full flag should be set.
+   always @(posedge clk `OR_ASYNC_RST)
+      if (f_past_valid && (f_curr_fifo_entries > f_total_fifo_entries-1))
+         assert (full_o);
+
+   //2. When FIFO is full, empty flag should not be set.
+   always @(posedge clk)
+      if (full_o && f_past_valid)
+         assert (!empty_o);
+
+   //3. When fifo has f_total_fifo_entries-1 entries, and
+   // write_i occurs, then full_o has to be set.
+   always @(posedge clk)
+      if (f_past_valid && ($past(f_curr_fifo_entries) ==
+          f_total_fifo_entries - 1) && $past(write_i) && !$past(read_i))
+         assert (full_o);
+
+   //4. When FIFO is full, no write_i.
+   always @(posedge clk) begin
+      if (f_past_valid && full_o)
+         assert (!write_i);
+   end
+
+   //Empty FIFO Assertions---------->
+   //1. When FIFO has no entries, empty flag has to be set.
+   always @(posedge clk)
+      if (f_curr_fifo_entries == 0 && f_past_valid)
+         assert (empty_o);
+
+   //2. If empty flag is set, full flag should be zero.
+   always @(posedge clk)
+      if (empty_o && f_past_valid)
+         assert (!full_o);
+
+   //3. When FIFO has one entry, and read occurs, then empty flag should be set.
+   always @(posedge clk)
+      if ($past(f_curr_fifo_entries == 1) && f_past_valid
+          && $past(read_i) && !$past(write_i))
+         assert (empty_o);
+
+   //4. When FIFO is empty, no read_i.
+   always @(posedge clk)
+      if (empty_o && f_past_valid && !write_i)
+         assert (!read_i);
+
+   //When FIFO is neither full nor empty, both full and empty flags should be 0.
+   always @(posedge clk)
+      if ((f_curr_fifo_entries > 0) && (f_curr_fifo_entries
+           < f_total_fifo_entries) && f_past_valid)
+         assert (!full_o && !empty_o);
+
+   //Write pointer should not change when write_i is 0.
+   always @(posedge clk)
+      if (f_past_valid && !$past(write_i))
+         assert ($stable(write_pointer));
+
+   //Read pointer should not change when read_i is 0.
+   always @(posedge clk)
+      if (f_past_valid && !$past(read_i))
+         assert ($stable(read_pointer));
+
+`endif
 endmodule

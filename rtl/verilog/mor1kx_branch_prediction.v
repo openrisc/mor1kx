@@ -110,4 +110,30 @@ end else begin
 end
 endgenerate
 
+/*------Formal Checking------*/
+
+`ifdef FORMAL
+
+   reg f_not_unknown = (op_bf_i !== 1'bx &&
+                        op_bnf_i !== 1'bx &&
+                        ^immjbr_upper_i !== 1'bx &&
+                        ^brn_pc_i !== 1'bx &&
+                        prev_op_brcond_i !== 1'bx &&
+                        flag_i !== 1'bx &&
+                        padv_decode_i !== 1'bx &&
+                        padv_decode_i !== 1'bx &&
+                        execute_bf_i !== 1'bx &&
+                        execute_bnf_i !== 1'bx );
+
+   initial f_not_unknown = 0;
+
+   //Output shouldn't have unknown bits.
+   always @(*) begin
+      if (f_not_unknown) begin
+         assert (branch_mispredict_o !== 1'bx);
+         assert (predicted_flag_o !== 1'bx);
+      end
+   end
+
+`endif
 endmodule
