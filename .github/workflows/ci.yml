@@ -98,3 +98,54 @@ jobs:
           - { EXPECTED_FAILURES: "or1k-cy or1k-cmov", EXTRA_CORE_ARGS: "--feature_cmov NONE" }
           - { EXPECTED_FAILURES: "or1k-cy or1k-ext", EXTRA_CORE_ARGS: "--feature_ext NONE" }
 
+  formal-verification:
+    runs-on: ubuntu-18.04
+    steps:
+      #Checkout Repository
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      #Install Yosys-Formal tools
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install g++ gperf build-essential bison flex \
+            libreadline-dev gawk tcl-dev libffi-dev git graphviz xdot \
+            pkg-config python python3 libboost-system-dev \
+            libboost-python-dev libboost-filesystem-dev zlib1g-dev
+
+      - name: Install clang
+        run: |
+          sudo apt-get -y install clang
+
+      - name: Install yosys
+        run: |
+          mkdir -p formal_tools
+          cd formal_tools
+          git clone --depth 1 https://github.com/YosysHQ/yosys.git yosys
+          cd yosys
+          make -j$(nproc)
+          sudo make install
+          cd ..
+
+      - name: Install Symbiyosys
+        run: |
+          git clone --depth 1 https://github.com/YosysHQ/SymbiYosys.git SymbiYosys
+          cd SymbiYosys
+          sudo make install
+          cd ..
+
+      - name: Install yices
+        run: |
+          git clone --depth 1 https://github.com/SRI-CSL/yices2.git yices2
+          cd yices2
+          autoconf
+          ./configure
+          make -j$(nproc)
+          sudo make install
+
+      #Run tests
+      - name: Run tests
+        shell: bash {0}
+        run: |
+          make -C bench/formal
