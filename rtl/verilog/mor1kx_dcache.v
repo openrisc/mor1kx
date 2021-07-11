@@ -949,6 +949,21 @@ endgenerate
           && !$past(rst,2) && !$past(write_pending,2) && !$past(write_pending))
       assert (write_pending);
 
+   fspr_slave
+       #(
+         OPTION_OPERAND_WIDTH
+        )
+   slave(
+        clk,
+        rst,
+        // SPR interface
+        spr_bus_addr_i,
+        spr_bus_we_i,
+        spr_bus_stb_i,
+        spr_bus_dat_i,
+        spr_bus_dat_o,
+        spr_bus_ack_o
+        );
 //----------------Cover-----------------
 
    //Cache Write-----------Trace 0

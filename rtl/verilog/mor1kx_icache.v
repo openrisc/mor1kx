@@ -641,19 +641,21 @@ module mor1kx_icache
       if (invalidate_o)
          assert (spr_bus_addr_i == `OR1K_SPR_ICBIR_ADDR);
 
-   //SPR ack is seen only if strobe and write signal rise in the previous clock cycle
-   always @(posedge clk)
-      if ($rose(spr_bus_ack_o) && f_past_valid && !$past(rst))
-         assert ($past(spr_bus_stb_i) & $past(spr_bus_we_i)
-                 & $past(spr_bus_addr_i) == `OR1K_SPR_ICBIR_ADDR
-                 & !$past(refill_o));
-
-   //SPR ack shouldn't be observed for spr read request in icache.
-   always @(posedge clk)
-      if (f_past_valid & !$past(rst) & $past(spr_bus_stb_i) & !$past(spr_bus_we_i)
-           & $past(spr_bus_addr_i) == `OR1K_SPR_ICBIR_ADDR & !$past(invalidate))
-         assert (!spr_bus_ack_o);
-
+   fspr_slave
+       #(
+         OPTION_OPERAND_WIDTH
+        )
+   slave(
+        clk,
+        rst,
+        // SPR interface
+        spr_bus_addr_i,
+        spr_bus_we_i,
+        spr_bus_stb_i,
+        spr_bus_dat_i,
+        spr_bus_dat_o,
+        spr_bus_ack_o
+       );
 //-------------Cover-------------
 
 `ifdef ICACHE

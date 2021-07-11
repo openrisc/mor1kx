@@ -529,16 +529,26 @@ endgenerate
       if ($onehot(dtlb_match_we))
          assert (!$onehot(dtlb_trans_we));
 
-   //If spr ack is received, assert stb
-   always @(posedge clk)
-      if (spr_bus_ack_o)
-         assert (spr_bus_stb_i);
-
    //On spr read request, spr write signals shouldn't be generated,
    always @(*)
       if (spr_bus_stb_i && !spr_bus_we_i && spr_bus_addr_i[15:11] == 5'd2)
          assert (!dtlb_trans_we & !dtlb_match_we);
 
+   fspr_slave
+       #(
+         OPTION_OPERAND_WIDTH
+        )
+   slave(
+        clk,
+        rst,
+        // SPR interface
+        spr_bus_addr_i,
+        spr_bus_we_i,
+        spr_bus_stb_i,
+        spr_bus_dat_i,
+        spr_bus_dat_o,
+        spr_bus_ack_o
+    );
 //----------------Cover------------------
 
 `ifdef DMMU

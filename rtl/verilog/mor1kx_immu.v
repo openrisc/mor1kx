@@ -573,6 +573,21 @@ endgenerate
       if (f_past_valid && $rose(f_busy_valid) && !$past(rst) & enable_i)
          assert (busy_o);
 
+   fspr_slave
+       #(
+         OPTION_OPERAND_WIDTH
+        )
+   slave(
+        clk,
+        rst,
+        // SPR interface
+        spr_bus_addr_i,
+        spr_bus_we_i,
+        spr_bus_stb_i,
+        spr_bus_dat_i,
+        spr_bus_dat_o,
+        spr_bus_ack_o
+       );
 //--------------Cover-----------------
 
 `ifdef IMMU

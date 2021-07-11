@@ -1630,6 +1630,31 @@ module mor1kx_cpu_cappuccino
    end
 
    //SPR Properties check------------->
+   fspr_master
+        #(
+          OPTION_OPERAND_WIDTH
+         )
+   master(
+          clk,
+          rst,
+          // SPR interface
+          spr_bus_addr_o,
+          spr_bus_we_o,
+          spr_bus_stb_o,
+          spr_bus_dat_dc_i,
+          spr_bus_ack_dc_i,
+          spr_bus_dat_ic_i,
+          spr_bus_ack_ic_i,
+          spr_bus_dat_dmmu_i,
+          spr_bus_ack_dmmu_i,
+          spr_bus_dat_immu_i,
+          spr_bus_ack_immu_i,
+          ctrl_mfspr_ack_o,
+          ctrl_mtspr_ack_o,
+          ctrl_op_mfspr_o,
+          ctrl_op_mtspr_o
+         );
+
    always @(posedge clk)
       if (f_past_valid && !$past(rst) && ($rose(spr_bus_ack_dmmu_i)
           || $rose(spr_bus_ack_immu_i) ||
