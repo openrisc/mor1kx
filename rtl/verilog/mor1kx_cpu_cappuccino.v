@@ -1585,4 +1585,97 @@ module mor1kx_cpu_cappuccino
       end
    endgenerate
 
+
+/*-----------------Formal Checking-------------------*/
+
+`ifdef FORMAL
+
+   reg f_past_valid = 0;
+   initial f_past_valid = 1'b0;
+   initial assume (rst);
+
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+
+   always @(posedge clk)
+      if (!f_past_valid)
+         assume (rst);
+
+   //Reset Assertions
+   always @(posedge clk) begin
+      if (f_past_valid && $past(rst) && !rst) begin
+         assert (!fetch_valid_o);
+         assert (!ibus_req_o);
+         assert (!spr_bus_stb_o);
+         assert (!ibus_burst_o);
+        //Fail assert (!spr_bus_ack_ic_i);
+         assert (!spr_bus_ack_immu_i);
+         assert (!decode_valid_o);
+         assert (!decode_bubble_o);
+         assert (!execute_bubble_o);
+         assert (!padv_decode_o);
+         assert (!padv_execute_o);
+         assert (!padv_ctrl_o);
+         assert (!predicted_flag_o);
+         assert (!spr_bus_ack_dc_i);
+         assert (!spr_bus_ack_dmmu_i);
+         assert (!ctrl_bubble_o);
+         assert (!wb_rf_wb_o);
+      end
+   end
+
+   always @(posedge clk) begin
+      if (f_past_valid && padv_decode_o && !$past(rst))
+         assert (fetch_valid_o);
+   end
+
+   //SPR Properties check------------->
+   fspr_master
+        #(
+          OPTION_OPERAND_WIDTH
+         )
+   master(
+          clk,
+          rst,
+          // SPR interface
+          spr_bus_addr_o,
+          spr_bus_we_o,
+          spr_bus_stb_o,
+          spr_bus_dat_dc_i,
+          spr_bus_ack_dc_i,
+          spr_bus_dat_ic_i,
+          spr_bus_ack_ic_i,
+          spr_bus_dat_dmmu_i,
+          spr_bus_ack_dmmu_i,
+          spr_bus_dat_immu_i,
+          spr_bus_ack_immu_i,
+          ctrl_mfspr_ack_o,
+          ctrl_mtspr_ack_o,
+          ctrl_op_mfspr_o,
+          ctrl_op_mtspr_o
+         );
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && ($rose(spr_bus_ack_dmmu_i)
+          || $rose(spr_bus_ack_immu_i) ||
+          $rose(spr_bus_ack_dc_i) || $rose(spr_bus_ack_ic_i)))
+         assert (spr_bus_stb_o || $past(spr_bus_stb_o));
+
+   //Without spr strobe, spr_bus_dat_o remains unchanged.
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && !$past(spr_bus_stb_o)
+          && !spr_bus_stb_o && !rst && !$past(spr_bus_stb_o,2)
+          && !$past(rst,2)) begin
+         assert ($stable(spr_bus_dat_dmmu_i));
+         assert ($stable(spr_bus_dat_immu_i));
+      end
+   end
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !rst && $stable(spr_bus_addr_o)
+          && $past(spr_bus_stb_o) && !$past(spr_bus_stb_o,2) && $past(rst,2))
+         assert ($onehot0({spr_bus_ack_ic_i, spr_bus_ack_immu_i,
+                 spr_bus_ack_dmmu_i, spr_bus_ack_dc_i}));
+
+`endif
 endmodule // mor1kx_cpu_cappuccino

@@ -1,0 +1,17 @@
+[options]
+mode prove
+#True DPRAM uses two clocks, so turning on multiclock option 
+multiclock on
+depth 30
+wait on
+
+[engines]
+smtbmc yices
+
+[script]
+
+read -formal -D TDPRAM mor1kx_true_dpram_sclk.v
+prep -top mor1kx_true_dpram_sclk
+
+[files]
+../../rtl/verilog/mor1kx_true_dpram_sclk.v

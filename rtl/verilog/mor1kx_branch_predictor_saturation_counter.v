@@ -94,4 +94,5 @@ module mor1kx_branch_predictor_saturation_counter
          end
       end
    end
+
 endmodule
