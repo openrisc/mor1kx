@@ -537,4 +537,27 @@ module mor1kx_decode
 				      opc_alu == `OR1K_ALU_OPC_ADDC) ||
 				     (opc_insn == `OR1K_OPCODE_ADDIC));
 
+
+
+/*----------------------Formal Checking---------------------*/
+
+`ifdef FORMAL
+
+    wire [30:0] f_set_of_opcodes;
+    assign f_set_of_opcodes = {decode_op_lsu_load_o, decode_op_lsu_store_o,
+                                   decode_op_mfspr_o, decode_op_mtspr_o,
+                                   decode_op_rfe_o, decode_op_setflag_o,
+                                   decode_op_add_o, decode_op_mul_signed_o,
+                                   decode_op_mul_unsigned_o,
+                                   decode_op_div_signed_o,
+                                   decode_op_ext_o, decode_op_div_unsigned_o,
+                                   decode_op_shift_o, decode_op_ffl1_o,
+                                   decode_op_movhi_o, decode_op_msync_o,
+                                   decode_op_branch_o};
+
+   //one instruction => one opcode
+   always @(*)
+      assert ($onehot0(f_set_of_opcodes));
+
+`endif
 endmodule // mor1kx_decode

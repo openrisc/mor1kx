@@ -362,4 +362,27 @@ end else begin
 end
 endgenerate
 
+/*--------------Formal Checking---------------*/
+
+`ifdef FORMAL
+
+   reg f_past_valid;
+   initial f_past_valid = 0;
+   initial assume(rst);
+   always @(posedge clk)
+      f_past_valid <= 1;
+   always @(*)
+      if (!f_past_valid)
+         assume (rst);
+
+   //Execute register file should hold decode rf data if no hazards observed
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(padv_decode_i) &&
+          !execute_hazard_a && !ctrl_hazard_a && !wb_hazard_a &&
+          !execute_hazard_b && !ctrl_hazard_b && !wb_hazard_b) begin
+         assert (execute_rfa_o == $past(decode_rfa_o));
+         assert (execute_rfb_o == $past(decode_rfb_o));
+      end
+
+`endif
 endmodule // mor1kx_rf_cappuccino

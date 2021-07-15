@@ -1,0 +1,19 @@
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal mor1kx_rf_cappuccino.v
+read -formal mor1kx_simple_dpram_sclk.v
+chparam -set FEATURE_DEBUGUNIT "ENABLED" mor1kx_rf_cappuccino
+prep -top mor1kx_rf_cappuccino
+
+[files]
+../../rtl/verilog/mor1kx_rf_cappuccino.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v
+../../rtl/verilog/mor1kx_simple_dpram_sclk.v
+../../rtl/verilog/mor1kx_utils.vh

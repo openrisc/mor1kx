@@ -137,4 +137,21 @@ module mor1kx_pcu
       end
    endgenerate
 
+/*-----------------Formal Checking -------------*/
+
+`ifdef FORMAL
+
+   reg f_past_valid;
+   initial f_past_valid = 0;
+   initial assume(rst);
+   always @(posedge clk)
+      f_past_valid <= 1;
+   always @(*)
+      if (!f_past_valid)
+         assume (rst);
+
+   //PCMR and PCCR access requests are mutually exclusive
+   always @(*)
+         assert ($onehot0({pcu_pcmr_access,pcu_pccr_access}));
+`endif
 endmodule // mor1kx_pcu
