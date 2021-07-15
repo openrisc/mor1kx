@@ -1,0 +1,24 @@
+[tasks]
+prv
+cvr
+
+[options]
+prv: mode prove
+cvr: mode cover
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+
+read -formal -D IMMU mor1kx_immu.v
+read -formal mor1kx_true_dpram_sclk.v
+chparam -set FEATURE_IMMU_HW_TLB_RELOAD "NONE" mor1kx_immu
+prep -top mor1kx_immu
+
+[files]
+../../rtl/verilog/mor1kx_immu.v
+../../rtl/verilog/mor1kx_true_dpram_sclk.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v

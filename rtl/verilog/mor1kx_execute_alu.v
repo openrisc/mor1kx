@@ -851,4 +851,268 @@ endgenerate
 
    assign alu_valid_o = !alu_stall;
 
+/*-------------------Formal Checking------------------*/
+
+`ifdef FORMAL
+
+`ifdef ALU
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
+   reg f_past_valid;
+   initial f_past_valid = 1'b0;
+
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+
+   always @(*)
+      if (!f_past_valid)
+         assume (rst);
+      else
+         assume (!rst);
+
+   wire [7:0] f_exec_opcodes;
+   assign f_exec_opcodes = {op_mul_i, op_div_i,
+                            op_movhi_i, op_shift_i,
+                            op_ffl1_i, op_mtspr_i,
+                            op_mfspr_i, op_ext_i};
+
+   always @(posedge clk)
+      if (op_mul_i && f_past_valid && !$past(rst))
+         `ASSUME (op_mul_unsigned_i | op_mul_signed_i);
+
+   always @(posedge clk)
+      if (op_div_i && f_past_valid && !$past(rst))
+         `ASSUME (op_div_signed_i | op_div_unsigned_i);
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst))
+         `ASSUME ($onehot0(f_exec_opcodes));
+
+   //MULTIPLICATION: THREE STAGE
+   reg f_op_mul;
+   initial f_op_mul = 0;
+
+   always @(posedge clk) begin
+      if (FEATURE_MULTIPLIER == "THREESTAGE"
+          && f_past_valid && !$past(rst)) begin
+          if ($rose(op_mul_i) && !mul_valid && !pipeline_flush_i)
+             f_op_mul <= 1;
+          if (($rose(f_op_mul) || (!$past(f_op_mul,2) && $past(f_op_mul))) 
+              && ((!$past(pipeline_flush_i) && !pipeline_flush_i) ||
+              !pipeline_flush_i))
+             `ASSUME ($stable(op_mul_i));
+          if ((!$past(f_op_mul,2) && $past(f_op_mul) && !$past(rst,2)
+              && op_mul_i) || !pipeline_flush_i || !op_mul_i)
+             f_op_mul <= 0;
+      end
+   end
+
+   always @(posedge clk)
+      if (FEATURE_MULTIPLIER == "THREESTAGE" && !$past(op_mul_i,4)
+          && $past(op_mul_i,3) && mul_valid && $past(decode_valid_i,4) &&
+          f_past_valid &&  !$past(rst) && !$past(rst,2) && !$past(rst,3) &&
+          !$past(rst,4) && !(op_div_i | op_mul_i | fpu_op_is_arith |
+          fpu_op_is_cmp | op_shift_i | op_ffl1_i) && $fell(f_op_mul)) begin
+         //Stall three clock cycles
+         assert ($past(alu_stall) && $past(alu_stall,2) && $past(alu_stall,3));
+         //After execution, no stall
+         assert (!alu_stall);
+         assert (alu_valid_o);
+      end
+
+   //MULTIPLICATION: PIPELINED
+   always @(posedge clk) begin
+      if ($past(decode_op_mul_i,3) && $past(padv_decode_i,3) &&
+          $past(padv_execute_i,2) && f_past_valid &&
+          FEATURE_MULTIPLIER == "PIPELINED" && !$past(rst)
+          && op_mul_i && !$past(rst,2) && !$past(rst,3)) begin
+         assert (mul_valid);
+         assert (alu_valid_o);
+         assert (!alu_stall);
+      end
+   end
+   
+   //MULTIPLICATION: SIMULATION
+   always @(*) begin
+      if (FEATURE_MULTIPLIER == "SIMULATION" &&
+          op_mul_i) begin
+         //No stall for simulation based multiplier
+         assert (!alu_stall);
+         assert (alu_valid_o);
+         assert (mul_valid);
+      end
+   end
+
+   //MULTIPLICATION: SERIAL
+   reg [5:0] f_mul_count;
+   initial f_mul_count = 0;
+   //f_mul tracks ongoing serial multiplication
+   reg f_mul;
+   initial f_mul = 0;
+   //Valid multiplication output is seen after 32 clocks
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && FEATURE_MULTIPLIER == "SERIAL") begin
+          if ($rose(op_mul_i) && decode_valid_i) begin
+             f_mul <= 1;
+             f_mul_count <= 0;
+          end
+          if (f_mul) begin
+             f_mul_count <= f_mul_count + 1;
+             `ASSUME (op_mul_i);
+             `ASSUME (decode_valid_i);
+          end
+          if (f_mul_count == 30)
+             f_mul <= 0;
+      end
+   end
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && FEATURE_MULTIPLIER == "SERIAL"
+          && mul_valid && $fell(f_mul))
+          assert(f_mul_count == 6'd31);
+
+   always @(posedge clk) begin
+      if (FEATURE_MULTIPLIER == "NONE") begin
+         assume (!op_mul_i);
+         assert (!mul_result);
+      end
+   end
+
+   //TODO
+   //Formal verification of FPU and FF1.
+
+   //DIVIDER: SIMULATION
+   always @(posedge clk) begin
+      if (FEATURE_DIVIDER == "SIMULATION" &&
+         (opc_alu_i == `OR1K_ALU_OPC_DIV ||
+         opc_alu_i == `OR1K_ALU_OPC_DIVU)) begin
+         assert (div_valid);
+         //Divide by zero testing
+         if (b==0)
+            assert (div_by_zero);
+       end
+
+       if (FEATURE_DIVIDER == "NONE" && f_past_valid && !$past(rst)) begin
+          assert (!div_result);
+          assert (!div_by_zero);
+       end
+   end
+
+   //DIVIDER: SERIAL
+   reg [5:0] f_div_count;
+   initial f_div_count = 0;
+   //f_div tracks ongoing serial division
+   reg f_div;
+   initial f_div = 0;
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && FEATURE_DIVIDER == "SERIAL") begin
+          if ($rose(op_div_i) && decode_valid_i) begin
+             f_div <= 1;
+             f_div_count <= 0;
+          end
+          if (f_div) begin
+             f_div_count <= f_div_count + 1;
+             `ASSUME (decode_valid_i);
+          end
+          if (f_div_count == 30)
+             f_div <= 0;
+      end
+   end
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && FEATURE_DIVIDER == "SERIAL"
+          && $rose(div_valid) && $fell(f_div))
+          assert (f_div_count == 6'd31);
+
+   //SHIFTER: BARREL
+   (* anyconst *) reg [4:0] f_b;
+   wire [OPTION_OPERAND_WIDTH-1:0] f_sll;
+   assign f_sll = a << f_b;
+   wire [OPTION_OPERAND_WIDTH-1:0] f_srl;
+   assign f_srl = a >> f_b;
+
+   always @(posedge clk) begin
+      if (OPTION_SHIFTER == "BARREL" && op_shift_i &&
+          !op_alu_i && f_past_valid && !$past(rst)) begin
+         //Logical shifts
+         if (opc_alu_shr == `OR1K_ALU_OPC_SECONDARY_SHRT_SLL && b == f_b)
+            assert (alu_result_o == f_sll);
+         if (opc_alu_shr == `OR1K_ALU_OPC_SECONDARY_SHRT_SRL && b == f_b)
+            assert (alu_result_o == f_srl);
+      end
+   end
+
+   //SHIFTER: SERIAL
+   reg [4:0] f_shift_count;
+   initial f_shift_count <= 0;
+   //f_shift tracks serial shifting.
+   reg f_shift;
+   initial f_shift <= 0;
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && OPTION_SHIFTER == "SERIAL") begin
+         if ($rose(op_shift_i) & decode_valid_i) begin
+            f_shift_count <= 0;
+            f_shift <= 1;
+         end
+         if (f_shift) begin
+            `ASSUME ($stable(b));
+            `ASSUME (decode_valid_i);
+            f_shift_count <= f_shift_count + 1;
+         end
+         if (f_shift_count == (b[4:0] - 1))
+            f_shift <= 0;
+      end
+   end
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && OPTION_SHIFTER == "SERIAL"
+          && $rose(shift_valid) && $fell(f_shift))
+          assert (f_shift_count == $past(b[4:0]));
+
+   always @(*) begin
+
+      //If adder result is zero than a must be equal to b.
+      if ((adder_result == 0) && !adder_carryout && op_add_i)
+         assert (carry_clear_o && a_eq_b);
+
+      //If carry is generated then carry flag has to be set
+      if (adder_carryout & op_add_i)
+         assert (carry_set_o);
+
+      //Overflow set condition
+      if (op_add_i && adder_signed_overflow && FEATURE_OVERFLOW != "NONE")
+         assert (overflow_set_o);
+
+      //Short duration ALU operations shouldn't stall. 
+      if (!op_div_i && !op_mul_i && !fpu_op_is_arith &&
+          !fpu_op_is_cmp && !op_shift_i && !op_ffl1_i)
+         assert (!alu_stall);
+
+   end
+
+   wire [OPTION_OPERAND_WIDTH-1:0] f_logic_and;
+   assign f_logic_and = a & b;
+   wire [OPTION_OPERAND_WIDTH-1:0] f_logic_or;
+   assign f_logic_or = a | b;
+   wire [OPTION_OPERAND_WIDTH-1:0] f_logic_xor;
+   assign f_logic_xor = a ^ b;
+
+   always @(*) begin
+
+      //Logical Operations
+      if (opc_alu_i == `OR1K_ALU_OPC_AND && op_alu_i
+          && !op_mtspr_i && !op_mfspr_i)
+         assert (logic_result == f_logic_and);
+      else if (opc_alu_i == `OR1K_ALU_OPC_OR
+               && (op_alu_i || op_mtspr_i || op_mfspr_i))
+         assert (logic_result == f_logic_or);
+      else if (opc_alu_i == `OR1K_ALU_OPC_XOR
+               && op_alu_i && !op_mtspr_i && !op_mfspr_i)
+         assert (logic_result == f_logic_xor);
+
+   end
+
+`endif
 endmodule // mor1kx_execute_alu

@@ -484,4 +484,196 @@ module mor1kx_icache
       .we				(tag_we),		 // Templated
       .din				(tag_din));		 // Templated
 
+/*----------------Formal Checking------------------*/
+
+`ifdef FORMAL
+
+   reg f_past_valid;
+   initial f_past_valid = 1'b0;
+   initial assume (rst);
+
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+
+   always @(posedge clk)
+      if (!f_past_valid)
+         assume (rst);
+
+`ifdef ICACHE
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
+   //CPU request should arrive only if fetch gives access to icache
+   always @(posedge clk)
+      if (cpu_req_i)
+         `ASSUME(ic_access_i);
+
+//-------------Assertions--------------------
+
+//----------Verifying functionality---------
+`ifdef ICACHE
+
+   (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_refill_addr;
+   (* anyconst *) reg [OPTION_OPERAND_WIDTH-1:0] f_refill_data;
+   wire f_this_refill;
+   reg f_refilled = 0;
+
+   initial f_refilled = 1'b0;
+   assign f_this_refill = (wradr_i == f_refill_addr) && refill_o;
+
+   //Refilling
+   always @(posedge clk) begin
+      if ($past(f_this_refill) && (f_refill_data == wrdat_i) &&
+          !$past(cache_hit_o)&& $past(cpu_req_i)
+          && f_past_valid && !$past(rst) && $past(state) == READ) begin
+         assert (refill);
+         f_refilled <= 1'b1;
+         assert ($onehot(way_we));
+      end
+   end
+
+   //Read: f_refill_data has to be returned if cpu requests for same address f_refill_addr.
+   always @(posedge clk) begin
+      if ($rose(f_refilled) && (cpu_adr_match_i == f_refill_addr)
+          && cache_hit_o && f_past_valid && !$past(rst)) begin
+         assert (cpu_dat_o == f_refill_data);
+         assert (read);
+         assert (cpu_ack_o);
+      end
+   end
+
+   reg f_after_invalidate = 0;
+   initial f_after_invalidate = 1'b0;
+
+   //Invalidation: Checking if ways of set have invalid tag bit on set invalidation.
+   always @(posedge clk) begin
+      if ($past(invalidate_o) && !$past(refill) && f_past_valid
+         && $past(spr_bus_dat_i) == f_refill_addr[WAY_WIDTH-1:OPTION_ICACHE_BLOCK_WIDTH]
+         && $past(f_refilled) && !$past(f_refilled,2)) begin
+         assert (spr_bus_ack_o);
+         assert (invalidate);
+         assert (!cpu_ack_o);
+         assert (tag_we);
+         assert (!tag_din[TAGMEM_WAY_VALID]);
+         f_after_invalidate <= 1;
+      end
+   end
+
+   //There shouldn't be any cache hit for f_refill_addr after invalidation.
+   always @(posedge clk)
+      if (cpu_adr_match_i == f_refill_addr && $rose(f_after_invalidate) && f_past_valid)
+         assert (!cache_hit_o);
+
+`endif
+
+//-----------ICACHE PROPERTIES-------------
+
+   // Cache hit in read state updates lru access variable
+   // Checking every way might slow down the solver, so assuming some way hit.
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && way_hit[0] && $onehot(way_hit) && read)
+         assert (access == way_hit[0]);
+   end
+
+   //Way ram should be written only on refill request.
+   always @(posedge clk)
+      if (way_we == way_hit && $onehot(way_hit) && f_past_valid && !$past(rst))
+         assert (we_i);
+
+   //Tag ram and way ram are not updated in the IDLE state
+   always @(*)
+      if (state == IDLE)
+         assert (!tag_we && !way_we);
+
+   //Way ram cannot be written in the read state
+   always @(*)
+      if (read)
+         assert (!way_we);
+
+   //CPU acknowledgement in the refill state is valid only if read is set low.
+   always @(*)
+      if (refill_o && cpu_ack_o)
+         assert (refill_hit && !read);
+
+   //If instruction memory throws up an error then icache shouldn't proceed with its tasks
+   always @(posedge clk)
+      if (f_past_valid & !$past(rst) && $past(ic_imem_err_i))
+         assert ((state == IDLE) & !(read | refill | invalidate));
+
+   //CPU acknowledgement implies either cache_hit_o or refill hit is observed.
+   always @(posedge clk)
+      if (cpu_ack_o && f_past_valid && !$past(rst))
+         assert (cache_hit_o || refill_hit);
+
+   //Icache triggers to refill state only if there is cache miss
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $rose(refill_o))
+         assert (!$past(cache_hit_o));
+
+   //Refill hit shouldn't happen in any state other than refill
+   always @(posedge clk)
+      if (refill_hit && f_past_valid && !$past(rst))
+         assert (state != READ && state != INVALIDATE && state != IDLE);
+
+   //Refilling should always update way ram
+   always @(*)
+      if (refill_o && we_i && $onehot(tag_save_lru))
+         assert ($onehot(way_we));
+
+   //Refilling should replace the least recently used way in a set.
+   always @(*)
+      if (refill_o && we_i)
+         assert (way_we == access);
+
+   //Before refilling tag should be invalidated
+   always @(*)
+      if (refill_o && !refill_valid && we_i)
+         assert (tag_we);
+
+   //LRU access variable should be updated while refilling
+   always @(*)
+      if (refill_o && we_i)
+         assert (access == tag_save_lru);
+
+   //Icache invalidation is initiated only if spr address is ICBIR
+   always @(posedge clk)
+      if (invalidate_o)
+         assert (spr_bus_addr_i == `OR1K_SPR_ICBIR_ADDR);
+
+   //SPR ack is seen only if strobe and write signal rise in the previous clock cycle
+   always @(posedge clk)
+      if ($rose(spr_bus_ack_o) && f_past_valid && !$past(rst))
+         assert ($past(spr_bus_stb_i) & $past(spr_bus_we_i)
+                 & $past(spr_bus_addr_i) == `OR1K_SPR_ICBIR_ADDR
+                 & !$past(refill_o));
+
+   //SPR ack shouldn't be observed for spr read request in icache.
+   always @(posedge clk)
+      if (f_past_valid & !$past(rst) & $past(spr_bus_stb_i) & !$past(spr_bus_we_i)
+           & $past(spr_bus_addr_i) == `OR1K_SPR_ICBIR_ADDR & !$past(invalidate))
+         assert (!spr_bus_ack_o);
+
+//-------------Cover-------------
+
+`ifdef ICACHE
+
+   //Invalidation----------Trace 0
+   always @(posedge clk)
+      cover (tag_we && state == INVALIDATE && !$past(rst)
+            && f_past_valid && spr_bus_ack_o);
+
+   //Cache Read------------Trace 1
+   always @(posedge clk)
+      cover (state == READ && tag_we && cache_hit_o &&
+            cpu_ack_o && !$past(rst) && f_past_valid);
+
+   //Refilling-------------Trace 2
+   always @(posedge clk)
+      cover (refill_o && $onehot(way_we) && refill_done
+             && tag_we && !$past(rst) && cpu_ack_o && f_past_valid);
+`endif
+
+`endif
 endmodule

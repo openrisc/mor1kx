@@ -1586,4 +1586,234 @@ end else begin
 end
 endgenerate
 
+
+/*-----------------Formal Checking-------------------*/
+
+`ifdef FORMAL
+
+`ifdef CTRL
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
+   reg f_past_valid = 0;
+   initial f_past_valid = 0;
+   initial assume(rst);
+
+   always @(posedge clk)
+      f_past_valid <= 1;
+
+   always @(*)
+      if (!f_past_valid)
+         assume (rst);
+
+`ifdef CTRL
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(padv_execute_o))
+         assume ($onehot0({ctrl_op_mfspr_i, ctrl_op_mtspr_i}));
+`endif
+//--------------Assertions----------------
+
+   //Ctrl always advances after execute stage
+   always @(posedge clk)
+      if (f_past_valid && $rose(padv_ctrl_o) && !$past(rst))
+         assert ($past(padv_execute_o));
+
+   //Execute stage bubbles are passed to ctrl stage
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $rose(ctrl_bubble_o))
+         assert ($past(execute_bubble_i));
+
+   //SPR shouldn't give more than one acknowledgement
+   always @*
+      assert ($onehot0(spr_access_ack));
+
+   //SPR acknowledgement makes spr access valid
+   always @*
+      if ($onehot(spr_access_ack))
+         assert (spr_access_valid);
+
+   //Insn mfspr should always read from spr and
+   //insn mtspr should always write to spr.
+   always @*
+      if (ctrl_op_mfspr_i)
+          assert (spr_read_access);
+      else if (ctrl_op_mtspr_i)
+          assert (spr_write_access);
+
+   //Fail always @*
+      //assert ($onehot0({spr_read_access, spr_write_access}));
+
+   //always @*
+     //if (spr_bus_stb_o && spr_read_access)
+         //assert (!spr_bus_we_o);
+
+   always @*
+      if (spr_bus_we_o)
+         assert (spr_we);
+
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && $past(exception_re)) begin
+         assert (spr_sr[`OR1K_SPR_SR_SM]);
+         if (FEATURE_IMMU == "ENABLED")
+            assert (!spr_sr[`OR1K_SPR_SR_IME]);
+         if (FEATURE_DMMU == "ENABLED")
+            assert (!spr_sr[`OR1K_SPR_SR_DME]);
+         if (FEATURE_TIMER == "ENABLED")
+            assert (!spr_sr[`OR1K_SPR_SR_TEE]);
+         if (FEATURE_PIC == "ENABLED")
+            assert (!spr_sr[`OR1K_SPR_SR_IEE]);
+         if (FEATURE_DSX == "ENABLED")
+            assert (spr_sr[`OR1K_SPR_SR_DSX] == $past(ctrl_delay_slot));
+         if (FEATURE_OVERFLOW== "ENABLED")
+            assert (!spr_sr[`OR1K_SPR_SR_OVE]);
+      end
+   end
+
+   always @*
+      if (ctrl_branch_exception_o)
+         assert (!exception_taken);
+
+   reg f_exception = 0;
+   initial f_exception = 0;
+
+   //Excpetion taken should remain high only for one clock cycle.
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && exception_taken) begin
+         assert ($changed(exception_taken));
+         f_exception <= 1;
+      end
+      if (f_past_valid && $rose(f_exception) && !$past(rst))
+         assert ($fell(exception_taken));
+   end
+
+   //spr_ppc should be stable before pipeline advances to ctrl stage
+   always @(posedge clk `OR_ASYNC_RST)
+      if (f_past_valid && !$past(rst) && !$past(padv_ctrl))
+         assert ($stable(spr_ppc));
+      else if (f_past_valid && !$past(rst) && $past(padv_ctrl))
+         assert (spr_ppc == $past(pc_ctrl_i));
+
+   always @*
+      //Don't advance execute if exception occurs
+      if (exception_re)
+         assert (!padv_execute_o);
+
+   //Assertions on flags and carry
+   always @* begin
+      assert (!atomic_flag_set_i | !ctrl_flag_set_i || ctrl_flag_o);
+      assert (!ctrl_carry_set_i || ctrl_carry_o);
+   end
+
+   //PC has to be stable before it's advanced to pipeline execute stage
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(padv_execute_o))
+         assert ($stable(last_branch_insn_pc));
+
+   //Branch target pc is expected to be unchange, if pipeline haven't moved.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(padv_execute_o)
+          && !$past(padv_decode_o))
+         assert ($stable(last_branch_target_pc));
+
+   //Waits for fetch only if fetch delayed to output valid bit
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $rose(waiting_for_fetch))
+         assert (!$past(fetch_valid_i));
+
+   //Return from exception assertion
+   always @*
+      if (doing_rfe_o)
+         assert (!deassert_doing_rfe);
+
+   //Supervision register must be stable if there is no exceptions, or spr write.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(exception_re) && !$past(spr_we)
+          && !$past(du_access) && !$past(padv_ctrl))
+         assert ($stable(spr_sr));
+
+   //Exception SR remain unchanged if there is no exception or spr write.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(exception_re) && !$past(spr_we))
+         assert ($stable(spr_esr));
+
+   //Exception PC
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && !$past(exception_re) &&
+          !$past(except_ibus_err_i) && !$past(except_syscall_i) &&
+          !$past(store_buffer_err_i) && !$past(stall_on_trap) && !$past(spr_we))
+         assert ($stable(spr_epcr));
+      if (f_past_valid && !$past(rst) && $past(exception_re)  &&
+          !$past(except_ibus_err_i) && $past(except_syscall_i) &&
+          !$past(ctrl_delay_slot))
+         assert (spr_epcr == $past(pc_ctrl_i) + 4);
+   end
+
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && !$past(exception_re))
+         assert ($stable(spr_eear));
+      if (f_past_valid && !$past(rst) && $past(exception_re)) begin
+         if ($past(except_ibus_err_i) | $past(except_itlb_miss_i)
+             | $past(except_ipagefault_i))
+            assert (spr_eear == $past(pc_ctrl_i));
+         else
+            assert (spr_eear == $past(ctrl_lsu_adr_i));
+      end
+   end
+
+   always @(posedge clk)
+      if (f_past_valid && !($past(du_npc_write) || $past(du_npc_written)
+          || $past(stepping) || ($past(stall_on_trap) & $past(padv_ctrl)
+          & $past(except_trap_i)) || ($past(padv_ctrl) & $past(cpu_stall))
+          || !$past(cpu_stall) || $past(rst)))
+         assert ($stable(spr_npc));
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(spr_we))
+         assert ($stable(spr_evbar));
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(padv_execute_o))
+         assert ($stable(execute_delay_slot) && $stable(execute_delay_slot));
+
+//----------------Debug Interface Assertions---------------
+
+   reg f_debug = 0;
+   initial f_debug = 0;
+
+   //Debug ack should be high only for one clock cycle
+   always @(posedge clk) begin
+      if (f_past_valid && du_ack_o && $past(spr_ack)) begin
+         assert ($changed(du_ack_o));
+         f_debug <= 1;
+      end
+      if (f_past_valid && $rose(f_debug) && !$past(rst))
+         assert ($fell(du_ack_o));
+   end
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(du_stall_i) && $fell(cpu_stall))
+         assert ($past(cpu_stall));
+
+   always @(posedge clk)
+      if (f_past_valid && (du_restart_from_stall | du_restart_o))
+         assert ($fell(du_stall_i));
+
+   always @(*)
+      if (du_stb_i && FEATURE_DEBUGUNIT != "NONE")
+         assert (du_access);
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst)  && $past(du_npc_write) && !$past(du_restart_o))
+         assert (du_npc_written);
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(du_restart_o))
+         assert (!stepped_into_rfe && !du_npc_written && !stepped_into_exception);
+
+   always @*
+      assert (stall_on_trap == spr_dsr[`OR1K_SPR_DSR_TE]);
+
+`endif
 endmodule // mor1kx_ctrl_cappuccino

@@ -867,4 +867,314 @@ end else begin
 end
 endgenerate
 
+
+/*----------------Formal Checking--------------*/
+
+`ifdef FORMAL
+
+`ifdef LSU
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
+   reg f_past_valid;
+   initial f_past_valid = 1'b0;
+   initial assume (rst);
+
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+   always @(posedge clk)
+      if (!f_past_valid)
+         assume (rst);
+
+//------------Assumptions on Inputs-------------
+
+`ifdef LSU
+   always @(posedge clk) begin
+      if (f_past_valid && $past(exec_op_lsu_load_i) && !$past(rst)
+          && $past(padv_ctrl_i) && !$past(pipeline_flush_i) && !rst)
+         assume (ctrl_op_lsu_load_i);
+      if (f_past_valid && $past(exec_op_lsu_store_i) && !$past(rst)
+          && $past(padv_ctrl_i) && !$past(pipeline_flush_i) && !rst)
+         assume (ctrl_op_lsu_store_i);
+      if (f_past_valid && $past(exec_op_lsu_atomic_i) && !$past(rst)
+          && $past(padv_ctrl_i) && !$past(pipeline_flush_i) && !rst)
+         assume (ctrl_op_lsu_atomic_i);
+      end
+`endif
+
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst)) begin
+         `ASSUME ($onehot0({exec_op_lsu_load_i, exec_op_lsu_store_i}));
+         `ASSUME ($onehot0({ctrl_op_lsu_store_i, ctrl_op_lsu_load_i}));
+      end
+   end
+
+//-------------------Assertions-----------------
+
+//------------------LSU Properties--------------
+
+   //Based on ctrl_lsu_adr_i, requested data is put on output port of LSU
+   always @(*)
+      casex ({ctrl_lsu_zext_i, ctrl_lsu_length_i, ctrl_lsu_adr_i[1:0]})
+            5'b11x00: assert (lsu_result_o == lsu_ldat);
+            5'b10011: assert (lsu_result_o == {24'd0, lsu_ldat[7:0]});
+            5'b10110: assert (lsu_result_o == {16'd0, lsu_ldat[15:0]});
+            5'b00011: assert (lsu_result_o == {{24{lsu_ldat[7]}}, lsu_ldat[7:0]});
+            5'b00110: assert (lsu_result_o == {{16{lsu_ldat[15]}}, lsu_ldat[15:0]});
+      endcase
+
+   always @(*)
+      if (pipeline_flush_i)
+         assert (!lsu_except_dpagefault_o &&
+                 !lsu_except_dtlb_miss_o && !lsu_except_align_o);
+
+   //For exceptions related to dmmu, dmmu should be enabled
+   always @(*)
+      if (lsu_except_dtlb_miss_o | lsu_except_dpagefault_o)
+         assert (dmmu_enable_i);
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(pipeline_flush_i)
+          && !$past(padv_execute_i) && $past(dbus_err_i))
+         assert (lsu_except_dbus_o);
+
+//---------------LSU SPR Properties-----------------------
+
+   always @(posedge clk)
+      if (spr_bus_ack_dc_o && f_past_valid && !$past(rst) &&
+          FEATURE_DMMU != "NONE" && FEATURE_DATACACHE != "NONE")
+         assert (!spr_bus_ack_dmmu_o);
+
+   //For spr read, dcache shouldn't acknowledge as dcache
+   // won't support any read requests
+   always @(posedge clk)
+      if (dc_access && spr_bus_stb_i && !spr_bus_we_i &&
+          !$past(spr_bus_we_i) && f_past_valid && !$past(rst))
+       assert (!spr_bus_ack_dc_o);
+
+   always @(posedge clk)
+      if (f_past_valid && spr_bus_ack_dmmu_o)
+         assert (spr_bus_we_i | !spr_bus_we_i);
+
+//---------------DCACHE-----------------
+
+   //Load
+   //Case 1: If address is found in cache then cache hit is seen immediately
+   // and data will be muxed to lsudat immediately if dbus_access is low.
+   (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_loaded_data;
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && dc_ack && !dc_refill
+          && dc_enabled && dc_access && ctrl_op_lsu_load_i &&
+          !dbus_access && (dc_ldat == f_loaded_data)
+          && ctrl_lsu_adr_i[1:0] == 2'd0 && ctrl_lsu_length_i == 2'd3) begin
+         assert (dc_hit_o);
+         assert (lsu_ack);
+         assert (lsu_valid_o);
+         assert (lsu_ldat == f_loaded_data);
+         assert (lsu_result_o == f_loaded_data);
+      end
+
+   //Case 2: If address is found in cache then cache hit is seen immediately and
+   // if dbus_access is high, then data is put on output port as soon as dbus_access goes low.
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(dc_ack) && !$past(dc_refill)
+         && $past(dc_enabled) && $past(dc_access) && $past(ctrl_op_lsu_load_i)
+         && ctrl_op_lsu_load_i && $past(dbus_access) && !$past(rst,2) && $past(state != WRITE) &&
+         $past(dc_ldat) == f_loaded_data && !$past(dbus_ack) && (dc_ldat == f_loaded_data)
+         && !dbus_access) begin
+         assert($past(dc_hit_o));
+         assert(!$past(lsu_ack));
+         assert(lsu_ack);
+         assert ($stable(lsu_ldat));
+         assert(lsu_ldat == f_loaded_data);
+      end
+
+   //access_done will be high only if lsu_ack is high in previous clock
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(lsu_ack) && !$past(padv_execute_i)) begin
+         assert (access_done);
+         assert (lsu_valid_o);
+      end
+
+   /*/Fail: dmmu_cache_inhibit fails to inhibit dcache
+   always @(posedge clk)
+      if (dmmu_cache_inhibit && f_past_valid && !$past(rst) && !ctrl_op_lsu_store_i)
+         assert (!dc_access);*/
+
+   always @(*) begin
+      if (dbus_burst_o)
+         assert (state == DC_REFILL);
+      if (dbus_access)
+         assert (state != DC_REFILL);
+   end
+
+//----------------------DATA BUS-----------------------------
+//Walk through memory load access
+
+   (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_adr;
+   reg f_track_state = 0;
+   initial f_track_state = 0;
+   always @(posedge clk) begin
+
+         if ($past(ctrl_op_lsu_load_i)
+             && $past(store_buffer_empty) && !$past(dc_refill) && !$past(dbus_ack)
+             && !$past(dbus_err) && !$past(except_dbus) && !$past(access_done) && $past(dbus_access)
+             && !$past(pipeline_flush_i) && !$past(tlb_reload_req) && !$past(dmmu_enable_i)
+             && !$past(except_align) && $past(ctrl_lsu_adr_i) == f_adr && f_past_valid && state == IDLE
+             && !$past(rst) && $past(rst,2)) begin
+             assert (dbus_req_o);
+             assert (state == READ);
+             assert (dbus_adr == f_adr);
+             f_track_state <= 1;
+         end
+
+         if ($rose(f_track_state) && f_past_valid && $past(dbus_dat_i) == f_loaded_data
+             && $past(dbus_ack_i) && !$past(rst)) begin
+            assert (dbus_dat_o == f_loaded_data);
+            assert (dbus_ack);
+            assert (lsu_ack);
+            assert (lsu_valid_o);
+            assert (!dbus_burst_o);
+     end
+   end
+
+   always @(posedge clk)
+      if (f_past_valid && dbus_req_o && !$past(rst))
+         assert (state != IDLE);
+
+//----------------------LSU ACKS------------------------
+//This code snippet checks if all store and load requests
+//are acknowledged by lsu unit.Some load requests could be
+//fulfilled immediately and some requests leads to refilling
+//which might take maximum of 8 clock cycles to acknowledge.
+
+   //Counts load requests
+   reg [5:0]f_ld_reqs = 0;
+   initial f_ld_reqs = 0;
+   //Counts store_requests
+   reg [5:0]f_st_reqs = 0;
+   initial f_st_reqs = 0;
+
+   always @(posedge clk)
+      if (rst || pipeline_flush_i) begin
+         f_ld_reqs <=0;
+         f_st_reqs <=0;
+      end
+      else if (ctrl_op_lsu_load_i)
+         f_ld_reqs <=f_ld_reqs+1;
+      else if (ctrl_op_lsu_store_i)
+         f_st_reqs <=f_st_reqs +1;
+
+   //Counts acknowledgements
+   reg [5:0]f_lsu_acks =0;
+   initial f_lsu_acks = 0;
+
+   always @(posedge clk) begin
+      if (rst || pipeline_flush_i)
+         f_lsu_acks <=0;
+      else if (lsu_valid_o && lsu_ack)
+         f_lsu_acks<= f_lsu_acks +1;
+   end
+
+   //Critical path taken by lsu_ack while refilling is 8 clk cycles.
+   //To assert completed requests f_no_ips is used to make sure no
+   // new requests arise during refilling.
+   reg [5:0] f_no_ips = 0;
+   initial f_no_ips = 0;
+
+   always @(posedge clk)
+      if (rst || pipeline_flush_i)
+         f_no_ips <=0;
+      else if (f_past_valid && !ctrl_op_lsu && !$past(ctrl_op_lsu)
+               && !$past(rst) && !$past(pipeline_flush_i) && !pipeline_flush_i)
+         f_no_ips <= f_no_ips + 1;
+
+   //Assert acks are sum of load and store requests
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $rose(f_no_ips) == 8)
+         assert (f_lsu_acks == f_ld_reqs + f_st_reqs);
+
+//----------------Store buffer Properties---------------------
+
+   //Don't read from store buffer if store buffer is empty
+   always @(posedge clk)
+      if (store_buffer_empty && !store_buffer_write
+          && f_past_valid && !$past(rst))
+         assert (!store_buffer_read);
+
+   //Assert store buffer can't be empty and full at the same time
+   always @(*)
+      if (store_buffer_full)
+         assert (!store_buffer_empty);
+
+   //No write when store buffer is full
+   always @(*)
+      if (store_buffer_full)
+         assert (!store_buffer_write);
+
+   //Store buffer ack implies buffer write was successful
+   always @(*)
+      if (store_buffer_ack)
+         assert (store_buffer_write);
+
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(pipeline_flush_i)
+          && $past(dbus_err_i) && $past(dbus_we_o))
+         assert (store_buffer_err_o);
+
+   //Walk through store buffer
+   (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_pc;
+   (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_wadr;
+   (* anyconst *) reg [OPTION_OPERAND_WIDTH-1:0] f_dat_i;
+   (* anyconst *) wire [3:0] f_bsel;
+   reg f_stored = 0;
+   initial f_stored = 0;
+
+   //Queing incoming store info in buffer.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && (ctrl_epcr_i == f_pc)
+          && store_buffer_wadr == f_wadr && f_dat_i == lsu_sdat
+          && dbus_bsel == f_bsel && !ctrl_op_lsu_atomic_i &&
+          store_buffer_write && store_buffer_empty)
+          //Buffer has one entry
+          f_stored <= 1;
+
+   always @(posedge clk)
+      if (f_past_valid && store_buffer_radr == f_wadr && !$past(rst)
+          && $rose(f_stored) && $past(store_buffer_read) && !rst) begin
+         assert (store_buffer_dat == f_dat_i);
+         assert (store_buffer_epcr_o == f_pc);
+         assert (store_buffer_bsel == f_bsel);
+         assert (!store_buffer_atomic);
+         //Poping this entry, makes buffer empty
+         assert (store_buffer_empty);
+      end
+
+   //Writing all queued stores is completed if last buffer data is written
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && write_done && !$past(dbus_err_i))
+         assert ($past(last_write));
+
+   //If there are any exceptions then store buffer shouldn't store anything.
+   always @(*)
+      if (except_align | except_dbus | except_dtlb_miss | except_dpagefault) begin
+         assert (!store_buffer_write);
+         assert (dbus_stall);
+      end
+
+   //While refilling don't write store buffer
+   always @(*)
+      if (dc_refill)
+         assert (!store_buffer_write);
+
+   //Don't allow refilling while doing store operation
+   always @(*)
+      if (ctrl_op_lsu_store_i || state == WRITE)
+         assert (!dc_refill_allowed);
+
+`endif
 endmodule // mor1kx_lsu_cappuccino

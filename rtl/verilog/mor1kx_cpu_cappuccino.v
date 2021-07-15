@@ -1585,4 +1585,56 @@ module mor1kx_cpu_cappuccino
       end
    endgenerate
 
+
+/*-----------------Formal Checking-------------------*/
+
+`ifdef FORMAL
+
+   reg f_past_valid = 0;
+   initial f_past_valid = 1'b0;
+   initial assume (rst);
+
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+
+   always @(posedge clk)
+      if (!f_past_valid)
+         assume (rst);
+
+   //Reset Assertions
+   always @(posedge clk) begin
+      if (f_past_valid && $past(rst) && !rst) begin
+         assert (!fetch_valid_o);
+         assert (!ibus_req_o);
+         assert (!spr_bus_stb_o);
+         assert (!ibus_burst_o);
+        //Fail assert (!spr_bus_ack_ic_i);
+         assert (!spr_bus_ack_immu_i);
+         assert (!decode_valid_o);
+         assert (!decode_bubble_o);
+         assert (!execute_bubble_o);
+         assert (!padv_decode_o);
+         assert (!padv_execute_o);
+         assert (!padv_ctrl_o);
+         assert (!predicted_flag_o);
+         assert (!spr_bus_ack_dc_i);
+         assert (!spr_bus_ack_dmmu_i);
+         assert (!ctrl_bubble_o);
+         assert (!wb_rf_wb_o);
+      end
+   end
+
+   always @(posedge clk) begin
+      if (f_past_valid && padv_decode_o && !$past(rst))
+         assert (fetch_valid_o);
+   end
+
+   //SPR Property checking
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) &&
+          ($rose(spr_bus_ack_dmmu_i) || $rose(spr_bus_ack_immu_i) ||
+           $rose(spr_bus_ack_dc_i) || $rose(spr_bus_ack_ic_i)))
+         assert (spr_bus_stb_o || $past(spr_bus_stb_o));
+
+`endif
 endmodule // mor1kx_cpu_cappuccino

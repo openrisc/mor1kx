@@ -454,4 +454,109 @@ for (i = 0; i < OPTION_DMMU_WAYS; i=i+1) begin : dtlb
 end
 endgenerate
 
+/*-------------------Formal Checking---------------------*/
+
+`ifdef FORMAL
+
+`ifdef DMMU
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
+   reg f_past_valid;
+   (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_vaddr;
+   initial f_past_valid = 1'b0;
+   initial assume (rst);
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+
+   always @(posedge clk) begin
+      if (!f_past_valid)
+         assume (rst);
+      if (f_past_valid && !$past(rst))
+         `ASSUME ($onehot0({op_load_i, op_store_i}));
+   end
+
+//------------------DMMU PROPERTIES-------------------
+
+   //Physical Address of f_vaddr virtual address is asserted to verify expected PPN.
+   //Case 1: Page bits = 13 bits
+   always @(posedge clk) begin
+      if ((virt_addr_match_i == f_vaddr) && way_hit[0]
+           && !way_huge[0] && !pagefault_o && f_past_valid)
+         assert ((phys_addr_o[12:0] == f_vaddr[12:0]) &&
+                 phys_addr_o[31:13] == dtlb_trans_dout[0][31:13]);
+   end
+
+   //Case 2: Page bits = 24 bits (huge)
+   always @(posedge clk) begin
+      if ((virt_addr_match_i == f_vaddr) && way_huge_hit[0]
+          && way_huge[0] && !pagefault_o && f_past_valid)
+         assert ((phys_addr_o[23:0] == f_vaddr[23:0]) &&
+                 phys_addr_o[31:24] == dtlb_trans_huge_dout[0][31:24]);
+   end
+
+   //On TLB miss, mmu should not inhibit cache.
+   always @(*)
+      if (tlb_miss_o)
+      assert (!cache_inhibit_o);
+   always @(*) begin
+      assert ($onehot0(way_hit));
+      assert ($onehot0(way_huge_hit));
+   end
+
+   //On TLB hit, tlb_miss_o should be 0.
+   always @(*)
+      if (way_huge[0] & way_huge_hit[0] || !way_huge[0] & way_hit[0])
+         assert (!tlb_miss_o);
+
+   //DMMU SPR registers are accessible only if the last 5 bits
+   // of spr_bus_addr_i corresponds to group 1.
+   always @(*)
+      if ($onehot(dtlb_match_we) || $onehot(dtlb_trans_we))
+         assert (spr_bus_addr_i[15:11] == 5'd1);
+
+   //Spr can't access both Match TLB and Translation TLB at the same time.
+   always @(posedge clk)
+      if (dtlb_match_spr_cs)
+         assert (!dtlb_trans_spr_cs);
+
+   //Disabling Hardware TLB loads dtlb_match_din and dtlb_trans_din
+   // with spr_bus_dat_i, so its neccessary to check both match and
+   // translate TLBs don't write TLB with same data.
+   always @(*)
+      if ($onehot(dtlb_match_we))
+         assert (!$onehot(dtlb_trans_we));
+
+   //If spr ack is received, assert stb
+   always @(posedge clk)
+      if (spr_bus_ack_o)
+         assert (spr_bus_stb_i);
+
+   //On spr read request, spr write signals shouldn't be generated,
+   always @(*)
+      if (spr_bus_stb_i && !spr_bus_we_i && spr_bus_addr_i[15:11] == 5'd2)
+         assert (!dtlb_trans_we & !dtlb_match_we);
+
+//----------------Cover------------------
+
+`ifdef DMMU
+
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst)) begin
+         //TLB HIT-------------Trace 0
+         cover (!tlb_miss_o && phys_addr_o != 0);
+         //Trans write---------Trace 1
+         cover (dtlb_trans_spr_cs && $past(dtlb_trans_we)
+                && $rose(spr_bus_ack_o));
+         //Match write---------Trace 2
+         cover (dtlb_match_spr_cs && $past(dtlb_match_we)
+                && $rose(spr_bus_ack_o));
+      end
+   end
+
+`endif
+
+`endif
 endmodule // mor1kx_dmmu

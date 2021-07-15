@@ -1,0 +1,17 @@
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal mor1kx_decode.v
+chparam -set FEATURE_ATOMIC "NONE" mor1kx_decode
+
+prep -top mor1kx_decode
+
+[files]
+../../rtl/verilog/mor1kx_decode.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v

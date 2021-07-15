@@ -592,4 +592,207 @@ module mor1kx_decode_execute_cappuccino
      else if (padv_i)
        execute_bubble_o <= decode_bubble_o;
 
+
+/*-------------------Formal Checking------------------*/
+
+`ifdef FORMAL
+
+   reg f_past_valid;
+   initial f_past_valid = 1'b0;
+   initial assume (rst);
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+
+   always @(posedge clk)
+      if (!f_past_valid)
+         assume (rst);
+
+   //Reset conditions
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if ($past(rst) && f_past_valid) begin
+         assert (!execute_op_bf_o);
+         assert (!execute_op_bnf_o);
+         assert (!execute_op_alu_o);
+         assert (!execute_op_add_o);
+         assert (!execute_op_mul_o);
+         assert (!execute_op_mul_signed_o);
+         assert (!execute_op_mul_unsigned_o);
+         assert (!execute_op_div_o);
+         assert (!execute_op_div_signed_o);
+         assert (!execute_op_div_unsigned_o);
+         assert (!execute_op_shift_o);
+         assert (!execute_op_ffl1_o);
+         assert (!execute_op_movhi_o);
+         assert (!execute_op_ext_o);
+         assert (!execute_op_msync_o);
+         assert (!execute_op_mfspr_o);
+         assert (!execute_op_mtspr_o);
+         assert (!execute_op_lsu_load_o);
+         assert (!execute_op_lsu_store_o);
+         assert (!execute_op_lsu_atomic_o);
+         assert (!execute_op_setflag_o);
+         assert (!execute_op_jbr_o);
+         assert (!execute_op_jr_o);
+         assert (!execute_op_jal_o);
+         assert (!execute_op_brcond_o);
+         assert (!execute_op_branch_o);
+         assert (!execute_op_rfe_o);
+         assert (!execute_rf_wb_o);
+         assert (execute_opc_insn_o == `OR1K_OPCODE_NOP);
+         assert (!execute_adder_do_sub_o);
+         assert (!execute_adder_do_carry_o);
+         assert (!execute_except_syscall_o);
+         assert (!execute_except_trap_o);
+         assert (!execute_except_illegal_o);
+         assert (!execute_except_ibus_err_o);
+         assert (!execute_except_itlb_miss_o);
+         assert (!execute_except_ipagefault_o);
+         assert (!execute_except_ibus_align_o);
+         assert (!decode_valid_o);
+         assert (!execute_bubble_o);
+     end
+   end
+
+   //Pipelien Flush assertions
+   always @(posedge clk) begin
+      if ($past(pipeline_flush_i) && !$past(rst) && f_past_valid) begin
+         assert (!execute_op_bf_o);
+         assert (!execute_op_bnf_o);
+         assert (!execute_op_alu_o);
+         assert (!execute_op_add_o);
+         assert (!execute_op_mul_o);
+         assert (!execute_op_mul_signed_o);
+         assert (!execute_op_mul_unsigned_o);
+         assert (!execute_op_div_o);
+         assert (!execute_op_div_signed_o);
+         assert (!execute_op_div_unsigned_o);
+         assert (!execute_op_shift_o);
+         assert (!execute_op_ffl1_o);
+         assert (!execute_op_movhi_o);
+         assert (!execute_op_ext_o);
+         assert (!execute_op_msync_o);
+         assert (!execute_op_lsu_load_o);
+         assert (!execute_op_lsu_store_o);
+         assert (!execute_op_lsu_atomic_o);
+         assert (!execute_op_setflag_o);
+         assert (!execute_op_jbr_o);
+         assert (!execute_op_jr_o);
+         assert (!execute_op_jal_o);
+         assert (!execute_op_brcond_o);
+         assert (!execute_op_branch_o);
+         assert (!execute_rf_wb_o);
+         assert (execute_opc_insn_o == `OR1K_OPCODE_NOP);
+         assert (!execute_adder_do_sub_o);
+         assert (!execute_adder_do_carry_o);
+         assert (!execute_bubble_o);
+      end
+   end
+
+   //Execute signals shouldn't be sent to the execute stage when
+   //the decode inserts bubble in the pipeline
+   always @(posedge clk) begin
+      if ($past(padv_i) && !$past(rst) && !$past(pipeline_flush_i)
+          && $past(decode_bubble_o) && f_past_valid) begin
+         assert (!execute_op_bf_o);
+         assert (!execute_op_bnf_o);
+         assert (!execute_op_alu_o);
+         assert (!execute_op_add_o);
+         assert (!execute_op_mul_o);
+         assert (!execute_op_mul_signed_o);
+         assert (!execute_op_mul_unsigned_o);
+         assert (!execute_op_div_o);
+         assert (!execute_op_div_signed_o);
+         assert (!execute_op_div_unsigned_o);
+         assert (!execute_op_shift_o);
+         assert (!execute_op_ffl1_o);
+         assert (!execute_op_movhi_o);
+         assert (!execute_op_ext_o);
+         assert (!execute_op_msync_o);
+         assert (!execute_op_mfspr_o);
+         assert (!execute_op_mtspr_o);
+         assert (!execute_op_lsu_load_o);
+         assert (!execute_op_lsu_store_o);
+         assert (!execute_op_lsu_atomic_o);
+         assert (!execute_op_setflag_o);
+         assert (!execute_op_jbr_o);
+         assert (!execute_op_jr_o);
+         assert (!execute_op_jal_o);
+         assert (!execute_op_brcond_o);
+         assert (!execute_op_branch_o);
+      end
+   end
+
+   //Bubble in the decode stage has to be forwarded to execute stage
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(pipeline_flush_i) && $past(padv_i))
+         assert (execute_bubble_o == $past(decode_bubble_o));
+
+   //Whenever pipeline advances to decode stage, decode_valid_o should be high
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(padv_i) && !rst)
+         assert (decode_valid_o);
+
+   //Execute signals remains stable when pipeline doesn't advance.
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && !$past(pipeline_flush_i) && !$past(padv_i)) begin
+         assert ($stable(execute_op_rfe_o));
+         assert ($stable(execute_rf_wb_o));
+         assert ($stable(execute_rfd_adr_o));
+         assert ($stable(execute_lsu_length_o));
+         assert ($stable(execute_lsu_zext_o));
+         assert ($stable(execute_imm16_o));
+         assert ($stable(execute_immediate_o));
+         assert ($stable(execute_immediate_sel_o));
+         assert ($stable(execute_immjbr_upper_o));
+         assert ($stable(execute_opc_alu_o));
+         assert ($stable(execute_opc_alu_secondary_o));
+         assert ($stable(execute_opc_insn_o));
+         assert ($stable(execute_adder_do_sub_o));
+         assert ($stable(execute_adder_do_carry_o));
+         assert ($stable(execute_except_syscall_o));
+         assert ($stable(execute_except_trap_o));
+         assert ($stable(execute_except_illegal_o));
+         assert ($stable(execute_except_ibus_err_o));
+         assert ($stable(execute_except_itlb_miss_o));
+         assert ($stable(execute_except_ipagefault_o));
+         assert ($stable(execute_except_ibus_align_o));
+         assert ($stable(pc_execute_o));
+         assert ($stable(execute_jal_result_o));
+      end
+   end
+
+   //Fetch related any exceptions should be observed in decode stage
+   always @(posedge clk) begin
+      if (f_past_valid && $rose(execute_except_illegal_o)
+          && !$past(rst) && !rst)
+         assert ($past(padv_i));
+      if (f_past_valid && $rose(execute_except_ibus_err_o)
+          && !$past(rst) && !rst)
+         assert ($past(padv_i));
+      if (f_past_valid && $rose(execute_except_itlb_miss_o)
+          && !$past(rst) && !rst)
+         assert ($past(padv_i));
+      if (f_past_valid && $rose(execute_except_ipagefault_o)
+          && !$past(rst) && !rst)
+         assert ($past(padv_i));
+      if (f_past_valid && $rose(execute_except_ibus_align_o)
+          && !$past(rst) && !rst)
+         assert ($past(padv_i));
+      if (f_past_valid && $rose(execute_except_ibus_err_o)
+          && !$past(rst) && !rst)
+         assert ($past(padv_i));
+      if (f_past_valid && $rose(execute_except_trap_o) &&
+          !$past(rst) && !rst && FEATURE_TRAP == "ENABLED")
+         assert ($past(padv_i));
+      if (f_past_valid && $rose(execute_except_syscall_o) &&
+          !$past(rst) && !rst && FEATURE_SYSCALL == "ENABLED")
+         assert ($past(padv_i));
+   end
+
+
+   //Execute pc changes only if decode pipeline advances.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(padv_i) && !rst)
+         assert ($stable(pc_execute_o));
+`endif
 endmodule // mor1kx_decode_execute_cappuccino
