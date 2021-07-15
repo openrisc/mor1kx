@@ -69,4 +69,49 @@ endgenerate
 	rdata <= mem[raddr];
    end
 
+/*--------------Formal checking---------------*/
+
+`ifdef FORMAL
+
+   reg f_past_valid;
+   (* anyconst *) wire [ADDR_WIDTH-1:0] f_addr;
+   (* anyconst *) reg [DATA_WIDTH-1:0] f_data;
+
+   initial f_past_valid = 1'b0;
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+
+`ifdef SDPRAM
+
+   reg f_written = 0;
+   initial f_written = 0;
+
+   //Writing f_data at address f_addr
+   always @(posedge clk)
+      if (f_past_valid && $past(we) && $past(waddr) == f_addr && !ENABLE_BYPASS && $past(din) == f_data)
+         f_written <= 1;
+
+   //Read access for address f_addr should return f_data
+   always @(posedge clk)
+      if (f_past_valid && $past(re) && $past(raddr) == f_addr && !ENABLE_BYPASS && $rose(f_written))
+        assert (dout == f_data);
+
+`endif
+
+   //Verifying Bypass logic of SDPRAM
+   always @(posedge clk)
+      if (f_past_valid && $past(we) && $past(re) && $past(waddr) == f_addr && $past(raddr) == f_addr && ENABLE_BYPASS)
+        assert (dout == $past(din));
+
+   //Output data should remain unchanged if there is no read enable
+   always @(posedge clk)
+      if (f_past_valid && !$past(re))
+         assert ($stable(dout));
+
+   //Output data changes only if there is read or write enable
+   always @(posedge clk)
+      if (f_past_valid && $changed(dout))
+         assert ($past(re) | $past(we));
+`endif
+
 endmodule

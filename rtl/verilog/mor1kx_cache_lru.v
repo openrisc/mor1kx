@@ -277,5 +277,19 @@ module mor1kx_cache_lru(/*AUTOARG*/
       // lru_post = 4'b0010 is what we expected.
    end
 
+/*---------------Formal Checking----------------*/
+
+`ifdef FORMAL
+
+   always @(*) begin
+      assert (NUMWAYS > 1);
+`ifdef LRU
+      assume ($onehot0(access));
+`endif
+      assert ($onehot(lru_pre));
+      assert ($onehot(lru_post));
+   end
+
+`endif
 
 endmodule // mor1kx_dcache_lru

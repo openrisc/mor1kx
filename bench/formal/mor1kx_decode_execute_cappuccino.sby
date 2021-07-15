@@ -1,0 +1,18 @@
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal mor1kx_decode_execute_cappuccino.v
+
+chparam -set FEATURE_SYSCALL "ENABLED" mor1kx_decode_execute_cappuccino
+chparam -set FEATURE_TRAP "ENABLED" mor1kx_decode_execute_cappuccino
+prep -top mor1kx_decode_execute_cappuccino
+
+[files]
+../../rtl/verilog/mor1kx_decode_execute_cappuccino.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v

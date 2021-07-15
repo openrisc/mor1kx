@@ -1,0 +1,18 @@
+[options]
+mode prove
+depth 30
+
+[engines]
+smtbmc yices
+
+[script]
+
+read -formal mor1kx_simple_dpram_sclk.v
+read -formal -DBUFFER mor1kx_store_buffer.v
+prep -top mor1kx_store_buffer
+
+[files]
+../../rtl/verilog/mor1kx_simple_dpram_sclk.v
+../../rtl/verilog/mor1kx_store_buffer.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v

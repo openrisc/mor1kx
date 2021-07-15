@@ -87,4 +87,56 @@ module mor1kx_ticktimer
      else if (ttcr_run)
        spr_ttcr <= spr_ttcr + 1;
 
+/*----------------Formal Checking------------------*/
+
+`ifdef FORMAL
+
+   reg f_past_valid;
+   initial f_past_valid = 0;
+   initial assume(rst);
+   always @(posedge clk)
+      f_past_valid <= 1;
+   always @(*)
+      if (!f_past_valid)
+         assume (rst);
+
+   always @*
+      assert ($onehot0({spr_ttcr_access, spr_ttmr_access}));
+
+   //Interrupt pending goes high when there is match and interrupt enabled.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) &&
+          $past(ttcr_match) && $past(spr_ttmr[29]) && !$past(spr_we_i))
+         assert (spr_ttmr_o[28]);
+
+   //Without spr write signal and interrupt enable, spr_ttmr_o should be stable.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) &&
+          !$past(spr_we_i) && !$past(spr_ttmr[29]))
+         assert ($stable(spr_ttmr_o));
+
+   //In mode 10 timer stops, so it shouldn't increment.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(ttcr_match) &&
+          $past(spr_ttmr[31:30]) == 2'b10 && !$past(spr_we_i))
+         assert ($stable(spr_ttcr_o));
+
+   //In mode 00 timer is disabled, so no counts.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) &&
+          $past(spr_ttmr[31:30]) == 2'b00 && !$past(spr_we_i))
+         assert ($stable(spr_ttcr_o));
+
+   //On reset or mode 01, timer is restarted.
+   always @(posedge clk)
+      if (f_past_valid && ($past(rst) || (($past(spr_ttmr[31:30]) == 2'b01) &
+          $past(ttcr_match))) && !$past(spr_we_i))
+         assert (spr_ttcr_o == 0);
+
+   //In mode 11, timer counts
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && ($past(spr_ttmr[31:30]) == 2'b11) &&
+          !$past(spr_we_i) && !$past(ttcr_clear))
+         assert ($changed(spr_ttcr_o));
+`endif
 endmodule // mor1kx_ticktimer
