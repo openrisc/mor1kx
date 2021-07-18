@@ -2,9 +2,10 @@
 RUN  icache  immu
 
 
+# We only check the first few cycles since we just confirm reset conditions
 [options]
 mode prove
-depth 20
+depth 5
 
 [engines]
 smtbmc yices
@@ -43,6 +44,7 @@ chparam -set FEATURE_INSTRUCTIONCACHE "ENABLED" mor1kx_cpu_cappuccino
 chparam -set FEATURE_IMMU "ENABLED" mor1kx_cpu_cappuccino
 chparam -set FEATURE_DMMU "ENABLED" mor1kx_cpu_cappuccino
 chparam -set FEATURE_DATACACHE "ENABLED" mor1kx_cpu_cappuccino
+chparam -set FEATURE_MULTIPLIER "SIMULATION" mor1kx_cpu_cappuccino
 
 prep -top mor1kx_cpu_cappuccino
 

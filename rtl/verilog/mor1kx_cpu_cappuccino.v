@@ -1636,5 +1636,20 @@ module mor1kx_cpu_cappuccino
            $rose(spr_bus_ack_dc_i) || $rose(spr_bus_ack_ic_i)))
          assert (spr_bus_stb_o || $past(spr_bus_stb_o));
 
+   always @(*)
+      case (ibus_dat_i[`OR1K_ALU_OPC_SELECT])
+        `OR1K_ALU_OPC_ADDC,
+        `OR1K_ALU_OPC_ADD,
+        `OR1K_ALU_OPC_SUB,
+        `OR1K_ALU_OPC_MUL,
+        `OR1K_ALU_OPC_MULU,
+        `OR1K_ALU_OPC_DIV,
+        `OR1K_ALU_OPC_DIVU,
+        `OR1K_ALU_OPC_SHRT,
+        `OR1K_ALU_OPC_FFL1,
+        `OR1K_ALU_OPC_EXTBH,
+        `OR1K_ALU_OPC_EXTW:
+          assume (ibus_dat_i[`OR1K_OPCODE_SELECT] == `OR1K_OPCODE_ALU);
+      endcase
 `endif
 endmodule // mor1kx_cpu_cappuccino
