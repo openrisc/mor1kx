@@ -677,4 +677,295 @@ if (OPTION_DCACHE_SNOOP != "NONE") begin
 end
 endgenerate
 
+
+/*----------------Formal Checking-----------------*/
+
+`ifdef FORMAL
+
+`ifdef DCACHE
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
+   reg f_past_valid;
+   initial f_past_valid = 1'b0;
+   initial assume (rst);
+
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+   always @(posedge clk)
+      if (!f_past_valid)
+         assume (rst);
+
+//-----------Assumptions on Inputs-----------
+
+   always @(posedge clk) begin
+      if (cpu_req_i)
+         `ASSUME (dc_access_i);
+   end
+
+//-------------Assertions--------------------
+
+`ifdef DCACHE
+
+//----------Verifying functionality---------
+
+//Case 1: Refill followed by read
+
+   (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_refill_addr;
+   (* anyconst *) reg [OPTION_OPERAND_WIDTH-1:0] f_refill_data;
+   wire f_this_refill;
+   reg f_refilled = 0;
+   initial f_refilled = 1'b0;
+   assign f_this_refill = (wradr_i == f_refill_addr) && refill_o;
+
+   //Refilling
+   always @(posedge clk) begin
+      if ($past(f_this_refill) && (f_refill_data == wrdat_i)
+          && !$past(write_pending) && $past(refill_allowed)
+          && !$past(cache_hit_o)&& $past(cpu_req_i)
+          && f_past_valid && !$past(rst) &&
+          $past(state) == READ) begin
+         assert (refill);
+         f_refilled <= 1'b1;
+         assert ($onehot(way_we));
+      end
+   end
+
+   //Read: Asserting if f_refill_data is returned if the
+   //      cpu requests for same address f_refill_addr.
+   always @(posedge clk) begin
+      if ($rose(f_refilled) && (cpu_adr_match_i == f_refill_addr)
+         && cache_hit_o && f_past_valid && !$past(rst)) begin
+         assert (cpu_dat_o == f_refill_data);
+         assert (read);
+         assert (cpu_ack_o);
+      end
+   end
+
+   reg f_after_invalidate = 0;
+   initial f_after_invalidate = 1'b0;
+
+   //Invalidation : Checking if ways of set have invalid tag bit
+   //               on set invalidation.
+   always @(posedge clk) begin
+      if ($past(invalidate) && !$past(refill) && f_past_valid &&
+         $past(spr_bus_dat_i) == f_refill_addr[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH]
+         && $past(f_refilled) && !$past(f_refilled,2)) begin
+         assert (spr_bus_ack_o);
+         assert (invalidate);
+         assert (!cpu_ack_o);
+         assert (tag_we);
+         assert (!tag_din[TAGMEM_WAY_VALID]);
+         f_after_invalidate <= 1;
+      end
+   end
+
+   //There shouldn't be any cache hit for f_refill_addr after invalidation.
+   always @(posedge clk)
+      if (cpu_adr_match_i == f_refill_addr && $rose(f_after_invalidate)
+          && f_past_valid)
+         assert (!cache_hit_o);
+
+//Case 2: Write followed by read
+
+   (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_write_addr;
+   (* anyconst *) reg [OPTION_OPERAND_WIDTH-1:0] f_write_data;
+   wire f_this_write;
+   reg f_written = 0;
+   initial f_written = 1'b0;
+   assign f_this_write = (cpu_adr_match_i == f_write_addr);
+
+   //Write
+   always @(posedge clk)
+      if (f_this_write && (f_write_data == cpu_dat_i)
+          && $past(cpu_we_i) && f_past_valid && !$past(rst)
+          && !$past(invalidate) && cpu_bsel_i == 4'hf
+          && !$past(write_pending) && !$past(dc_dbus_err_i)
+          && !invalidate && !dc_dbus_err_i && $past(state) == IDLE
+          && $onehot(way_hit) && cpu_req_i) begin
+         assert (write);
+         assert ($onehot(way_we));
+         f_written <= 1;
+       end
+
+   //Read
+   always @(posedge clk)
+      if (f_past_valid && $past(f_written) && !$past(f_written,2)
+         && $past(cpu_adr_i) == f_write_addr && (cpu_adr_match_i == f_write_addr)
+         && !write_pending && cpu_req_i && !$past(rst)
+         && cache_hit_o && !$past(way_we)) begin
+         assert (cpu_dat_o == f_write_data);
+      end
+
+   reg f_invalid = 0;
+   initial f_invalid = 1'b0;
+
+   //Invalidate f_write_addr
+   always @(posedge clk)
+      if (!$past(invalidate,2) && $past(invalidate) && f_past_valid &&
+         $past(spr_bus_dat_i) == f_write_addr[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH]
+         && $rose(f_written) && !$past(dc_dbus_err_i) && !$past(cpu_we_i)) begin
+         assert (spr_bus_ack_o);
+         assert (!cpu_ack_o);
+         assert (tag_we);
+         assert (!tag_din[TAGMEM_WAY_VALID]);
+         f_invalid <= 1'b1;
+      end
+
+   //No cache hit for invalidated address
+   always @(posedge clk)
+      if (f_past_valid && cpu_adr_match_i == f_write_addr
+          && $rose(f_invalid) && f_past_valid)
+         assert (!cache_hit_o);
+
+`endif
+
+//-------------DCACHE PROPERTIES-------------------
+
+   //Cache hit in read state updates lru access variable
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && way_hit[0]
+          && $onehot(way_hit) && read)
+         assert (access == way_hit[0]);
+   end
+
+   //Way ram writes only on cpu write request or refill request.
+   always @(posedge clk)
+      if (way_we == way_hit && $onehot(way_hit) &&
+          f_past_valid && !$past(rst) && !dc_dbus_err_i)
+         assert (cpu_we_i || write_pending || we_i ||
+                 $past(write_pending));
+
+   //CPU acknowledgement is given only if cache fulfills cpu's request.
+   always @(posedge clk)
+      if (cpu_ack_o)
+         assert (cpu_req_i);
+
+   //CPU receives acknowledgement only on cache hits or refill hits.
+   always @(posedge clk)
+      if (cpu_ack_o && f_past_valid && !$past(rst))
+         assert (cache_hit_o || refill_hit);
+
+   //Back to back writes should keep write pending high
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(cpu_we_i) && cpu_we_i
+         && !$past(dc_dbus_err_i) && cache_hit_o &&
+         !$past(cpu_we_i,2) && $past(rst,2))
+         assert (write_pending);
+   always @(posedge clk)
+      if (write_pending && f_past_valid && !$past(rst))
+         assert ($past(cpu_we_i) || $past(write_pending));
+
+   //Write is successful only if there is cache hit
+   always @(*)
+      if ($onehot(way_we) && write)
+         assert (cache_hit_o);
+
+   //Cache writes should update both way and tag memories
+   always @(posedge clk)
+      if (write && cpu_req_i && cache_hit_o && $onehot(way_hit) && f_past_valid)
+         assert (tag_we && $onehot(way_we));
+
+   //Refill data 'wrdat_i' shouldn't be written while doing write operation
+   always @(posedge clk)
+      if (write && f_past_valid && cpu_dat_i != wrdat_i &&
+          !$past(rst) && cpu_bsel_i == 4'hf)
+         assert (way_wr_dat != wrdat_i);
+
+   //Dcache triggers to refill state only if there is cache miss
+   always @(posedge clk)
+      if ($rose(refill_o) && f_past_valid && !$past(rst))
+         assert (!$past(cache_hit_o));
+
+   //Refill hit shouldn't happen in any state other than refill
+   always @(posedge clk)
+      if (refill_hit && f_past_valid && !$past(rst))
+         assert (state != READ && state != WRITE && state != INVALIDATE && state != IDLE);
+
+   //Refilling should always update way ram
+   always @(*)
+      if (refill_o && we_i && $onehot(tag_save_lru))
+         assert ($onehot(way_we));
+
+   //Before refilling tag should be invalidated
+   always @(*)
+      if (refill_o && !refill_valid && we_i)
+         assert (tag_we);
+
+//---------INVALIDATION AND SPR BUS ----------
+
+   //Dcache invalidation is initiated only if the spr request
+   // is for block flush or block invalidate
+   always @(posedge clk)
+      if (invalidate)
+         assert (spr_bus_addr_i == `OR1K_SPR_DCBFR_ADDR |
+                  spr_bus_addr_i == `OR1K_SPR_DCBIR_ADDR);
+
+   //Invalidate should acknowledge only if spr has some invalidate request
+   //or if cache remains in either idle or invalidate state.
+   always @(posedge clk)
+      if ($rose(invalidate_ack) && f_past_valid && !$past(rst))
+         assert (state == INVALIDATE || state == IDLE || $past(invalidate));
+
+   reg f_1st_inv=0;
+   initial f_1st_inv = 1'b0;
+
+   //Checking back to back invalidation writes
+   always @(posedge clk)
+      if ($past(invalidate) && invalidate && f_past_valid && !$past(rst)
+         && $past(rst,2) && !$past(dc_dbus_err_i) && !$past(cpu_we_i,2)
+         && !dc_dbus_err_i && !rst) begin
+         assert (tag_we);
+         f_1st_inv <= 1'b1;
+      end
+   always @(posedge clk)
+      if ($rose(f_1st_inv) && f_past_valid) begin
+         assert (tag_we);
+         assert (invalidate_ack);
+      end
+
+   //SPR acknowledgement is valid only if there is invalidate acknowledgement.
+   always @(posedge clk)
+      if (spr_bus_ack_o)
+         assert (invalidate_ack);
+
+   //If invalidation and write arrives at same the clock invalidation wins over writing
+   //Case 1: Just after reset
+   always @(posedge clk)
+      if ($past(invalidate) && f_past_valid && !$past(rst)
+         && $past(cpu_we_i) && !$past(dc_dbus_err_i)
+         && !$past(cpu_we_i,2) && $past(rst,2)) begin
+         assert (write_pending);
+         assert (invalidate_ack);
+      end
+
+   //Case 2:Invalidate and write signal arriving at same clock, not right after reset.
+   //If cache is in read state and these signals arrive then write wins over invalidation.
+   always @(posedge clk)
+      if ($past(invalidate) && f_past_valid && !$past(rst)
+          && $past(cpu_we_i) && !$past(dc_dbus_err_i) && !$past(cpu_we_i,2)
+          && !$past(rst,2) && !$past(write_pending,2) && !$past(write_pending))
+      assert (write_pending);
+
+//----------------Cover-----------------
+
+   //Cache Write-----------Trace 0
+   always @(posedge clk)
+      cover (state == WRITE && tag_we && $onehot(way_we) && f_past_valid && !$past(rst));
+
+   //Invalidation----------Trace 1
+   always @(posedge clk)
+      cover (tag_we && state == INVALIDATE && !$past(rst) && f_past_valid);
+
+   //Cache Read------------Trace 2
+   always @(posedge clk)
+      cover (state == READ && tag_we && cache_hit_o && cpu_ack_o && !$past(rst) && f_past_valid);
+
+   //Refilling-------------Trace 3
+   always @(posedge clk)
+      cover (refill_o && $onehot(way_we) && refill_done && tag_we && !$past(rst) && f_past_valid);
+
+`endif
 endmodule

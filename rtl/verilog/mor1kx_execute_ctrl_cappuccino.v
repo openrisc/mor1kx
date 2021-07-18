@@ -384,4 +384,126 @@ endgenerate
    always @(posedge clk)
      wb_rfd_adr_o <= ctrl_rfd_adr_o;
 
+
+/*----------------Formal Checking-----------------*/
+
+`ifdef FORMAL
+
+   reg f_past_valid;
+   initial f_past_valid = 1'b0;
+   initial assume (rst);
+
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+
+   always @(posedge clk)
+      if (!f_past_valid)
+         assume (rst);
+
+   //Reset and pipeline flush conditions
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if (f_past_valid && ($past(rst) || $past(pipeline_flush_i))) begin
+         assert (!ctrl_except_ibus_err_o);
+         assert (!ctrl_except_itlb_miss_o);
+         assert (!ctrl_except_ipagefault_o);
+         assert (!ctrl_except_ibus_align_o);
+         assert (!ctrl_except_illegal_o);
+         assert (!ctrl_except_syscall_o);
+         assert (!ctrl_except_trap_o);
+         assert (!ctrl_except_dbus_o);
+         assert (!ctrl_except_align_o);
+         assert (!wb_rf_wb_o);
+         if (FEATURE_FPU != "NONE")
+         assert (ctrl_fpcsr_o == {`OR1K_FPCSR_WIDTH{1'b0}}
+                 && !ctrl_fpcsr_set_o);
+      end
+   end
+
+   //Reset Conditions
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if (f_past_valid && $past(rst)) begin
+         assert (!ctrl_flag_set_o);
+         assert (!ctrl_flag_clear_o);
+         assert (!ctrl_carry_set_o);
+         assert (!ctrl_carry_clear_o);
+         assert (!ctrl_overflow_set_o);
+         assert (!ctrl_overflow_clear_o);
+         assert (pc_ctrl_o == OPTION_RESET_PC);
+         assert (!ctrl_op_mul_o);
+         assert (!ctrl_op_mfspr_o);
+         assert (!ctrl_op_mtspr_o);
+         assert (!ctrl_op_rfe_o);
+         assert (!ctrl_op_msync_o);
+         assert (!ctrl_op_lsu_load_o);
+         assert (!ctrl_op_lsu_store_o);
+         assert (!ctrl_op_lsu_atomic_o);
+         assert (!ctrl_rf_wb_o);
+      end
+   end
+
+   //If bubble is inserted in the pipeline
+   //then the pc ctrl shouldn't advance to the next execution pc.
+   always @(posedge clk)
+      if (f_past_valid && $past(execute_bubble_i) && !$past(rst))
+         assert ($stable(pc_ctrl_o));
+
+   //Executed mtspr insn shouldn't be lost on the pipeline flush.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(pipeline_flush_i)
+          && $past(padv_i) && $past(op_mtspr_i))
+         assert (ctrl_op_mtspr_o);
+
+   //Executed mfspr insn shouldn't be lost on the pipeline flush.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(pipeline_flush_i)
+          && $past(padv_i) && $past(op_mfspr_i))
+         assert (ctrl_op_mfspr_o);
+
+   //Pipeline flush shouldn't disturb multiplication execution
+   always @(posedge clk)
+      if (FEATURE_MULTIPLIER == "PIPELINED" && !$past(rst)
+          && f_past_valid && $past(pipeline_flush_i) &&
+          $past(padv_i) && $past(op_mul_i))
+         assert (ctrl_op_mul_o);
+
+   //Pipeline flush shouldn't destroy rfe instruction.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(op_rfe_i)
+          && $past(pipeline_flush_i) && $past(padv_i))
+         assert (ctrl_op_rfe_o);
+
+   //Instruction msync_o shouldn't be lost if pipeline flush occurs.
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(pipeline_flush_i)
+          && $past(padv_i) && $past(op_msync_i))
+         assert (ctrl_op_msync_o);
+
+   //Abort load-store signals on any exceptions related to data bus.
+   always @(posedge clk)
+      if (f_past_valid && $past(ctrl_except_align_o) |
+          $past(ctrl_except_dbus_o) | $past(ctrl_except_dtlb_miss_o)
+          | $past(ctrl_except_dpagefault_o) && !$past(rst))
+         assert (!ctrl_op_lsu_load_o && !ctrl_op_lsu_store_o &&
+                 !ctrl_op_lsu_atomic_o);
+
+    //Control signals should remain unchanged if pipeline hasn't advanced
+    always @(posedge clk) begin
+       if (f_past_valid && !$past(rst) && !$past(padv_i)
+           && !$past(pipeline_flush_i)) begin
+          assert ($stable(ctrl_alu_result_o));
+          assert ($stable(ctrl_lsu_adr_o));
+          assert ($stable(ctrl_rfb_o));
+          assert ($stable(pc_ctrl_o));
+          assert ($stable(ctrl_op_mul_o));
+          assert ($stable(ctrl_op_mfspr_o));
+          assert ($stable(ctrl_op_mtspr_o));
+          assert ($stable(ctrl_op_rfe_o));
+          assert ($stable(ctrl_op_msync_o));
+          assert ($stable(ctrl_lsu_length_o));
+          assert ($stable(ctrl_lsu_zext_o));
+       end
+    end
+
+`endif
+
 endmodule // mor1kx_execute_ctrl_cappuccino

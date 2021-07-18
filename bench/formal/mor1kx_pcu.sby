@@ -1,0 +1,16 @@
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+
+read -formal mor1kx_pcu.v
+prep -top mor1kx_pcu
+
+[files]
+../../rtl/verilog/mor1kx_pcu.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v

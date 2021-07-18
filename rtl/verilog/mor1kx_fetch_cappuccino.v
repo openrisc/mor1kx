@@ -642,4 +642,200 @@ end else begin
 end
 endgenerate
 
+/*---------------Formal Checking---------------*/
+
+`ifdef FORMAL
+
+   reg f_past_valid;
+   initial f_past_valid = 1'b0;
+   initial assume (rst);
+   always @(posedge clk)
+      f_past_valid <= 1'b1;
+
+   always @(*)
+      if (!f_past_valid)
+         assume (rst);
+
+//----------------------ASSERTIONS-------------------
+
+   //Reset Conditions
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if ($past(rst) && f_past_valid) begin
+         assert (!fetching_brcond);
+         assert (!fetching_mispredicted_branch);
+         assert (pc_fetch == OPTION_RESET_PC);
+         assert (!fetch_exception_taken_o);
+         assert (!fetch_valid_o);
+         assert (decode_insn_o == {`OR1K_OPCODE_NOP, 26'd0});
+         assert (!decode_except_ipagefault_o);
+         assert (!nop_ack);
+         assert (!ibus_req_o);
+      end
+   end
+
+//------------------FETCH PROPERTIES----------------
+
+   //If fetch was valid it will be cleared when we have a branch misprediction
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if (f_past_valid && $past(fetch_valid_o) && $past(mispredict_stall)
+          && !$past(stall_fetch_valid))
+         assert (!fetch_valid_o);
+   end
+
+   //Fetch valid_o has to be stable if there is stall in pipeline
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if (f_past_valid && !$past(rst) && $past(fetch_valid_o) &&
+          $past(stall_fetch_valid) && !$past(pipeline_flush_i))
+         assert (fetch_valid_o == $past(fetch_valid_o));
+   end
+
+   //Pipeline flush unsets fetch.
+   always @(posedge clk)
+      if (f_past_valid && $past(pipeline_flush_i))
+         assert (!fetch_valid_o);
+
+   //If pipeline is stalled then pc_decode_o and decode_insn_o are expected not to change.
+   always @(posedge clk) begin
+      if (f_past_valid && $past(fetch_valid_o) && fetch_valid_o &&
+          $past(stall_fetch_valid) && !$past(flushing | imem_err) && !$past(rst)) begin
+         assert ($stable(pc_decode_o));
+         assert ($stable(decode_insn_o));
+      end
+   end
+
+   //Checking pc update after every fetch excluding jump instructions.
+   reg f_last_pc_valid = 1'b0;
+   always @(posedge clk)
+      if (rst || pipeline_flush_i || !(bus_access_done & padv_i &&
+          !mispredict_stall & !immu_busy & !tlb_reload_busy | stall_fetch_valid))
+         f_last_pc_valid <= 1'b0;
+      else if (fetch_valid_o)
+         f_last_pc_valid <= 1'b1;
+
+   reg [OPTION_OPERAND_WIDTH-1:0] f_last_pc;
+   always @(posedge clk)
+      if (fetch_valid_o && f_past_valid)
+         f_last_pc <= pc_decode_o;
+      else if (f_last_pc_valid && f_past_valid)
+         assert (pc_decode_o == f_last_pc + 4);
+
+   //Fetched instructions has to be flushed if branch exception occurs.
+   always @(posedge clk)
+      if (f_past_valid && $rose(ctrl_branch_exception_i) && !$past(rst))
+          assert (flushing);
+
+   //Fetch exception has to be taken only for one clock cycle.
+   always @(posedge clk)
+      if (f_past_valid && $past(fetch_exception_taken_o))
+          assert (!fetch_exception_taken_o);
+
+   //Fetch exception is taken only if there is branch exception in the previous clock cycle.
+   always @(posedge clk)
+      if (fetch_exception_taken_o && f_past_valid)
+          assert ($past(ctrl_branch_exception_i));
+
+   //Branch misprediction should insert stall in the pipeline.
+   always @(posedge clk)
+      if (branch_mispredict_i && fetching_brcond && branch_mispredict_i && f_past_valid)
+          assert (mispredict_stall);
+
+`ifdef FETCH
+
+   (* anyconst *) reg [OPTION_OPERAND_WIDTH-1:0] f_const_pc;
+   (* anyconst *) reg [`OR1K_INSN_WIDTH-1:0] f_const_insn;
+
+   reg f_fetch_read;
+   initial f_fetch_read = 1'b0;
+
+   //Walk through instruction fetch with f_pc_address with mmu enabled.
+   always @(posedge clk) begin
+      if (f_past_valid && !$past(rst) && $past(f_const_pc == du_restart_pc_i)
+          && $past(du_restart_i) && $past(padv_i) && $past(ibus_access) &&
+          !$past(ibus_ack) & !$past(imem_err) && !$past(tlb_reload_req) &&
+          $past(immu_enable_i) && ibus_dat_i == f_const_insn && !$past(nop_ack)
+          && !$past(tlb_miss) && !$past(pagefault) && !$past(immu_busy) &&
+          $past(state == IDLE)) begin
+         assert (pc_fetch == f_const_pc);
+         assert ($past(immu_phys_addr) == ibus_adr);
+         assert (state == READ);
+         f_fetch_read <= 1'b1;
+      end
+   end
+
+   reg f_imem_read;
+   initial f_imem_read = 1'b0;
+
+   // Expecting imem_dat has the same instruction that we had in ibus.
+   always @(posedge clk) begin
+      if (f_past_valid && $rose(f_fetch_read) && !except_ipagefault &&
+          !except_itlb_miss && !nop_ack && ibus_access) begin
+         assert (ibus_dat == f_const_insn);
+         f_imem_read = 1'b1;
+         assert (imem_dat == f_const_insn);
+      end
+   end
+
+   always @(posedge clk) begin
+      if (f_past_valid && $rose(f_imem_read) && !$past(imem_err) && !$past(flushing)
+          && $past(bus_access_done) && $past(padv_i) && !$past(mispredict_stall)
+          && !$past(rst) && $past(du_restart_i) && !$past(addr_valid)) begin
+         assert (decode_insn_o == f_const_insn);
+         assert (pc_decode_o == f_const_pc);
+       end
+   end
+
+`endif
+
+   // When RFE trap is executed no other exceptions are allowed if HW_TLB_RELOAD disabled
+   always @(posedge clk) begin
+      if (f_past_valid && $past(doing_rfe_i) && !$past(tlb_reload_pagefault)
+          && !$past(rst) && $past(except_ipagefault_clear)) begin
+         assert (!decode_except_itlb_miss_o);
+         assert (!decode_except_ipagefault_o);
+      end
+   end
+
+   // ibus_error has to be passed as an input for decode stage.
+   always @(posedge clk `OR_ASYNC_RST)
+      if (f_past_valid && $past(ibus_err_i,2) && !$past(rst,2) && !$past(rst)
+          && !$past(du_restart_i))
+         assert (decode_except_ibus_err_o);
+
+   //If immu_cache_inhibit_o is set by mmu, then access should not be given to instruction cache.
+   always @(posedge clk)
+      if (f_past_valid && immu_cache_inhibit && FEATURE_INSTRUCTIONCACHE != "NONE"
+          && immu_enable_i)
+         assert (!ic_access);
+
+   //When ICACHE is refilling ibus_burst_o should be high
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && ibus_burst_o)
+         assert (!ic_refill_done);
+
+   //Decode instruction should be stable if pipeline has not moved
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(imem_err) && !$past(flushing) && !$past(padv_i))
+         assert ($stable(decode_insn_o));
+
+   //Decode PC shouldn't changed when pipeline hasn't advanced
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && !$past(padv_i))
+         assert ($stable(pc_decode_o));
+
+   //Stall should always set padv_i low
+   always @*
+      if (stall_fetch_valid)
+         assert (!padv_i);
+
+   //Pagefault exception should be forwarded to decode stage in the next clock cycle
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst) && $past(except_ipagefault) && !$past(du_restart_i))
+         assert (decode_except_ipagefault_o);
+
+   //ibus_err_i takes two clock cycles to forward error signal to decode
+   always @(posedge clk)
+      if (f_past_valid && !$past(rst,2) && !$past(rst) && $past(ibus_err_i,2) && !$past(du_restart_i))
+         assert (decode_except_ibus_err_o);
+
+`endif
 endmodule // mor1kx_fetch_cappuccino

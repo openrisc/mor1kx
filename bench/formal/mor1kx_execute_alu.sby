@@ -1,0 +1,42 @@
+[tasks]
+#Tags are not used in code but specify type of parameters set.
+test1  serial_mul        serial_div       serial_shift
+test2  pipelined_mul     simulation_div   barrel_shift
+test3  threestage_mul    none  _div       serial_div
+test4  simulation_mul    simulation_div   barrel_shift
+
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal -D ALU mor1kx_execute_alu.v
+
+test1: chparam -set FEATURE_MULTIPLIER "SERIAL" mor1kx_execute_alu
+test1: chparam -set FEATURE_DIVIDER "SERIAL" mor1kx_execute_alu
+test1: chparam -set OPTION_SHIFTER "SERIAL" mor1kx_execute_alu
+
+test2: chparam -set FEATURE_MULTIPLIER "PIPELINED" mor1kx_execute_alu
+test2: chparam -set FEATURE_DIVIDER "SIMULATION" mor1kx_execute_alu
+test2: chparam -set OPTION_SHIFTER "BARREL" mor1kx_execute_alu
+
+test3: chparam -set FEATURE_MULTIPLIER "THREESTAGE" mor1kx_execute_alu
+test3: chparam -set FEATURE_DIVIDER "NONE" mor1kx_execute_alu
+test3: chparam -set OPTION_SHIFTER "SERIAL" mor1kx_execute_alu
+
+test4: chparam -set FEATURE_MULTIPLIER "SIMULATION" mor1kx_execute_alu
+test4: chparam -set FEATURE_DIVIDER "SIMULATION" mor1kx_execute_alu
+test4: chparam -set OPTION_SHIFTER "BARREL" mor1kx_execute_alu
+
+chparam -set FEATURE_OVERFLOW "ENABLED" mor1kx_execute_alu
+
+
+prep -top mor1kx_execute_alu
+
+[files]
+../../rtl/verilog/mor1kx_execute_alu.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v

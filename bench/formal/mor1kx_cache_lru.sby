@@ -1,0 +1,14 @@
+[options]
+mode prove
+depth 30
+
+[engines]
+smtbmc
+
+[script]
+
+read -formal -D LRU mor1kx_cache_lru.v
+prep -top mor1kx_cache_lru
+
+[files]
+../../rtl/verilog/mor1kx_cache_lru.v
