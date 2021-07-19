@@ -873,11 +873,12 @@ endgenerate
       else
          assume (!rst);
 
-   wire [7:0] f_exec_opcodes;
-   assign f_exec_opcodes = {op_mul_i, op_div_i,
+   wire [16:0] f_exec_opcodes;
+   assign f_exec_opcodes = {op_add_i, op_mul_i, op_div_i,
                             op_movhi_i, op_shift_i,
                             op_ffl1_i, op_mtspr_i,
-                            op_mfspr_i, op_ext_i};
+                            op_mfspr_i, op_ext_i,
+                            op_jbr_i, op_jr_i};
 
    always @(posedge clk)
       if (op_mul_i && f_past_valid && !$past(rst))
@@ -890,38 +891,6 @@ endgenerate
    always @(posedge clk)
       if (f_past_valid && !$past(rst))
          `ASSUME ($onehot0(f_exec_opcodes));
-
-   //MULTIPLICATION: THREE STAGE
-   reg f_op_mul;
-   initial f_op_mul = 0;
-
-   always @(posedge clk) begin
-      if (FEATURE_MULTIPLIER == "THREESTAGE"
-          && f_past_valid && !$past(rst)) begin
-          if ($rose(op_mul_i) && !mul_valid && !pipeline_flush_i)
-             f_op_mul <= 1;
-          if (($rose(f_op_mul) || (!$past(f_op_mul,2) && $past(f_op_mul))) 
-              && ((!$past(pipeline_flush_i) && !pipeline_flush_i) ||
-              !pipeline_flush_i))
-             `ASSUME ($stable(op_mul_i));
-          if ((!$past(f_op_mul,2) && $past(f_op_mul) && !$past(rst,2)
-              && op_mul_i) || !pipeline_flush_i || !op_mul_i)
-             f_op_mul <= 0;
-      end
-   end
-
-   always @(posedge clk)
-      if (FEATURE_MULTIPLIER == "THREESTAGE" && !$past(op_mul_i,4)
-          && $past(op_mul_i,3) && mul_valid && $past(decode_valid_i,4) &&
-          f_past_valid &&  !$past(rst) && !$past(rst,2) && !$past(rst,3) &&
-          !$past(rst,4) && !(op_div_i | op_mul_i | fpu_op_is_arith |
-          fpu_op_is_cmp | op_shift_i | op_ffl1_i) && $fell(f_op_mul)) begin
-         //Stall three clock cycles
-         assert ($past(alu_stall) && $past(alu_stall,2) && $past(alu_stall,3));
-         //After execution, no stall
-         assert (!alu_stall);
-         assert (alu_valid_o);
-      end
 
    //MULTIPLICATION: PIPELINED
    always @(posedge clk) begin
@@ -946,33 +915,23 @@ endgenerate
       end
    end
 
-   //MULTIPLICATION: SERIAL
-   reg [5:0] f_mul_count;
-   initial f_mul_count = 0;
-   //f_mul tracks ongoing serial multiplication
-   reg f_mul;
-   initial f_mul = 0;
-   //Valid multiplication output is seen after 32 clocks
-   always @(posedge clk) begin
-      if (f_past_valid && !$past(rst) && FEATURE_MULTIPLIER == "SERIAL") begin
-          if ($rose(op_mul_i) && decode_valid_i) begin
-             f_mul <= 1;
-             f_mul_count <= 0;
-          end
-          if (f_mul) begin
-             f_mul_count <= f_mul_count + 1;
-             `ASSUME (op_mul_i);
-             `ASSUME (decode_valid_i);
-          end
-          if (f_mul_count == 30)
-             f_mul <= 0;
-      end
-   end
 
-   always @(posedge clk)
-      if (f_past_valid && !$past(rst) && FEATURE_MULTIPLIER == "SERIAL"
-          && mul_valid && $fell(f_mul))
-          assert(f_mul_count == 6'd31);
+   //MULTIPLICATION: SERIAL & THREESTAGE
+   generate
+      if (FEATURE_MULTIPLIER == "SERIAL" || FEATURE_MULTIPLIER == "THREESTAGE") begin : f_mul_multiclock
+          f_multiclock_op #(
+             .STABLE_WIDTH(32 + 32 + 1 + 1),
+             .OP_MAX_CLOCKS(FEATURE_MULTIPLIER == "SERIAL" ? 32 : 3)
+           ) u_f_multiclock_mul (
+             .clk(clk),
+             .f_op_i(op_mul_i),
+             .f_op_valid_i(mul_valid),
+             .decode_valid_i(decode_valid_i),
+             .f_stable_i({rfa_i, rfb_i, op_mul_unsigned_i, op_mul_signed_i}),
+             .f_past_valid(f_past_valid)
+          );
+      end
+   endgenerate
 
    always @(posedge clk) begin
       if (FEATURE_MULTIPLIER == "NONE") begin
@@ -1002,30 +961,21 @@ endgenerate
    end
 
    //DIVIDER: SERIAL
-   reg [5:0] f_div_count;
-   initial f_div_count = 0;
-   //f_div tracks ongoing serial division
-   reg f_div;
-   initial f_div = 0;
-   always @(posedge clk) begin
-      if (f_past_valid && !$past(rst) && FEATURE_DIVIDER == "SERIAL") begin
-          if ($rose(op_div_i) && decode_valid_i) begin
-             f_div <= 1;
-             f_div_count <= 0;
-          end
-          if (f_div) begin
-             f_div_count <= f_div_count + 1;
-             `ASSUME (decode_valid_i);
-          end
-          if (f_div_count == 30)
-             f_div <= 0;
+   generate
+      if (FEATURE_DIVIDER == "SERIAL") begin : f_div_multiclock
+          f_multiclock_op #(
+             .STABLE_WIDTH(32 + 32 + 1 + 1),
+             .OP_MAX_CLOCKS(FEATURE_MULTIPLIER == "SERIAL" ? 32 : 3)
+           ) u_f_multiclock_div (
+             .clk(clk),
+             .f_op_i(op_div_i),
+             .f_op_valid_i(div_valid),
+             .decode_valid_i(decode_valid_i),
+             .f_stable_i({rfa_i, rfb_i, op_div_unsigned_i, op_div_signed_i}),
+             .f_past_valid(f_past_valid)
+          );
       end
-   end
-
-   always @(posedge clk)
-      if (f_past_valid && !$past(rst) && FEATURE_DIVIDER == "SERIAL"
-          && $rose(div_valid) && $fell(f_div))
-          assert (f_div_count == 6'd31);
+   endgenerate
 
    //SHIFTER: BARREL
    (* anyconst *) reg [4:0] f_b;
@@ -1046,30 +996,21 @@ endgenerate
    end
 
    //SHIFTER: SERIAL
-   reg [4:0] f_shift_count;
-   initial f_shift_count <= 0;
-   //f_shift tracks serial shifting.
-   reg f_shift;
-   initial f_shift <= 0;
-   always @(posedge clk) begin
-      if (f_past_valid && !$past(rst) && OPTION_SHIFTER == "SERIAL") begin
-         if ($rose(op_shift_i) & decode_valid_i) begin
-            f_shift_count <= 0;
-            f_shift <= 1;
-         end
-         if (f_shift) begin
-            `ASSUME ($stable(b));
-            `ASSUME (decode_valid_i);
-            f_shift_count <= f_shift_count + 1;
-         end
-         if (f_shift_count == (b[4:0] - 1))
-            f_shift <= 0;
+   generate
+      if (OPTION_SHIFTER == "SERIAL") begin : f_shft_multiclock
+          f_multiclock_op #(
+             .STABLE_WIDTH(32 + 32 + `OR1K_ALU_OPC_WIDTH),
+             .OP_MAX_CLOCKS(32)
+           ) u_f_multiclock_shft (
+             .clk(clk),
+             .f_op_i(op_shift_i),
+             .f_op_valid_i(shift_valid),
+             .decode_valid_i(decode_valid_i),
+             .f_stable_i({rfa_i, rfb_i, opc_alu_secondary_i}),
+             .f_past_valid(f_past_valid)
+          );
       end
-   end
-   always @(posedge clk)
-      if (f_past_valid && !$past(rst) && OPTION_SHIFTER == "SERIAL"
-          && $rose(shift_valid) && $fell(f_shift))
-          assert (f_shift_count == $past(b[4:0]));
+   endgenerate
 
    always @(*) begin
 
