@@ -2,7 +2,7 @@
 #Tags are not used in code but specify type of parameters set.
 test_serial      serial_mul        serial_div       serial_shift
 test_pipe_mul    pipelined_mul     simulation_div   barrel_shift
-test_3stage_mul  threestage_mul    no_div           serial_shift
+test_3stage_mul  threestage_mul    no_div           barrel_shift
 test_sim_mul     simulation_mul    simulation_div   barrel_shift
 
 # Depth set to 64 to handle 32 cycle serial operations
@@ -31,13 +31,14 @@ test_pipe_mul: chparam -set OPTION_SHIFTER "BARREL" mor1kx_execute_alu
 
 test_3stage_mul: chparam -set FEATURE_MULTIPLIER "THREESTAGE" mor1kx_execute_alu
 test_3stage_mul: chparam -set FEATURE_DIVIDER "NONE" mor1kx_execute_alu
-test_3stage_mul: chparam -set OPTION_SHIFTER "SERIAL" mor1kx_execute_alu
+test_3stage_mul: chparam -set OPTION_SHIFTER "BARREL" mor1kx_execute_alu
 
 test_sim_mul: chparam -set FEATURE_MULTIPLIER "SIMULATION" mor1kx_execute_alu
 test_sim_mul: chparam -set FEATURE_DIVIDER "SIMULATION" mor1kx_execute_alu
 test_sim_mul: chparam -set OPTION_SHIFTER "BARREL" mor1kx_execute_alu
 
 chparam -set FEATURE_OVERFLOW "ENABLED" mor1kx_execute_alu
+chparam -set FEATURE_FFL1 "REGISTERED" mor1kx_execute_alu
 
 
 prep -top mor1kx_execute_alu
