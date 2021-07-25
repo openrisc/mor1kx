@@ -694,7 +694,7 @@ endgenerate
 
    always @(posedge clk)
       f_past_valid <= 1'b1;
-   always @(posedge clk)
+   always @(*)
       if (!f_past_valid)
          assume (rst);
 
@@ -716,7 +716,7 @@ endgenerate
    (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_refill_addr;
    (* anyconst *) reg [OPTION_OPERAND_WIDTH-1:0] f_refill_data;
    wire f_this_refill;
-   reg f_refilled = 0;
+   reg f_refilled;
    initial f_refilled = 1'b0;
    assign f_this_refill = (wradr_i == f_refill_addr) && refill_o;
 
@@ -744,7 +744,7 @@ endgenerate
       end
    end
 
-   reg f_after_invalidate = 0;
+   reg f_after_invalidate;
    initial f_after_invalidate = 1'b0;
 
    //Invalidation : Checking if ways of set have invalid tag bit
@@ -773,7 +773,7 @@ endgenerate
    (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_write_addr;
    (* anyconst *) reg [OPTION_OPERAND_WIDTH-1:0] f_write_data;
    wire f_this_write;
-   reg f_written = 0;
+   reg f_written;
    initial f_written = 1'b0;
    assign f_this_write = (cpu_adr_match_i == f_write_addr);
 
@@ -799,7 +799,7 @@ endgenerate
          assert (cpu_dat_o == f_write_data);
       end
 
-   reg f_invalid = 0;
+   reg f_invalid;
    initial f_invalid = 1'b0;
 
    //Invalidate f_write_addr
@@ -909,7 +909,7 @@ endgenerate
       if ($rose(invalidate_ack) && f_past_valid && !$past(rst))
          assert (state == INVALIDATE || state == IDLE || $past(invalidate));
 
-   reg f_1st_inv=0;
+   reg f_1st_inv;
    initial f_1st_inv = 1'b0;
 
    //Checking back to back invalidation writes
@@ -948,6 +948,23 @@ endgenerate
           && $past(cpu_we_i) && !$past(dc_dbus_err_i) && !$past(cpu_we_i,2)
           && !$past(rst,2) && !$past(write_pending,2) && !$past(write_pending))
       assert (write_pending);
+
+   fspr_slave #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .SLAVE("DCACHE")
+       )
+       u_f_icache_slave (
+        .clk(clk),
+        .rst(rst),
+         // SPR interface
+        .spr_bus_addr_i(spr_bus_addr_i),
+        .spr_bus_we_i(spr_bus_we_i),
+        .spr_bus_stb_i(spr_bus_stb_i),
+        .spr_bus_dat_i(spr_bus_dat_i),
+        .spr_bus_dat_o(spr_bus_dat_o),
+        .spr_bus_ack_o(spr_bus_ack_o),
+        .f_past_valid(f_past_valid)
+       );
 
 //----------------Cover-----------------
 

@@ -884,7 +884,7 @@ endgenerate
 
    always @(posedge clk)
       f_past_valid <= 1'b1;
-   always @(posedge clk)
+   always @(*)
       if (!f_past_valid)
          assume (rst);
 
@@ -1053,10 +1053,10 @@ endgenerate
 //which might take maximum of 8 clock cycles to acknowledge.
 
    //Counts load requests
-   reg [5:0]f_ld_reqs = 0;
+   reg [5:0]f_ld_reqs;
    initial f_ld_reqs = 0;
    //Counts store_requests
-   reg [5:0]f_st_reqs = 0;
+   reg [5:0]f_st_reqs;
    initial f_st_reqs = 0;
 
    always @(posedge clk)
@@ -1070,7 +1070,7 @@ endgenerate
          f_st_reqs <=f_st_reqs +1;
 
    //Counts acknowledgements
-   reg [5:0]f_lsu_acks =0;
+   reg [5:0]f_lsu_acks;
    initial f_lsu_acks = 0;
 
    always @(posedge clk) begin
@@ -1083,7 +1083,7 @@ endgenerate
    //Critical path taken by lsu_ack while refilling is 8 clk cycles.
    //To assert completed requests f_no_ips is used to make sure no
    // new requests arise during refilling.
-   reg [5:0] f_no_ips = 0;
+   reg [5:0] f_no_ips;
    initial f_no_ips = 0;
 
    always @(posedge clk)
@@ -1131,7 +1131,7 @@ endgenerate
    (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_wadr;
    (* anyconst *) reg [OPTION_OPERAND_WIDTH-1:0] f_dat_i;
    (* anyconst *) wire [3:0] f_bsel;
-   reg f_stored = 0;
+   reg f_stored;
    initial f_stored = 0;
 
    //Queing incoming store info in buffer.

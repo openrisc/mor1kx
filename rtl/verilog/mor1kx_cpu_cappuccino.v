@@ -1597,7 +1597,7 @@ module mor1kx_cpu_cappuccino
    always @(posedge clk)
       f_past_valid <= 1'b1;
 
-   always @(posedge clk)
+   always @(*)
       if (!f_past_valid)
          assume (rst);
 
@@ -1651,5 +1651,23 @@ module mor1kx_cpu_cappuccino
         `OR1K_ALU_OPC_EXTW:
           assume (ibus_dat_i[`OR1K_OPCODE_SELECT] == `OR1K_OPCODE_ALU);
       endcase
+
+   fspr_master #(
+        .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH)
+        )
+        u_spr_master(
+        .clk(clk),
+        .rst(rst),
+        // SPR interface
+        .spr_bus_addr_o(spr_bus_addr_o),
+        .spr_bus_we_o(spr_bus_we_o),
+        .spr_bus_stb_o(spr_bus_stb_o),
+        .spr_bus_dat_o(spr_bus_dat_o),
+        .spr_bus_ack_ic_i(spr_bus_ack_ic_i),
+        .spr_bus_ack_dc_i(spr_bus_ack_dc_i),
+        .spr_bus_ack_dmmu_i(spr_bus_ack_dmmu_i),
+        .spr_bus_ack_immu_i(spr_bus_ack_immu_i),
+        .f_past_valid(f_past_valid)
+  );
 `endif
 endmodule // mor1kx_cpu_cappuccino

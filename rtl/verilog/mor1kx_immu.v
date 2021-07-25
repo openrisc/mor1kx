@@ -488,7 +488,7 @@ endgenerate
    always @(posedge clk)
       f_past_valid <= 1'b1;
 
-   always @(posedge clk)
+   always @(*)
       if (!f_past_valid)
          assume (rst);
 
@@ -559,7 +559,7 @@ endgenerate
       if (f_past_valid && $rose(itlb_trans_spr_tx))
          assert (!itlb_match_spr_tx);
 
-   reg f_busy_valid = 0;
+   reg f_busy_valid;
    //Busy should be set high for every spr read/write transactions
    always @(posedge clk)
       if (f_past_valid && spr_bus_stb_i && ($rose(itlb_match_spr_cs)
@@ -572,6 +572,24 @@ endgenerate
    always @(posedge clk)
       if (f_past_valid && $rose(f_busy_valid) && !$past(rst) & enable_i)
          assert (busy_o);
+
+   fspr_slave #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .SLAVE("IMMU")
+       )
+       u_f_immu_slave (
+        .clk(clk),
+        .rst(rst),
+         // SPR interface
+        .spr_bus_addr_i(spr_bus_addr_i),
+        .spr_bus_we_i(spr_bus_we_i),
+        .spr_bus_stb_i(spr_bus_stb_i),
+        .spr_bus_dat_i(spr_bus_dat_i),
+        .spr_bus_dat_o(spr_bus_dat_o),
+        .spr_bus_ack_o(spr_bus_ack_o),
+        .f_past_valid(f_past_valid)
+       );
+
 
 //--------------Cover-----------------
 

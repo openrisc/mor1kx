@@ -1608,11 +1608,10 @@ endgenerate
       if (!f_past_valid)
          assume (rst);
 
-`ifdef CTRL
    always @(posedge clk)
       if (f_past_valid && !$past(rst) && $past(padv_execute_o))
-         assume ($onehot0({ctrl_op_mfspr_i, ctrl_op_mtspr_i}));
-`endif
+         `ASSUME ($onehot0({ctrl_op_mfspr_i, ctrl_op_mtspr_i}));
+
 //--------------Assertions----------------
 
    //Ctrl always advances after execute stage
@@ -1642,12 +1641,19 @@ endgenerate
       else if (ctrl_op_mtspr_i)
           assert (spr_write_access);
 
-   //Fail always @*
-      //assert ($onehot0({spr_read_access, spr_write_access}));
+/* Issue #135: Both spr read and write access stays high when debug unit is
+   enabled.
+   always @*
+      assert ($onehot0({spr_read_access, spr_write_access}));
 
-   //always @*
-     //if (spr_bus_stb_o && spr_read_access)
-         //assert (!spr_bus_we_o);
+   always @*
+     if (spr_bus_stb_o && spr_read_access)
+         assert (!spr_bus_we_o);*/
+
+   //Issue 136: Without spr instruction spr_access should be 0.
+   /*always @(posedge clk)
+      if (f_past_valid & !ctrl_op_mfspr_i & !ctrl_op_mtspr_i & !$past(rst))
+         assert (|spr_access == 0);*/
 
    always @*
       if (spr_bus_we_o)
