@@ -8,7 +8,7 @@ smtbmc yices
 [script]
 read -formal mor1kx_bus_if_wb32.v
 
-chparam -set BUS_IF_TYPE "B3_REGISTERED_FEEDBAC" mor1kx_bus_if_wb32
+chparam -set BUS_IF_TYPE "B3_REGISTERED_FEEDBACK" mor1kx_bus_if_wb32
 
 prep -top mor1kx_bus_if_wb32
 

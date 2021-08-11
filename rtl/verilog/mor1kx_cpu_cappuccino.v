@@ -1608,7 +1608,7 @@ module mor1kx_cpu_cappuccino
          assert (!ibus_req_o);
          assert (!spr_bus_stb_o);
          assert (!ibus_burst_o);
-        //Fail assert (!spr_bus_ack_ic_i);
+         assert (!spr_bus_ack_ic_i);
          assert (!spr_bus_ack_immu_i);
          assert (!decode_valid_o);
          assert (!decode_bubble_o);
