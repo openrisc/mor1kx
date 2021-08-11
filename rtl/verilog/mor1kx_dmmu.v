@@ -470,10 +470,13 @@ endgenerate
    initial assume (rst);
    always @(posedge clk)
       f_past_valid <= 1'b1;
-
-   always @(posedge clk) begin
+   always @(*)
       if (!f_past_valid)
          assume (rst);
+      else
+         assume (!rst);
+
+   always @(posedge clk) begin
       if (f_past_valid && !$past(rst))
          `ASSUME ($onehot0({op_load_i, op_store_i}));
    end
@@ -536,8 +539,25 @@ endgenerate
 
    //On spr read request, spr write signals shouldn't be generated,
    always @(*)
-      if (spr_bus_stb_i && !spr_bus_we_i && spr_bus_addr_i[15:11] == 5'd2)
+      if (spr_bus_stb_i && !spr_bus_we_i && spr_bus_addr_i[15:11] == 5'd1)
          assert (!dtlb_trans_we & !dtlb_match_we);
+
+   fspr_slave #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .SLAVE("DMMU")
+       )
+       u_f_dmmu_slave (
+        .clk(clk),
+        .rst(rst),
+         // SPR interface
+        .spr_bus_addr_i(spr_bus_addr_i),
+        .spr_bus_we_i(spr_bus_we_i),
+        .spr_bus_stb_i(spr_bus_stb_i),
+        .spr_bus_dat_i(spr_bus_dat_i),
+        .spr_bus_dat_o(spr_bus_dat_o),
+        .spr_bus_ack_o(spr_bus_ack_o),
+        .f_past_valid(f_past_valid)
+       );
 
 //----------------Cover------------------
 

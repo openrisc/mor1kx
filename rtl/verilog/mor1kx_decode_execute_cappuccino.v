@@ -603,7 +603,7 @@ module mor1kx_decode_execute_cappuccino
    always @(posedge clk)
       f_past_valid <= 1'b1;
 
-   always @(posedge clk)
+   always @(*)
       if (!f_past_valid)
          assume (rst);
 

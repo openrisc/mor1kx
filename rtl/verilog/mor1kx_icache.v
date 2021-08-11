@@ -495,7 +495,7 @@ module mor1kx_icache
    always @(posedge clk)
       f_past_valid <= 1'b1;
 
-   always @(posedge clk)
+   always @(*)
       if (!f_past_valid)
          assume (rst);
 
@@ -518,7 +518,7 @@ module mor1kx_icache
    (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_refill_addr;
    (* anyconst *) reg [OPTION_OPERAND_WIDTH-1:0] f_refill_data;
    wire f_this_refill;
-   reg f_refilled = 0;
+   reg f_refilled;
 
    initial f_refilled = 1'b0;
    assign f_this_refill = (wradr_i == f_refill_addr) && refill_o;
@@ -544,7 +544,7 @@ module mor1kx_icache
       end
    end
 
-   reg f_after_invalidate = 0;
+   reg f_after_invalidate;
    initial f_after_invalidate = 1'b0;
 
    //Invalidation: Checking if ways of set have invalid tag bit on set invalidation.
@@ -654,6 +654,23 @@ module mor1kx_icache
       if (f_past_valid & !$past(rst) & $past(spr_bus_stb_i) & !$past(spr_bus_we_i)
            & $past(spr_bus_addr_i) == `OR1K_SPR_ICBIR_ADDR & !$past(invalidate))
          assert (!spr_bus_ack_o);
+
+   fspr_slave #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .SLAVE("ICACHE")
+       )
+       u_f_icache_slave (
+        .clk(clk),
+        .rst(rst),
+         // SPR interface
+        .spr_bus_addr_i(spr_bus_addr_i),
+        .spr_bus_we_i(spr_bus_we_i),
+        .spr_bus_stb_i(spr_bus_stb_i),
+        .spr_bus_dat_i(spr_bus_dat_i),
+        .spr_bus_dat_o(spr_bus_dat_o),
+        .spr_bus_ack_o(spr_bus_ack_o),
+        .f_past_valid(f_past_valid)
+       );
 
 //-------------Cover-------------
 

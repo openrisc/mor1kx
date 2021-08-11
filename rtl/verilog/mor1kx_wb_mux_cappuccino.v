@@ -56,12 +56,6 @@ module mor1kx_wb_mux_cappuccino
 
 `ifdef FORMAL
 
-`ifdef MUX
-`define ASSUME assume
-`else
-`define ASSUME assert
-`endif
-
    reg f_past_valid;
    initial f_past_valid = 0;
    always @(posedge clk)
@@ -69,8 +63,9 @@ module mor1kx_wb_mux_cappuccino
    always @(*)
       if (!f_past_valid)
          assume (rst);
-   always @(*)
-         `ASSUME ($onehot0({op_mul_i, op_lsu_load_i, op_mfspr_i}));
+`ifdef MUX
+   always @*
+         assume ($onehot0({op_mul_i, op_lsu_load_i, op_mfspr_i}));
 
    always @(posedge clk) begin
       if (f_past_valid && !$past(rst)) begin
@@ -84,6 +79,7 @@ module mor1kx_wb_mux_cappuccino
             assert (rf_result_o == $past(alu_result_i));
       end
    end
+`endif
 
 `endif
 endmodule // mor1kx_wb_mux_cappuccino
