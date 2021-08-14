@@ -468,4 +468,34 @@ module mor1kx
       .snoop_adr_i			(snoop_adr_i[31:0]),
       .snoop_en_i			(snoop_en_i));
 
+/*-----------Formal Checking--------*/
+`ifdef FORMAL
+
+      fwb_master #(.AW(OPTION_OPERAND_WIDTH), .DW(OPTION_OPERAND_WIDTH),
+			.F_MAX_ACK_DELAY(1), .F_LGDEPTH(3),
+			.F_MAX_REQUESTS(16), .F_OPT_SOURCE(1),
+			.F_OPT_RMW_BUS_OPTION(0),
+			.F_OPT_DISCONTINUOUS(0),
+			.F_OPT_SHORT_CIRCUIT_PROOF(1),
+			.F_OPT_MINCLOCK_DELAY(1))
+			u_iwbm(.i_clk(clk), .i_reset(rst),
+		// The Wishbone bus
+		.i_wb_cyc(iwbm_cyc_o), .i_wb_stb(iwbm_stb_o), .i_wb_we(iwbm_we_o),
+		.i_wb_addr(iwbm_adr_o), .i_wb_data(iwbm_dat_o), .i_wb_sel(iwbm_sel_o),
+			.i_wb_ack(iwbm_ack_i), .i_wb_idata(iwbm_dat_i), .i_wb_err(iwbm_err_i));
+
+      fwb_master #(.AW(OPTION_OPERAND_WIDTH), .DW(OPTION_OPERAND_WIDTH),
+			.F_MAX_ACK_DELAY(1), .F_LGDEPTH(3),
+			.F_MAX_REQUESTS(16), .F_OPT_SOURCE(1),
+			.F_OPT_RMW_BUS_OPTION(0),
+			.F_OPT_DISCONTINUOUS(0),
+			.F_OPT_SHORT_CIRCUIT_PROOF(1),
+			.F_OPT_MINCLOCK_DELAY(1))
+			u_dwbm(.i_clk(clk), .i_reset(rst),
+		// The Wishbone bus
+		.i_wb_cyc(dwbm_cyc_o), .i_wb_stb(dwbm_stb_o), .i_wb_we(dwbm_we_o),
+		.i_wb_addr(dwbm_adr_o), .i_wb_data(dwbm_dat_o), .i_wb_sel(dwbm_sel_o),
+			.i_wb_ack(dwbm_ack_i), .i_wb_idata(dwbm_dat_i), .i_wb_err(dwbm_err_i));
+
+`endif
 endmodule // mor1kx

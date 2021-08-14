@@ -193,43 +193,50 @@ module mor1kx_bus_if_wb32
    always @(*)
       if (!f_past_valid)
          assume (rst);
+      else
+         assume (!rst);
 
-    always @(posedge clk) begin
-       if (BUS_IF_TYPE != "B3_REGISTERED_FEEDBACK" && BUS_IF_TYPE != "B3_READ_BURSTING") begin
-          if (f_past_valid && $past(rst))
-             assert (!wbm_stb_o);
-          //On getting ack, strobe signal goes low.
-          if (f_past_valid && !$past(rst) && ($past(cpu_ack_o) | $past(cpu_err_o)))
-              assert (!wbm_stb_o);
-          //CPU req should keep wbm_stb_o high till we get wb ack.
-          //If there is no ack but cpu req is seen, then strobe should
-          //stay high.
-          if (f_past_valid && !$past(rst) && (!$past(cpu_ack_o) & !$past(cpu_err_o)) && cpu_req_i)
-             assert (wbm_stb_o);
-       end
-    end
-
-    always @* begin
-       if (BUS_IF_TYPE != "B3_REGISTERED_FEEDBACK" && BUS_IF_TYPE != "B3_READ_BURSTING") begin
-          assert (!wbm_cti_o);
-          assert (!wbm_bte_o);
-       end
+   always @(posedge clk) begin
+      if (BUS_IF_TYPE != "B3_REGISTERED_FEEDBACK" &
+          BUS_IF_TYPE != "B3_READ_BURSTING") begin
+         if (f_past_valid & $past(rst))
+            assert (!wbm_stb_o);
+         // On getting ack, strobe signal goes low.
+         if (f_past_valid & !$past(rst) & ($past(cpu_ack_o) | $past(cpu_err_o)))
+            assert (!wbm_stb_o);
+         // CPU req should keep wbm_stb_o high till we get wb ack.
+         // If there is no ack but cpu req is seen, then strobe should
+         // stay high.
+         if (f_past_valid & !$past(rst) & (!$past(cpu_ack_o) &
+             !$past(cpu_err_o)) & cpu_req_i)
+            assert (wbm_stb_o);
+      end
    end
 
+   always @*
+      if (BUS_IF_TYPE != "B3_REGISTERED_FEEDBACK" &
+          BUS_IF_TYPE != "B3_READ_BURSTING") begin
+         assert (!wbm_cti_o);
+         assert (!wbm_bte_o);
+      end
+
    always @(posedge clk)
-      if (f_past_valid && ($past(rst) || $past(wbm_err_i)))
+      if (f_past_valid & ($past(rst) | $past(wbm_err_i)))
          assert (wbm_adr_o == cpu_adr_i);
 
-   //wbm_cti_o should remain in either of these three states:
-   // 111- end of burst
-   // 010- incrementing
-   // 000- classic
+   // wbm_cti_o should remain in either of these three states:
+   //  111- end of burst
+   //  010- incrementing
+   //  000- classic
    always @*
       assert (wbm_cti_o == 3'b111 | wbm_cti_o == 3'b010 | wbm_cti_o == 3'b000);
 
-   //If cycle type identifier is incrementing and wb ack arrives, then burst should be ended.
+   // If cycle type identifier is incrementing and wb ack arrives,
+   // then burst should be ended.
    always @(posedge clk)
-      if (f_past_valid && !$past(rst) && $past(wbm_ack_i) && $past(wbm_cti_o) == 2'b010)
+      if (f_past_valid & !$past(rst) & $past(wbm_ack_i) & (!wbm_ack_i &
+          !cpu_burst_i) & !$past(wbm_err_i) & $past(wbm_cti_o) == 2'b010
+          & !cpu_req_i)
          assert (wbm_cti_o == 3'b111);
 `endif
 endmodule // mor1kx_bus_if_wb

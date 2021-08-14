@@ -33,6 +33,7 @@ TESTS := mor1kx_cache_lru \
 	mor1kx_bus_if_wb32 \
 	mor1kx_wb_mux_cappuccino \
 	mor1kx_cpu_cappuccino \
+	mor1kx
 
 
 all: $(TESTS)
