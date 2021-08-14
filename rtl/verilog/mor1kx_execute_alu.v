@@ -889,7 +889,7 @@ endgenerate
          `ASSUME (op_div_signed_i | op_div_unsigned_i);
 
    always @(posedge clk)
-      if (f_past_valid && !$past(rst))
+      if (f_past_valid)
          `ASSUME ($onehot0(f_exec_opcodes));
 
    //MULTIPLICATION: PIPELINED
@@ -907,7 +907,7 @@ endgenerate
    //MULTIPLICATION: SIMULATION
    always @(*) begin
       if (FEATURE_MULTIPLIER == "SIMULATION" &&
-          op_mul_i) begin
+          op_mul_i && !rst) begin
          //No stall for simulation based multiplier
          assert (!alu_stall);
          assert (alu_valid_o);
@@ -941,7 +941,7 @@ endgenerate
    end
 
    //TODO
-   //Formal verification of FPU and FF1.
+   //Formal verification of FPU.
 
    //DIVIDER: SIMULATION
    always @(posedge clk) begin
@@ -999,14 +999,31 @@ endgenerate
    generate
       if (OPTION_SHIFTER == "SERIAL") begin : f_shft_multiclock
           f_multiclock_op #(
-             .STABLE_WIDTH(32 + 32 + `OR1K_ALU_OPC_WIDTH),
+             .STABLE_WIDTH(32 + 32 + `OR1K_IMM_WIDTH + 32 + 1 +`OR1K_ALU_OPC_WIDTH),
              .OP_MAX_CLOCKS(32)
            ) u_f_multiclock_shft (
              .clk(clk),
              .f_op_i(op_shift_i),
              .f_op_valid_i(shift_valid),
              .decode_valid_i(decode_valid_i),
-             .f_stable_i({rfa_i, rfb_i, opc_alu_secondary_i}),
+             .f_stable_i({rfa_i, rfb_i, imm16_i, immediate_i, immediate_sel_i, opc_alu_secondary_i}),
+             .f_past_valid(f_past_valid)
+          );
+      end
+   endgenerate
+
+   //FFL1
+   generate
+      if (FEATURE_FFL1 == "REGISTERED") begin : f_ffl1_multiclock
+          f_multiclock_op #(
+             .STABLE_WIDTH(`OR1K_ALU_OPC_WIDTH),
+             .OP_MAX_CLOCKS(1)
+           ) u_f_multiclock_ffl1 (
+             .clk(clk),
+             .f_op_i(op_ffl1_i),
+             .f_op_valid_i(ffl1_valid),
+             .decode_valid_i(decode_valid_i),
+             .f_stable_i(opc_alu_secondary_i),
              .f_past_valid(f_past_valid)
           );
       end

@@ -39,7 +39,7 @@ module f_multiclock_op
       if (f_past_valid) begin
 	  // If we have slow operations decode_valid will
 	  // go low to stall after the operation starts.
-	  if ($past(f_op_i))
+	  if (f_op | f_op_valid_i)
 	     assume (!decode_valid_i);
 	  else
 	     assume (decode_valid_i);
@@ -58,9 +58,8 @@ module f_multiclock_op
 	  end
 
 	  // Ensure the operation completes never going beyond max count
-	  assert (f_op_count <= (OP_MAX_CLOCKS + 2));
+	  assert (f_op_count <= (OP_MAX_CLOCKS + 1));
       end
    end
-
 endmodule
 
