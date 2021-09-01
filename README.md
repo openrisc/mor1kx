@@ -158,6 +158,8 @@ Integration (CI) suite.  This currently covers:
  - [or1k-tests](https://github.com/openrisc/or1k-tests) - the `or1k-tests` test suite
    is run against each pipeline to check most major instructions, exception handling,
    caching, timers, interrupts and other features.
+ - mor1kx formal - `formal-verification` tests are run on the cappuccino pipeline to confirm the processor doesn't
+   encounter undesirable states and identify unseen bugs.
 
    Status: ![Build Status](https://github.com/openrisc/mor1kx/actions/workflows/ci.yml/badge.svg)
 
@@ -180,7 +182,7 @@ In the future we are working on bringing more tests including:
   - softfloat, fpu verification (may not be feasable in CI due to long run times)
   - CPU pipeline debugging verification via GDB/OpenOCD
   - Resource utilization regression with yosys synth_intel synth_xilinx
-  - Formal verification with yosys
+  - Formal verification of ESPRESSO and PRONTO ESPRESSO using yosys-formal.
   - Verification that each revision can boot differnt OS's **Linux**, **RTMES**
   - Golden reference `or1ksim` trace comparisons vs verilog model using constrained
     random inputs.
@@ -189,7 +191,7 @@ Verification status of mor1kx pipelines:
 
 |Pipeline|Testing Support|Comments|
 |--------|---------------|--------|
-|`CAPPUCCINO`|`Linting` `or1k-tests`|All supported tests passing|
+|`CAPPUCCINO`|`Linting` `or1k-tests` `formal-verification` |All supported tests passing|
 |`ESPRESSO`|`linting` `or1k-tests` |Still many pipeline failures, see issue #71|
 |`PRONTO_ESPRESSO`|`linting`|No toolchain support for no-delayslot c code|
 |`MAROCCHINO`|`linting` `or1k-tests`|See [marocchino](https://github.com/openrisc/or1k_marocchino) project.|
