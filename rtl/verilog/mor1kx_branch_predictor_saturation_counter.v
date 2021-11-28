@@ -1,22 +1,26 @@
-/******************************************************************************
- This Source Code Form is subject to the terms of the
- Open Hardware Description License, v. 1.0. If a copy
- of the OHDL was not distributed with this file, You
- can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+/* ****************************************************************************
+  This source describes Open Hardware and is licensed under the CERN-OHLW v2
 
- Description: Saturating counter branch predictor
- This is FSM with 4 states: strongly not taken, weakly not taken,
- weakly taken, strongly taken.
- Fsm changes it state upon real(not predicted) flag.
- If flag was "true" and instruction was bf  or flag was "false" and
- instruction was bnf fsm changes its state towards "taken". And vice versa
- otherwise.
- We predict flag on current fsm state and current branch type.
- If we are in any "taken" state and current instruction is bf,
- we predict flag to be "true". Or we're in any "not taken" state and
- current instruction is bnf, we predict flag to be "true".
+  You may redistribute and modify this documentation and make products
+  using it under the terms of the CERN-OHL-W v2 (https:/cern.ch/cern-ohl).
+  This documentation is distributed WITHOUT ANY EXPRESS OR IMPLIED
+  WARRANTY, INCLUDING OF MERCHANTABILITY, SATISFACTORY QUALITY
+  AND FITNESS FOR A PARTICULAR PURPOSE. Please see the CERN-OHL-W v2
+  for applicable conditions.
 
- Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
+  Description: Saturating counter branch predictor
+  This is FSM with 4 states: strongly not taken, weakly not taken,
+  weakly taken, strongly taken.
+  Fsm changes it state upon real(not predicted) flag.
+  If flag was "true" and instruction was bf  or flag was "false" and
+  instruction was bnf fsm changes its state towards "taken". And vice versa
+  otherwise.
+  We predict flag on current fsm state and current branch type.
+  If we are in any "taken" state and current instruction is bf,
+  we predict flag to be "true". Or we're in any "not taken" state and
+  current instruction is bnf, we predict flag to be "true".
+
+  Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
 
  ******************************************************************************/
 

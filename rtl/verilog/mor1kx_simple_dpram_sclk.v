@@ -1,14 +1,18 @@
-/******************************************************************************
- This Source Code Form is subject to the terms of the
- Open Hardware Description License, v. 1.0. If a copy
- of the OHDL was not distributed with this file, You
- can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+/* ****************************************************************************
+  This source describes Open Hardware and is licensed under the CERN-OHLW v2
 
- Description:
- Simple single clocked dual port ram (separate read and write ports),
- with optional bypass logic.
+  You may redistribute and modify this documentation and make products
+  using it under the terms of the CERN-OHL-W v2 (https:/cern.ch/cern-ohl).
+  This documentation is distributed WITHOUT ANY EXPRESS OR IMPLIED
+  WARRANTY, INCLUDING OF MERCHANTABILITY, SATISFACTORY QUALITY
+  AND FITNESS FOR A PARTICULAR PURPOSE. Please see the CERN-OHL-W v2
+  for applicable conditions.
 
- Copyright (C) 2012 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
+  Description:
+  Simple single clocked dual port ram (separate read and write ports),
+  with optional bypass logic.
+
+  Copyright (C) 2012 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
 
  ******************************************************************************/
 
