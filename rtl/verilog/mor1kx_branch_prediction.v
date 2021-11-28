@@ -1,17 +1,21 @@
-/******************************************************************************
- This Source Code Form is subject to the terms of the
- Open Hardware Description License, v. 1.0. If a copy
- of the OHDL was not distributed with this file, You
- can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+/* ****************************************************************************
+  This source describes Open Hardware and is licensed under the CERN-OHLW v2
 
- Description: Branch prediction module
- Generates a predicted flag output and compares that to the real flag
- when it comes back in the following pipeline stage.
- Signals are deliberately not named after the pipeline stage they belong to,
- in order to keep this module generic.
+  You may redistribute and modify this documentation and make products
+  using it under the terms of the CERN-OHL-W v2 (https:/cern.ch/cern-ohl).
+  This documentation is distributed WITHOUT ANY EXPRESS OR IMPLIED
+  WARRANTY, INCLUDING OF MERCHANTABILITY, SATISFACTORY QUALITY
+  AND FITNESS FOR A PARTICULAR PURPOSE. Please see the CERN-OHL-W v2
+  for applicable conditions.
 
- Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
- Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
+  Description: Branch prediction module
+  Generates a predicted flag output and compares that to the real flag
+  when it comes back in the following pipeline stage.
+  Signals are deliberately not named after the pipeline stage they belong to,
+  in order to keep this module generic.
+
+  Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
+  Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
 
  ******************************************************************************/
 
