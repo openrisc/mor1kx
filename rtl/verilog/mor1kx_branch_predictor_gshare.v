@@ -1,15 +1,12 @@
-/******************************************************************************
- This Source Code Form is subject to the terms of the
- Open Hardware Description License, v. 1.0. If a copy
- of the OHDL was not distributed with this file, You
- can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+/* ****************************************************************************
+  SPDX-License-Identifier: CERN-OHL-W-2.0
 
- Description: gshare branch predictor
- This predictor is based on array of FSMs with 4 states: strongly not taken,
- weakly not taken, weakly taken, strongly taken. Check saturation predictor.
- Index to the array of FSMs is built using xor of global history and lower bits of PC.
+  Description: gshare branch predictor
+  This predictor is based on array of FSMs with 4 states: strongly not taken,
+  weakly not taken, weakly taken, strongly taken. Check saturation predictor.
+  Index to the array of FSMs is built using xor of global history and lower bits of PC.
 
- Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
+  Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
 
  ******************************************************************************/
 

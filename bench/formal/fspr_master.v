@@ -1,4 +1,8 @@
-module fspr_master
+/* ****************************************************************************
+  SPDX-License-Identifier: CERN-OHL-W-2.0
+  ***************************************************************************** */
+
+ module fspr_master
 #(
   parameter OPTION_OPERAND_WIDTH = 32
   )

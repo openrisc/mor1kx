@@ -1,22 +1,19 @@
-/******************************************************************************
- This Source Code Form is subject to the terms of the
- Open Hardware Description License, v. 1.0. If a copy
- of the OHDL was not distributed with this file, You
- can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+/* ****************************************************************************
+  SPDX-License-Identifier: CERN-OHL-W-2.0
 
- Description: Saturating counter branch predictor
- This is FSM with 4 states: strongly not taken, weakly not taken,
- weakly taken, strongly taken.
- Fsm changes it state upon real(not predicted) flag.
- If flag was "true" and instruction was bf  or flag was "false" and
- instruction was bnf fsm changes its state towards "taken". And vice versa
- otherwise.
- We predict flag on current fsm state and current branch type.
- If we are in any "taken" state and current instruction is bf,
- we predict flag to be "true". Or we're in any "not taken" state and
- current instruction is bnf, we predict flag to be "true".
+  Description: Saturating counter branch predictor
+  This is FSM with 4 states: strongly not taken, weakly not taken,
+  weakly taken, strongly taken.
+  Fsm changes it state upon real(not predicted) flag.
+  If flag was "true" and instruction was bf  or flag was "false" and
+  instruction was bnf fsm changes its state towards "taken". And vice versa
+  otherwise.
+  We predict flag on current fsm state and current branch type.
+  If we are in any "taken" state and current instruction is bf,
+  we predict flag to be "true". Or we're in any "not taken" state and
+  current instruction is bnf, we predict flag to be "true".
 
- Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
+  Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
 
  ******************************************************************************/
 

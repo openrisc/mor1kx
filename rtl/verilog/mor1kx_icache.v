@@ -1,14 +1,11 @@
-/******************************************************************************
- This Source Code Form is subject to the terms of the
- Open Hardware Description License, v. 1.0. If a copy
- of the OHDL was not distributed with this file, You
- can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+/* ****************************************************************************
+  SPDX-License-Identifier: CERN-OHL-W-2.0
 
- Description: Instruction cache implementation
+  Description: Instruction cache implementation
 
- Copyright (C) 2012-2013
-    Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
-    Stefan Wallentowitz <stefan.wallentowitz@tum.de>
+  Copyright (C) 2012-2013
+     Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
+     Stefan Wallentowitz <stefan.wallentowitz@tum.de>
 
  ******************************************************************************/
 

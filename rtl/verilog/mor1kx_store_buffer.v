@@ -1,14 +1,11 @@
-/******************************************************************************
- This Source Code Form is subject to the terms of the
- Open Hardware Description License, v. 1.0. If a copy
- of the OHDL was not distributed with this file, You
- can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+/* ****************************************************************************
+  SPDX-License-Identifier: CERN-OHL-W-2.0
 
- Description: Store buffer
- Currently a simple single clock FIFO, but with the ambition to
- have combining and reordering capabilities in the future.
+  Description: Store buffer
+  Currently a simple single clock FIFO, but with the ambition to
+  have combining and reordering capabilities in the future.
 
- Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
+  Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
 
  ******************************************************************************/
 `include "mor1kx-defines.v"

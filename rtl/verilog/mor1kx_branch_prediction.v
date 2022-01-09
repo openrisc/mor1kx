@@ -1,17 +1,14 @@
-/******************************************************************************
- This Source Code Form is subject to the terms of the
- Open Hardware Description License, v. 1.0. If a copy
- of the OHDL was not distributed with this file, You
- can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+/* ****************************************************************************
+  SPDX-License-Identifier: CERN-OHL-W-2.0
 
- Description: Branch prediction module
- Generates a predicted flag output and compares that to the real flag
- when it comes back in the following pipeline stage.
- Signals are deliberately not named after the pipeline stage they belong to,
- in order to keep this module generic.
+  Description: Branch prediction module
+  Generates a predicted flag output and compares that to the real flag
+  when it comes back in the following pipeline stage.
+  Signals are deliberately not named after the pipeline stage they belong to,
+  in order to keep this module generic.
 
- Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
- Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
+  Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
+  Copyright (C) 2016 Alexey Baturo <baturo.alexey@gmail.com>
 
  ******************************************************************************/
 

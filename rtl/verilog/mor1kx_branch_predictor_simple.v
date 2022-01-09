@@ -1,14 +1,11 @@
-/******************************************************************************
- This Source Code Form is subject to the terms of the
- Open Hardware Description License, v. 1.0. If a copy
- of the OHDL was not distributed with this file, You
- can obtain one at http://juliusbaxter.net/ohdl/ohdl.txt
+/* ****************************************************************************
+  SPDX-License-Identifier: CERN-OHL-W-2.0
 
- Description: Simple branch predictor implementation
- We assume flag to be "true" if instruction is bf and it jumps backwords
- or if instruction is bnf and it jumps forward.
+  Description: Simple branch predictor implementation
+  We assume flag to be "true" if instruction is bf and it jumps backwords
+  or if instruction is bnf and it jumps forward.
 
- Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
+  Copyright (C) 2013 Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
 
  ******************************************************************************/
 
