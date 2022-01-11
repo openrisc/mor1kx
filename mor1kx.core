@@ -76,6 +76,102 @@ parameters:
     description : Output mor1kx instruction trace to screen
     paramtype   : plusarg
 
+  FEATURE_DATACACHE:
+    datatype   : str
+    description: Enable the mor1kx data cache, use ENABLED, NONE. default NONE
+    paramtype  : vlogparam
+    scope      : private
+
+  FEATURE_DMMU:
+    datatype   : str
+    description: Enable the mor1kx data bus mmu, use ENABLED, NONE. default NONE
+    paramtype  : vlogparam
+    scope      : private
+
+  FEATURE_INSTRUCTIONCACHE:
+    datatype   : str
+    description: Enable the mor1kx instruction cache, use ENABLED, NONE. default NONE
+    paramtype  : vlogparam
+    scope      : private
+
+  FEATURE_IMMU:
+    datatype   : str
+    description: Enable the mor1kx instruction bus mmu, use ENABLED, NONE. default NONE
+    paramtype  : vlogparam
+    scope      : private
+
+  FEATURE_FPU:
+    datatype   : str
+    description: Enable the mor1kx floating point unit, use ENABLED, NONE. default NONE
+    paramtype  : vlogparam
+    scope      : private
+
+  FEATURE_ROR:
+    datatype   : str
+    description: Enable the mor1kx rotate right instruction, use ENABLED, NONE. default NONE
+    paramtype  : vlogparam
+    scope      : private
+
+  FEATURE_EXT:
+    datatype   : str
+    description: Enable the mor1kx sign extend instructions, use ENABLED, NONE. default NONE
+    paramtype  : vlogparam
+    scope      : private
+
+  OPTION_DCACHE_BLOCK_WIDTH:
+    datatype   : int
+    description: Configure mor1kx d-cache block width in bits, controls block size. default 5
+    paramtype  : vlogparam
+    scope      : private
+
+  OPTION_DCACHE_LIMIT_WIDTH:
+    datatype   : int
+    description: Configure mor1kx d-cache limit in bits. default 32
+    paramtype  : vlogparam
+    scope      : private
+
+  OPTION_DCACHE_SET_WIDTH:
+    datatype   : int
+    description: Configure mor1kx d-cache set width in bits, controls numbers of sets. default 9
+    paramtype  : vlogparam
+    scope      : private
+
+  OPTION_DCACHE_WAYS:
+    datatype   : int
+    description: Configure mor1kx d-cache ways, controls number of blocks per set. default 2
+    paramtype  : vlogparam
+    scope      : private
+
+  OPTION_ICACHE_BLOCK_WIDTH:
+    datatype   : int
+    description: Configure mor1kx i-cache block width in bits, controls block size. default 5
+    paramtype  : vlogparam
+    scope      : private
+
+  OPTION_ICACHE_LIMIT_WIDTH:
+    datatype   : int
+    description: Configure mor1kx i-cache limit in bits. default 32
+    paramtype  : vlogparam
+    scope      : private
+
+  OPTION_ICACHE_SET_WIDTH:
+    datatype   : int
+    description: Configure mor1kx i-cache set width in bits, controls numbers of sets. default 9
+    paramtype  : vlogparam
+    scope      : private
+
+  OPTION_ICACHE_WAYS:
+    datatype   : int
+    description: Configure mor1kx i-cache ways, controls number of blocks per set. default 2
+    paramtype  : vlogparam
+    scope      : private
+
+  OPTION_RF_NUM_SHADOW_GPR:
+    datatype   : int
+    description: Configure mor1kx available shadow registers. default 0
+    paramtype  : vlogparam
+    scope      : private
+
 targets:
   default:
     filesets:
@@ -93,5 +189,12 @@ targets:
     filesets : [core , fpu]
     tools:
       icestorm:
+        arch: xilinx
         pnr: none
     toplevel : mor1kx
+    parameters: [FEATURE_DATACACHE, FEATURE_DMMU,
+                 FEATURE_INSTRUCTIONCACHE, FEATURE_IMMU,
+                 FEATURE_FPU, FEATURE_ROR, FEATURE_EXT,
+                 OPTION_DCACHE_BLOCK_WIDTH, OPTION_DCACHE_LIMIT_WIDTH, OPTION_DCACHE_SET_WIDTH, OPTION_DCACHE_WAYS,
+                 OPTION_ICACHE_BLOCK_WIDTH, OPTION_ICACHE_LIMIT_WIDTH, OPTION_ICACHE_SET_WIDTH, OPTION_ICACHE_WAYS,
+                 OPTION_RF_NUM_SHADOW_GPR]
