@@ -395,7 +395,7 @@ module mor1kx_cpu
 	 assign monitor_spr_sr = {16'd0,cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_sr[15:`OR1K_SPR_SR_F+1],cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.ctrl_flag_o,cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_sr[`OR1K_SPR_SR_F-1:0]};
 	 assign monitor_execute_pc = cappuccino.mor1kx_cpu.pc_decode_to_execute;
 	 assign monitor_rf_result_in = cappuccino.mor1kx_cpu.mor1kx_rf_cappuccino.result_i;
-	 assign monitor_spr_esr = {16'd0,cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_esr};
+	 assign monitor_spr_esr = {15'd0,cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_esr};
 	 assign monitor_spr_epcr = cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_epcr;
 	 assign monitor_spr_eear = cappuccino.mor1kx_cpu.mor1kx_ctrl_cappuccino.spr_eear;
 	 assign monitor_branch_mispredict = cappuccino.mor1kx_cpu.branch_mispredict_o;
