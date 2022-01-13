@@ -66,8 +66,8 @@ module mor1kx_ctrl_cappuccino
     parameter FEATURE_OVERFLOW = "NONE",
     parameter FEATURE_CARRY_FLAG = "ENABLED",
 
-    parameter SPR_SR_WIDTH = 16,
-    parameter SPR_SR_RESET_VALUE = 16'h8001
+    parameter SPR_SR_WIDTH = 17,
+    parameter SPR_SR_RESET_VALUE = 17'h08001
     )
    (
     input 			      clk,
@@ -568,7 +568,9 @@ module mor1kx_ctrl_cappuccino
      else if (padv_ctrl)
        doing_rfe_r <= ctrl_op_rfe_i;
 
-   assign spr_sr_o = spr_sr;
+   // TODO(?): SR[SUMRA] is ommitted for output to keep 
+   //          size of spr_sr_o same for all mor1kx_* pipes.
+   assign spr_sr_o = spr_sr[15:0];
 
 
    // FPU related: FPCSR and exception
@@ -618,7 +620,7 @@ module mor1kx_ctrl_cappuccino
            spr_fpcsr[`OR1K_FPCSR_FPEE] <= 1'b0;
          end  
          else if ((spr_we & spr_access[`OR1K_SPR_SYS_BASE] &
-                  (spr_sr[`OR1K_SPR_SR_SM] & padv_ctrl | du_access)) &&
+                  ((spr_sr[`OR1K_SPR_SR_SM] | spr_sr[`OR1K_SPR_SR_SUMRA]) & padv_ctrl | du_access)) &&
                   `SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_FPCSR_ADDR)) begin
            spr_fpcsr <= spr_write_dat[`OR1K_FPCSR_WIDTH-1:0]; // update all fields
           `ifdef OR1K_FPCSR_MASK_FLAGS
@@ -710,6 +712,8 @@ module mor1kx_ctrl_cappuccino
 	    spr_sr[`OR1K_SPR_SR_DSX ] <= spr_write_dat[`OR1K_SPR_SR_DSX ];
 
 	  spr_sr[`OR1K_SPR_SR_EPH ] <= spr_write_dat[`OR1K_SPR_SR_EPH ];
+
+	  spr_sr[`OR1K_SPR_SR_SUMRA] <= spr_write_dat[`OR1K_SPR_SR_SUMRA];
        end
      else if (padv_ctrl)
        begin
@@ -726,8 +730,10 @@ module mor1kx_ctrl_cappuccino
 				ctrl_overflow_clear_i ? 0 :
 				spr_sr[`OR1K_SPR_SR_OV   ];
 	  // Skip FO. TODO: make this even more selective.
-	  if (ctrl_op_rfe_i)
+	  if (ctrl_op_rfe_i) begin
 	    spr_sr[14:0] <= spr_esr[14:0];
+	    spr_sr[`OR1K_SPR_SR_SUMRA] <= spr_esr[`OR1K_SPR_SR_SUMRA];
+	  end
        end
 
 
@@ -792,6 +798,8 @@ module mor1kx_ctrl_cappuccino
 	    spr_esr[`OR1K_SPR_SR_DSX ] <= spr_write_dat[`OR1K_SPR_SR_DSX ];
 
 	  spr_esr[`OR1K_SPR_SR_EPH ] <= spr_write_dat[`OR1K_SPR_SR_EPH ];
+
+	  spr_esr[`OR1K_SPR_SR_SUMRA ] <= spr_write_dat[`OR1K_SPR_SR_SUMRA ];
        end
 
    always @(posedge clk `OR_ASYNC_RST)
