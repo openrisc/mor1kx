@@ -201,8 +201,9 @@ module mor1kx_fetch_cappuccino
    wire 				  except_ipagefault_clear;
 
    reg [OPTION_OPERAND_WIDTH-1:0] ibus_adr;
-   reg transducer_l15_val_r = 0;
+   reg transducer_l15_val_r;
    assign transducer_l15_val = transducer_l15_val_r;
+   assign transducer_l15_req_ack = l15_transducer_val;
 
    wire l15_refill_ack;
    assign l15_refill_ack = l15_transducer_val & (l15_transducer_returntype == `PCX_REQTYPE_IFILL);
@@ -428,25 +429,34 @@ module mor1kx_fetch_cappuccino
       imem_err <= l15_transducer_error;
 
    always @(posedge clk) begin
+	  if (rst) begin
+	      transducer_l15_val_r <= 1'b0;
+	  end
       ibus_ack <= 0;
       exception_while_tlb_reload <= 0;
       tlb_reload_ack <= 0;
+	  if (l15_transducer_header_ack) begin
+	      transducer_l15_val_r <= 0;
+	  end
 
       case (state)
 	IDLE: begin
 	   ibus_req <= 0;
 	   if (padv_i & ibus_access & !ibus_ack & !imem_err & !nop_ack) begin
 	      if (tlb_reload_req) begin
+	     transducer_l15_val_r <= 1;
 		 ibus_adr <= tlb_reload_addr;
 		 ibus_req <= 1;
 		 state <= TLB_RELOAD;
 	      end else if (immu_enable_i) begin
 		 ibus_adr <= immu_phys_addr;
 		 if (!tlb_miss & !pagefault & !immu_busy) begin
+			transducer_l15_val_r <= 1;
 		    ibus_req <= 1;
 		    state <= READ;
 		 end
 	      end else if (!ctrl_branch_exception_i | doing_rfe_i) begin
+		 transducer_l15_val_r <= 1;
 		 ibus_adr <= pc_fetch;
 		 ibus_req <= 1;
 		 state <= READ;
@@ -468,9 +478,6 @@ module mor1kx_fetch_cappuccino
 		 state <= IDLE;
 	      end
 	   end
-     if (l15_transducer_header_ack) begin
-       transducer_l15_val_r <= 0;
-     end
 	   if (l15_transducer_error) begin
 	      ibus_req <= 0;
 	      state <= IDLE;
