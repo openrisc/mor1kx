@@ -206,7 +206,7 @@ module mor1kx_fetch_cappuccino
    assign transducer_l15_req_ack = l15_transducer_val;
 
    wire l15_refill_ack;
-   assign l15_refill_ack = l15_transducer_val & (l15_transducer_returntype == `PCX_REQTYPE_IFILL);
+   assign l15_refill_ack = l15_transducer_val & (l15_transducer_returntype == `CPX_RESTYPE_IFILL1);
 
    assign transducer_l15_address = {{(40-OPTION_OPERAND_WIDTH){1'b0}},ibus_adr};
 
