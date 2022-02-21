@@ -24,7 +24,7 @@ module mor1kx_fetch_cappuccino
   #(
     parameter OPTION_OPERAND_WIDTH = 32,
     parameter OPTION_RESET_PC = {{(OPTION_OPERAND_WIDTH-13){1'b0}},
-				 `OR1K_RESET_VECTOR,8'd0},
+ `OR1K_RESET_VECTOR,8'd0},
     parameter OPTION_RF_ADDR_WIDTH = 5,
     parameter FEATURE_INSTRUCTIONCACHE = "NONE",
     parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
@@ -37,23 +37,23 @@ module mor1kx_fetch_cappuccino
     parameter OPTION_IMMU_WAYS = 1
     )
    (
-    input 				  clk,
-    input 				  rst,
+    input   clk,
+    input   rst,
 
     // SPR interface
-    input [15:0] 			  spr_bus_addr_i,
-    input 				  spr_bus_we_i,
-    input 				  spr_bus_stb_i,
-    input [OPTION_OPERAND_WIDTH-1:0] 	  spr_bus_dat_i,
-    output [OPTION_OPERAND_WIDTH-1:0] 	  spr_bus_dat_ic_o,
-    output 				  spr_bus_ack_ic_o,
-    output [OPTION_OPERAND_WIDTH-1:0] 	  spr_bus_dat_immu_o,
-    output 				  spr_bus_ack_immu_o,
+    input [15:0]   spr_bus_addr_i,
+    input   spr_bus_we_i,
+    input   spr_bus_stb_i,
+    input [OPTION_OPERAND_WIDTH-1:0]   spr_bus_dat_i,
+    output [OPTION_OPERAND_WIDTH-1:0]   spr_bus_dat_ic_o,
+    output   spr_bus_ack_ic_o,
+    output [OPTION_OPERAND_WIDTH-1:0]   spr_bus_dat_immu_o,
+    output   spr_bus_ack_immu_o,
 
-    input 				  ic_enable,
-    input 				  immu_enable_i,
-    input 				  supervisor_mode_i,
-    output 				  ic_hit_o,
+    input   ic_enable,
+    input   immu_enable_i,
+    input   supervisor_mode_i,
+    output   ic_hit_o,
 
     // TRI interface
     output          transducer_l15_val,
@@ -100,105 +100,105 @@ module mor1kx_fetch_cappuccino
     output          transducer_l15_req_ack,
 
     // interface to ibus
-    // input 				  ibus_err_i,
-    // input 				  ibus_ack_i,
-    // input [`OR1K_INSN_WIDTH-1:0] 	  ibus_dat_i,
-    // output 				  ibus_req_o,
-    // output [OPTION_OPERAND_WIDTH-1:0] 	  ibus_adr_o,
-    // output 				  ibus_burst_o,
+    // input   ibus_err_i,
+    // input   ibus_ack_i,
+    // input [`OR1K_INSN_WIDTH-1:0]   ibus_dat_i,
+    // output   ibus_req_o,
+    // output [OPTION_OPERAND_WIDTH-1:0]   ibus_adr_o,
+    // output   ibus_burst_o,
 
     // pipeline control input
-    input 				  padv_i,
-    input 				  padv_ctrl_i, // needed for immu spr
+    input   padv_i,
+    input   padv_ctrl_i, // needed for immu spr
 
     // interface to decode unit
     output reg [OPTION_OPERAND_WIDTH-1:0] pc_decode_o,
-    output reg [`OR1K_INSN_WIDTH-1:0] 	  decode_insn_o,
-    output reg 				  fetch_valid_o,
-    output [OPTION_RF_ADDR_WIDTH-1:0] 	  fetch_rfa_adr_o,
-    output [OPTION_RF_ADDR_WIDTH-1:0] 	  fetch_rfb_adr_o,
-    output 				  fetch_rf_adr_valid_o,
+    output reg [`OR1K_INSN_WIDTH-1:0]   decode_insn_o,
+    output reg   fetch_valid_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0]   fetch_rfa_adr_o,
+    output [OPTION_RF_ADDR_WIDTH-1:0]   fetch_rfb_adr_o,
+    output   fetch_rf_adr_valid_o,
 
     // branch/jump indication
-    input 				  decode_branch_i,
-    input [OPTION_OPERAND_WIDTH-1:0] 	  decode_branch_target_i,
-    input 				  ctrl_branch_exception_i,
-    input [OPTION_OPERAND_WIDTH-1:0] 	  ctrl_branch_except_pc_i,
-    input 				  du_restart_i,
-    input [OPTION_OPERAND_WIDTH-1:0] 	  du_restart_pc_i,
-    input 				  decode_op_brcond_i,
-    input 				  branch_mispredict_i,
-    input [OPTION_OPERAND_WIDTH-1:0] 	  execute_mispredict_target_i,
+    input   decode_branch_i,
+    input [OPTION_OPERAND_WIDTH-1:0]   decode_branch_target_i,
+    input   ctrl_branch_exception_i,
+    input [OPTION_OPERAND_WIDTH-1:0]   ctrl_branch_except_pc_i,
+    input   du_restart_i,
+    input [OPTION_OPERAND_WIDTH-1:0]   du_restart_pc_i,
+    input   decode_op_brcond_i,
+    input   branch_mispredict_i,
+    input [OPTION_OPERAND_WIDTH-1:0]   execute_mispredict_target_i,
 
     // pipeline flush input from control unit
-    input 				  pipeline_flush_i,
+    input   pipeline_flush_i,
 
     // rfe instruction is being performed
-    input 				  doing_rfe_i,
+    input   doing_rfe_i,
 
     // instruction ibus error indication out
-    output reg 				  decode_except_ibus_err_o,
+    output reg   decode_except_ibus_err_o,
 
     // IMMU exceptions
-    output reg 				  decode_except_itlb_miss_o,
-    output reg 				  decode_except_ipagefault_o,
+    output reg   decode_except_itlb_miss_o,
+    output reg   decode_except_ipagefault_o,
 
-    output reg 				  fetch_exception_taken_o
+    output reg   fetch_exception_taken_o
    );
 
    // registers
-   reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_fetch;
-   reg [OPTION_OPERAND_WIDTH-1:0] 	  pc_addr;
-   reg 					  ctrl_branch_exception_r;
+   reg [OPTION_OPERAND_WIDTH-1:0]   pc_fetch;
+   reg [OPTION_OPERAND_WIDTH-1:0]   pc_addr;
+   reg   ctrl_branch_exception_r;
 
-   wire 				  bus_access_done;
-   wire 				  ctrl_branch_exception_edge;
-   wire					  stall_fetch_valid;
-   wire 				  addr_valid;
-   reg 					  flush;
-   wire					  flushing;
+   wire   bus_access_done;
+   wire   ctrl_branch_exception_edge;
+   wire  stall_fetch_valid;
+   wire   addr_valid;
+   reg   flush;
+   wire  flushing;
 
-   reg 					  nop_ack;
+   reg   nop_ack;
 
-   reg 					  imem_err;
-   wire 				  imem_ack;
-   wire [`OR1K_INSN_WIDTH-1:0] 		  imem_dat;
+   reg   imem_err;
+   wire   imem_ack;
+   wire [`OR1K_INSN_WIDTH-1:0]   imem_dat;
 
-   wire 				  ic_ack;
-   wire [`OR1K_INSN_WIDTH-1:0] 		  ic_dat;
+   wire   ic_ack;
+   wire [`OR1K_INSN_WIDTH-1:0]   ic_dat;
 
-   wire 				  ic_refill;
-   wire 				  ic_refill_req;
-   wire 				  ic_refill_done;
-   wire 				  ic_invalidate;
-   wire [OPTION_OPERAND_WIDTH-1:0] 	  ic_addr;
-   wire [OPTION_OPERAND_WIDTH-1:0] 	  ic_addr_match;
+   wire   ic_refill;
+   wire   ic_refill_req;
+   wire   ic_refill_done;
+   wire   ic_invalidate;
+   wire [OPTION_OPERAND_WIDTH-1:0]   ic_addr;
+   wire [OPTION_OPERAND_WIDTH-1:0]   ic_addr_match;
 
-   wire 				  ic_access;
+   wire   ic_access;
 
 
-   wire [OPTION_OPERAND_WIDTH-1:0] 	  immu_phys_addr;
-   wire 				  immu_cache_inhibit;
-   wire 				  pagefault;
-   wire 				  tlb_miss;
-   wire 				  except_itlb_miss;
-   wire 				  except_ipagefault;
+   wire [OPTION_OPERAND_WIDTH-1:0]   immu_phys_addr;
+   wire   immu_cache_inhibit;
+   wire   pagefault;
+   wire   tlb_miss;
+   wire   except_itlb_miss;
+   wire   except_ipagefault;
 
-   wire 				  immu_busy;
+   wire   immu_busy;
 
-   wire 				  tlb_reload_req;
-   reg 					  tlb_reload_ack;
-   wire [OPTION_OPERAND_WIDTH-1:0] 	  tlb_reload_addr;
-   reg [OPTION_OPERAND_WIDTH-1:0] 	  tlb_reload_data;
-   wire 				  tlb_reload_pagefault;
-   wire 				  tlb_reload_busy;
+   wire   tlb_reload_req;
+   reg   tlb_reload_ack;
+   wire [OPTION_OPERAND_WIDTH-1:0]   tlb_reload_addr;
+   reg [OPTION_OPERAND_WIDTH-1:0]   tlb_reload_data;
+   wire   tlb_reload_pagefault;
+   wire   tlb_reload_busy;
 
-   reg 					  fetching_brcond;
-   reg 					  fetching_mispredicted_branch;
-   wire 				  mispredict_stall;
+   reg   fetching_brcond;
+   reg   fetching_mispredicted_branch;
+   wire   mispredict_stall;
 
-   reg 					  exception_while_tlb_reload;
-   wire 				  except_ipagefault_clear;
+   reg   exception_while_tlb_reload;
+   wire   except_ipagefault_clear;
 
    reg [OPTION_OPERAND_WIDTH-1:0] ibus_adr;
    reg transducer_l15_val_r;
@@ -211,24 +211,24 @@ module mor1kx_fetch_cappuccino
    assign transducer_l15_address = {{(40-OPTION_OPERAND_WIDTH){1'b0}},ibus_adr};
 
    assign bus_access_done = (imem_ack | imem_err | nop_ack) & !immu_busy &
-			    !tlb_reload_busy;
+    !tlb_reload_busy;
    assign ctrl_branch_exception_edge = ctrl_branch_exception_i &
-				       !ctrl_branch_exception_r;
+       !ctrl_branch_exception_r;
 
    /* used to keep fetch_valid_o high during stall */
    assign stall_fetch_valid = !padv_i & fetch_valid_o;
 
    assign addr_valid = bus_access_done & padv_i &
-		       !(except_itlb_miss | except_ipagefault) |
-		       decode_except_itlb_miss_o & ctrl_branch_exception_i |
-		       decode_except_ipagefault_o & ctrl_branch_exception_i |
-		       doing_rfe_i;
+       !(except_itlb_miss | except_ipagefault) |
+       decode_except_itlb_miss_o & ctrl_branch_exception_i |
+       decode_except_ipagefault_o & ctrl_branch_exception_i |
+       doing_rfe_i;
 
    assign except_itlb_miss = tlb_miss & immu_enable_i & bus_access_done &
-			     !mispredict_stall & !doing_rfe_i;
+     !mispredict_stall & !doing_rfe_i;
    assign except_ipagefault = pagefault & immu_enable_i & bus_access_done &
-			      !mispredict_stall & !doing_rfe_i |
-			      tlb_reload_pagefault;
+      !mispredict_stall & !doing_rfe_i |
+      tlb_reload_pagefault;
 
    assign fetch_rfa_adr_o = imem_dat[`OR1K_RA_SELECT];
    assign fetch_rfb_adr_o = imem_dat[`OR1K_RB_SELECT];
@@ -270,7 +270,7 @@ module mor1kx_fetch_cappuccino
        fetching_mispredicted_branch <= 1;
 
    assign mispredict_stall = fetching_mispredicted_branch |
-			     branch_mispredict_i & fetching_brcond;
+     branch_mispredict_i & fetching_brcond;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -281,24 +281,24 @@ module mor1kx_fetch_cappuccino
    // calculate address stage pc
    always @(*)
       if (rst)
-	pc_addr = OPTION_RESET_PC;
+pc_addr = OPTION_RESET_PC;
       else if (du_restart_i)
-	pc_addr = du_restart_pc_i;
+pc_addr = du_restart_pc_i;
       else if (ctrl_branch_exception_i & !fetch_exception_taken_o)
-	pc_addr = ctrl_branch_except_pc_i;
+pc_addr = ctrl_branch_except_pc_i;
       else if (branch_mispredict_i | fetching_mispredicted_branch)
-	pc_addr = execute_mispredict_target_i;
+pc_addr = execute_mispredict_target_i;
       else if (decode_branch_i)
-	pc_addr = decode_branch_target_i;
+pc_addr = decode_branch_target_i;
       else
-	pc_addr = pc_fetch + 4;
+pc_addr = pc_fetch + 4;
 
    // Register fetch pc from address stage
    always @(posedge clk `OR_ASYNC_RST)
       if (rst)
-	pc_fetch <= OPTION_RESET_PC;
+pc_fetch <= OPTION_RESET_PC;
       else if (addr_valid | du_restart_i)
-	pc_fetch <= pc_addr;
+pc_fetch <= pc_addr;
 
    // fetch_exception_taken_o generation
    always @(posedge clk `OR_ASYNC_RST)
@@ -318,7 +318,7 @@ module mor1kx_fetch_cappuccino
      else if (pipeline_flush_i)
        fetch_valid_o <= 1'b0;
      else if (bus_access_done & padv_i & !mispredict_stall & !immu_busy &
-	      !tlb_reload_busy | stall_fetch_valid)
+      !tlb_reload_busy | stall_fetch_valid)
        fetch_valid_o <= 1'b1;
      else
        fetch_valid_o <= 1'b0;
@@ -360,7 +360,7 @@ module mor1kx_fetch_cappuccino
        decode_except_itlb_miss_o <= 0;
 
    assign except_ipagefault_clear = decode_except_ipagefault_o &
-				    ctrl_branch_exception_i;
+    ctrl_branch_exception_i;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -374,19 +374,19 @@ module mor1kx_fetch_cappuccino
 
    // Bus access logic
    localparam [2:0]
-     IDLE		= 0,
-     READ		= 1,
-     TLB_RELOAD		= 2,
-     IC_REFILL		= 3;
+     IDLE= 0,
+     READ= 1,
+     TLB_RELOAD= 2,
+     IC_REFILL= 3;
 
    reg [2:0] state;
 
    wire [OPTION_OPERAND_WIDTH-1:0] next_ibus_adr;
-   reg [255:0] 	ibus_dat;
-   reg 				  ibus_req;
-   reg 				  ibus_ack;
+   reg [255:0] ibus_dat;
+   reg   ibus_req;
+   reg   ibus_ack;
 
-   wire 			  ibus_access;
+   wire   ibus_access;
 
    wire block_index;
    assign block_index = ic_addr[OPTION_ICACHE_BLOCK_WIDTH-1:2] << 3;
@@ -402,25 +402,25 @@ module mor1kx_fetch_cappuccino
        nop_ack <= 0;
      else
        nop_ack <= padv_i & !bus_access_done & !(ibus_req & ibus_access) &
-		  ((immu_enable_i & (tlb_miss | pagefault) &
-		    !tlb_reload_busy) |
-		   ctrl_branch_exception_edge & !tlb_reload_busy |
-		   exception_while_tlb_reload & !tlb_reload_busy |
-		   tlb_reload_pagefault |
-		   mispredict_stall);
+  ((immu_enable_i & (tlb_miss | pagefault) &
+    !tlb_reload_busy) |
+   ctrl_branch_exception_edge & !tlb_reload_busy |
+   exception_while_tlb_reload & !tlb_reload_busy |
+   tlb_reload_pagefault |
+   mispredict_stall);
 
    assign ibus_access = (!ic_access | tlb_reload_busy | ic_invalidate) &
-			!ic_refill |
-			(state != IDLE) & (state != IC_REFILL) |
-			ibus_ack;
+!ic_refill |
+(state != IDLE) & (state != IC_REFILL) |
+ibus_ack;
    assign imem_ack = ibus_access ? ibus_ack : ic_ack;
    assign imem_dat = (nop_ack | except_itlb_miss | except_ipagefault) ?
-		     {`OR1K_OPCODE_NOP,26'd0} :
-		     ibus_access ? ibus_dat[block_index +: OPTION_OPERAND_WIDTH] : ic_dat;
+     {`OR1K_OPCODE_NOP,26'd0} :
+     ibus_access ? ibus_dat[block_index +: OPTION_OPERAND_WIDTH] : ic_dat;
 
    assign next_ibus_adr = (OPTION_ICACHE_BLOCK_WIDTH == 5) ?
-			  {ibus_adr[31:5], ibus_adr[4:0] + 5'd4} : // 32 byte
-			  {ibus_adr[31:4], ibus_adr[3:0] + 4'd4};  // 16 byte
+  {ibus_adr[31:5], ibus_adr[4:0] + 5'd4} : // 32 byte
+  {ibus_adr[31:4], ibus_adr[3:0] + 4'd4};  // 16 byte
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -429,95 +429,95 @@ module mor1kx_fetch_cappuccino
       imem_err <= l15_transducer_error;
 
    always @(posedge clk) begin
-	  if (rst) begin
-	      transducer_l15_val_r <= 1'b0;
-	  end
+      if (rst) begin
+         transducer_l15_val_r <= 1'b0;
+      end
       ibus_ack <= 0;
       exception_while_tlb_reload <= 0;
       tlb_reload_ack <= 0;
-	  if (l15_transducer_header_ack) begin
-	      transducer_l15_val_r <= 0;
-	  end
 
+     if (l15_transducer_header_ack) begin
+       transducer_l15_val_r <= 0;
+     end
       case (state)
-	IDLE: begin
-	   ibus_req <= 0;
-	   if (padv_i & ibus_access & !ibus_ack & !imem_err & !nop_ack) begin
-	      if (tlb_reload_req) begin
-	     transducer_l15_val_r <= 1;
-		 ibus_adr <= tlb_reload_addr;
-		 ibus_req <= 1;
-		 state <= TLB_RELOAD;
-	      end else if (immu_enable_i) begin
-		 ibus_adr <= immu_phys_addr;
-		 if (!tlb_miss & !pagefault & !immu_busy) begin
-			transducer_l15_val_r <= 1;
-		    ibus_req <= 1;
-		    state <= READ;
-		 end
-	      end else if (!ctrl_branch_exception_i | doing_rfe_i) begin
-		 transducer_l15_val_r <= 1;
-		 ibus_adr <= pc_fetch;
-		 ibus_req <= 1;
-		 state <= READ;
-	      end
-	   end else if (ic_refill_req) begin
+IDLE: begin
+   ibus_req <= 0;
+   if (padv_i & ibus_access & !ibus_ack & !imem_err & !nop_ack) begin
+      if (tlb_reload_req) begin
         transducer_l15_val_r <= 1;
-	      ibus_adr <= ic_addr_match;
-	      ibus_req <= 1;
-	      state <= IC_REFILL;
-	   end
-	end
+ ibus_adr <= tlb_reload_addr;
+ ibus_req <= 1;
+ state <= TLB_RELOAD;
+      end else if (immu_enable_i) begin
+ ibus_adr <= immu_phys_addr;
+ if (!tlb_miss & !pagefault & !immu_busy) begin
+        transducer_l15_val_r <= 1;
+    ibus_req <= 1;
+    state <= READ;
+ end
+      end else if (!ctrl_branch_exception_i | doing_rfe_i) begin
+        transducer_l15_val_r <= 1;
+ ibus_adr <= pc_fetch;
+ ibus_req <= 1;
+ state <= READ;
+      end
+   end else if (ic_refill_req) begin
+        transducer_l15_val_r <= 1;
+      ibus_adr <= ic_addr_match;
+      ibus_req <= 1;
+      state <= IC_REFILL;
+   end
+end
 
-	IC_REFILL: begin
-	   ibus_req <= 1;
-	   if (l15_refill_ack) begin
-	      ibus_adr <= next_ibus_adr;
-	      if (ic_refill_done) begin
-		 ibus_req <= 0;
-		 state <= IDLE;
-	      end
-	   end
-	   if (l15_transducer_error) begin
-	      ibus_req <= 0;
-	      state <= IDLE;
-	   end
-	end
+IC_REFILL: begin
+   ibus_req <= 1;
+   if (l15_refill_ack) begin
+      ibus_adr <= next_ibus_adr;
+      if (ic_refill_done) begin
+ ibus_req <= 0;
+ state <= IDLE;
+      end
+   end
+   if (l15_transducer_error) begin
+      ibus_req <= 0;
+      state <= IDLE;
+   end
+end
 
-	READ: begin
-	   ibus_ack <= l15_refill_ack;
-	   ibus_dat <= 
+READ: begin
+   ibus_ack <= l15_refill_ack;
+   ibus_dat <= 
       {l15_transducer_data_3, l15_transducer_data_2, l15_transducer_data_1, l15_transducer_data_0};
-	   if (l15_refill_ack | l15_transducer_error) begin
-	      ibus_req <= 0;
-	      state <= IDLE;
-	   end
-	end
+   if (l15_refill_ack | l15_transducer_error) begin
+      ibus_req <= 0;
+      state <= IDLE;
+   end
+end
 
-	TLB_RELOAD: begin
-	   if (ctrl_branch_exception_i)
-	     exception_while_tlb_reload <= 1;
+TLB_RELOAD: begin
+   if (ctrl_branch_exception_i)
+     exception_while_tlb_reload <= 1;
 
      // TODO: handle TLB
-	   ibus_adr <= tlb_reload_addr;
-	   tlb_reload_data <= {(OPTION_OPERAND_WIDTH-1){1'b0}};
-	   tlb_reload_ack <= 1'b0 & tlb_reload_req;
+   ibus_adr <= tlb_reload_addr;
+   tlb_reload_data <= {(OPTION_OPERAND_WIDTH-1){1'b0}};
+   tlb_reload_ack <= 1'b0 & tlb_reload_req;
 
-	   if (!tlb_reload_req)
-	     state <= IDLE;
+   if (!tlb_reload_req)
+     state <= IDLE;
 
-	   ibus_req <= tlb_reload_req;
-	   if (l15_refill_ack | tlb_reload_ack)
-	     ibus_req <= 0;
-	end
+   ibus_req <= tlb_reload_req;
+   if (l15_refill_ack | tlb_reload_ack)
+     ibus_req <= 0;
+end
 
-	default:
-	  state <= IDLE;
+default:
+  state <= IDLE;
       endcase // case (state)
 
       if (rst) begin
-	 ibus_req <= 0;
-	 state <= IDLE;
+ ibus_req <= 0;
+ state <= IDLE;
       end
    end
 
@@ -527,7 +527,7 @@ module mor1kx_fetch_cappuccino
 
 generate
 if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
-   reg 					  ic_enable_r;
+   reg   ic_enable_r;
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        ic_enable_r <= 0;
@@ -537,49 +537,49 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
        ic_enable_r <= 0;
    wire ic_enabled = ic_enable & ic_enable_r;
    wire ic_refill_allowed = (!((tlb_miss | pagefault) & immu_enable_i) &
-			      !ctrl_branch_exception_i & !pipeline_flush_i &
-			      !mispredict_stall | doing_rfe_i) &
-			      !tlb_reload_busy & !immu_busy;
+      !ctrl_branch_exception_i & !pipeline_flush_i &
+      !mispredict_stall | doing_rfe_i) &
+      !tlb_reload_busy & !immu_busy;
    wire ic_req = padv_i & !decode_except_ibus_err_o &
-		   !decode_except_itlb_miss_o & !except_itlb_miss &
-		   !decode_except_ipagefault_o & !except_ipagefault &
-		   ic_access & ic_refill_allowed;
+   !decode_except_itlb_miss_o & !except_itlb_miss &
+   !decode_except_ipagefault_o & !except_ipagefault &
+   ic_access & ic_refill_allowed;
 
    if (OPTION_ICACHE_LIMIT_WIDTH == OPTION_OPERAND_WIDTH) begin
       assign ic_access = ic_enabled &
-			 !(immu_cache_inhibit & immu_enable_i);
+ !(immu_cache_inhibit & immu_enable_i);
    end else if (OPTION_ICACHE_LIMIT_WIDTH < OPTION_OPERAND_WIDTH) begin
       assign ic_access = ic_enabled &
-			 ic_addr_match[OPTION_OPERAND_WIDTH-1:
-				       OPTION_ICACHE_LIMIT_WIDTH] == 0 &
-			 !(immu_cache_inhibit & immu_enable_i);
+ ic_addr_match[OPTION_OPERAND_WIDTH-1:
+       OPTION_ICACHE_LIMIT_WIDTH] == 0 &
+ !(immu_cache_inhibit & immu_enable_i);
    end else begin
       initial begin
-	 $display("ERROR: OPTION_ICACHE_LIMIT_WIDTH > OPTION_OPERAND_WIDTH");
-	 $finish();
+ $display("ERROR: OPTION_ICACHE_LIMIT_WIDTH > OPTION_OPERAND_WIDTH");
+ $finish();
       end
    end
 
    /* mor1kx_icache AUTO_TEMPLATE (
     // Outputs
-    .cpu_ack_o			(ic_ack),
-    .cpu_dat_o			(ic_dat[OPTION_OPERAND_WIDTH-1:0]),
-    .spr_bus_dat_o		(spr_bus_dat_ic_o),
-    .spr_bus_ack_o		(spr_bus_ack_ic_o),
-    .refill_o			(ic_refill),
-    .refill_req_o		(ic_refill_req),
-    .refill_done_o		(ic_refill_done),
-    .invalidate_o		(ic_invalidate),
+    .cpu_ack_o(ic_ack),
+    .cpu_dat_o(ic_dat[OPTION_OPERAND_WIDTH-1:0]),
+    .spr_bus_dat_o(spr_bus_dat_ic_o),
+    .spr_bus_ack_o(spr_bus_ack_ic_o),
+    .refill_o(ic_refill),
+    .refill_req_o(ic_refill_req),
+    .refill_done_o(ic_refill_done),
+    .invalidate_o(ic_invalidate),
     // Inputs
-    .rst			(rst),
+    .rst(rst),
     .ic_imem_err_i      (imem_err),
-    .ic_access_i		(ic_access),
-    .cpu_adr_i			(ic_addr),
-    .cpu_adr_match_i		(ic_addr_match),
-    .cpu_req_i			(ic_req),
-    .wradr_i			(ibus_adr),
-    .wrdat_i			(ibus_dat_i),
-    .we_i			(ibus_ack_i),
+    .ic_access_i(ic_access),
+    .cpu_adr_i(ic_addr),
+    .cpu_adr_match_i(ic_addr_match),
+    .cpu_req_i(ic_req),
+    .wradr_i(ibus_adr),
+    .wrdat_i(ibus_dat_i),
+    .we_i(ibus_ack_i),
     );*/
 
    mor1kx_icache
@@ -592,31 +592,31 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
    mor1kx_icache
      (/*AUTOINST*/
       // Outputs
-      .refill_o				(ic_refill),		 // Templated
-      .refill_req_o			(ic_refill_req),	 // Templated
-      .refill_done_o			(ic_refill_done),	 // Templated
-      .invalidate_o			(ic_invalidate),	 // Templated
-      .cpu_ack_o			(ic_ack),		 // Templated
-      .cpu_dat_o			(ic_dat[OPTION_OPERAND_WIDTH-1:0]), // Templated
-      .spr_bus_dat_o			(spr_bus_dat_ic_o),	 // Templated
-      .spr_bus_ack_o			(spr_bus_ack_ic_o),	 // Templated
-      .cache_hit_o			(ic_hit_o),
+      .refill_o(ic_refill), // Templated
+      .refill_req_o(ic_refill_req), // Templated
+      .refill_done_o(ic_refill_done), // Templated
+      .invalidate_o(ic_invalidate), // Templated
+      .cpu_ack_o(ic_ack), // Templated
+      .cpu_dat_o(ic_dat[OPTION_OPERAND_WIDTH-1:0]), // Templated
+      .spr_bus_dat_o(spr_bus_dat_ic_o), // Templated
+      .spr_bus_ack_o(spr_bus_ack_ic_o), // Templated
+      .cache_hit_o(ic_hit_o),
       // Inputs
-      .clk				(clk),
-      .rst				(rst),		 // Templated
+      .clk(clk),
+      .rst(rst), // Templated
       .ic_imem_err_i    (imem_err), 
-      .ic_access_i			(ic_access),		 // Templated
-      .cpu_adr_i			(ic_addr),		 // Templated
-      .cpu_adr_match_i			(ic_addr_match),	 // Templated
-      .cpu_req_i			(ic_req),		 // Templated
-      .wradr_i				(ibus_adr),		 // Templated
-      .wrdat_i				(
-        {l15_transducer_data_3, l15_transducer_data_2, l15_transducer_data_1, l15_transducer_data_0}),		 // Templated
-      .we_i				(l15_refill_ack),		 // Templated
-      .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
-      .spr_bus_we_i			(spr_bus_we_i),
-      .spr_bus_stb_i			(spr_bus_stb_i),
-      .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
+      .ic_access_i(ic_access), // Templated
+      .cpu_adr_i(ic_addr), // Templated
+      .cpu_adr_match_i(ic_addr_match), // Templated
+      .cpu_req_i(ic_req), // Templated
+      .wradr_i(ibus_adr), // Templated
+      .wrdat_i(
+        {l15_transducer_data_3, l15_transducer_data_2, l15_transducer_data_1, l15_transducer_data_0}), // Templated
+      .we_i(l15_refill_ack), // Templated
+      .spr_bus_addr_i(spr_bus_addr_i[15:0]),
+      .spr_bus_we_i(spr_bus_we_i),
+      .spr_bus_stb_i(spr_bus_stb_i),
+      .spr_bus_dat_i(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]),
       // TRI
       .transducer_l15_l1rplway          (transducer_l15_l1rplway),
       .l15_transducer_nc                (l15_transducer_nc));
@@ -637,8 +637,8 @@ endgenerate
 generate
 if (FEATURE_IMMU!="NONE") begin : immu_gen
     wire  [OPTION_OPERAND_WIDTH-1:0] virt_addr = ic_addr;
-    wire 			    immu_spr_bus_stb;
-    wire 			    immu_enable;
+    wire     immu_spr_bus_stb;
+    wire     immu_enable;
     // small hack to delay immu spr reads by one cycle
     // ideally the spr accesses should work so that the address is presented
     // in execute stage and the delayed data should be available in control
@@ -648,24 +648,24 @@ if (FEATURE_IMMU!="NONE") begin : immu_gen
     assign immu_enable = immu_enable_i & !pipeline_flush_i & !mispredict_stall;
 
     /* mor1kx_immu AUTO_TEMPLATE (
-      .enable_i				(immu_enable),
-      .busy_o				(immu_busy),
-      .phys_addr_o			(immu_phys_addr),
-      .cache_inhibit_o			(immu_cache_inhibit),
-      .tlb_miss_o				(tlb_miss),
-      .tlb_reload_req_o			(tlb_reload_req),
-      .tlb_reload_addr_o			(tlb_reload_addr),
-      .tlb_reload_pagefault_o		(tlb_reload_pagefault),
-      .tlb_reload_ack_i			(tlb_reload_ack),
-      .tlb_reload_data_i			(tlb_reload_data),
-      .tlb_reload_busy_o			(tlb_reload_busy),
-      .tlb_reload_pagefault_clear_i	(except_ipagefault_clear),
-      .pagefault_o			(pagefault),
-      .spr_bus_dat_o			(spr_bus_dat_immu_o),
-      .spr_bus_ack_o			(spr_bus_ack_immu_o),
-      .spr_bus_stb_i			(immu_spr_bus_stb),
-      .virt_addr_i			(virt_addr),
-      .virt_addr_match_i			(pc_fetch),
+      .enable_i(immu_enable),
+      .busy_o(immu_busy),
+      .phys_addr_o(immu_phys_addr),
+      .cache_inhibit_o(immu_cache_inhibit),
+      .tlb_miss_o(tlb_miss),
+      .tlb_reload_req_o(tlb_reload_req),
+      .tlb_reload_addr_o(tlb_reload_addr),
+      .tlb_reload_pagefault_o(tlb_reload_pagefault),
+      .tlb_reload_ack_i(tlb_reload_ack),
+      .tlb_reload_data_i(tlb_reload_data),
+      .tlb_reload_busy_o(tlb_reload_busy),
+      .tlb_reload_pagefault_clear_i(except_ipagefault_clear),
+      .pagefault_o(pagefault),
+      .spr_bus_dat_o(spr_bus_dat_immu_o),
+      .spr_bus_ack_o(spr_bus_ack_immu_o),
+      .spr_bus_stb_i(immu_spr_bus_stb),
+      .virt_addr_i(virt_addr),
+      .virt_addr_match_i(pc_fetch),
       ); */
     mor1kx_immu
         #(
@@ -677,31 +677,31 @@ if (FEATURE_IMMU!="NONE") begin : immu_gen
         mor1kx_immu
         (/*AUTOINST*/
             // Outputs
-            .busy_o				(immu_busy),		 // Templated
-            .phys_addr_o			(immu_phys_addr),	 // Templated
-            .cache_inhibit_o			(immu_cache_inhibit),	 // Templated
-            .tlb_miss_o			(tlb_miss),		 // Templated
-            .pagefault_o			(pagefault),		 // Templated
-            .tlb_reload_req_o			(tlb_reload_req),	 // Templated
-            .tlb_reload_addr_o		(tlb_reload_addr),	 // Templated
-            .tlb_reload_pagefault_o		(tlb_reload_pagefault),	 // Templated
-            .tlb_reload_busy_o		(tlb_reload_busy),	 // Templated
-            .spr_bus_dat_o			(spr_bus_dat_immu_o),	 // Templated
-            .spr_bus_ack_o			(spr_bus_ack_immu_o),	 // Templated
+            .busy_o(immu_busy), // Templated
+            .phys_addr_o(immu_phys_addr), // Templated
+            .cache_inhibit_o(immu_cache_inhibit), // Templated
+            .tlb_miss_o(tlb_miss), // Templated
+            .pagefault_o(pagefault), // Templated
+            .tlb_reload_req_o(tlb_reload_req), // Templated
+            .tlb_reload_addr_o(tlb_reload_addr), // Templated
+            .tlb_reload_pagefault_o(tlb_reload_pagefault), // Templated
+            .tlb_reload_busy_o(tlb_reload_busy), // Templated
+            .spr_bus_dat_o(spr_bus_dat_immu_o), // Templated
+            .spr_bus_ack_o(spr_bus_ack_immu_o), // Templated
             // Inputs
-            .clk				(clk),
-            .rst				(rst),
-            .enable_i				(immu_enable),		 // Templated
-            .virt_addr_i			(virt_addr),		 // Templated
-            .virt_addr_match_i		(pc_fetch),		 // Templated
-            .supervisor_mode_i		(supervisor_mode_i),
-            .tlb_reload_ack_i			(tlb_reload_ack),	 // Templated
-            .tlb_reload_data_i		(tlb_reload_data),	 // Templated
-            .tlb_reload_pagefault_clear_i	(except_ipagefault_clear), // Templated
-            .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
-            .spr_bus_we_i			(spr_bus_we_i),
-            .spr_bus_stb_i			(immu_spr_bus_stb),	 // Templated
-            .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
+            .clk(clk),
+            .rst(rst),
+            .enable_i(immu_enable), // Templated
+            .virt_addr_i(virt_addr), // Templated
+            .virt_addr_match_i(pc_fetch), // Templated
+            .supervisor_mode_i(supervisor_mode_i),
+            .tlb_reload_ack_i(tlb_reload_ack), // Templated
+            .tlb_reload_data_i(tlb_reload_data), // Templated
+            .tlb_reload_pagefault_clear_i(except_ipagefault_clear), // Templated
+            .spr_bus_addr_i(spr_bus_addr_i[15:0]),
+            .spr_bus_we_i(spr_bus_we_i),
+            .spr_bus_stb_i(immu_spr_bus_stb), // Templated
+            .spr_bus_dat_i(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
 end else begin
     assign immu_cache_inhibit = 0;
     assign immu_busy = 0;
