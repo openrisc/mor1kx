@@ -223,6 +223,9 @@ module mor1kx_dcache
    assign tag_tag = cpu_adr_match_i[OPTION_DCACHE_LIMIT_WIDTH-1:WAY_WIDTH];
    assign tag_wtag = wradr_i[OPTION_DCACHE_LIMIT_WIDTH-1:WAY_WIDTH];
 
+   assign cpu_err_o = 0;
+   assign spr_bus_dat_o = 0;
+
    generate
       if (OPTION_DCACHE_WAYS >= 2) begin
          // Multiplex the LRU history from and to tag memory
