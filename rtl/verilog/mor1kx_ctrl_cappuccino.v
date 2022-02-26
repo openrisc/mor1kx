@@ -618,7 +618,7 @@ module mor1kx_ctrl_cappuccino
            spr_fpcsr[`OR1K_FPCSR_FPEE] <= 1'b0;
          end  
          else if ((spr_we & spr_access[`OR1K_SPR_SYS_BASE] &
-                  (spr_sr[`OR1K_SPR_SR_SM] & padv_ctrl | du_access)) &&
+                  (padv_ctrl | du_access)) &&
                   `SPR_OFFSET(spr_addr)==`SPR_OFFSET(`OR1K_SPR_FPCSR_ADDR)) begin
            spr_fpcsr <= spr_write_dat[`OR1K_FPCSR_WIDTH-1:0]; // update all fields
           `ifdef OR1K_FPCSR_MASK_FLAGS
