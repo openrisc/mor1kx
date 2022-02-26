@@ -1,0 +1,88 @@
+[*]
+[*] GTKWave Analyzer v3.3.108 (w)1999-2020 BSI
+[*] Sun Apr 17 21:04:51 2022
+[*]
+[dumpfile] "/home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/mor1kx_dcache_prv/engine_0/trace_induct.vcd"
+[dumpfile_mtime] "Sun Apr 17 11:12:31 2022"
+[dumpfile_size] 119689
+[savefile] "/home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/mor1kx_dcache.gtkw"
+[timestart] 111
+[size] 1162 721
+[pos] -1 -1
+*-5.096636 117 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] mor1kx_dcache.
+[sst_width] 281
+[signals_width] 198
+[sst_expanded] 1
+[sst_vpaned_height] 152
+@420
+smt_step
+@28
+mor1kx_dcache.clk
+mor1kx_dcache.rst
+[color] 1
+mor1kx_dcache.dc_dbus_err_i
+[color] 1
+mor1kx_dcache.snoop_valid_i
+@200
+-FSM
+@28
+mor1kx_dcache.invalidate
+mor1kx_dcache.write_pending
+@2024
+[color] 3
+^1 /home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/states-dcache.txt
+mor1kx_dcache.state[4:0]
+@200
+-CPU
+@28
+mor1kx_dcache.cpu_we_i
+mor1kx_dcache.cpu_req_i
+@22
+mor1kx_dcache.cpu_adr_i[31:0]
+mor1kx_dcache.cpu_adr_match_i[31:0]
+mor1kx_dcache.cpu_dat_i[31:0]
+mor1kx_dcache.cpu_dat_o[31:0]
+@28
+mor1kx_dcache.cpu_ack_o
+@200
+-SPR
+@28
+[color] 2
+mor1kx_dcache.spr_bus_stb_i
+[color] 2
+mor1kx_dcache.spr_bus_we_i
+[color] 2
+mor1kx_dcache.spr_bus_ack_o
+@22
+[color] 2
+mor1kx_dcache.spr_bus_addr_i[15:0]
+[color] 2
+mor1kx_dcache.spr_bus_dat_i[31:0]
+@200
+-REFILL
+@28
+mor1kx_dcache.refill_allowed_i
+mor1kx_dcache.refill_req_o
+mor1kx_dcache.refill_we_i
+mor1kx_dcache.refill_done_o
+mor1kx_dcache.refill_hit
+mor1kx_dcache.refill_o
+@22
+mor1kx_dcache.refill_adr_i[31:0]
+mor1kx_dcache.refill_dat_i[31:0]
+mor1kx_dcache.way_wr_dat[31:0]
+@200
+-formal
+@22
+[color] 5
+mor1kx_dcache.f_op_count[4:0]
+@28
+[color] 5
+mor1kx_dcache.f_read_pending
+[color] 5
+mor1kx_dcache.f_write_pending
+[color] 5
+mor1kx_dcache.f_flush_pending
+[pattern_trace] 1
+[pattern_trace] 0
