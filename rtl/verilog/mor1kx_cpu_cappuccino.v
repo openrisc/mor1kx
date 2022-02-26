@@ -58,7 +58,7 @@ module mor1kx_cpu_cappuccino
     parameter FEATURE_CARRY_FLAG = "ENABLED",
 
     parameter FEATURE_FASTCONTEXTS = "NONE",
-    parameter OPTION_RF_CLEAR_ON_INIT = 0,
+    parameter OPTION_RF_CLEAR_ON_INIT = 1,
     parameter OPTION_RF_NUM_SHADOW_GPR = 0,
     parameter OPTION_RF_ADDR_WIDTH = 5,
     parameter OPTION_RF_WORDS = 32,

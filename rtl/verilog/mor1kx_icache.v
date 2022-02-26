@@ -18,8 +18,8 @@ module mor1kx_icache
        #(
            parameter OPTION_OPERAND_WIDTH = 32,
            parameter OPTION_ICACHE_BLOCK_WIDTH = 5,
-           parameter OPTION_ICACHE_SET_WIDTH = 9,
-           parameter OPTION_ICACHE_WAYS = 2,
+           parameter OPTION_ICACHE_SET_WIDTH = 7,
+           parameter OPTION_ICACHE_WAYS = 4,
            parameter OPTION_ICACHE_LIMIT_WIDTH = 32
        )
        (
@@ -222,7 +222,7 @@ generate
     endgenerate
 
         // Get block index bit position aligned to word
-        assign block_index = cpu_adr_i[OPTION_ICACHE_BLOCK_WIDTH-1:2] << 3;
+        assign block_index = cpu_adr_i[OPTION_ICACHE_BLOCK_WIDTH-1:0] << 3;
 
 assign hit = |way_hit;
 assign cache_hit_o = hit;

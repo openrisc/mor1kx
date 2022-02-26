@@ -388,8 +388,8 @@ pc_fetch <= pc_addr;
 
    wire   ibus_access;
 
-   wire block_index;
-   assign block_index = ic_addr[OPTION_ICACHE_BLOCK_WIDTH-1:2] << 3;
+   wire [OPTION_ICACHE_BLOCK_WIDTH+2:0] block_index;
+   assign block_index = ic_addr[OPTION_ICACHE_BLOCK_WIDTH-1:0] << 3;
 
    //
    // Under certain circumstances, there is a need to insert an nop
@@ -486,8 +486,10 @@ end
 
 READ: begin
    ibus_ack <= l15_refill_ack;
-   ibus_dat <= 
-      {l15_transducer_data_3, l15_transducer_data_2, l15_transducer_data_1, l15_transducer_data_0};
+   ibus_dat <= {l15_transducer_data_3[31:0], l15_transducer_data_3[63:32],
+	   l15_transducer_data_2[31:0], l15_transducer_data_2[63:32],
+	   l15_transducer_data_1[31:0], l15_transducer_data_1[63:32],
+	   l15_transducer_data_0[31:0], l15_transducer_data_0[63:32]};
    if (l15_refill_ack | l15_transducer_error) begin
       ibus_req <= 0;
       state <= IDLE;
@@ -611,7 +613,11 @@ if (FEATURE_INSTRUCTIONCACHE!="NONE") begin : icache_gen
       .cpu_req_i(ic_req), // Templated
       .wradr_i(ibus_adr), // Templated
       .wrdat_i(
-        {l15_transducer_data_3, l15_transducer_data_2, l15_transducer_data_1, l15_transducer_data_0}), // Templated
+		{l15_transducer_data_3[31:0], l15_transducer_data_3[63:32],
+		l15_transducer_data_2[31:0], l15_transducer_data_2[63:32],
+		l15_transducer_data_1[31:0], l15_transducer_data_1[63:32],
+		l15_transducer_data_0[31:0], l15_transducer_data_0[63:32]}),
+		// Templated
       .we_i(l15_refill_ack), // Templated
       .spr_bus_addr_i(spr_bus_addr_i[15:0]),
       .spr_bus_we_i(spr_bus_we_i),
