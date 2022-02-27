@@ -9,6 +9,10 @@
 
  ******************************************************************************/
 
+// The mor1kx dcache is implemented as a write around cache with an
+// optimization to populate cache line (write though) entries if a there is
+// a valid entry in the dcache.
+
 `include "mor1kx-defines.v"
 
 module mor1kx_dcache
@@ -161,8 +165,10 @@ module mor1kx_dcache
    wire [OPTION_DCACHE_WAYS-1:0]      way_hit;
 
    // This is the least recently used value before access the memory.
-   // Those are one hot encoded.
-   wire [OPTION_DCACHE_WAYS-1:0]      lru;
+   // It is the value of current_lru_history that is combinationally
+   // one hot encoded.
+   // Used to select which way to replace during refill.
+   wire [OPTION_DCACHE_WAYS-1:0]      current_lru;
 
    // Register that stores the LRU value from lru
    reg [OPTION_DCACHE_WAYS-1:0]       tag_save_lru;
@@ -171,9 +177,12 @@ module mor1kx_dcache
    // a hit or is refilled. It is also one-hot encoded.
    reg [OPTION_DCACHE_WAYS-1:0]       access;
 
-   // The current LRU history as read from tag memory and the update
-   // value after we accessed it to write back to tag memory.
+   // The current encoded LRU history as read from tag memory.
    wire [TAG_LRU_WIDTH_BITS-1:0]      current_lru_history;
+   // This is the encoded value of current LRU history after being combined
+   // with the access vector.
+   // This value is written back to tag memory if there is a hit or
+   // refill.
    wire [TAG_LRU_WIDTH_BITS-1:0]      next_lru_history;
 
    // Intermediate signals to ease debugging
@@ -395,7 +404,7 @@ module mor1kx_dcache
 
 		    // Store the LRU information for correct replacement
                     // on refill. Always one when only one way.
-                    tag_save_lru <= (OPTION_DCACHE_WAYS==1) | lru;
+                    tag_save_lru <= (OPTION_DCACHE_WAYS==1) | current_lru;
 
 		    for (w1 = 0; w1 < OPTION_DCACHE_WAYS; w1 = w1 + 1) begin
 		       tag_way_save[w1] <= tag_way_out[w1];
@@ -536,9 +545,10 @@ module mor1kx_dcache
 		 if (!cpu_bsel_i[0])
 		   way_wr_dat[7:0] = cpu_dat_o[7:0];
 
-	      way_we = way_hit;
+		 // Only write data to way ram if we have a valid cacheline
+		 way_we = way_hit;
 
-	      tag_lru_in = next_lru_history;
+		 tag_lru_in = next_lru_history;
 
 		 tag_we = 1'b1;
 	      end
@@ -629,7 +639,7 @@ module mor1kx_dcache
          /* mor1kx_cache_lru AUTO_TEMPLATE(
           .current  (current_lru_history),
           .update   (next_lru_history),
-          .lru_pre  (lru),
+          .lru_pre  (current_lru),
           .lru_post (),
           .access   (access),
           ); */
@@ -639,7 +649,7 @@ module mor1kx_dcache
          u_lru(/*AUTOINST*/
 	       // Outputs
 	       .update			(next_lru_history),	 // Templated
-	       .lru_pre			(lru),			 // Templated
+	       .lru_pre			(current_lru),		 // Templated
 	       .lru_post		(),			 // Templated
 	       // Inputs
 	       .current			(current_lru_history),	 // Templated
