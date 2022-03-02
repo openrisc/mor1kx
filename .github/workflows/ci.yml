@@ -34,7 +34,8 @@ jobs:
       # Install OS and Python Tools
       - name: Install Tools
         run: |
-          sudo apt-get install build-essential python3 xz-utils git iverilog libelf-dev
+          sudo apt-get install build-essential python3 xz-utils git iverilog \
+            libfl2 libelf-dev
           pip3 install setuptools wheel
           pip3 install fusesoc
           export PATH=$PATH:$HOME/.local/bin
@@ -47,9 +48,8 @@ jobs:
           mkdir -p /tmp/tools/lib
           cd /tmp/tools
           curl --remote-name --location \
-            https://github.com/stffrdhrn/gcc/releases/download/or1k-10.0.0-20190723/or1k-elf-10.0.0-20190723.tar.xz
-          tar xC /tmp/tools -f or1k-elf-10.0.0-20190723.tar.xz
-          ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /tmp/tools/lib/libmpfr.so.4
+            https://github.com/openrisc/or1k-gcc/releases/download/or1k-12.0.1-20220210-20220304/or1k-elf-12.0.1-20220210-20220304.tar.xz
+          tar xC /tmp/tools -f or1k-elf-12.0.1-20220210-20220304.tar.xz
           export PATH=$PATH:/tmp/tools/or1k-elf/bin/
           or1k-elf-gcc --version
 
