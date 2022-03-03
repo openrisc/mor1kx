@@ -59,7 +59,7 @@ jobs:
           export PATH=$PATH:/tmp/tools/or1k-elf/bin:$HOME/.local/bin
           mkdir -p /tmp/tools
           cd /tmp/tools
-          git clone --depth 1 https://github.com/openrisc/or1k-tests.git -b v1.0.4
+          git clone --depth 1 https://github.com/openrisc/or1k-tests.git -b v1.0.5
           cd or1k-tests/native
           make -j8
           fusesoc library add mor1kx-generic https://github.com/openrisc/mor1kx-generic.git
@@ -77,7 +77,8 @@ jobs:
           export PIPELINE=CAPPUCCINO
           export TARGET=mor1kx_tb
           export TARGET_ARGS="--tool=icarus"
-          export CORE_ARGS="--pipeline=$PIPELINE $EXTRA_CORE_ARGS"
+          export CORE_ARGS="--pipeline=$PIPELINE --vcd --trace_enable $EXTRA_CORE_ARGS"
+          export ARTIFACT_PATH="build/mor1kx-generic_*/mor1kx_tb-icarus"
           cd /tmp/tools/or1k-tests/native
           ./runtests.sh
           result=$?
@@ -85,6 +86,13 @@ jobs:
             cat runtests.log
           fi
           exit $result
+
+      # Upload test results
+      - uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: runtest-results
+          path: /tmp/tools/or1k-tests/native/artifacts/**/*
 
     strategy:
       matrix:
