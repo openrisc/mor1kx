@@ -689,17 +689,28 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 		  dbus_atomic & dbus_we_o & !write_done |
 		  ctrl_op_lsu_store_i & tlb_reload_busy & !tlb_reload_req;
 
-   /* mor1kx_dcache AUTO_TEMPLATE (
+   mor1kx_dcache
+     #(
+       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
+       .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
+       .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
+       .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
+       .OPTION_DCACHE_LIMIT_WIDTH(OPTION_DCACHE_LIMIT_WIDTH),
+       .OPTION_DCACHE_SNOOP(OPTION_DCACHE_SNOOP)
+       )
+   mor1kx_dcache
+	   (
+	    // Outputs
 	    .refill_o			(dc_refill),
 	    .refill_req_o		(dc_refill_req),
 	    .refill_done_o		(dc_refill_done),
-            .cache_hit_o                (dc_hit),
+	    .cache_hit_o		(dc_hit_o),
 	    .cpu_err_o			(dc_err),
 	    .cpu_ack_o			(dc_ack),
 	    .cpu_dat_o			(dc_ldat),
+	    .snoop_hit_o		(dc_snoop_hit),
 	    .spr_bus_dat_o		(spr_bus_dat_dc_o),
 	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
-            .snoop_hit_o                (dc_snoop_hit),
 	    // Inputs
 	    .clk			(clk),
 	    .rst			(rst),
@@ -712,53 +723,12 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
 	    .cpu_req_i			(dc_req),
 	    .cpu_we_i			(dc_we),
 	    .cpu_bsel_i			(dc_bsel),
-	    .refill_allowed		(dc_refill_allowed),
+	    .refill_allowed_i		(dc_refill_allowed),
 	    .wradr_i			(dbus_adr),
 	    .wrdat_i			(dbus_dat_i),
 	    .we_i			(dbus_ack_i),
-            .snoop_valid_i              (snoop_valid),
-    );*/
-
-   mor1kx_dcache
-     #(
-       .OPTION_OPERAND_WIDTH(OPTION_OPERAND_WIDTH),
-       .OPTION_DCACHE_BLOCK_WIDTH(OPTION_DCACHE_BLOCK_WIDTH),
-       .OPTION_DCACHE_SET_WIDTH(OPTION_DCACHE_SET_WIDTH),
-       .OPTION_DCACHE_WAYS(OPTION_DCACHE_WAYS),
-       .OPTION_DCACHE_LIMIT_WIDTH(OPTION_DCACHE_LIMIT_WIDTH),
-       .OPTION_DCACHE_SNOOP(OPTION_DCACHE_SNOOP)
-       )
-   mor1kx_dcache
-	   (/*AUTOINST*/
-	    // Outputs
-	    .refill_o			(dc_refill),		 // Templated
-	    .refill_req_o		(dc_refill_req),	 // Templated
-	    .refill_done_o		(dc_refill_done),	 // Templated
-	    .cache_hit_o		(dc_hit_o),		 // Templated
-	    .cpu_err_o			(dc_err),		 // Templated
-	    .cpu_ack_o			(dc_ack),		 // Templated
-	    .cpu_dat_o			(dc_ldat),		 // Templated
-	    .snoop_hit_o		(dc_snoop_hit),		 // Templated
-	    .spr_bus_dat_o		(spr_bus_dat_dc_o),	 // Templated
-	    .spr_bus_ack_o		(spr_bus_ack_dc_o),	 // Templated
-	    // Inputs
-	    .clk			(clk),			 // Templated
-	    .rst			(rst),			 // Templated
-	    .dc_dbus_err_i		(dbus_err),		 // Templated
-	    .dc_enable_i		(dc_enabled),		 // Templated
-	    .dc_access_i		(dc_access),		 // Templated
-	    .cpu_dat_i			(lsu_sdat),		 // Templated
-	    .cpu_adr_i			(dc_adr),		 // Templated
-	    .cpu_adr_match_i		(dc_adr_match),		 // Templated
-	    .cpu_req_i			(dc_req),		 // Templated
-	    .cpu_we_i			(dc_we),		 // Templated
-	    .cpu_bsel_i			(dc_bsel),		 // Templated
-	    .refill_allowed		(dc_refill_allowed),	 // Templated
-	    .wradr_i			(dbus_adr),		 // Templated
-	    .wrdat_i			(dbus_dat_i),		 // Templated
-	    .we_i			(dbus_ack_i),		 // Templated
 	    .snoop_adr_i		(snoop_adr_i[31:0]),
-	    .snoop_valid_i		(snoop_valid),		 // Templated
+	    .snoop_valid_i		(snoop_valid),
 	    .spr_bus_addr_i		(spr_bus_addr_i[15:0]),
 	    .spr_bus_we_i		(spr_bus_we_i),
 	    .spr_bus_stb_i		(spr_bus_stb_i),
@@ -797,27 +767,6 @@ if (FEATURE_DMMU!="NONE") begin : dmmu_gen
 
    assign dmmu_enable = dmmu_enable_i & !pipeline_flush_i;
 
-   /* mor1kx_dmmu AUTO_TEMPLATE (
-    .enable_i				(dmmu_enable),
-    .phys_addr_o			(dmmu_phys_addr),
-    .cache_inhibit_o			(dmmu_cache_inhibit),
-    .op_store_i				(ctrl_op_lsu_store_i),
-    .op_load_i				(ctrl_op_lsu_load_i),
-    .tlb_miss_o				(tlb_miss),
-    .pagefault_o			(pagefault),
-    .tlb_reload_req_o			(tlb_reload_req),
-    .tlb_reload_busy_o			(tlb_reload_busy),
-    .tlb_reload_addr_o			(tlb_reload_addr),
-    .tlb_reload_pagefault_o		(tlb_reload_pagefault),
-    .tlb_reload_ack_i			(tlb_reload_ack),
-    .tlb_reload_data_i			(tlb_reload_data),
-    .tlb_reload_pagefault_clear_i	(tlb_reload_pagefault_clear),
-    .spr_bus_dat_o			(spr_bus_dat_dmmu_o),
-    .spr_bus_ack_o			(spr_bus_ack_dmmu_o),
-    .spr_bus_stb_i			(dmmu_spr_bus_stb),
-    .virt_addr_i			(virt_addr),
-    .virt_addr_match_i			(ctrl_lsu_adr_i),
-    ); */
    mor1kx_dmmu
      #(
        .FEATURE_DMMU_HW_TLB_RELOAD(FEATURE_DMMU_HW_TLB_RELOAD),
@@ -826,7 +775,7 @@ if (FEATURE_DMMU!="NONE") begin : dmmu_gen
        .OPTION_DMMU_WAYS(OPTION_DMMU_WAYS)
        )
    mor1kx_dmmu
-     (/*AUTOINST*/
+     (
       // Outputs
       .phys_addr_o			(dmmu_phys_addr),	 // Templated
       .cache_inhibit_o			(dmmu_cache_inhibit),	 // Templated
@@ -841,18 +790,18 @@ if (FEATURE_DMMU!="NONE") begin : dmmu_gen
       // Inputs
       .clk				(clk),
       .rst				(rst),
-      .enable_i				(dmmu_enable),		 // Templated
-      .virt_addr_i			(virt_addr),		 // Templated
-      .virt_addr_match_i		(ctrl_lsu_adr_i),	 // Templated
-      .op_store_i			(ctrl_op_lsu_store_i),	 // Templated
-      .op_load_i			(ctrl_op_lsu_load_i),	 // Templated
+      .enable_i				(dmmu_enable),
+      .virt_addr_i			(virt_addr),
+      .virt_addr_match_i		(ctrl_lsu_adr_i),
+      .op_store_i			(ctrl_op_lsu_store_i),
+      .op_load_i			(ctrl_op_lsu_load_i),
       .supervisor_mode_i		(supervisor_mode_i),
-      .tlb_reload_ack_i			(tlb_reload_ack),	 // Templated
-      .tlb_reload_data_i		(tlb_reload_data),	 // Templated
-      .tlb_reload_pagefault_clear_i	(tlb_reload_pagefault_clear), // Templated
+      .tlb_reload_ack_i			(tlb_reload_ack),
+      .tlb_reload_data_i		(tlb_reload_data),
+      .tlb_reload_pagefault_clear_i	(tlb_reload_pagefault_clear),
       .spr_bus_addr_i			(spr_bus_addr_i[15:0]),
       .spr_bus_we_i			(spr_bus_we_i),
-      .spr_bus_stb_i			(dmmu_spr_bus_stb),	 // Templated
+      .spr_bus_stb_i			(dmmu_spr_bus_stb),
       .spr_bus_dat_i			(spr_bus_dat_i[OPTION_OPERAND_WIDTH-1:0]));
 end else begin
    assign dmmu_cache_inhibit = 0;

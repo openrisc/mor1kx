@@ -47,7 +47,7 @@ module mor1kx_dcache
     input 			      cpu_we_i,
     input [3:0] 		      cpu_bsel_i,
 
-    input 			      refill_allowed,
+    input 			      refill_allowed_i,
 
     input [OPTION_OPERAND_WIDTH-1:0]  wradr_i,
     input [OPTION_OPERAND_WIDTH-1:0]  wrdat_i,
@@ -310,7 +310,7 @@ module mor1kx_dcache
 
    assign refill_o = refill;
 
-   assign refill_req_o = read & cpu_req_i & !hit & !write_pending & refill_allowed | refill;
+   assign refill_req_o = read & cpu_req_i & !hit & !write_pending & refill_allowed_i | refill;
 
    /*
     * SPR bus interface
@@ -398,7 +398,7 @@ module mor1kx_dcache
 
 	   READ: begin
 	      if (dc_access_i | cpu_we_i & dc_enable_i) begin
-		 if (!hit & cpu_req_i & !write_pending & refill_allowed) begin
+		 if (!hit & cpu_req_i & !write_pending & refill_allowed_i) begin
 		    refill_valid <= 0;
 		    refill_valid_r <= 0;
 
@@ -636,17 +636,9 @@ module mor1kx_dcache
       end
 
       if (OPTION_DCACHE_WAYS >= 2) begin : gen_u_lru
-         /* mor1kx_cache_lru AUTO_TEMPLATE(
-          .current  (current_lru_history),
-          .update   (next_lru_history),
-          .lru_pre  (current_lru),
-          .lru_post (),
-          .access   (access),
-          ); */
-
          mor1kx_cache_lru
            #(.NUMWAYS(OPTION_DCACHE_WAYS))
-         u_lru(/*AUTOINST*/
+         u_lru(
 	       // Outputs
 	       .update			(next_lru_history),	 // Templated
 	       .lru_pre			(current_lru),		 // Templated
@@ -743,7 +735,7 @@ endgenerate
    //Refilling
    always @(posedge clk) begin
       if ($past(f_this_refill) && (f_refill_data == wrdat_i)
-          && !$past(write_pending) && $past(refill_allowed)
+          && !$past(write_pending) && $past(refill_allowed_i)
           && !$past(cache_hit_o)&& $past(cpu_req_i)
           && f_past_valid && !$past(rst) &&
           $past(state) == READ) begin
