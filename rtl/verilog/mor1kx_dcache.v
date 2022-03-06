@@ -574,16 +574,6 @@ module mor1kx_dcache
 		      refill_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 
 	 case (state)
-	   IDLE: begin
-	      //
-	      // When idle we can always acknowledge the invalidate as it
-	      // has the highest priority in handling. When something is
-	      // changed on the state machine handling above this needs
-	      // to be changed.
-	      //
-	      invalidate_ack = 1'b1;
-	   end
-
 	   READ: begin
 	      if (hit) begin
 		 //
