@@ -15,6 +15,11 @@
 
 `include "mor1kx-defines.v"
 
+// The mor1kx load store unit (LSU) module controls access to the CPU data bus
+// to provide memory load and store operations.  The LSU provides configurable
+// data cache, memmory management unit (MMU), store buffer and atomic
+// operations.
+
 module mor1kx_lsu_cappuccino
   #(
     parameter FEATURE_DATACACHE	= "NONE",
@@ -138,6 +143,8 @@ module mor1kx_lsu_cappuccino
    wire [OPTION_OPERAND_WIDTH-1:0]   lsu_sdat;
    wire				     lsu_ack;
 
+   // Data Cache
+   // From Data Cache to LSU to indicate load request is ready
    wire 			     dc_ack;
    wire 			     dc_err;
    wire [31:0] 			     dc_ldat;
@@ -220,8 +227,11 @@ module mor1kx_lsu_cappuccino
    assign align_err_word = |ctrl_lsu_adr_i[1:0];
    assign align_err_short = ctrl_lsu_adr_i[0];
 
-
-   assign lsu_valid_o = (lsu_ack | access_done) & !tlb_reload_busy & !dc_snoop_hit;
+   // Assert lsu_valid_o to progress pipeline past LSU operation if the LSU
+   // operation is done and we are not waiting on tlb reloads or data cache
+   // invalidations.
+   assign lsu_valid_o = (lsu_ack | access_done) &
+			!tlb_reload_busy & !dc_snoop_hit;
 
    assign lsu_except_dbus_o = except_dbus | store_buffer_err_o;
 
@@ -242,6 +252,7 @@ module mor1kx_lsu_cappuccino
 
    assign lsu_except_dpagefault_o = except_dpagefault & !pipeline_flush_i;
 
+   // Assert access_done one cycle after lsu_ack, clear on padv_execute_i
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        access_done <= 0;
@@ -350,6 +361,7 @@ module mor1kx_lsu_cappuccino
 
    reg [2:0] state;
 
+   // Indicates if reads come from the data bus or data cache
    assign dbus_access = (!dc_access | tlb_reload_busy | ctrl_op_lsu_store_i) &
 			(state != DC_REFILL) | (state == WRITE);
    reg      dc_refill_r;
@@ -358,21 +370,23 @@ module mor1kx_lsu_cappuccino
      dc_refill_r <= dc_refill;
 
    wire     store_buffer_ack;
+   // The store buffer ack is used to ack incoming write requests
    assign store_buffer_ack = (FEATURE_STORE_BUFFER!="NONE") ?
 			     store_buffer_write :
 			     write_done;
-			     
-   // If we are writing we wait for the store buffer ack and
-   // in case of dcache being busy we wait for data cache ack too
+
+   // If we are writing we wait for the store buffer ack
+   // If we are reading we wait for the dbus ack or in case of the
+   // dcache being busy wait for data cache ack
    assign lsu_ack = (ctrl_op_lsu_store_i | state == WRITE) ?
                      (ctrl_op_lsu_atomic_i ? write_done : store_buffer_ack) :
 		     (dbus_access ? dbus_ack : dc_ack);
 
+   // Load data to be sent to lsu_result_o
    assign lsu_ldat = dbus_access ? dbus_dat : dc_ldat;
+
    assign dbus_adr_o = dbus_adr;
-
    assign dbus_dat_o = dbus_dat;
-
    assign dbus_burst_o = (state == DC_REFILL) & !dc_refill_done;
 
    //
@@ -582,6 +596,9 @@ endgenerate
 	      (store_buffer_full | dc_refill | dc_refill_r | dc_snoop_hit))
        store_buffer_write_pending <= 1;
 
+   // Indicates a request to write an entry to the store buffer
+   // this is also used to indicate the store buffer ack to
+   // which feeds back to the pipeline control to advance the pipeline.
    assign store_buffer_write = (ctrl_op_lsu_store_i &
 				(padv_ctrl_i | tlb_reload_done) |
 				store_buffer_write_pending) &
@@ -646,6 +663,7 @@ end
 endgenerate
    assign store_buffer_wadr = dc_adr_match;
 
+   // Data Cache Logic
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        dc_enable_r <= 0;
@@ -700,35 +718,39 @@ if (FEATURE_DATACACHE!="NONE") begin : dcache_gen
        )
    mor1kx_dcache
 	   (
-	    // Outputs
-	    .refill_o			(dc_refill),
-	    .refill_req_o		(dc_refill_req),
-	    .refill_done_o		(dc_refill_done),
-	    .cache_hit_o		(dc_hit_o),
-	    .cpu_err_o			(dc_err),
-	    .cpu_ack_o			(dc_ack),
-	    .cpu_dat_o			(dc_ldat),
-	    .snoop_hit_o		(dc_snoop_hit),
-	    .spr_bus_dat_o		(spr_bus_dat_dc_o),
-	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
-	    // Inputs
 	    .clk			(clk),
 	    .rst			(rst),
+
 	    .dc_dbus_err_i		(dbus_err),
 	    .dc_enable_i		(dc_enabled),
 	    .dc_access_i		(dc_access),
+
+	    .refill_o			(dc_refill),
+	    .refill_req_o		(dc_refill_req),
+	    .refill_done_o		(dc_refill_done),
+	    .refill_allowed_i		(dc_refill_allowed),
+	    .refill_adr_i		(dbus_adr),
+	    .refill_dat_i		(dbus_dat_i),
+	    .refill_we_i		(dbus_ack_i),
+
+	    .cache_hit_o		(dc_hit_o),
+
+	    .cpu_err_o			(dc_err),
+	    .cpu_ack_o			(dc_ack),
+	    .cpu_dat_o			(dc_ldat),
 	    .cpu_dat_i			(lsu_sdat),
 	    .cpu_adr_i			(dc_adr),
 	    .cpu_adr_match_i		(dc_adr_match),
 	    .cpu_req_i			(dc_req),
 	    .cpu_we_i			(dc_we),
 	    .cpu_bsel_i			(dc_bsel),
-	    .refill_allowed_i		(dc_refill_allowed),
-	    .wradr_i			(dbus_adr),
-	    .wrdat_i			(dbus_dat_i),
-	    .we_i			(dbus_ack_i),
+
 	    .snoop_adr_i		(snoop_adr_i[31:0]),
 	    .snoop_valid_i		(snoop_valid),
+	    .snoop_hit_o		(dc_snoop_hit),
+
+	    .spr_bus_dat_o		(spr_bus_dat_dc_o),
+	    .spr_bus_ack_o		(spr_bus_ack_dc_o),
 	    .spr_bus_addr_i		(spr_bus_addr_i[15:0]),
 	    .spr_bus_we_i		(spr_bus_we_i),
 	    .spr_bus_stb_i		(spr_bus_stb_i),
@@ -745,6 +767,8 @@ end else begin
    assign dc_snoop_hit = 0;
    assign dc_hit_o = 0;
    assign dc_ldat = 0;
+   assign spr_bus_dat_dc_o = 0;
+   assign spr_bus_ack_dc_o = 0;
 end
 
 endgenerate

@@ -13,6 +13,68 @@
 // optimization to populate cache line (write though) entries if a there is
 // a valid entry in the dcache.
 
+// Cases:
+
+// 1. Write to cached memory entry
+//    A data cache write operation will update cached way data if there is
+//    a valid cache-line entry.  A write request must be guaranteed to finish in
+//    2 clock cycles.  First clock cycle request, second clock cycle write.  The
+//    LSU does not expect a response and will only present the write request to
+//    the data cache for 2 clock cycles.  This will be extended only if there is
+//    a snoop hit.
+//
+//    A write starts by transitioning the data cache FSM into WRITE state.
+//    While in the WRITE state the tag memory and way memory will be written to.
+//
+//    If already in WRITE state a write option can complete in one cycle.
+//
+// 2. Write to non-cached memory entry
+//    A data cache write to a non-cached entry is similar to a cached write
+//    however tag and way memory will not be updated.  The FSM will sill need to
+//    transition to the WRITE state in order to check the cache-line.
+//
+// 3. Read from cached memory entry
+//    A data cache read will first transition the data cache FSM to the READ
+//    state.  When in the read state a valid entry in the way memory will be
+//    represented as a hit.
+//
+//    The cache-line data be provided back to the LSU.  This is done by
+//    asserting the cpu ack line.
+//
+//    If the data cache is already in the READ state valid read requests will
+//    complete in 1 clock cycle.
+//
+// 4. Read from non-cached memory entry
+//    A data cache read for a non-cached memory entry will first transition the
+//    FSM to the READ state to check the cache-line.  If the cache-line does not
+//    have a valid entry (miss) the data cache will transition to the REFILL
+//    state.  During REFILL the data cache requests the LSU to operate the data
+//    bus and provide cache REFILL data.  When a cache-line if filled the data
+//    cache requests the LSU to stop.
+//
+//    During refill when the request cache-line entry is being filled it will be
+//    provided back to the LSU.  This provides better performance as the pending
+//    read does not need to wait for the refill to complete.  This is done by
+//    asserting the cpu ack line.
+//
+// 5. SPR request to invalidate or flush entries
+//    An data cache SPR request will first transition the FSM into the
+//    INVALIDATE state.  Once in the invalidate state the requested cache-line
+//    entries will be invalidated.  The completion of this operation is
+//    represented as an SPR ack.
+//
+// 6. Snoop Operation
+//    Snoop is a signal that comes when there has been a CPU external memory
+//    write on bus.  The data cache must invalidate valid entries in tag
+//    memory when this occurs.
+//
+//    Snoop operations are highest priority and like other operations take
+//    a maximum of 2 clock cycles.  One cycle to register the request and one
+//    cycle to perform the invalidation.
+//
+//    When there is a snoop hit the data cache indicates this to the LSU to
+//    delay any pending writes.
+
 `include "mor1kx-defines.v"
 
 module mor1kx_dcache
@@ -29,11 +91,24 @@ module mor1kx_dcache
     input 			      rst,
 
     input 			      dc_dbus_err_i,
+    // Indicates if data cache is enabled on the CPU
     input 			      dc_enable_i,
+    // Indicates the data cache is being accessed for a read or write
     input 			      dc_access_i,
+
+    // Refill Interface
+    // Indicate to LSU that refill is in progress
     output 			      refill_o,
+    // Request to the LSU to start and complete a refill transaction
+    // at the current read address.
     output 			      refill_req_o,
     output 			      refill_done_o,
+    // Refill inputs from the LSU
+    input 			      refill_allowed_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  refill_adr_i,
+    input [OPTION_OPERAND_WIDTH-1:0]  refill_dat_i,
+    input 			      refill_we_i,
+
     output 			      cache_hit_o,
 
     // CPU Interface
@@ -47,12 +122,6 @@ module mor1kx_dcache
     input 			      cpu_we_i,
     input [3:0] 		      cpu_bsel_i,
 
-    input 			      refill_allowed_i,
-
-    input [OPTION_OPERAND_WIDTH-1:0]  wradr_i,
-    input [OPTION_OPERAND_WIDTH-1:0]  wrdat_i,
-    input 			      we_i,
-
     // Snoop address
     input [31:0] 		      snoop_adr_i,
     // Snoop event in this cycle
@@ -61,13 +130,11 @@ module mor1kx_dcache
     // this cycle. The LSU may need to stall the pipeline.
     output 			      snoop_hit_o,
 
-
     // SPR interface
     input [15:0] 		      spr_bus_addr_i,
     input 			      spr_bus_we_i,
     input 			      spr_bus_stb_i,
     input [OPTION_OPERAND_WIDTH-1:0]  spr_bus_dat_i,
-
     output [OPTION_OPERAND_WIDTH-1:0] spr_bus_dat_o,
     output 			      spr_bus_ack_o
     );
@@ -224,13 +291,14 @@ module mor1kx_dcache
 
    genvar 			      i;
 
+   // Ack the to LSU to indicate a Data Cache read is ready
    assign cpu_ack_o = ((read | refill) & hit & !write_pending |
 		       refill_hit) & cpu_req_i & !snoop_hit;
 
    assign tag_rindex = cpu_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 
    assign tag_tag = cpu_adr_match_i[OPTION_DCACHE_LIMIT_WIDTH-1:WAY_WIDTH];
-   assign tag_wtag = wradr_i[OPTION_DCACHE_LIMIT_WIDTH-1:WAY_WIDTH];
+   assign tag_wtag = refill_adr_i[OPTION_DCACHE_LIMIT_WIDTH-1:WAY_WIDTH];
 
    assign cpu_err_o = 0;
    assign spr_bus_dat_o = 0;
@@ -246,7 +314,7 @@ module mor1kx_dcache
       for (i = 0; i < OPTION_DCACHE_WAYS; i=i+1) begin : ways
 	 assign way_raddr[i] = cpu_adr_i[WAY_WIDTH-1:2];
 	 assign way_waddr[i] = write ? cpu_adr_match_i[WAY_WIDTH-1:2] :
-			       wradr_i[WAY_WIDTH-1:2];
+			       refill_adr_i[WAY_WIDTH-1:2];
 	 assign way_din[i] = way_wr_dat;
 
 	 // compare stored tag with incoming tag and check valid bit
@@ -292,16 +360,16 @@ module mor1kx_dcache
    end
 
    assign next_refill_adr = (OPTION_DCACHE_BLOCK_WIDTH == 5) ?
-			    {wradr_i[31:5], wradr_i[4:0] + 5'd4} : // 32 byte
-			    {wradr_i[31:4], wradr_i[3:0] + 4'd4};  // 16 byte
+			    {refill_adr_i[31:5], refill_adr_i[4:0] + 5'd4} : // 32 byte
+			    {refill_adr_i[31:4], refill_adr_i[3:0] + 4'd4};  // 16 byte
 
    assign refill_done_o = refill_done;
    assign refill_done = refill_valid[next_refill_adr[OPTION_DCACHE_BLOCK_WIDTH-1:2]];
    assign refill_hit = refill_valid_r[cpu_adr_match_i[OPTION_DCACHE_BLOCK_WIDTH-1:2]] &
 		       cpu_adr_match_i[OPTION_DCACHE_LIMIT_WIDTH-1:
 				       OPTION_DCACHE_BLOCK_WIDTH] ==
-		       wradr_i[OPTION_DCACHE_LIMIT_WIDTH-1:
-			       OPTION_DCACHE_BLOCK_WIDTH] &
+		       refill_adr_i[OPTION_DCACHE_LIMIT_WIDTH-1:
+				    OPTION_DCACHE_BLOCK_WIDTH] &
 		       refill & !write_pending;
 
    assign refill = (state == REFILL);
@@ -422,8 +490,8 @@ module mor1kx_dcache
 	   end
 
 	   REFILL: begin
-	      if (we_i) begin
-		 refill_valid[wradr_i[OPTION_DCACHE_BLOCK_WIDTH-1:2]] <= 1;
+	      if (refill_we_i) begin
+		 refill_valid[refill_adr_i[OPTION_DCACHE_BLOCK_WIDTH-1:2]] <= 1;
 
 		 if (refill_done)
 		   state <= IDLE;
@@ -479,7 +547,7 @@ module mor1kx_dcache
 
       access = {(OPTION_DCACHE_WAYS){1'b0}};
 
-      way_wr_dat = wrdat_i;
+      way_wr_dat = refill_dat_i;
 
       // The default is (of course) not to acknowledge the invalidate
       invalidate_ack = 1'b0;
@@ -498,12 +566,12 @@ module mor1kx_dcache
       end else begin
 	 //
 	 // The tag mem is written during reads and writes to write
-	 // the lru info and  during refill and invalidate.
+	 // the lru info and during refill and invalidate.
 	 //
 	 tag_windex = read | write ?
 		      cpu_adr_match_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH] :
 		      (state == INVALIDATE) ? invalidate_adr :
-		      wradr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
+		      refill_adr_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
 
 	 case (state)
 	   IDLE: begin
@@ -555,7 +623,7 @@ module mor1kx_dcache
 	   end
 
 	   REFILL: begin
-	      if (we_i) begin
+	      if (refill_we_i) begin
 		 //
 		 // Write the data to the way that is replaced (which is
 		 // the LRU)
@@ -726,15 +794,15 @@ endgenerate
 //Case 1: Refill followed by read
 
    (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_refill_addr;
-   (* anyconst *) reg [OPTION_OPERAND_WIDTH-1:0] f_refill_data;
+   reg [OPTION_OPERAND_WIDTH-1:0] f_refill_data;
    wire f_this_refill;
    reg f_refilled;
    initial f_refilled = 1'b0;
-   assign f_this_refill = (wradr_i == f_refill_addr) && refill_o;
+   assign f_this_refill = (refill_adr_i == f_refill_addr) && refill_o;
 
    //Refilling
    always @(posedge clk) begin
-      if ($past(f_this_refill) && (f_refill_data == wrdat_i)
+      if ($past(f_this_refill) && (f_refill_data == refill_dat_i)
           && !$past(write_pending) && $past(refill_allowed_i)
           && !$past(cache_hit_o)&& $past(cpu_req_i)
           && f_past_valid && !$past(rst) &&
@@ -847,7 +915,7 @@ endgenerate
    always @(posedge clk)
       if (way_we == way_hit && $onehot(way_hit) &&
           f_past_valid && !$past(rst) && !dc_dbus_err_i)
-         assert (cpu_we_i || write_pending || we_i ||
+         assert (cpu_we_i || write_pending || refill_we_i ||
                  $past(write_pending));
 
    //CPU acknowledgement is given only if cache fulfills cpu's request.
@@ -880,11 +948,11 @@ endgenerate
       if (write && cpu_req_i && cache_hit_o && $onehot(way_hit) && f_past_valid)
          assert (tag_we && $onehot(way_we));
 
-   //Refill data 'wrdat_i' shouldn't be written while doing write operation
+   //Refill data shouldn't be written while doing write operation
    always @(posedge clk)
-      if (write && f_past_valid && cpu_dat_i != wrdat_i &&
+      if (write && f_past_valid && cpu_dat_i != refill_dat_i &&
           !$past(rst) && cpu_bsel_i == 4'hf)
-         assert (way_wr_dat != wrdat_i);
+         assert (way_wr_dat != refill_dat_i);
 
    //Dcache triggers to refill state only if there is cache miss
    always @(posedge clk)
@@ -898,12 +966,12 @@ endgenerate
 
    //Refilling should always update way ram
    always @(*)
-      if (refill_o && we_i && $onehot(tag_save_lru))
+      if (refill_o && refill_we_i && $onehot(tag_save_lru))
          assert ($onehot(way_we));
 
    //Before refilling tag should be invalidated
    always @(*)
-      if (refill_o && !refill_valid && we_i)
+      if (refill_o && !refill_valid && refill_we_i)
          assert (tag_we);
 
 //---------INVALIDATION AND SPR BUS ----------
