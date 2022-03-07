@@ -71,34 +71,46 @@ endgenerate
 `ifdef FORMAL
 
    reg f_past_valid;
-   (* anyconst *) wire [ADDR_WIDTH-1:0] f_addr;
-   (* anyconst *) reg [DATA_WIDTH-1:0] f_data;
+   wire f_bypass;
 
    initial f_past_valid = 1'b0;
    always @(posedge clk)
       f_past_valid <= 1'b1;
 
+   assign f_bypass = waddr == raddr && we && re && ENABLE_BYPASS;
+
 `ifdef SDPRAM
 
-   reg f_written = 0;
-   initial f_written = 0;
+   (* anyconst *) wire [ADDR_WIDTH-1:0] f_addr;
+   reg [DATA_WIDTH-1:0] f_data;
+
+   initial assume (f_data == mem[f_addr]);
+   always @(*)
+	assert(mem[f_addr] == f_data);
 
    //Writing f_data at address f_addr
    always @(posedge clk)
-      if (f_past_valid && $past(we) && $past(waddr) == f_addr && !ENABLE_BYPASS && $past(din) == f_data)
-         f_written <= 1;
+      if (we && waddr == f_addr)
+         f_data <= din;
 
-   //Read access for address f_addr should return f_data
+   //Read access for the non bypass case
    always @(posedge clk)
-      if (f_past_valid && $past(re) && $past(raddr) == f_addr && !ENABLE_BYPASS && $rose(f_written))
-        assert (dout == f_data);
+      if (f_past_valid && $past(re) && $past(raddr == f_addr)
+          && $past(!f_bypass))
+         assert (dout == $past(f_data));
+
+   always @(posedge clk) begin
+       c0_write: cover (f_past_valid && we);
+       c1_read: cover (f_past_valid && re);
+       c2_bypass: cover (f_past_valid && waddr == raddr && we && re);
+   end
 
 `endif
 
-   //Verifying Bypass logic of SDPRAM
+   //Read access for the bypass case
    always @(posedge clk)
-      if (f_past_valid && $past(we) && $past(re) && $past(waddr) == f_addr && $past(raddr) == f_addr && ENABLE_BYPASS)
-        assert (dout == $past(din));
+      if (f_past_valid && $past(f_bypass))
+         assert (dout == $past(din));
 
    //Output data should remain unchanged if there is no read enable
    always @(posedge clk)
