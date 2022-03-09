@@ -7,6 +7,38 @@
 
  ******************************************************************************/
 
+// The mor1k data memory management unit (MMU) provides an multi way
+// configurable MMU with optional support for harward TLB reloading.
+
+// Cases:
+
+// 1. TLB Matching
+//    When the MMU is enabled and a valid entry exists in the TLB memory
+//    the virtual address to physical address translation takes one clock
+//    cycle.
+//
+//    In the case that a valid TLB entry does not exist the TLB MISS output
+//    will be raised.
+//
+//    In the case that a valid TLB entry exists but request does not have
+//    permission to proceed the PAGE FAULT output will be raised.
+//
+// 2. TLB SPR Write/Read
+//    Writing and Reading to the TLB Match and Translate registers conforms
+//    to the SPR databus standard protocol.
+//
+// 3. Hardware TLB Reload and Huge Pages
+//    Hardware TLB reloading is supported by using the base pointer from
+//    the DMMUCR SPR.  TLB reloading also supports loading huge pages which
+//    provide 16MB (24-bit) pages.
+//
+//    This is documented below, but not in a lot of detail as this feature
+//    is not actively used.
+//
+//    When a TLB miss happens the hardware reloading enabled the MMU will
+//    request to the LSU to control the data bus to perform the TLB.  This
+//    takes multiple cycles.
+
 `include "mor1kx-defines.v"
 
 module mor1kx_dmmu
