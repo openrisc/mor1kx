@@ -1,0 +1,77 @@
+[*]
+[*] GTKWave Analyzer v3.3.108 (w)1999-2020 BSI
+[*] Fri Mar 11 13:23:11 2022
+[*]
+[dumpfile] "(null)"
+[savefile] "/home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/mor1kx_dmmu.gtkw"
+[timestart] 0
+[size] 1336 1014
+[pos] -1 -1
+*-4.640134 59 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] mor1kx_dmmu.
+[sst_width] 281
+[signals_width] 310
+[sst_expanded] 1
+[sst_vpaned_height] 286
+@28
+mor1kx_dmmu.u_f_dmmu_slave.clk
+mor1kx_dmmu.rst
+mor1kx_dmmu.enable_i
+@22
+mor1kx_dmmu.virt_addr_i[31:0]
+mor1kx_dmmu.virt_addr_match_i[31:0]
+mor1kx_dmmu.phys_addr_o[31:0]
+@28
+mor1kx_dmmu.cache_inhibit_o
+mor1kx_dmmu.pagefault_o
+mor1kx_dmmu.tlb_miss_o
+mor1kx_dmmu.way_hit
+@200
+-TLB
+@28
+mor1kx_dmmu.spr_way_idx
+mor1kx_dmmu.dtlb_match_spr_cs
+mor1kx_dmmu.dtlb_match_we
+@22
+mor1kx_dmmu.dtlb_match_addr[5:0]
+mor1kx_dmmu.dtlb_match_din[31:0]
+mor1kx_dmmu.dtlb_match_dout<0>[31:0]
+@28
+mor1kx_dmmu.dtlb_trans_spr_cs
+mor1kx_dmmu.dtlb_trans_we
+@22
+mor1kx_dmmu.dtlb_trans_addr[5:0]
+mor1kx_dmmu.dtlb_trans_din[31:0]
+mor1kx_dmmu.dtlb_trans_dout<0>[31:0]
+@200
+-SPR
+@28
+mor1kx_dmmu.spr_bus_we_i
+mor1kx_dmmu.spr_bus_stb_i
+@22
+mor1kx_dmmu.spr_bus_addr_i[15:0]
+mor1kx_dmmu.spr_bus_dat_i[31:0]
+@28
+[color] 5
+mor1kx_dmmu.f_past_valid
+[color] 5
+mor1kx_dmmu.f_match_set
+[color] 5
+mor1kx_dmmu.f_trans_set
+[color] 5
+mor1kx_dmmu.f_tlb_setup
+[color] 5
+mor1kx_dmmu.f_way[1:0]
+@22
+[color] 5
+mor1kx_dmmu.f_set[5:0]
+@23
+[color] 5
+mor1kx_dmmu.f_vaddr[31:0]
+@22
+mor1kx_dmmu.f_spr_match_addr[10:0]
+mor1kx_dmmu.f_spr_match_data[31:0]
+mor1kx_dmmu.f_spr_trans_addr[10:0]
+mor1kx_dmmu.f_spr_trans_data[31:0]
+[pattern_trace] 1
+[pattern_trace] 0
