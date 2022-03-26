@@ -394,6 +394,7 @@ end else begin // if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED")
       tlb_reload_req_o <= 0;
       tlb_reload_addr_o <= 0;
       tlb_reload_pagefault <= 0;
+      tlb_reload_huge <= 0;
       dtlb_trans_reload_we <= 0;
       dtlb_trans_reload_din <= 0;
       dtlb_match_reload_we <= 0;
