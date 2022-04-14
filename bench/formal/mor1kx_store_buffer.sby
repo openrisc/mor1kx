@@ -1,14 +1,20 @@
+[tasks]
+cvr
+prv
+
 [options]
-mode prove
+cvr: mode cover
+prv: mode prove
 depth 30
 
 [engines]
 smtbmc yices
 
 [script]
-
 read -formal mor1kx_simple_dpram_sclk.v
 read -formal -DBUFFER mor1kx_store_buffer.v
+
+chparam -set DEPTH_WIDTH 3 mor1kx_store_buffer
 prep -top mor1kx_store_buffer
 
 [files]

@@ -1,0 +1,40 @@
+[*]
+[*] GTKWave Analyzer v3.3.108 (w)1999-2020 BSI
+[*] Thu Apr 14 21:03:02 2022
+[*]
+[dumpfile] "/home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/mor1kx_store_buffer_cvr/engine_0/trace0.vcd"
+[dumpfile_mtime] "Thu Apr 14 21:02:09 2022"
+[dumpfile_size] 23380
+[savefile] "/home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/mor1kx_store_buffer.gtkw"
+[timestart] 0
+[size] 1467 600
+[pos] -1 -1
+*-4.576430 23 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] mor1kx_store_buffer.
+[treeopen] mor1kx_store_buffer.fifo_ram.
+[sst_width] 281
+[signals_width] 222
+[sst_expanded] 1
+[sst_vpaned_height] 152
+@28
+mor1kx_store_buffer.clk
+mor1kx_store_buffer.rst
+mor1kx_store_buffer.read_i
+mor1kx_store_buffer.write_i
+[color] 3
+mor1kx_store_buffer.read_pointer[3:0]
+[color] 3
+mor1kx_store_buffer.write_pointer[3:0]
+mor1kx_store_buffer.empty_o
+mor1kx_store_buffer.full_o
+@24
+[color] 6
+mor1kx_store_buffer.f_curr_fifo_entries[4:0]
+@28
+[color] 6
+mor1kx_store_buffer.f_write_idx[4:0]
+@29
+[color] 6
+mor1kx_store_buffer.f_seen_full
+[pattern_trace] 1
+[pattern_trace] 0

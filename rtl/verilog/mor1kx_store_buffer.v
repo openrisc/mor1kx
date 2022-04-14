@@ -102,9 +102,19 @@ module mor1kx_store_buffer
          assume (rst);
 
    localparam f_total_fifo_entries = 2 ** DEPTH_WIDTH;
-   wire [DEPTH_WIDTH:0]f_curr_fifo_entries;
+   wire [DEPTH_WIDTH+1:0] f_curr_fifo_entries;
+   wire [DEPTH_WIDTH+1:0] f_write_idx;
+   wire f_ptr_cross;
+   reg f_seen_full;
 
-   assign f_curr_fifo_entries = write_pointer - read_pointer;
+   initial f_seen_full = 0;
+
+   // Writes are always ahead of reads, so to calculate the
+   // fifo size we need to simulate that.
+   assign f_ptr_cross = read_pointer > write_pointer;
+   assign f_write_idx = {f_ptr_cross, write_pointer};
+
+   assign f_curr_fifo_entries = f_write_idx - read_pointer;
 
    //Reset Assertions---------------->
    always @(posedge clk)
@@ -113,62 +123,50 @@ module mor1kx_store_buffer
                  && empty_o && !full_o &&
                  (f_curr_fifo_entries == 0));
 
-   //Full FIFO Assertions------------>
-   //1. When FIFO is full, full flag should be set.
-   always @(posedge clk `OR_ASYNC_RST)
-      if (f_past_valid && f_curr_fifo_entries == f_total_fifo_entries)
-         assert (full_o);
+   // Input assumptions --------------
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if (f_past_valid) begin
+	 if (full_o && !read_i)
+	    `ASSUME (!write_i);
 
-   //2. When fifo has f_total_fifo_entries-1 entries, and
-   //   write_i occurs, then full_o has to be set.
-   always @(posedge clk)
-      if (f_past_valid && ($past(f_curr_fifo_entries) ==
-          f_total_fifo_entries - 1) && $past(write_i) &&
-          !$past(read_i) && !$past(rst))
-         assert (full_o);
-
-   //2. When FIFO is full, no write_i.
-   always @(posedge clk) begin
-      if (f_past_valid && full_o)
-         `ASSUME (!write_i);
+	 if (empty_o && !write_i)
+	    `ASSUME (!read_i);
+      end
    end
 
-   //Empty FIFO Assertions---------->
-   //1. When FIFO has no entries, empty flag has to be set.
-   always @(posedge clk)
-      if (f_curr_fifo_entries == 0 && f_past_valid)
-         assert (empty_o);
+   // FIFO Assertions ------------
 
-   //2. When FIFO has one entry, and read occurs, then empty flag should be set.
-   always @(posedge clk)
-      if ($past(f_curr_fifo_entries == 1) && f_past_valid
-          && $past(read_i) && !$past(write_i))
-         assert (empty_o);
-
-   //3. When FIFO is empty, no read_i.
-   always @(posedge clk)
-      if (empty_o && f_past_valid && !write_i)
-         `ASSUME (!read_i);
-
-   //Empty flag and Full flag can't be 1 at the same time.
+   // Empty flag and Full flag can't be 1 at the same time.
    always @(*)
-         assert ($onehot0({empty_o, full_o}));
+      a0_full_or_empty: assert ($onehot0({empty_o, full_o}));
 
-   //When FIFO is neither full nor empty, both full and empty flags should be 0.
-   always @(posedge clk)
-      if (f_curr_fifo_entries && (f_curr_fifo_entries
-           < f_total_fifo_entries) && f_past_valid && !$past(rst))
-         assert (!full_o && !empty_o);
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if (rst)
+	 f_seen_full <= 0;
+      else if (f_past_valid) begin
+	 // When FIFO is full, full flag should be set.
+	 if (f_curr_fifo_entries == f_total_fifo_entries) begin
+	    f_seen_full <= 1;
+	    a1_full: assert (full_o);
+	 end
 
-   //Write pointer should not change when write_i is 0.
-   always @(posedge clk)
-      if (f_past_valid && !$past(write_i) && !$past(rst))
-         assert ($stable(write_pointer));
+	 // When FIFO has no entries, empty flag has to be set.
+	 if (f_curr_fifo_entries == 0)
+	    a2_empty: assert (empty_o);
 
-   //Read pointer should not change when read_i is 0.
-   always @(posedge clk)
-      if (f_past_valid && !$past(read_i) && !$past(rst))
-         assert ($stable(read_pointer));
+	 a3_max_depth: assert (f_curr_fifo_entries <= f_total_fifo_entries);
+      end
+   end
 
-`endif
+`ifdef BUFFER
+   // FIFO Cover ------------
+   always @(posedge clk `OR_ASYNC_RST) begin
+      if (f_past_valid) begin
+	 cover ($past(write_i) && full_o);
+	 cover (f_seen_full && empty_o);
+	 cover ($past(read_i) && f_ptr_cross);
+      end
+   end
+`endif // BUFFER
+`endif // FORMAL
 endmodule
