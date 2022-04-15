@@ -1567,6 +1567,10 @@ module mor1kx_cpu_cappuccino
          traceport_exec_insn_o <= {`OR1K_INSN_WIDTH{1'b0}};
          traceport_exec_pc_o <= 32'h0;
          traceport_exec_valid_o <= 1'b0;
+         traceport_exec_jbtarget_o <= 32'h0;
+         traceport_exec_jal_o <= 1'b0;
+         traceport_exec_jr_o <= 1'b0;
+         traceport_exec_jb_o <= 1'b0;
       end
    end
 

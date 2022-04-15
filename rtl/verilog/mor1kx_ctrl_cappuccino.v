@@ -1491,6 +1491,9 @@ module mor1kx_ctrl_cappuccino
 		spr_drr <= 0;
 		du_npc_written <= 0;
 		cpu_stall <= 0;
+
+		stepped_into_rfe <= 0;
+		stepped_into_exception <= 0;
 	     end
 	end
    endgenerate
