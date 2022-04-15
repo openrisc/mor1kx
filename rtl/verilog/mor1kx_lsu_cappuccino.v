@@ -678,7 +678,7 @@ endgenerate
      else if (!dc_enable_i & !dc_refill)
        dc_enable_r <= 0;
 
-   assign dc_enabled = dc_enable_i & dc_enable_r;
+   assign dc_enabled = dc_enable_r;
 
    // Dcache Address
    //  - If the *execute* stage has an upcoming LSU operation present that
