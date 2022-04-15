@@ -1,12 +1,12 @@
 [options]
 mode prove
-depth 20
+depth 8
 
 [engines]
 smtbmc yices
 
 [script]
-read -formal mor1kx_decode_execute_cappuccino.v
+read -formal -D DECODE_EXECUTE mor1kx_decode_execute_cappuccino.v
 
 chparam -set FEATURE_SYSCALL "ENABLED" mor1kx_decode_execute_cappuccino
 chparam -set FEATURE_TRAP "ENABLED" mor1kx_decode_execute_cappuccino

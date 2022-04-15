@@ -386,6 +386,12 @@ endgenerate
 
 `ifdef FORMAL
 
+`ifdef EXECUTE_CTRL
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
    reg f_past_valid;
    initial f_past_valid = 1'b0;
    initial assume (rst);
@@ -435,6 +441,24 @@ endgenerate
          assert (!ctrl_op_lsu_store_o);
          assert (!ctrl_op_lsu_atomic_o);
          assert (!ctrl_rf_wb_o);
+      end
+   end
+
+    wire [7:0] f_input_opcodes;
+    wire [7:0] f_output_opcodes;
+    assign f_input_opcodes = {op_lsu_load_i, op_lsu_store_i,
+			      op_mfspr_i, op_mtspr_i,
+			      op_rfe_i, op_mul_i, op_msync_i};
+    assign f_output_opcodes = {ctrl_op_lsu_load_o, ctrl_op_lsu_store_o,
+			       ctrl_op_mfspr_o, ctrl_op_mtspr_o,
+			       ctrl_op_rfe_o, ctrl_op_mul_o,
+			       ctrl_op_msync_o};
+
+   //one instruction => one opcode
+   always @(*) begin
+      if (f_past_valid) begin
+	 `ASSUME ($onehot0(f_input_opcodes));
+	 assert ($onehot0(f_output_opcodes));
       end
    end
 
