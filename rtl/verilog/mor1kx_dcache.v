@@ -466,7 +466,9 @@ module mor1kx_dcache
 
 	   READ: begin
 	      if (dc_access_i | cpu_we_i & dc_enable_i) begin
-		 if (!hit & cpu_req_i & !write_pending & refill_allowed_i) begin
+		 if (cpu_we_i | write_pending) begin
+		    state <= WRITE;
+		 end else if (!hit & cpu_req_i & refill_allowed_i) begin
 		    refill_valid <= 0;
 		    refill_valid_r <= 0;
 
@@ -479,8 +481,6 @@ module mor1kx_dcache
 		    end
 
 		    state <= REFILL;
-		 end else if (cpu_we_i | write_pending) begin
-		    state <= WRITE;
 		 end else if (invalidate) begin
 		    state <= IDLE;
 		 end
@@ -508,7 +508,7 @@ module mor1kx_dcache
 	   WRITE: begin
 	      if ((!dc_access_i | !cpu_req_i | !cpu_we_i) & !snoop_hit) begin
 		 write_pending <= 0;
-		 state <= READ;
+		 state <= IDLE;
 	      end
 	   end
 
@@ -575,7 +575,7 @@ module mor1kx_dcache
 
 	 case (state)
 	   READ: begin
-	      if (hit) begin
+	      if (hit & cpu_req_i) begin
 		 //
 		 // We got a hit. The LRU module gets the access
 		 // information. Depending on this we update the LRU
