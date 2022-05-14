@@ -513,7 +513,13 @@ module mor1kx_dcache
 	   end
 
 	   INVALIDATE: begin
-	      if (invalidate) begin
+	      if (cpu_we_i) begin
+		 // If we get a write while we are in invalidate its because
+		 // We have already acked the invalidate and the control unit
+		 // has moved on.  So start the write as if we were in READ
+		 // or idle.
+		 state <= WRITE;
+	      end else if (invalidate) begin
 		 // Store address in invalidate_adr that is muxed to the tag
 		 // memory write address
 		 invalidate_adr <= spr_bus_dat_i[WAY_WIDTH-1:OPTION_DCACHE_BLOCK_WIDTH];
