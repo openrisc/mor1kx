@@ -1,7 +1,7 @@
 # We only check the first few cycles since we just confirm reset conditions
 [options]
-mode prove
-depth 5
+mode bmc
+depth 10
 
 [engines]
 smtbmc yices
