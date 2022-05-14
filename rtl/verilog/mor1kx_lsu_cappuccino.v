@@ -264,10 +264,10 @@ module mor1kx_lsu_cappuccino
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
        except_dbus <= 0;
-     else if (padv_execute_i | pipeline_flush_i)
-       except_dbus <= 0;
      else if (dbus_err_i)
        except_dbus <= 1;
+     else if (padv_execute_i | pipeline_flush_i)
+       except_dbus <= 0;
 
    always @(posedge clk `OR_ASYNC_RST)
      if (rst)
@@ -419,10 +419,17 @@ module mor1kx_lsu_cappuccino
 	   dbus_bsel_o <= 4'hf;
 	   dbus_atomic <= 0;
 	   last_write <= 0;
-	   if (store_buffer_write | !store_buffer_empty) begin
+	   if (dbus_err_i | dbus_err) begin
+	      state <= IDLE;
+	   end else if (store_buffer_write | !store_buffer_empty) begin
+	      // Write must be higher priority for store order
 	      state <= WRITE;
+	   end else if (dc_refill_req) begin
+	      dbus_req_o <= 1;
+	      dbus_adr <= dc_adr_match;
+	      state <= DC_REFILL;
 	   end else if (ctrl_op_lsu & dbus_access & !dc_refill & !dbus_ack &
-			!dbus_err & !except_dbus & !access_done &
+			!except_dbus & !access_done &
 			!pipeline_flush_i) begin
 	      if (tlb_reload_req) begin
 		 dbus_adr <= tlb_reload_addr;
@@ -445,10 +452,6 @@ module mor1kx_lsu_cappuccino
 		    state <= READ;
 		 end
 	      end
-	   end else if (dc_refill_req) begin
-	      dbus_req_o <= 1;
-	      dbus_adr <= dc_adr_match;
-	      state <= DC_REFILL;
 	   end
 	end
 
