@@ -1,0 +1,158 @@
+[*]
+[*] GTKWave Analyzer v3.3.108 (w)1999-2020 BSI
+[*] Mon May  2 02:35:06 2022
+[*]
+[dumpfile] "/home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/mor1kx_cpu_cappuccino/engine_0/trace_induct.vcd"
+[dumpfile_mtime] "Sun May  1 08:39:41 2022"
+[dumpfile_size] 776476
+[savefile] "/home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/mor1kx_cpu_cappuccino.gtkw"
+[timestart] 28
+[size] 1360 872
+[pos] -1 -1
+*-5.214850 146 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] mor1kx_cpu_cappuccino.
+[treeopen] mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dcache_gen.
+[treeopen] mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dcache_gen.mor1kx_dcache.
+[sst_width] 281
+[signals_width] 278
+[sst_expanded] 1
+[sst_vpaned_height] 251
+@28
+smt_clock
+@420
+smt_step
+@200
+-exceptions
+@28
+mor1kx_cpu_cappuccino.decode_except_ibus_err_o
+mor1kx_cpu_cappuccino.execute_except_ibus_err_o
+mor1kx_cpu_cappuccino.msync_stall_o
+mor1kx_cpu_cappuccino.pipeline_flush_o
+mor1kx_cpu_cappuccino.snoop_en_i
+@200
+-ibus
+@28
+mor1kx_cpu_cappuccino.ibus_req_o
+mor1kx_cpu_cappuccino.ibus_ack_i
+[color] 1
+mor1kx_cpu_cappuccino.ibus_err_i
+@200
+-dbus
+@28
+mor1kx_cpu_cappuccino.dbus_req_o
+mor1kx_cpu_cappuccino.dbus_we_o
+mor1kx_cpu_cappuccino.dbus_ack_i
+[color] 1
+mor1kx_cpu_cappuccino.dbus_err_i
+@200
+-
+-FETCH
+@22
+mor1kx_cpu_cappuccino.mor1kx_fetch_cappuccino.pc_addr[31:0]
+mor1kx_cpu_cappuccino.mor1kx_fetch_cappuccino.pc_decode_o[31:0]
+mor1kx_cpu_cappuccino.mor1kx_fetch_cappuccino.decode_insn_o[31:0]
+@24
+[color] 2
+mor1kx_cpu_cappuccino.mor1kx_fetch_cappuccino.fetch_rfa_adr_o[4:0]
+[color] 3
+mor1kx_cpu_cappuccino.mor1kx_fetch_cappuccino.fetch_rfb_adr_o[4:0]
+@28
+[color] 3
+mor1kx_cpu_cappuccino.mor1kx_fetch_cappuccino.fetch_valid_o
+@200
+-DECODE
+@22
+[color] 1
+mor1kx_cpu_cappuccino.mor1kx_decode.decode_imm16_o[15:0]
+@24
+[color] 2
+mor1kx_cpu_cappuccino.mor1kx_decode.decode_rfa_adr_o[4:0]
+[color] 3
+mor1kx_cpu_cappuccino.mor1kx_decode.decode_rfb_adr_o[4:0]
+@28
+mor1kx_cpu_cappuccino.mor1kx_decode.decode_op_mfspr_o
+mor1kx_cpu_cappuccino.mor1kx_decode.decode_op_mtspr_o
+mor1kx_cpu_cappuccino.mor1kx_decode.decode_op_lsu_load_o
+mor1kx_cpu_cappuccino.mor1kx_decode.decode_op_lsu_store_o
+mor1kx_cpu_cappuccino.mor1kx_decode.decode_op_lsu_atomic_o
+mor1kx_cpu_cappuccino.mor1kx_decode.decode_op_msync_o
+@200
+-DECODE EXEC
+@28
+[color] 7
+mor1kx_cpu_cappuccino.mor1kx_decode_execute_cappuccino.padv_i
+mor1kx_cpu_cappuccino.mor1kx_decode_execute_cappuccino.execute_op_lsu_load_o
+mor1kx_cpu_cappuccino.mor1kx_decode_execute_cappuccino.execute_op_lsu_store_o
+mor1kx_cpu_cappuccino.mor1kx_decode_execute_cappuccino.execute_op_lsu_atomic_o
+mor1kx_cpu_cappuccino.mor1kx_decode_execute_cappuccino.execute_op_msync_o
+@200
+-EXEC_CTRL
+@28
+[color] 7
+mor1kx_cpu_cappuccino.mor1kx_execute_ctrl_cappuccino.padv_i
+mor1kx_cpu_cappuccino.mor1kx_execute_ctrl_cappuccino.ctrl_op_mfspr_o
+mor1kx_cpu_cappuccino.mor1kx_execute_ctrl_cappuccino.ctrl_op_mtspr_o
+mor1kx_cpu_cappuccino.mor1kx_execute_ctrl_cappuccino.ctrl_op_lsu_load_o
+mor1kx_cpu_cappuccino.mor1kx_execute_ctrl_cappuccino.ctrl_op_lsu_store_o
+mor1kx_cpu_cappuccino.mor1kx_execute_ctrl_cappuccino.ctrl_op_lsu_atomic_o
+mor1kx_cpu_cappuccino.mor1kx_execute_ctrl_cappuccino.ctrl_op_msync_o
+@200
+-
+-LSU
+@28
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dmmu_enable_i
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dc_enable_i
+[color] 3
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.lsu_valid_o
+@200
+-LSU.s1
+@28
+[color] 7
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.padv_execute_i
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.exec_op_lsu_load_i
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.exec_op_lsu_store_i
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.exec_op_lsu_atomic_i
+@200
+-LSU.s2
+@28
+[color] 7
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.padv_ctrl_i
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.ctrl_op_lsu_load_i
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.ctrl_op_lsu_store_i
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.ctrl_op_lsu_atomic_i
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.ctrl_op_msync_i
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.spr_bus_stb_i
+@200
+-
+@2024
+[color] 3
+^1 /home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/states-lsu.txt
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.state[2:0]
+@28
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.tlb_reload_done
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.store_buffer_write_pending
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.store_buffer_full
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dbus_stall
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dcache_gen.dc_req
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dc_ack
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dc_refill
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dc_refill_r
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dc_refill_req
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dc_refill_done
+@200
+-LSU[dcache]
+@2024
+[color] 3
+^2 /home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/states-dcache.txt
+mor1kx_cpu_cappuccino.mor1kx_lsu_cappuccino.dcache_gen.mor1kx_dcache.state[4:0]
+@200
+-CTRL
+@28
+mor1kx_cpu_cappuccino.mor1kx_ctrl_cappuccino.spr_we
+@22
+mor1kx_cpu_cappuccino.mor1kx_ctrl_cappuccino.spr_sr[15:0]
+mor1kx_cpu_cappuccino.mor1kx_ctrl_cappuccino.spr_dmmucfgr[31:0]
+mor1kx_cpu_cappuccino.mor1kx_ctrl_cappuccino.spr_dccfgr[31:0]
+mor1kx_cpu_cappuccino.mor1kx_ctrl_cappuccino.spr_dcfgr[31:0]
+[pattern_trace] 1
+[pattern_trace] 0
