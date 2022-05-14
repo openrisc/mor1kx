@@ -1,0 +1,51 @@
+[*]
+[*] GTKWave Analyzer v3.3.108 (w)1999-2020 BSI
+[*] Sat Apr 16 09:30:26 2022
+[*]
+[dumpfile] "/home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/mor1kx/engine_0/trace_induct.vcd"
+[dumpfile_mtime] "Sat Apr 16 09:19:48 2022"
+[dumpfile_size] 313480
+[savefile] "/home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/mor1kx.gtkw"
+[timestart] 0
+[size] 1000 600
+[pos] -1 -1
+*-4.914850 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] mor1kx.
+[treeopen] mor1kx.mor1kx_cpu.
+[treeopen] mor1kx.mor1kx_cpu.cappuccino.
+[treeopen] mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.
+[treeopen] mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.mor1kx_lsu_cappuccino.
+[treeopen] mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.mor1kx_lsu_cappuccino.dcache_gen.
+[sst_width] 281
+[signals_width] 142
+[sst_expanded] 1
+[sst_vpaned_height] 295
+@28
+smt_clock
+@420
+smt_step
+@200
+-LSU
+@28
+mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.mor1kx_lsu_cappuccino.dc_enable_i
+@29
+mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.mor1kx_lsu_cappuccino.dmmu_enable_i
+@28
+mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.mor1kx_lsu_cappuccino.dbus_err_i
+mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.mor1kx_lsu_cappuccino.dc_enabled
+mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.mor1kx_lsu_cappuccino.dc_err
+@2024
+[color] 3
+^2 /home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/states-lsu.txt
+mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.mor1kx_lsu_cappuccino.state[2:0]
+@28
+mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.mor1kx_lsu_cappuccino.dc_refill_req
+mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.mor1kx_lsu_cappuccino.dc_refill_done
+@200
+-LSU.dcache
+@2024
+[color] 3
+^1 /home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/states-dcache.txt
+mor1kx.mor1kx_cpu.cappuccino.mor1kx_cpu.mor1kx_lsu_cappuccino.dcache_gen.mor1kx_dcache.state[4:0]
+[pattern_trace] 1
+[pattern_trace] 0
