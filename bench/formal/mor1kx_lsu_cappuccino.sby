@@ -4,7 +4,7 @@ prv
 
 [options]
 cvr: mode cover
-prv: mode prove
+prv: mode bmc
 depth 20
 
 [engines]
