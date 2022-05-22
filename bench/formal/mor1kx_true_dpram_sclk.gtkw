@@ -1,0 +1,67 @@
+[*]
+[*] GTKWave Analyzer v3.3.108 (w)1999-2020 BSI
+[*] Sat Mar 12 06:30:56 2022
+[*]
+[dumpfile] "/home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/mor1kx_true_dpram_sclk_prv/engine_0/trace.vcd"
+[dumpfile_mtime] "Sat Mar 12 06:27:12 2022"
+[dumpfile_size] 2738
+[savefile] "/home/shorne/work/openrisc/local-cores/mor1kx/bench/formal/mor1kx_true_dpram_sclk.gtkw"
+[timestart] 0
+[size] 1479 600
+[pos] -1 -1
+*-3.976430 24 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 281
+[signals_width] 142
+[sst_expanded] 1
+[sst_vpaned_height] 273
+@28
+smt_clock
+@420
+smt_step
+@22
+mor1kx_true_dpram_sclk.mem<9e>[31:0]
+mor1kx_true_dpram_sclk.mem<8e>[31:0]
+@200
+-PORT-A
+@28
+[color] 2
+mor1kx_true_dpram_sclk.clk_a
+[color] 2
+mor1kx_true_dpram_sclk.we_a
+@22
+[color] 2
+mor1kx_true_dpram_sclk.addr_a[7:0]
+[color] 2
+mor1kx_true_dpram_sclk.din_a[31:0]
+[color] 2
+mor1kx_true_dpram_sclk.dout_a[31:0]
+@200
+-PORT-B
+@28
+[color] 7
+mor1kx_true_dpram_sclk.clk_b
+[color] 7
+mor1kx_true_dpram_sclk.we_b
+@22
+[color] 7
+mor1kx_true_dpram_sclk.addr_b[7:0]
+[color] 7
+mor1kx_true_dpram_sclk.din_b[31:0]
+[color] 7
+mor1kx_true_dpram_sclk.dout_b[31:0]
+@200
+-FORMAL
+@28
+[color] 5
+mor1kx_true_dpram_sclk.f_past_valid
+@22
+[color] 5
+mor1kx_true_dpram_sclk.f_addr_a[7:0]
+[color] 5
+mor1kx_true_dpram_sclk.f_data_a[31:0]
+[color] 5
+mor1kx_true_dpram_sclk.f_addr_b[7:0]
+[color] 5
+mor1kx_true_dpram_sclk.f_data_b[31:0]
+[pattern_trace] 1
+[pattern_trace] 0

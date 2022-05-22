@@ -3,12 +3,12 @@ prv
 cvr
 
 [options]
-prv: mode prove
+prv: mode bmc
 cvr: mode cover
-depth 20
+depth 8
 
 [engines]
-smtbmc yices
+smtbmc
 
 [script]
 

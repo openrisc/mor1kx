@@ -250,6 +250,7 @@ module mor1kx_icache
     */
    assign invalidate_o = spr_bus_stb_i & spr_bus_we_i &
 			 (spr_bus_addr_i == `OR1K_SPR_ICBIR_ADDR);
+   assign spr_bus_dat_o = 32'b0;
 
    /*
     * Cache FSM

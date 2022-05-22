@@ -7,6 +7,80 @@
 
  ******************************************************************************/
 
+// The mor1k data memory management unit (MMU) provides an multi way
+// configurable MMU with optional support for harward TLB reloading.
+
+// Cases:
+
+// 1. TLB Matching
+//    When the MMU is enabled and a valid entry exists in the TLB memory
+//    the virtual address to physical address translation takes one clock
+//    cycle.
+//
+//    In the case that a valid TLB entry does not exist the TLB MISS output
+//    will be raised.
+//
+//    In the case that a valid TLB entry exists but request does not have
+//    permission to proceed the PAGE FAULT output will be raised.
+//
+// 2. TLB SPR Write/Read
+//    Writing and Reading to the TLB Match and Translate registers conforms
+//    to the SPR databus standard protocol.
+//
+// 3. Hardware TLB Reload and Huge Pages
+//    Hardware TLB reloading is supported by using the base pointer from
+//    the DMMUCR SPR.  TLB reloading also supports loading huge pages which
+//    provide 16MB (24-bit) pages.
+//
+//    This is documented below, but not in a lot of detail as this feature
+//    is not actively used.
+//
+//    When a TLB miss happens the hardware reloading enabled the MMU will
+//    request to the LSU to control the data bus to perform the TLB.  This
+//    takes multiple cycles.
+
+//    virt_addr_match ---------------+
+//                                   |
+//    virt_addr                    ( == )-+->o--> tlb_miss
+//      |                            |    |
+//      +---+-----> [ Match TLB ] ---+    |
+//          |           ^             0--[ 0 ]
+//          +-----> [ Trans TLB ] -------[ 1 ]--> phys_addr
+//                      ^
+//    clk---------------+
+
+// SPR Addresses
+//
+// +-----------+-------+---+-------+---------+
+// | 15     11 | 10  8 | 7 | 6   4 | 3     0 |
+// +-----------+-------+---+-------+---------+
+// |     group |   way | MT|             set |
+// +-----------+-------+---+-------+---------+
+// | 0 0 0 0 1 | 0 1 0 | 0 | x x x | x x x x |
+// | 0 0 0 0 1 | 0 1 0 | 1 | x x x | x x x x |
+// | 0 0 0 0 1 | 0 1 1 | 0 | x x x | x x x x |
+// | 0 0 0 0 1 | 0 1 1 | 1 | x x x | x x x x |
+// | 0 0 0 0 1 | 1 0 0 | 0 | x x x | x x x x |
+// | 0 0 0 0 1 | 1 0 0 | 1 | x x x | x x x x |
+// | 0 0 0 0 1 | 1 0 1 | 0 | x x x | x x x x |
+// | 0 0 0 0 1 | 1 0 1 | 1 | x x x | x x x x |
+// +-----------+-------+---+-------+---------+
+
+// 8K pages (13-bits)
+//
+//               / TLB Match Addr   \
+// +------------+--------------------+---------+
+// | 31   ..    | 13+SET_WIDTH .. 13 | 12 .. 0 |
+// +------------+--------------------+---------+
+//
+// Huge 16MB Page (24-bits), only available with TLB reload
+//
+//               / TLB Match Addr   \
+// +------------+--------------------+---------+
+// | 31   ..    | 24+SET_WIDTH .. 24 | 23 .. 0 |
+// +------------+--------------------+---------+
+
+
 `include "mor1kx-defines.v"
 
 module mor1kx_dmmu
@@ -124,14 +198,22 @@ module mor1kx_dmmu
 
 generate
 for (i = 0; i < OPTION_DMMU_WAYS; i=i+1) begin : ways
-   assign way_huge[i] = &dtlb_match_huge_dout[i][1:0]; // huge & valid
-
    assign way_hit[i] = (dtlb_match_dout[i][31:13] == virt_addr_match_i[31:13]) &
                        dtlb_match_dout[i][0];  // valid bit
 
-   assign way_huge_hit[i] = (dtlb_match_huge_dout[i][31:24] ==
-                             virt_addr_match_i[31:24]) &
-                            dtlb_match_huge_dout[i][0];
+   // Huge pages are only supported with TLB RELOAD, if we don't
+   // block this off way_huge may be asserted randomly after
+   // reset based on the contents of TLB ram which are not
+   // cleared.
+   if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED") begin
+      assign way_huge[i] = &dtlb_match_huge_dout[i][1:0]; // huge & valid
+      assign way_huge_hit[i] = (dtlb_match_huge_dout[i][31:24] ==
+				virt_addr_match_i[31:24]) &
+			       dtlb_match_huge_dout[i][0];
+   end else begin
+      assign way_huge[i] = 0;
+      assign way_huge_hit[i] = 0;
+   end
 end
 endgenerate
 
@@ -394,6 +476,7 @@ end else begin // if (FEATURE_DMMU_HW_TLB_RELOAD == "ENABLED")
       tlb_reload_req_o <= 0;
       tlb_reload_addr_o <= 0;
       tlb_reload_pagefault <= 0;
+      tlb_reload_huge <= 0;
       dtlb_trans_reload_we <= 0;
       dtlb_trans_reload_din <= 0;
       dtlb_match_reload_we <= 0;
@@ -461,73 +544,111 @@ endgenerate
 `define ASSUME assert
 `endif
 
-   reg f_past_valid;
-   (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_vaddr;
+   reg					f_past_valid;
+
    initial f_past_valid = 1'b0;
-   initial assume (rst);
    always @(posedge clk)
       f_past_valid <= 1'b1;
+
    always @(*)
       if (!f_past_valid)
-         assume (rst);
+	 assume (rst);
       else
-         assume (!rst);
+	 assume (!rst);
+
+   always @(*)
+      if (f_past_valid)
+	 a0_load_or_store: `ASSUME ($onehot0({op_load_i, op_store_i}));
+
+`ifdef DMMU
+
+   reg					f_match_set;
+   reg					f_trans_set;
+   wire					f_tlb_setup;
+   wire					f_spr_addr_is_tlb;
+   reg [OPTION_OPERAND_WIDTH-1:0]	f_spr_match_data;
+   reg [OPTION_OPERAND_WIDTH-1:0]	f_spr_trans_data;
+   wire [OPTION_DMMU_SET_WIDTH-1:0]	f_set;
+
+   (* anyconst *) wire [OPTION_OPERAND_WIDTH-1:0] f_vaddr;
+   (* anyconst *) wire [WAYS_WIDTH-1:0]	f_way;
+
+   initial f_match_set = 0;
+   initial f_trans_set = 0;
+   initial f_spr_match_data = 0;
+   initial f_spr_trans_data = 0;
+
+   assign f_tlb_setup = f_match_set & f_trans_set & f_spr_match_data[0];
+
+   assign f_set = f_vaddr[13+(OPTION_DMMU_SET_WIDTH-1):13];
+
+   assign f_spr_addr_is_tlb = spr_way_idx == f_way && 		// match way
+			      (spr_bus_addr_i[OPTION_DMMU_SET_WIDTH-1:0] ==
+			       f_set); // match set
+
+   always @(*) begin
+      assume (spr_way_idx < OPTION_DMMU_WAYS);
+   end
 
    always @(posedge clk) begin
-      if (f_past_valid && !$past(rst))
-         `ASSUME ($onehot0({op_load_i, op_store_i}));
+      a1_virt_addr_progress: `ASSUME ($past(virt_addr_i) == virt_addr_match_i);
    end
+
+   always @(posedge clk) begin
+      if (f_past_valid) begin
+	 if (f_spr_addr_is_tlb && spr_bus_we_i) begin
+
+	    if (spr_bus_dat_i[31:13] == f_vaddr[31:13]) begin
+	       // Capture match address or translate address
+	       if (dtlb_match_spr_cs) begin
+		  f_match_set <= 1;
+		  f_spr_match_data <= spr_bus_dat_i;
+	       end else if (dtlb_trans_spr_cs) begin
+		  f_trans_set <= 1;
+		  f_spr_trans_data <= spr_bus_dat_i;
+	       end
+	    end else begin
+	       // If we change the match address, de-assert setup
+	       if (dtlb_match_spr_cs) begin
+		  f_match_set <= 0;
+	       end
+	    end
+	 end
+
+	 // If we are setup assert translates will be valid
+	 if (virt_addr_match_i[31:13] == f_vaddr[31:13]) begin
+	    if ($past(f_tlb_setup) & !$past(spr_bus_stb_i)) begin
+	       a2_tlb_hit: assert (!tlb_miss_o);
+	    end
+	 end
+      end
+   end
+
+//----------------Cover------------------
+
+   always @(*) begin
+      c0_spr_match_write: cover (f_past_valid & f_match_set);
+      c1_spr_trans_write: cover (f_past_valid & f_trans_set);
+      c2_spr_tlb_setup: cover (f_past_valid & f_tlb_setup);
+      c3_spr_tlb_hit: cover (f_past_valid & f_tlb_setup && !tlb_miss_o);
+      c4_spr_pagefault: cover (f_past_valid & f_tlb_setup && pagefault_o);
+   end
+`endif
 
 //------------------DMMU PROPERTIES-------------------
 
-   //Physical Address of f_vaddr virtual address is asserted to verify expected PPN.
-   //Case 1: Page bits = 13 bits
-   always @(posedge clk) begin
-      if ((virt_addr_match_i == f_vaddr) && way_hit[0]
-           && !way_huge[0] && !pagefault_o && f_past_valid)
-         assert ((phys_addr_o[12:0] == f_vaddr[12:0]) &&
-                 phys_addr_o[31:13] == dtlb_trans_dout[0][31:13]);
-   end
-
-   //Case 2: Page bits = 24 bits (huge)
-   always @(posedge clk) begin
-      if ((virt_addr_match_i == f_vaddr) && way_huge_hit[0]
-          && way_huge[0] && !pagefault_o && f_past_valid)
-         assert ((phys_addr_o[23:0] == f_vaddr[23:0]) &&
-                 phys_addr_o[31:24] == dtlb_trans_huge_dout[0][31:24]);
-   end
-
-   //On TLB miss, mmu should not inhibit cache.
-   always @(*)
-      if (tlb_miss_o)
-      assert (!cache_inhibit_o);
+   //We can't have cache_inhibit when we have a tlb miss
    always @(*) begin
-      assert ($onehot0(way_hit));
-      assert ($onehot0(way_huge_hit));
+      if (f_past_valid) begin
+	 assert ($onehot0({tlb_miss_o, cache_inhibit_o}));
+      end
    end
-
-   //On TLB hit, tlb_miss_o should be 0.
-   always @(*)
-      if (way_huge[0] & way_huge_hit[0] || !way_huge[0] & way_hit[0])
-         assert (!tlb_miss_o);
-
-   //DMMU SPR registers are accessible only if the last 5 bits
-   // of spr_bus_addr_i corresponds to group 1.
-   always @(*)
-      if ($onehot(dtlb_match_we) || $onehot(dtlb_trans_we))
-         assert (spr_bus_addr_i[15:11] == 5'd1);
 
    //Spr can't access both Match TLB and Translation TLB at the same time.
-   always @(posedge clk)
-      if (dtlb_match_spr_cs)
-         assert (!dtlb_trans_spr_cs);
-
-   //Disabling Hardware TLB loads dtlb_match_din and dtlb_trans_din
-   // with spr_bus_dat_i, so its neccessary to check both match and
-   // translate TLBs don't write TLB with same data.
-   always @(*)
-      if ($onehot(dtlb_match_we))
-         assert (!$onehot(dtlb_trans_we));
+   always @(posedge clk) begin
+      assert ($onehot0({dtlb_match_spr_cs, dtlb_trans_spr_cs}));
+      assert ($onehot0({dtlb_match_we, dtlb_trans_we}));
+   end
 
    //If spr ack is received, assert stb
    always @(posedge clk)
@@ -555,25 +676,6 @@ endgenerate
         .spr_bus_ack_o(spr_bus_ack_o),
         .f_past_valid(f_past_valid)
        );
-
-//----------------Cover------------------
-
-`ifdef DMMU
-
-   always @(posedge clk) begin
-      if (f_past_valid && !$past(rst)) begin
-         //TLB HIT-------------Trace 0
-         cover (!tlb_miss_o && phys_addr_o != 0);
-         //Trans write---------Trace 1
-         cover (dtlb_trans_spr_cs && $past(dtlb_trans_we)
-                && $rose(spr_bus_ack_o));
-         //Match write---------Trace 2
-         cover (dtlb_match_spr_cs && $past(dtlb_match_we)
-                && $rose(spr_bus_ack_o));
-      end
-   end
-
-`endif
 
 `endif
 endmodule // mor1kx_dmmu

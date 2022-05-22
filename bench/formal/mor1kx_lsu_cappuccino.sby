@@ -1,5 +1,10 @@
+[tasks]
+cvr
+prv
+
 [options]
-mode prove
+cvr: mode cover
+prv: mode bmc
 depth 20
 
 [engines]
@@ -17,7 +22,10 @@ read -formal mor1kx_cache_lru.v
 read -formal fspr_slave.v
 
 chparam -set FEATURE_DATACACHE "ENABLED" mor1kx_lsu_cappuccino
+chparam -set OPTION_DCACHE_BLOCK_WIDTH 4 mor1kx_lsu_cappuccino
 chparam -set FEATURE_DMMU "ENABLED" mor1kx_lsu_cappuccino
+chparam -set FEATURE_STORE_BUFFER "ENABLED" mor1kx_lsu_cappuccino
+chparam -set OPTION_STORE_BUFFER_DEPTH_WIDTH 2 mor1kx_lsu_cappuccino
 chparam -set FEATURE_ATOMIC "ENABLED" mor1kx_lsu_cappuccino
 prep -top mor1kx_lsu_cappuccino
 

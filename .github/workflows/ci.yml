@@ -34,7 +34,8 @@ jobs:
       # Install OS and Python Tools
       - name: Install Tools
         run: |
-          sudo apt-get install build-essential python3 xz-utils git iverilog libelf-dev
+          sudo apt-get install build-essential python3 xz-utils git iverilog \
+            libfl2 libelf-dev
           pip3 install setuptools wheel
           pip3 install fusesoc
           export PATH=$PATH:$HOME/.local/bin
@@ -47,9 +48,8 @@ jobs:
           mkdir -p /tmp/tools/lib
           cd /tmp/tools
           curl --remote-name --location \
-            https://github.com/stffrdhrn/gcc/releases/download/or1k-10.0.0-20190723/or1k-elf-10.0.0-20190723.tar.xz
-          tar xC /tmp/tools -f or1k-elf-10.0.0-20190723.tar.xz
-          ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /tmp/tools/lib/libmpfr.so.4
+            https://github.com/openrisc/or1k-gcc/releases/download/or1k-12.0.1-20220210-20220304/or1k-elf-12.0.1-20220210-20220304.tar.xz
+          tar xC /tmp/tools -f or1k-elf-12.0.1-20220210-20220304.tar.xz
           export PATH=$PATH:/tmp/tools/or1k-elf/bin/
           or1k-elf-gcc --version
 
@@ -59,7 +59,7 @@ jobs:
           export PATH=$PATH:/tmp/tools/or1k-elf/bin:$HOME/.local/bin
           mkdir -p /tmp/tools
           cd /tmp/tools
-          git clone --depth 1 https://github.com/openrisc/or1k-tests.git -b v1.0.4
+          git clone --depth 1 https://github.com/openrisc/or1k-tests.git -b v1.0.5
           cd or1k-tests/native
           make -j8
           fusesoc library add mor1kx-generic https://github.com/openrisc/mor1kx-generic.git
@@ -77,7 +77,8 @@ jobs:
           export PIPELINE=CAPPUCCINO
           export TARGET=mor1kx_tb
           export TARGET_ARGS="--tool=icarus"
-          export CORE_ARGS="--pipeline=$PIPELINE $EXTRA_CORE_ARGS"
+          export CORE_ARGS="--pipeline=$PIPELINE --vcd --trace_enable $EXTRA_CORE_ARGS"
+          export ARTIFACT_PATH="build/mor1kx-generic_*/mor1kx_tb-icarus"
           cd /tmp/tools/or1k-tests/native
           ./runtests.sh
           result=$?
@@ -85,6 +86,13 @@ jobs:
             cat runtests.log
           fi
           exit $result
+
+      # Upload test results
+      - uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: runtest-results
+          path: /tmp/tools/or1k-tests/native/artifacts/**/*
 
     strategy:
       matrix:
@@ -113,6 +121,7 @@ jobs:
             libreadline-dev gawk tcl-dev libffi-dev git graphviz xdot \
             pkg-config python python3 libboost-system-dev \
             libboost-python-dev libboost-filesystem-dev zlib1g-dev
+          pip3 install dataclasses
 
       - name: Install clang
         run: |

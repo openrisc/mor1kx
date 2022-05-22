@@ -1,7 +1,7 @@
 # We only check the first few cycles since we just confirm reset conditions
 [options]
-mode prove
-depth 5
+mode bmc
+depth 16
 
 [engines]
 smtbmc yices
@@ -14,7 +14,7 @@ read -formal mor1kx_fetch_cappuccino.v
 read -formal mor1kx_icache.v
 read -formal mor1kx_cache_lru.v
 read_verilog mor1kx_branch_prediction.v
-read -formal mor1kx_cpu_cappuccino.v
+read -formal -D CPU_CAPPUCCINO mor1kx_cpu_cappuccino.v
 read -formal mor1kx_ctrl_cappuccino.v
 read -formal mor1kx_execute_ctrl_cappuccino.v
 read -formal mor1kx_rf_cappuccino.v

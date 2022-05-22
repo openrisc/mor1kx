@@ -702,6 +702,8 @@ endgenerate
       /* verilator lint_on WIDTH */
          assign cmov_result = flag_i ? a : b;
       end
+      else
+	 assign cmov_result = 32'b0;
    endgenerate
 
    // Sign Extension
@@ -733,6 +735,9 @@ endgenerate
                ext_result = a;
            endcase // case(opc_alu_i)
       end
+      else
+	 always @*
+	    ext_result = 32'b0;
    endgenerate
 
    // Comparison logic

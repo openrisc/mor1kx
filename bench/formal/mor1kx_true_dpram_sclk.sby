@@ -1,8 +1,13 @@
+[tasks]
+prv
+cvr
+
 [options]
-mode prove
-#True DPRAM uses two clocks, so turning on multiclock option 
+prv: mode prove
+cvr: mode cover
+#True DPRAM uses two clocks, so turning on multiclock option
 multiclock on
-depth 30
+depth 10
 wait on
 
 [engines]
@@ -11,6 +16,7 @@ smtbmc yices
 [script]
 
 read -formal -D TDPRAM mor1kx_true_dpram_sclk.v
+hierarchy -top mor1kx_true_dpram_sclk -chparam ADDR_WIDTH 8
 prep -top mor1kx_true_dpram_sclk
 
 [files]

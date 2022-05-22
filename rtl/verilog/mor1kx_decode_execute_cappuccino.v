@@ -594,6 +594,12 @@ module mor1kx_decode_execute_cappuccino
 
 `ifdef FORMAL
 
+`ifdef DECODE_EXECUTE
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif
+
    reg f_past_valid;
    initial f_past_valid = 1'b0;
    initial assume (rst);
@@ -756,6 +762,37 @@ module mor1kx_decode_execute_cappuccino
          assert ($stable(pc_execute_o));
          assert ($stable(execute_jal_result_o));
       end
+   end
+
+   //one instruction => one opcode
+   wire [30:0] f_input_opcodes;
+   wire [30:0] f_output_opcodes;
+   assign f_input_opcodes = {decode_op_lsu_load_i, decode_op_lsu_store_i,
+			     decode_op_mfspr_i, decode_op_mtspr_i,
+			     decode_op_rfe_i, decode_op_setflag_i,
+			     decode_op_add_i, decode_op_mul_signed_i,
+			     decode_op_mul_unsigned_i,
+			     decode_op_div_signed_i,
+			     decode_op_ext_i, decode_op_div_unsigned_i,
+			     decode_op_shift_i, decode_op_ffl1_i,
+			     decode_op_movhi_i, decode_op_msync_i,
+			     decode_op_branch_i};
+
+    assign f_output_opcodes = {execute_op_lsu_load_o, execute_op_lsu_store_o,
+			       execute_op_mfspr_o, execute_op_mtspr_o,
+			       execute_op_rfe_o, execute_op_setflag_o,
+			       execute_op_add_o, execute_op_mul_signed_o,
+			       execute_op_mul_unsigned_o,
+			       execute_op_div_signed_o, execute_op_ext_o,
+			       execute_op_div_unsigned_o, execute_op_shift_o,
+			       execute_op_ffl1_o,execute_op_movhi_o,
+			       execute_op_msync_o,execute_op_branch_o};
+
+   //one instruction => one opcode
+   always @(*) begin
+      `ASSUME ($onehot0(f_input_opcodes));
+      if (f_past_valid)
+	  assert ($onehot0(f_output_opcodes));
    end
 
    //Fetch related any exceptions should be observed in decode stage

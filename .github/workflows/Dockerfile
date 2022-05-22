@@ -14,15 +14,13 @@
 #
 FROM ubuntu:18.04
 RUN apt-get update && apt-get -y install \
-   build-essential \
-   python3 python3-pip
-RUN apt-get -y install git
+   build-essential python3 python3-pip xz-utils git iverilog \
+   flex libelf-dev
 
 RUN pip3 install setuptools wheel
 RUN pip3 install fusesoc
 
 RUN apt-get -y install curl
-RUN apt-get -y install iverilog libelf-dev
 
 RUN groupadd -g 999 runner && \
     useradd -m -r -u 999 -g runner runner

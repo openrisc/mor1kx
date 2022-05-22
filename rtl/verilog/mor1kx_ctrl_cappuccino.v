@@ -1491,6 +1491,9 @@ module mor1kx_ctrl_cappuccino
 		spr_drr <= 0;
 		du_npc_written <= 0;
 		cpu_stall <= 0;
+
+		stepped_into_rfe <= 0;
+		stepped_into_exception <= 0;
 	     end
 	end
    endgenerate
@@ -1621,14 +1624,11 @@ endgenerate
       if (f_past_valid && !$past(rst) && $rose(ctrl_bubble_o))
          assert ($past(execute_bubble_i));
 
+`ifndef CTRL
    //SPR shouldn't give more than one acknowledgement
    always @*
       assert ($onehot0(spr_access_ack));
-
-   //SPR acknowledgement makes spr access valid
-   always @*
-      if ($onehot(spr_access_ack))
-         assert (spr_access_valid);
+`endif
 
    //Insn mfspr should always read from spr and
    //insn mtspr should always write to spr.

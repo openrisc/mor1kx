@@ -35,7 +35,7 @@ TESTS := mor1kx_cache_lru \
 
 all: $(TESTS)
 clean:
-	rm -rf $(TESTS)
+	rm -rf mor1kx*/
 
 .PHONY: all clean $(TESTS)
 

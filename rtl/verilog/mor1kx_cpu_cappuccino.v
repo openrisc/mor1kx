@@ -1567,6 +1567,10 @@ module mor1kx_cpu_cappuccino
          traceport_exec_insn_o <= {`OR1K_INSN_WIDTH{1'b0}};
          traceport_exec_pc_o <= 32'h0;
          traceport_exec_valid_o <= 1'b0;
+         traceport_exec_jbtarget_o <= 32'h0;
+         traceport_exec_jal_o <= 1'b0;
+         traceport_exec_jr_o <= 1'b0;
+         traceport_exec_jb_o <= 1'b0;
       end
    end
 
@@ -1633,6 +1637,28 @@ module mor1kx_cpu_cappuccino
            $rose(spr_bus_ack_dc_i) || $rose(spr_bus_ack_ic_i)))
          assert (spr_bus_stb_o || $past(spr_bus_stb_o));
 
+// Simple interface assumptions when testing cpu_cappuccino alone
+`ifdef CPU_CAPPUCCINO
+   // DBUS/IBUS inputs
+   always @(posedge clk) begin
+      // When we send a request we either get back an ack or an error
+      if ($past(ibus_req_o) & ibus_req_o)
+	 assume ($onehot({ibus_ack_i,ibus_err_i}));
+      if ($past(dbus_req_o) & dbus_req_o)
+	 assume ($onehot({dbus_ack_i,dbus_err_i}));
+
+      // Don't allow spurious errors and acks when no requests
+      if (!dbus_req_o) begin
+	 assume (!dbus_ack_i);
+	 assume (!dbus_err_i);
+      end
+      if (!ibus_req_o) begin
+	 assume (!ibus_ack_i);
+	 assume (!ibus_err_i);
+      end
+   end
+`endif // CPU_CAPPUCCINO
+
    always @(*)
       case (ibus_dat_i[`OR1K_ALU_OPC_SELECT])
         `OR1K_ALU_OPC_ADDC,
@@ -1666,5 +1692,5 @@ module mor1kx_cpu_cappuccino
         .spr_bus_ack_immu_i(spr_bus_ack_immu_i),
         .f_past_valid(f_past_valid)
   );
-`endif
+`endif // FORMAL
 endmodule // mor1kx_cpu_cappuccino
