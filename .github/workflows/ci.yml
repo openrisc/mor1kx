@@ -4,7 +4,7 @@ on: [push, pull_request, workflow_dispatch]
 
 jobs:
   verilator-lint:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       # Checkout Repository
       - name: Checkout
@@ -21,7 +21,7 @@ jobs:
           verilator --lint-only rtl/verilog/*.v +incdir+rtl/verilog
 
   or1k-tests:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     env:
       LD_LIBRARY_PATH: "/tmp/tools/lib"
       EXPECTED_FAILURES: ${{ matrix.env.EXPECTED_FAILURES }}
@@ -107,7 +107,7 @@ jobs:
           - { EXPECTED_FAILURES: "or1k-cy or1k-ext", EXTRA_CORE_ARGS: "--feature_ext NONE" }
 
   formal-verification:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       #Checkout Repository
       - name: Checkout
