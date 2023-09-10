@@ -40,7 +40,6 @@ jobs:
           pip3 install fusesoc
           export PATH=$PATH:$HOME/.local/bin
           fusesoc --version
-          fusesoc init -y
 
       # Install Toolchain
       - name: Install Toolchain
@@ -62,6 +61,7 @@ jobs:
           git clone --depth 1 https://github.com/openrisc/or1k-tests.git -b v1.0.5
           cd or1k-tests/native
           make -j8
+          fusesoc library add fusesoc_cores https://github.com/fusesoc/fusesoc-cores
           fusesoc library add mor1kx-generic https://github.com/openrisc/mor1kx-generic.git
           fusesoc library add intgen https://github.com/openrisc/intgen.git
           fusesoc library add elf-loader https://github.com/fusesoc/elf-loader.git
