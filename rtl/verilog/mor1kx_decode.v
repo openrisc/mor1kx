@@ -366,8 +366,11 @@ module mor1kx_decode
        `OR1K_OPCODE_BF,
        `OR1K_OPCODE_MOVHI,
        `OR1K_OPCODE_RFE,
-       `OR1K_OPCODE_JR,
-       `OR1K_OPCODE_JALR,
+       `OR1K_OPCODE_JR:
+         decode_except_illegal_o = 1'b0;
+       `OR1K_OPCODE_JALR:
+         if (decode_insn_i[`OR1K_RB_SELECT] == 9)
+           decode_except_illegal_o = 1'b1;
        `OR1K_OPCODE_LWZ,
        `OR1K_OPCODE_LWS,
        `OR1K_OPCODE_LBZ,
