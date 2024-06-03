@@ -198,13 +198,11 @@ module mor1kx_cpu
 	// synthesis translate_off
 `ifndef SYNTHESIS
    /* Provide interface hooks for register functions. */
+	`include "mor1kx_utils.vh"
+	localparam RF_ADDR_WIDTH = calc_rf_addr_width(OPTION_RF_ADDR_WIDTH,
+                                                  OPTION_RF_NUM_SHADOW_GPR);
    generate
       if (OPTION_CPU=="CAPPUCCINO") begin : monitor
-
-`include "mor1kx_utils.vh"
-         localparam RF_ADDR_WIDTH = calc_rf_addr_width(OPTION_RF_ADDR_WIDTH,
-                                                       OPTION_RF_NUM_SHADOW_GPR);
-
          function [OPTION_OPERAND_WIDTH-1:0] get_gpr;
             // verilator public
             input [RF_ADDR_WIDTH-1:0] gpr_num;
