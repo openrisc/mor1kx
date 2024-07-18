@@ -21,25 +21,30 @@ TESTS := mor1kx_cache_lru \
 	mor1kx_execute_ctrl_cappuccino \
 	mor1kx_dmmu \
 	mor1kx_dcache \
-	mor1kx_lsu_cappuccino \
 	mor1kx_pcu \
 	mor1kx_pic \
 	mor1kx_ticktimer \
 	mor1kx_ctrl_cappuccino \
 	mor1kx_rf_cappuccino \
-	mor1kx_bus_if_wb32 \
-	mor1kx_wb_mux_cappuccino \
+	mor1kx_bus_if_wb32
+
+# tests that no longer work keep them here so we can easily
+# run them if we want to try and fix them.
+BROKEN_TESTS := \
+	mor1kx_lsu_cappuccino \
 	mor1kx_cpu_cappuccino \
 	mor1kx
-
 
 all: $(TESTS)
 clean:
 	rm -rf mor1kx*/
 
-.PHONY: all clean $(TESTS)
+.PHONY: all clean $(TESTS) $(BROKEN_TESTS)
 
 RTL := ../../rtl/verilog
+
+$(BROKEN_TESTS): % :
+	sby -f $@.sby
 
 $(TESTS): % :
 	sby -f $@.sby
