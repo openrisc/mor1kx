@@ -138,6 +138,7 @@ jobs:
           cd formal_tools
           git clone --depth 1 https://github.com/YosysHQ/yosys.git yosys
           cd yosys
+          git submodule update --init
           make -j$(nproc)
           sudo make install
           cd ..
