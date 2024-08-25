@@ -1,7 +1,7 @@
 CAPI=2:
 
-name : ::mor1kx:5.1
-#description : mor1kx - an OpenRISC processor IP core
+name : ::mor1kx:5.2
+description : mor1kx - an OpenRISC processor IP core
 
 filesets:
   core:
