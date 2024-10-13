@@ -26,7 +26,7 @@ jobs:
           verilator --lint-only rtl/verilog/*.v +incdir+rtl/verilog
 
   or1k-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       LD_LIBRARY_PATH: "/tmp/tools/lib"
       EXPECTED_FAILURES: ${{ matrix.env.EXPECTED_FAILURES }}
@@ -112,7 +112,7 @@ jobs:
           - { EXPECTED_FAILURES: "or1k-cy or1k-ext", EXTRA_CORE_ARGS: "--feature_ext NONE" }
 
   formal-verification:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       #Checkout Repository
       - name: Checkout
