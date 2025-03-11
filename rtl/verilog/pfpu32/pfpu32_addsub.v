@@ -328,4 +328,45 @@ module pfpu32_addsub
       add_rdy_o <= s2o_ready;
   end // posedge clock
 
+/*-------------------Formal Checking------------------*/
+
+`ifdef FORMAL
+
+`ifdef PFPU32_ADDSUB
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif // PFPU32_ADDSUB
+
+  // Reset the module before formal verification.
+  reg f_initialized;
+  initial f_initialized = 1'b0;
+  begin
+    always @(posedge clk)
+      f_initialized <= 1'b1;
+
+    always @(*)
+      if (!f_initialized)
+        assume (rst);
+      else
+        assume (!rst);
+  end
+
+  // Verify that a result is produced after three clocks.
+  generate
+  begin : f_addsub_multiclock
+    f_multiclock_pfpu32_addsub #(
+      .OP_MAX_CLOCKS(3),
+    ) u_f_multiclock (
+      .clk(clk),
+      .flush_i(flush_i),
+      .adv_i(adv_i),
+      .start_i(start_i),
+      .add_rdy_i(add_rdy_o),
+      .f_initialized(f_initialized),
+    );
+  end
+  endgenerate
+
+`endif // FORMAL
 endmodule // pfpu32_addsub
