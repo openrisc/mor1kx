@@ -352,6 +352,14 @@ module pfpu32_addsub
         assume (!rst);
   end
 
+  always @(posedge clk) begin
+    if (f_initialized) begin
+      // No results should be emitted if the pipeline was flushed.
+      if ($past(flush_i) || $past(flush_i,2) || $past(flush_i,3))
+        assert (!add_rdy_o);
+    end
+  end
+
   // Verify that a result is produced after three clocks.
   generate
   begin : f_addsub_multiclock
