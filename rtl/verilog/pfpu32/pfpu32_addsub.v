@@ -169,7 +169,7 @@ module pfpu32_addsub
   // shifter
   wire [25:0] s2t_fract26_fsh = {s1o_fract24_fsh,2'd0};
   wire [25:0] s2t_fract26_shr = s2t_fract26_fsh >> s1o_shr;
-  
+
   // sticky
   reg s2t_sticky;
   always @(s1o_shr or s1o_fract24_fsh) begin
@@ -204,7 +204,7 @@ module pfpu32_addsub
 
     // add/sub of non-shifted and shifted operands
   wire [27:0] s2t_fract28_shr = {1'b0,s2t_fract26_shr,s2t_sticky};
-  
+
   wire [27:0] s2t_fract28_add = {1'b0,s1o_fract24_nsh,3'd0} +
                                 (s2t_fract28_shr ^ {28{s1o_op_sub}}) +
                                 {27'd0,s1o_op_sub};
