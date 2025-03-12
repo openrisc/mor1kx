@@ -352,11 +352,221 @@ module pfpu32_addsub
         assume (!rst);
   end
 
+  // Expected output, based on inputs from the last cycle in which adv_i was
+  // high.
+  reg [50:0] f1_expected_output;
+
+  // Aliases
+  wire        f1_add_sign      = f1_expected_output[0];
+  wire        f1_add_sub_0     = f1_expected_output[1];
+  wire        f1_add_shr       = f1_expected_output[2];
+  wire  [4:0] f1_add_shl       = f1_expected_output[7:3];
+  wire  [9:0] f1_add_exp10sh0  = f1_expected_output[17:8];
+  wire [27:0] f1_add_fract28   = f1_expected_output[45:18];
+  wire        f1_add_inv       = f1_expected_output[46];
+  wire        f1_add_inf       = f1_expected_output[47];
+  wire        f1_add_snan      = f1_expected_output[48];
+  wire        f1_add_qnan      = f1_expected_output[49];
+  wire        f1_add_anan_sign = f1_expected_output[50];
+
+  // Expected output, based on inputs from two cycles ago in which adv_i was
+  // high.
+  reg [50:0] f2_expected_output;
+
+  // Expected output, based on inputs from three cycles ago in which adv_i was
+  // high.
+  reg [50:0] f3_expected_output;
+
+  // Aliases
+  wire        f3_add_sign      = f3_expected_output[0];
+  wire        f3_add_sub_0     = f3_expected_output[1];
+  wire        f3_add_shr       = f3_expected_output[2];
+  wire  [4:0] f3_add_shl       = f3_expected_output[7:3];
+  wire  [9:0] f3_add_exp10sh0  = f3_expected_output[17:8];
+  wire [27:0] f3_add_fract28   = f3_expected_output[45:18];
+  wire        f3_add_inv       = f3_expected_output[46];
+  wire        f3_add_inf       = f3_expected_output[47];
+  wire        f3_add_snan      = f3_expected_output[48];
+  wire        f3_add_qnan      = f3_expected_output[49];
+  wire        f3_add_anan_sign = f3_expected_output[50];
+
+  // Determine whether we actually have a subtraction operation and, if so,
+  // whether the subtraction yields 0.
+  wire f_is_sub = signa_i ^ signb_i ^ is_sub_i;
+  wire f_sub_0 = f_is_sub & addsub_aeqb_i;
+
+  // Re-order operands so that left side is at least as large as the right.
+  wire [23:0] f_fract24_l = addsub_agtb_i ? fract24a_i : fract24b_i;
+  wire [23:0] f_fract24_r = addsub_agtb_i ? fract24b_i : fract24a_i;
+
+  // Shift the right side to get it to line up with the left's exponent.
+  wire [9:0] f_exp_diff =
+    addsub_agtb_i ? exp10a_i - exp10b_i : exp10b_i - exp10a_i;
+  wire [25:0] f_fract26_r_shifted = {f_fract24_r, 2'b0} >> f_exp_diff;
+
+  // Figure out the sticky bit.
+  wire f_sticky;
+  always @(f_exp_diff or f_fract24_r) begin
+    case(f_exp_diff)
+      9'd0, 9'd1, 9'd2: f_sticky = 0;
+      9'd3:    f_sticky = |f_fract24_r[0];
+      9'd4:    f_sticky = |f_fract24_r[1:0];
+      9'd5:    f_sticky = |f_fract24_r[2:0];
+      9'd6:    f_sticky = |f_fract24_r[3:0];
+      9'd7:    f_sticky = |f_fract24_r[4:0];
+      9'd8:    f_sticky = |f_fract24_r[5:0];
+      9'd9:    f_sticky = |f_fract24_r[6:0];
+      9'd10:   f_sticky = |f_fract24_r[7:0];
+      9'd11:   f_sticky = |f_fract24_r[8:0];
+      9'd12:   f_sticky = |f_fract24_r[9:0];
+      9'd13:   f_sticky = |f_fract24_r[10:0];
+      9'd14:   f_sticky = |f_fract24_r[11:0];
+      9'd15:   f_sticky = |f_fract24_r[12:0];
+      9'd16:   f_sticky = |f_fract24_r[13:0];
+      9'd17:   f_sticky = |f_fract24_r[14:0];
+      9'd18:   f_sticky = |f_fract24_r[15:0];
+      9'd19:   f_sticky = |f_fract24_r[16:0];
+      9'd20:   f_sticky = |f_fract24_r[17:0];
+      9'd21:   f_sticky = |f_fract24_r[18:0];
+      9'd22:   f_sticky = |f_fract24_r[19:0];
+      9'd23:   f_sticky = |f_fract24_r[20:0];
+      9'd24:   f_sticky = |f_fract24_r[21:0];
+      9'd25:   f_sticky = |f_fract24_r[22:0];
+      default: f_sticky = |f_fract24_r[23:0];
+    endcase
+  end
+
+  // Add/subtract the fractional parts.
+  wire [27:0] f_fract28_l = {1'b0, f_fract24_l, 3'b0};
+  wire [27:0] f_fract28_r = {1'b0, f_fract26_r_shifted, f_sticky};
+  wire [27:0] f_fract28 =
+    (f_is_sub ? f_fract28_l - f_fract28_r : f_fract28_l + f_fract28_r)
+      | {27'b0, f_sticky};
+
+  // Figure out how much we need to left-shift to normalize f_fract28.
+  // Normalization occurs when the two highest bits are 01. Here, the
+  // least-significant bit is the sticky bit, and is therefore ignored.
+  reg [4:0] f_normalization_shift;
+  always @(f_fract28) begin
+    casez(f_fract28)
+      28'b1???????????????????????????: f_normalization_shift = 5'd0; // right shift needed
+      28'b01??????????????????????????: f_normalization_shift = 5'd0; // OK
+      28'b001?????????????????????????: f_normalization_shift = 5'd1;
+      28'b0001????????????????????????: f_normalization_shift = 5'd2;
+      28'b00001???????????????????????: f_normalization_shift = 5'd3;
+      28'b000001??????????????????????: f_normalization_shift = 5'd4;
+      28'b0000001?????????????????????: f_normalization_shift = 5'd5;
+      28'b00000001????????????????????: f_normalization_shift = 5'd6;
+      28'b000000001???????????????????: f_normalization_shift = 5'd7;
+      28'b0000000001??????????????????: f_normalization_shift = 5'd8;
+      28'b00000000001?????????????????: f_normalization_shift = 5'd9;
+      28'b000000000001????????????????: f_normalization_shift = 5'd10;
+      28'b0000000000001???????????????: f_normalization_shift = 5'd11;
+      28'b00000000000001??????????????: f_normalization_shift = 5'd12;
+      28'b000000000000001?????????????: f_normalization_shift = 5'd13;
+      28'b0000000000000001????????????: f_normalization_shift = 5'd14;
+      28'b00000000000000001???????????: f_normalization_shift = 5'd15;
+      28'b000000000000000001??????????: f_normalization_shift = 5'd16;
+      28'b0000000000000000001?????????: f_normalization_shift = 5'd17;
+      28'b00000000000000000001????????: f_normalization_shift = 5'd18;
+      28'b000000000000000000001???????: f_normalization_shift = 5'd19;
+      28'b0000000000000000000001??????: f_normalization_shift = 5'd20;
+      28'b00000000000000000000001?????: f_normalization_shift = 5'd21;
+      28'b000000000000000000000001????: f_normalization_shift = 5'd22;
+      28'b0000000000000000000000001???: f_normalization_shift = 5'd23;
+      28'b00000000000000000000000001??: f_normalization_shift = 5'd24;
+      28'b000000000000000000000000001?: f_normalization_shift = 5'd25;
+      28'b000000000000000000000000000?: f_normalization_shift = 5'd0; // zero
+    endcase
+  end
+
+  // Exponent if we didn't have to shift.
+  wire [9:0] f_exp10sh0 = addsub_agtb_i ? exp10a_i : exp10b_i;
+
+  // Figure out how much the result needs to be shifted left.
+  reg [4:0] f_shift_left;
+  always @(f_normalization_shift or f_sub_0 or f_exp10sh0) begin
+    if ((f_normalization_shift == 5'd0) | f_sub_0)
+      // Shift not needed.
+      f_shift_left = 5'd0;
+    else if (f_exp10sh0 == 10'd1)
+      // Started with denormalized values. Can't shift.
+      f_shift_left = 5'd0;
+    else if (f_exp10sh0 > f_normalization_shift)
+      f_shift_left = f_normalization_shift;
+    else
+      // Creating a denormalized value.
+      f_shift_left = f_exp10sh0[4:0] - 5'd1;
+  end
+
+  // Track expected output as pipeline progresses.
+  always @(posedge clk) begin
+    if (adv_i) begin
+      // Initialize expected output for current cycle inputs.
+
+      // If |a| > |b|, then the sign of the result is that of a. Otherwise, it
+      // is that of b, after taking the operator into account.
+      f1_add_sign <= addsub_agtb_i ? signa_i : signb_i ^ is_sub_i;
+
+      // According to the contract, add_sub_0 is high iff we have an actual
+      // subtraction that yields 0.
+      f1_add_sub_0 <= f_sub_0;
+
+      // If the high bit is set in the result's fractional part, then it needs
+      // to be right-shifted.
+      f1_add_shr <= f_fract28[27];
+
+      f1_add_shl <= f_shift_left;
+      f1_add_exp10sh0 <= f_exp10sh0;
+      f1_add_fract28 <= f_fract28;
+
+      // Subtraction of two infinities is undefined, and therefore invalid.
+      f1_add_inv <= infa_i & infb_i & f_is_sub;
+
+      // Result is an infinity if either operand is infinity.
+      f1_add_inf <= infa_i | infb_i;
+
+      // Pass-through signals.
+      f1_add_snan <= snan_i;
+      f1_add_qnan <= qnan_i;
+      f1_add_anan_sign <= anan_sign_i;
+
+      // Move expected output along the pipeline.
+      f2_expected_output <= f1_expected_output;
+      f3_expected_output <= f2_expected_output;
+    end
+  end
+
+  // Assertions on output.
   always @(posedge clk) begin
     if (f_initialized) begin
       // No results should be emitted if the pipeline was flushed.
       if ($past(flush_i) || $past(flush_i,2) || $past(flush_i,3))
         assert (!add_rdy_o);
+
+      // XXX - assuming adv_i is high for three consecutive cycles, to ensure
+      // that f3_expected_output is meaningful.
+      if (add_rdy_o && $past(adv_i) && $past(adv_i,2) && $past(adv_i,3)) begin
+        assert (add_snan_o == f3_add_snan);
+        assert (add_qnan_o == f3_add_qnan);
+        assert (add_anan_sign_o == f3_add_anan_sign);
+
+        // Assert remaining outputs only when they are meaningful.
+        if (!(f3_add_snan | f3_add_qnan | f3_add_anan_sign)) begin
+          assert (add_inv_o == f3_add_inv);
+          if (!f3_add_inv) begin
+            assert (add_inf_o == f3_add_inf);
+            if (!f3_add_inf) begin
+              assert (add_sign_o == f3_add_sign);
+              assert (add_sub_0_o == f3_add_sub_0);
+              assert (add_shr_o == f3_add_shr);
+              assert (add_shl_o == f3_add_shl);
+              assert (add_exp10sh0_o == f3_add_exp10sh0);
+              assert (add_fract28_o == f3_add_fract28);
+            end
+          end
+        end
+      end
     end
   end
 
