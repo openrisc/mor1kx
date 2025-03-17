@@ -1,0 +1,17 @@
+[options]
+mode prove
+depth 8
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal -D PFPU32_FCMP -D PFPU32_FCMP_SNAN_BUG pfpu32_cmp.v
+
+
+prep -top pfpu32_fcmp
+
+[files]
+../../rtl/verilog/pfpu32/pfpu32_cmp.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v
