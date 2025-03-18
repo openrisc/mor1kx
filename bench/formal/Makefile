@@ -26,7 +26,8 @@ TESTS := mor1kx_cache_lru \
 	mor1kx_ticktimer \
 	mor1kx_ctrl_cappuccino \
 	mor1kx_rf_cappuccino \
-	mor1kx_bus_if_wb32
+	mor1kx_bus_if_wb32 \
+	pfpu32_addsub
 
 # tests that no longer work keep them here so we can easily
 # run them if we want to try and fix them.
@@ -37,7 +38,7 @@ BROKEN_TESTS := \
 
 all: $(TESTS)
 clean:
-	rm -rf mor1kx*/
+	rm -rf mor1kx*/ pfpu32_*/
 
 .PHONY: all clean $(TESTS) $(BROKEN_TESTS)
 
