@@ -222,7 +222,7 @@ module pfpu32_muldiv
   // left-shift the dividend and divisor
   wire [23:0] s1t_fract24a_shl = s0o_fract24a << s0o_shla;
   wire [23:0] s1t_fract24b_shl = s0o_fract24b << s0o_shlb;
-  
+
   // force result to zero
   wire [23:0] s1t_fract24a = s1t_fract24a_shl & {24{~s0o_opc_0}};
   wire [23:0] s1t_fract24b = s1t_fract24b_shl & {24{~s0o_opc_0}};
@@ -231,7 +231,7 @@ module pfpu32_muldiv
   wire [9:0] s1t_exp10mux =
     s0o_is_div ? (s0o_exp10a - {5'd0,s0o_shla} - s0o_exp10b + {5'd0,s0o_shlb} + 10'd127) :
                  (s0o_exp10a - {5'd0,s0o_shla} + s0o_exp10b - {5'd0,s0o_shlb} - 10'd127);
-  
+
   // force result to zero
   wire [9:0] s1t_exp10c = s1t_exp10mux & {10{~s0o_opc_0}};
 
@@ -361,7 +361,7 @@ module pfpu32_muldiv
   // control for multiplier's input 'A'
   //   the register also contains quotient to output
   wire itr_uinA = s1t_is_mul   |
-                  itr_state[0] | itr_state[3] | 
+                  itr_state[0] | itr_state[3] |
                   itr_state[6] | itr_rndQ;
   // multiplexer for multiplier's input 'A'
   wire [31:0] itr_mul32a =
@@ -473,12 +473,12 @@ module pfpu32_muldiv
                        {16'd0, s2o_fract32_ahbl} +
                        {16'd0, s2o_fract32_albh} +
                        {32'd0, s2o_fract32_albl[31:16]};
-                       
+
   // multiplier shift right value
   wire [9:0] s3t_shrx = s2o_is_shrx ? s2o_shrx : {9'd0,s3t_fract48[47]};
 
   // stage #3 outputs (for division support)
-  
+
   // full product
   reg [32:0] s3o_mul33o; // output
   reg        s3o_mul33s; // sticky
@@ -521,7 +521,7 @@ module pfpu32_muldiv
       s3o_is_shrx  <= s2o_is_shrx;
     end // advance pipe
   end // @clock
-  
+
   // stage 3 ready makes sense for division only
   reg s3o_div_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -581,7 +581,7 @@ module pfpu32_muldiv
       s3o_res_qtnt26 <= itr_res_qtnt26;
     end
   end
-  
+
   // Possible left shift computation.
   // In fact, as the dividend and divisor was normalized
   //   and the result is non-zero
