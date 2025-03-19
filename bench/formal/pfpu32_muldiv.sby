@@ -1,0 +1,19 @@
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal f_multiclock_pfpu32_op.v
+read -formal -D PFPU32_MULDIV pfpu32_muldiv.v
+
+
+prep -top pfpu32_muldiv
+
+[files]
+f_multiclock_pfpu32_op.v
+../../rtl/verilog/pfpu32/pfpu32_muldiv.v
+../../rtl/verilog/mor1kx-defines.v
+../../rtl/verilog/mor1kx-sprs.v

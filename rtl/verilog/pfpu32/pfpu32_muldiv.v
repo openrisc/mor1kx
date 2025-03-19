@@ -642,6 +642,48 @@ module pfpu32_muldiv
       muldiv_rdy_o <= s2o_mul_ready | s3o_div_ready;
   end // posedge clock
 
+/*-------------------Formal Checking------------------*/
+
+`ifdef FORMAL
+
+`ifdef PFPU32_MULDIV
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif // PFPU32_MULDIV
+
+  // Reset the module before formal verification.
+  reg f_initialized;
+  initial f_initialized = 1'b0;
+  begin
+    always @(posedge clk)
+      f_initialized <= 1'b1;
+
+    always @(*)
+      if (!f_initialized)
+        assume (rst);
+      else
+        assume (!rst);
+  end
+
+  // Division takes 16 cycles. Verify that a result is produced within this
+  // amount of time.
+  generate
+  begin : f_muldiv_multiclock
+    f_multiclock_pfpu32_op #(
+      .OP_MAX_CLOCKS(16),
+    ) u_f_multiclock (
+      .clk(clk),
+      .flush_i(flush_i),
+      .adv_i(adv_i),
+      .start_i(start_i),
+      .result_rdy_i(muldiv_rdy_o),
+      .f_initialized(f_initialized),
+    );
+  end
+  endgenerate
+`endif // FORMAL
+
 endmodule // pfpu32_muldiv
 
 
