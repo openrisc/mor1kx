@@ -6,14 +6,14 @@ depth 10
 smtbmc yices
 
 [script]
-read -formal f_multiclock_pfpu32_addsub.v
+read -formal f_multiclock_pfpu32_op.v
 read -formal -D PFPU32_ADDSUB pfpu32_addsub.v
 
 
 prep -top pfpu32_addsub
 
 [files]
-f_multiclock_pfpu32_addsub.v
+f_multiclock_pfpu32_op.v
 ../../rtl/verilog/pfpu32/pfpu32_addsub.v
 ../../rtl/verilog/mor1kx-defines.v
 ../../rtl/verilog/mor1kx-sprs.v
