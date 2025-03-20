@@ -27,14 +27,16 @@ TESTS := mor1kx_cache_lru \
 	mor1kx_ctrl_cappuccino \
 	mor1kx_rf_cappuccino \
 	mor1kx_bus_if_wb32 \
-	pfpu32_addsub
+	pfpu32_addsub \
+	pfpu32_cmp
 
 # tests that no longer work keep them here so we can easily
 # run them if we want to try and fix them.
 BROKEN_TESTS := \
 	mor1kx_lsu_cappuccino \
 	mor1kx_cpu_cappuccino \
-	mor1kx
+	mor1kx \
+	pfpu32_cmp_snan_bug
 
 all: $(TESTS)
 clean:

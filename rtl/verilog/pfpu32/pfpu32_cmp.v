@@ -199,4 +199,203 @@ assign inv_o      = inv_cmp;
 assign inf_o      = infa_i | infb_i;
 assign ready_o    = fpu_op_is_comp_i;
 
+/*-------------------Formal Checking------------------*/
+
+`ifdef FORMAL
+
+`ifdef PFPU32_FCMP
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif // PFPU32_FCMP
+
+  always @(*) begin
+    // Assume that a valid opcode is given when this unit is activated.
+    `ASSUME (
+      ~fpu_op_is_comp_i
+    | generic_cmp_opc_i == GENERIC_SFEQ
+    | generic_cmp_opc_i == GENERIC_SFNE
+    | generic_cmp_opc_i == GENERIC_SFLT
+    | generic_cmp_opc_i == GENERIC_SFLE
+    | generic_cmp_opc_i == GENERIC_SFGT
+    | generic_cmp_opc_i == GENERIC_SFGE
+    );
+
+    // Assume that inputs are well-formed, based on what is expected from
+    // pfpu32_top.
+    `ASSUME (
+      // Top two bits in first operand's exponent are always 0.
+      exp10a_i[9:8] == 0
+    );
+    `ASSUME (
+      // Top two bits in second operand's exponent are always 0.
+      exp10b_i[9:8] == 0
+    );
+
+    // Assume that inputs are consistent.
+    `ASSUME (
+      // NaN signals for first operand.
+      (snana_i | qnana_i) == (exp10a_i == 255 & fract24a_i != 0)
+    );
+    `ASSUME (
+      // NaN signals for second operand.
+      (snanb_i | qnanb_i) == (exp10b_i == 255 & fract24b_i != 0)
+    );
+    `ASSUME (
+      // Infinity signal for first operand.
+      infa_i == (exp10a_i == 255 & fract24a_i == 0)
+    );
+    `ASSUME (
+      // Infinity signal for second operand.
+      infb_i == (exp10b_i == 255 & fract24b_i == 0)
+    );
+    `ASSUME (
+      // Zero signal for first operand.
+      zeroa_i == (~(|exp10a_i) & ~(|fract24a_i))
+    );
+    `ASSUME (
+      // Zero signal for second operand.
+      zerob_i == (~(|exp10b_i) & ~(|fract24b_i))
+    );
+  end
+
+  // Comparisons on exponents.
+  wire f_exp_eq = exp10a_i == exp10b_i;
+  wire f_exp_lt = exp10a_i < exp10b_i;
+  wire f_exp_gt = exp10a_i > exp10b_i;
+
+  // Comparisons on fractional parts.
+  wire f_fract_eq = fract24a_i == fract24b_i;
+  wire f_fract_lt = fract24a_i < fract24b_i;
+  wire f_fract_gt = fract24a_i > fract24b_i;
+
+  wire f_have_snan = snana_i | snanb_i;
+  wire f_have_qnan = qnana_i | qnanb_i;
+  wire f_have_nan = f_have_snan | f_have_qnan;
+
+  reg f_cmp_flag;
+  always @(*) begin
+    case (generic_cmp_opc_i)
+      GENERIC_SFEQ:
+        f_cmp_flag =
+          zeroa_i & zerob_i // handle zeroes
+          | f_have_nan & unordered_cmp_bit_i // handle NaNs
+          | ~f_have_nan & (signa_i == signb_i) & f_exp_eq & f_fract_eq;
+      GENERIC_SFNE:
+        f_cmp_flag =
+          zeroa_i != zerob_i // handle zeroes
+          | f_have_nan // handle NaNs
+          | ~zeroa_i & ~zerob_i & ~f_have_nan & (
+              signa_i != signb_i | ~f_exp_eq | ~f_fract_eq
+            );
+      GENERIC_SFLT:
+        f_cmp_flag =
+          f_have_nan & unordered_cmp_bit_i // handle NaNs
+          | ~f_have_nan & (
+              // Decompose non-NaN cases based on how a and b compare with 0.
+              zeroa_i & ~zerob_i & ~signb_i // a == 0 < b
+              | ~zeroa_i & signa_i & zerob_i // a < 0 == b
+              | ~zeroa_i & ~zerob_i & (
+                  signa_i & ~signb_i // a < 0 < b
+                  | signa_i & signb_i & (
+                      f_exp_gt | f_exp_eq & f_fract_gt // a < b < 0
+                    )
+                  | ~signa_i & ~signb_i & (
+                      f_exp_lt | f_exp_eq & f_fract_lt // 0 < a < b
+                    )
+                )
+            );
+      GENERIC_SFLE:
+        f_cmp_flag =
+          f_have_nan & unordered_cmp_bit_i // handle NaNs
+          | ~f_have_nan & (
+              // Decompose non-NaN cases based on how a and b compare with 0.
+              zeroa_i & zerob_i // a == b == 0
+              | zeroa_i & ~signb_i // a == 0 ≤ b
+              | signa_i & zerob_i // a ≤ 0 == b
+              | signa_i & ~signb_i // a ≤ 0 ≤ b
+              | signa_i & signb_i & (
+                  f_exp_gt | f_exp_eq & ~f_fract_lt // a ≤ b ≤ 0
+                )
+              | ~signa_i & ~signb_i & (
+                  f_exp_lt | f_exp_eq & ~f_fract_gt // 0 ≤ a ≤ b
+                )
+            );
+      GENERIC_SFGT:
+        f_cmp_flag =
+          f_have_nan & unordered_cmp_bit_i // handle NaNs
+          | ~f_have_nan & (
+              // Decompose non-NaN cases based on how a and b compare with 0.
+              zeroa_i & ~zerob_i & signb_i // a == 0 > b
+              | ~zeroa_i & ~signa_i & zerob_i // a > 0 == b
+              | ~zeroa_i & ~zerob_i & (
+                  ~signa_i & signb_i // a > 0 > b
+                  | signa_i & signb_i & (
+                      f_exp_lt | f_exp_eq & f_fract_lt // 0 > a > b
+                    )
+                  | ~signa_i & ~signb_i & (
+                      f_exp_gt | f_exp_eq & f_fract_gt // a > b > 0
+                    )
+                )
+            );
+      GENERIC_SFGE:
+        f_cmp_flag =
+          f_have_nan & unordered_cmp_bit_i // handle NaNs
+          | ~f_have_nan & (
+              // Decompose non-NaN cases based on how a and b compare with 0.
+              zeroa_i & zerob_i // a == b == 0
+              | zeroa_i & signb_i // a == 0 ≥ b
+              | ~signa_i & zerob_i // a ≥ 0 == b
+              | ~signa_i & signb_i // a ≥ 0 ≥ b
+              | signa_i & signb_i & (
+                  f_exp_lt | f_exp_eq & ~f_fract_gt // 0 ≥ a ≥ b
+                )
+              | ~signa_i & ~signb_i & (
+                  f_exp_gt | f_exp_eq & ~f_fract_lt // a ≥ b ≥ 0
+                )
+            );
+    endcase
+  end
+
+  // Exceptions.
+  wire f_have_inf = infa_i | infb_i;
+  // Signalling NaNs always generate exceptions. Otherwise, quiet NaNs
+  // generate exceptions for <, ≤, >, and ≥, unless unordered comparisons are
+  // allowed.
+  wire f_have_inv =
+      f_have_snan
+    | f_have_qnan & ~unordered_cmp_bit_i & (
+        generic_cmp_opc_i == GENERIC_SFLT
+      | generic_cmp_opc_i == GENERIC_SFLE
+      | generic_cmp_opc_i == GENERIC_SFGT
+      | generic_cmp_opc_i == GENERIC_SFGE
+      );
+
+  // Assertions on output.
+  always @(*) begin
+    // Output is ready if and only if the operation is a comparison.
+    assert (ready_o == fpu_op_is_comp_i);
+
+    // Output signals for addsub should always be valid, even if the operation
+    // is not a comparison.
+    assert (addsub_agtb_o == (f_exp_gt | f_exp_eq & fract_gt));
+    assert (addsub_aeqb_o == (f_exp_eq & f_fract_eq));
+
+    if (fpu_op_is_comp_i) begin
+      assert (cmp_flag_o == f_cmp_flag);
+`ifndef PFPU32_FCMP_SNAN_BUG
+      // XXX inv_o diverges from expected behaviour when sNaN is passed to
+      // sfult, sfule, sfugt, or sfuge.
+      if (~(f_have_snan & unordered_cmp_bit_i
+          & (generic_cmp_opc_i == GENERIC_SFLT
+            | generic_cmp_opc_i == GENERIC_SFLE
+            | generic_cmp_opc_i == GENERIC_SFGT
+            | generic_cmp_opc_i == GENERIC_SFGE)))
+`endif // PFPU32_FCMP_SNAN_BUG
+        assert (inv_o == f_have_inv);
+      assert (inf_o == f_have_inf);
+    end
+  end
+
+`endif // FORMAL
 endmodule // pfpu32_fcmp
