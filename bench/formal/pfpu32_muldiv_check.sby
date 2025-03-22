@@ -1,19 +1,19 @@
 [options]
 mode prove
-depth 10
+depth 20
 
 [engines]
 smtbmc yices
 
 [script]
 read -formal f_multiclock_pfpu32_op.v
-read -formal -D PFPU32_ADDSUB pfpu32_addsub.v
+read -formal -D PFPU32_MULDIV -D PFPU32_CHECK_MUL_ASSUMPTIONS pfpu32_muldiv.v
 
 
-prep -top pfpu32_addsub
+prep -top pfpu32_muldiv
 
 [files]
 f_multiclock_pfpu32_op.v
-../../rtl/verilog/pfpu32/pfpu32_addsub.v
+../../rtl/verilog/pfpu32/pfpu32_muldiv.v
 ../../rtl/verilog/mor1kx-defines.v
 ../../rtl/verilog/mor1kx-sprs.v

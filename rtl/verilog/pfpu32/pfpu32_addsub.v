@@ -573,14 +573,14 @@ module pfpu32_addsub
   // Verify that a result is produced after three clocks.
   generate
   begin : f_addsub_multiclock
-    f_multiclock_pfpu32_addsub #(
+    f_multiclock_pfpu32_op #(
       .OP_MAX_CLOCKS(3),
     ) u_f_multiclock (
       .clk(clk),
       .flush_i(flush_i),
       .adv_i(adv_i),
       .start_i(start_i),
-      .add_rdy_i(add_rdy_o),
+      .result_rdy_i(add_rdy_o),
       .f_initialized(f_initialized),
     );
   end
