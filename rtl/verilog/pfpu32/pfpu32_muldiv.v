@@ -185,7 +185,7 @@ module pfpu32_muldiv
   reg        s0o_dbz;
   // registering
   always @(posedge clk) begin
-    if(adv_i) begin
+    if(adv_i & start_i) begin
         // input related
       s0o_inv         <= s0t_inv;
       s0o_inf_i       <= s0t_inf_i;
@@ -242,7 +242,7 @@ module pfpu32_muldiv
   //   quotient is computed
   wire itr_rndQ = itr_state[10];
   //   iteration in progress
-  wire itr_Proc = |itr_state;
+  wire itr_Proc = |itr_state[9:0];
   // iteration control state machine
   always @(posedge clk `OR_ASYNC_RST) begin
     if (rst)
