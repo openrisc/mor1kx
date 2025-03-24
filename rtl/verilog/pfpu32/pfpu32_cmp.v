@@ -102,9 +102,9 @@ wire eqne = (generic_cmp_opc_i == GENERIC_SFEQ) |
             (generic_cmp_opc_i == GENERIC_SFNE);
 
 // Comparison is invalid if:
-//  1) sNaN is an operand of ordered/unordered EQ/NE comparison
+//  1) sNaN is an operand of any comparison
 //  2)  NaN is an operand of ordered LT/LE/GT/GE comparison
-wire inv_cmp = (eqne & snan) | ((~eqne) & anan & (~unordered_cmp_bit_i));
+wire inv_cmp = snan | ((~eqne) & anan & (~unordered_cmp_bit_i));
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -383,16 +383,7 @@ assign ready_o    = fpu_op_is_comp_i;
 
     if (fpu_op_is_comp_i) begin
       assert (cmp_flag_o == f_cmp_flag);
-`ifndef PFPU32_FCMP_SNAN_BUG
-      // XXX inv_o diverges from expected behaviour when sNaN is passed to
-      // sfult, sfule, sfugt, or sfuge.
-      if (~(f_have_snan & unordered_cmp_bit_i
-          & (generic_cmp_opc_i == GENERIC_SFLT
-            | generic_cmp_opc_i == GENERIC_SFLE
-            | generic_cmp_opc_i == GENERIC_SFGT
-            | generic_cmp_opc_i == GENERIC_SFGE)))
-`endif // PFPU32_FCMP_SNAN_BUG
-        assert (inv_o == f_have_inv);
+      assert (inv_o == f_have_inv);
       assert (inf_o == f_have_inf);
     end
   end

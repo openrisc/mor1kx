@@ -35,8 +35,7 @@ TESTS := mor1kx_cache_lru \
 BROKEN_TESTS := \
 	mor1kx_lsu_cappuccino \
 	mor1kx_cpu_cappuccino \
-	mor1kx \
-	pfpu32_cmp_snan_bug
+	mor1kx
 
 all: $(TESTS)
 clean:
