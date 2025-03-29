@@ -222,7 +222,7 @@ module pfpu32_muldiv
   // left-shift the dividend and divisor
   wire [23:0] s1t_fract24a_shl = s0o_fract24a << s0o_shla;
   wire [23:0] s1t_fract24b_shl = s0o_fract24b << s0o_shlb;
-  
+
   // force result to zero
   wire [23:0] s1t_fract24a = s1t_fract24a_shl & {24{~s0o_opc_0}};
   wire [23:0] s1t_fract24b = s1t_fract24b_shl & {24{~s0o_opc_0}};
@@ -231,7 +231,7 @@ module pfpu32_muldiv
   wire [9:0] s1t_exp10mux =
     s0o_is_div ? (s0o_exp10a - {5'd0,s0o_shla} - s0o_exp10b + {5'd0,s0o_shlb} + 10'd127) :
                  (s0o_exp10a - {5'd0,s0o_shla} + s0o_exp10b - {5'd0,s0o_shlb} - 10'd127);
-  
+
   // force result to zero
   wire [9:0] s1t_exp10c = s1t_exp10mux & {10{~s0o_opc_0}};
 
@@ -361,7 +361,7 @@ module pfpu32_muldiv
   // control for multiplier's input 'A'
   //   the register also contains quotient to output
   wire itr_uinA = s1t_is_mul   |
-                  itr_state[0] | itr_state[3] | 
+                  itr_state[0] | itr_state[3] |
                   itr_state[6] | itr_rndQ;
   // multiplexer for multiplier's input 'A'
   wire [31:0] itr_mul32a =
@@ -473,12 +473,12 @@ module pfpu32_muldiv
                        {16'd0, s2o_fract32_ahbl} +
                        {16'd0, s2o_fract32_albh} +
                        {32'd0, s2o_fract32_albl[31:16]};
-                       
+
   // multiplier shift right value
   wire [9:0] s3t_shrx = s2o_is_shrx ? s2o_shrx : {9'd0,s3t_fract48[47]};
 
   // stage #3 outputs (for division support)
-  
+
   // full product
   reg [32:0] s3o_mul33o; // output
   reg        s3o_mul33s; // sticky
@@ -521,7 +521,7 @@ module pfpu32_muldiv
       s3o_is_shrx  <= s2o_is_shrx;
     end // advance pipe
   end // @clock
-  
+
   // stage 3 ready makes sense for division only
   reg s3o_div_ready;
   always @(posedge clk `OR_ASYNC_RST) begin
@@ -581,7 +581,7 @@ module pfpu32_muldiv
       s3o_res_qtnt26 <= itr_res_qtnt26;
     end
   end
-  
+
   // Possible left shift computation.
   // In fact, as the dividend and divisor was normalized
   //   and the result is non-zero
@@ -641,6 +641,434 @@ module pfpu32_muldiv
     else if(adv_i)
       muldiv_rdy_o <= s2o_mul_ready | s3o_div_ready;
   end // posedge clock
+
+/*-------------------Formal Checking------------------*/
+
+`ifdef FORMAL
+
+`ifdef PFPU32_MULDIV
+`define ASSUME assume
+`else
+`define ASSUME assert
+`endif // PFPU32_MULDIV
+
+  // Reset the module before formal verification.
+  reg f_initialized;
+  initial f_initialized = 1'b0;
+  begin
+    always @(posedge clk)
+      f_initialized <= 1'b1;
+
+    always @(*)
+      if (!f_initialized)
+        assume (rst);
+      else begin
+        assume (!rst);
+        assume (adv_i);
+      end
+  end
+
+  // Track whether we have multiplication operations over the last four
+  // cycles, and whether we have division operations over the last 16 cycles.
+  reg [3:0] f_is_mul;
+  reg [15:0] f_is_div;
+  initial f_is_mul = 0;
+  initial f_is_div = 0;
+  always @(posedge clk) begin
+    if (rst | flush_i) begin
+      f_is_mul <= 0;
+      f_is_div <= 0;
+    end else begin
+      f_is_mul <= {f_is_mul[2:0], start_i & ~is_div_i};
+      f_is_div <= {f_is_div[14:0], start_i & is_div_i};
+    end
+  end
+
+  // Interface assumptions.
+  always @(posedge clk) begin
+    // Division blocks the module for 12 cycles.
+    if (f_initialized & start_i) begin
+      `ASSUME (~|f_is_div[11:0]);
+    end
+  end
+
+  wire f_muldiv_sign = signa_i ^ signb_i;
+  wire f_muldiv_snan = snan_i;
+  wire f_muldiv_qnan = qnan_i;
+  wire f_muldiv_anan_sign = anan_sign_i;
+  wire f_div_op = is_div_i;
+
+  // IEEE 754: invalid operations are 0*∞, ∞*0, 0/0, and ∞/∞.
+  wire f_muldiv_inv =
+    is_div_i
+      ? zeroa_i & zerob_i | infa_i & infb_i
+      : zeroa_i & infb_i | infa_i & zerob_i;
+
+  // IEEE 754: expressions that yield ∞ are x*∞, ∞*x, and ∞/x.
+  wire f_muldiv_inf =
+    is_div_i
+      ? infa_i
+      : infa_i | infb_i;
+
+  // IEEE 754: division by zero occurs when divisor is 0 and dividend is
+  // a finite non-zero number.
+  wire f_div_dbz = is_div_i & zerob_i & ~zeroa_i & ~infa_i;
+
+  // Determine whether the operation yields 0, while ignoring operations that
+  // are invalid or yield infinity.
+  wire f_zero_result =
+    is_div_i
+      ? zeroa_i | infb_i
+      : zeroa_i | zerob_i;
+
+  // Number of leading zeroes in the first operand's fractional part. This is
+  // 0 if the fractional part is 0.
+  reg [9:0] f_fract_leading_zeroes_a;
+  always @(fract24a_i) begin
+    casez(fract24a_i)
+      24'b1???????????????????????: f_fract_leading_zeroes_a = 9'd0;
+      24'b01??????????????????????: f_fract_leading_zeroes_a = 9'd1;
+      24'b001?????????????????????: f_fract_leading_zeroes_a = 9'd2;
+      24'b0001????????????????????: f_fract_leading_zeroes_a = 9'd3;
+      24'b00001???????????????????: f_fract_leading_zeroes_a = 9'd4;
+      24'b000001??????????????????: f_fract_leading_zeroes_a = 9'd5;
+      24'b0000001?????????????????: f_fract_leading_zeroes_a = 9'd6;
+      24'b00000001????????????????: f_fract_leading_zeroes_a = 9'd7;
+      24'b000000001???????????????: f_fract_leading_zeroes_a = 9'd8;
+      24'b0000000001??????????????: f_fract_leading_zeroes_a = 9'd9;
+      24'b00000000001?????????????: f_fract_leading_zeroes_a = 9'd10;
+      24'b000000000001????????????: f_fract_leading_zeroes_a = 9'd11;
+      24'b0000000000001???????????: f_fract_leading_zeroes_a = 9'd12;
+      24'b00000000000001??????????: f_fract_leading_zeroes_a = 9'd13;
+      24'b000000000000001?????????: f_fract_leading_zeroes_a = 9'd14;
+      24'b0000000000000001????????: f_fract_leading_zeroes_a = 9'd15;
+      24'b00000000000000001???????: f_fract_leading_zeroes_a = 9'd16;
+      24'b000000000000000001??????: f_fract_leading_zeroes_a = 9'd17;
+      24'b0000000000000000001?????: f_fract_leading_zeroes_a = 9'd18;
+      24'b00000000000000000001????: f_fract_leading_zeroes_a = 9'd19;
+      24'b000000000000000000001???: f_fract_leading_zeroes_a = 9'd20;
+      24'b0000000000000000000001??: f_fract_leading_zeroes_a = 9'd21;
+      24'b00000000000000000000001?: f_fract_leading_zeroes_a = 9'd22;
+      24'b000000000000000000000001: f_fract_leading_zeroes_a = 9'd23;
+      24'b000000000000000000000000: f_fract_leading_zeroes_a = 9'd0;
+    endcase
+  end
+
+  // Number of leading zeroes in the second operand's fractional part. This is
+  // 0 if the fractional part is 0.
+  reg [9:0] f_fract_leading_zeroes_b;
+  always @(fract24b_i) begin
+    casez(fract24b_i)
+      24'b1???????????????????????: f_fract_leading_zeroes_b = 9'd0;
+      24'b01??????????????????????: f_fract_leading_zeroes_b = 9'd1;
+      24'b001?????????????????????: f_fract_leading_zeroes_b = 9'd2;
+      24'b0001????????????????????: f_fract_leading_zeroes_b = 9'd3;
+      24'b00001???????????????????: f_fract_leading_zeroes_b = 9'd4;
+      24'b000001??????????????????: f_fract_leading_zeroes_b = 9'd5;
+      24'b0000001?????????????????: f_fract_leading_zeroes_b = 9'd6;
+      24'b00000001????????????????: f_fract_leading_zeroes_b = 9'd7;
+      24'b000000001???????????????: f_fract_leading_zeroes_b = 9'd8;
+      24'b0000000001??????????????: f_fract_leading_zeroes_b = 9'd9;
+      24'b00000000001?????????????: f_fract_leading_zeroes_b = 9'd10;
+      24'b000000000001????????????: f_fract_leading_zeroes_b = 9'd11;
+      24'b0000000000001???????????: f_fract_leading_zeroes_b = 9'd12;
+      24'b00000000000001??????????: f_fract_leading_zeroes_b = 9'd13;
+      24'b000000000000001?????????: f_fract_leading_zeroes_b = 9'd14;
+      24'b0000000000000001????????: f_fract_leading_zeroes_b = 9'd15;
+      24'b00000000000000001???????: f_fract_leading_zeroes_b = 9'd16;
+      24'b000000000000000001??????: f_fract_leading_zeroes_b = 9'd17;
+      24'b0000000000000000001?????: f_fract_leading_zeroes_b = 9'd18;
+      24'b00000000000000000001????: f_fract_leading_zeroes_b = 9'd19;
+      24'b000000000000000000001???: f_fract_leading_zeroes_b = 9'd20;
+      24'b0000000000000000000001??: f_fract_leading_zeroes_b = 9'd21;
+      24'b00000000000000000000001?: f_fract_leading_zeroes_b = 9'd22;
+      24'b000000000000000000000001: f_fract_leading_zeroes_b = 9'd23;
+      24'b000000000000000000000000: f_fract_leading_zeroes_b = 9'd0;
+    endcase
+  end
+
+  // Compute the exponent if we didn't have to shift.
+  //
+  // When computing the fractional part of the result, the fractional parts of
+  // the operands are first left-shifted so that the most significant bit is
+  // 1. We need to account for this shifting here.
+  //
+  // We also need to account for the fact that an exponent N is represented by
+  // the value N+127.
+  wire [9:0] f_adjusted_exp10a = exp10a_i - f_fract_leading_zeroes_a;
+  wire [9:0] f_adjusted_exp10b = exp10b_i - f_fract_leading_zeroes_b;
+  wire [9:0] f_muldiv_exp10sh0 =
+    f_zero_result ? 0 :
+    is_div_i      ? f_adjusted_exp10a - (f_adjusted_exp10b - 10'd127) :
+                    f_adjusted_exp10a + (f_adjusted_exp10b - 10'd127);
+
+  // Fractional parts of the operands, left-shifted so that the most
+  // significant bit is a 1.
+  wire [23:0] f_fract24a_shifted = fract24a_i << f_fract_leading_zeroes_a;
+  wire [23:0] f_fract24b_shifted = fract24b_i << f_fract_leading_zeroes_b;
+
+  // Expected 48-bit product for multiplication operations. Ideally, we'd have:
+  //
+  //   wire [47:0] f_mul_fract48 =
+  //     {24'b0,f_fract24a_shifted} * {24'b0,f_fract24b_shifted};
+  //
+  // But this gives the solver a hard time. Instead, we define something
+  // that is equivalent, but closer to what the implementation does:
+  //
+  //   f_mul_fract48
+  //     = f_fract24a_shifted * f_fract24b_shifted
+  //     = ({f_fract24a_shifted,8'd0} * {f_fract24b_shifted,8'd0}) >> 16
+  //     = ((2¹⁶*f_fract24a_shifted[23:8] + {f_fract24a_shifted[7:0],8'd0})
+  //         * (2¹⁶*f_fract24b_shifted[23:8] + {f_fract24b_shifted[7:0,8'd0}))
+  //       >> 16
+  //
+  // Let f_mul16_ah = f_fract24a_shifted[23:8]
+  //     f_mul16_al = {f_fract24a_shifted[7:0],8'd0}
+  //     f_mul16_bh = f_fract24b_shifted[23:8]
+  //     f_mul16_bl = {f_fract24b_shifted[7:0],8'd0}
+  //
+  // Then
+  //
+  //   f_mul_fract48
+  //     = ((2¹⁶*f_mul16_ah + f_mul16_al)
+  //           * (2¹⁶*f_mul16_bh + f_mul16_bl)) >> 16
+  //     = (2³²*f_mul16_ah*f_mul16_bh
+  //         + 2¹⁶*f_mul16_ah*f_mul16_bl
+  //         + 2¹⁶*f_mul16_al*f_mul16_bh
+  //         + f_mul16_al*f_mul16_bl) >> 16
+  //
+  // Let f_fract32_ahbh = f_mul16_ah*f_mul16_bh
+  //     f_fract32_ahbl = f_mul16_ah*f_mul16_bl
+  //     f_fract32_albh = f_mul16_al*f_mul16_bh
+  //     f_fract32_albl = f_mul16_al*f_mul16_bl
+  //
+  // Then
+  //
+  //   f_mul_fract48
+  //     = (2³²*f_fract32_ahbh + 2¹⁶*f_fract32_ahbl
+  //         + 2¹⁶*f_fract32_albh + f_fract32_albl) >> 16
+  //     = {f_fract32_ahbh,16'b0} + {16'b0,f_fract32_ahbl}
+  //         + {16'b0,f_fract32_albh} + {32'b0,f_fract32_albl[31:16]}
+  wire [15:0] f_mul16_ah = f_zero_result ? 0 : f_fract24a_shifted[23:8];
+  wire [15:0] f_mul16_al = f_zero_result ? 0 : {f_fract24a_shifted[7:0],8'd0};
+  wire [15:0] f_mul16_bh = f_zero_result ? 0 : f_fract24b_shifted[23:8];
+  wire [15:0] f_mul16_bl = f_zero_result ? 0 : {f_fract24b_shifted[7:0],8'd0};
+  wire [31:0] f_fract32_ahbh = f_mul16_ah * f_mul16_bh;
+  wire [31:0] f_fract32_ahbl = f_mul16_ah * f_mul16_bl;
+  wire [31:0] f_fract32_albh = f_mul16_al * f_mul16_bh;
+  wire [31:0] f_fract32_albl = f_mul16_al * f_mul16_bl;
+  wire [47:0] f_mul_fract48 =
+    {f_fract32_ahbh,16'b0} + {16'b0,f_fract32_ahbl} + {16'b0,f_fract32_albh}
+      + {32'b0,f_fract32_albl[31:16]};
+
+  // Truncate to 28 bits, with stickiness.
+  wire [27:0] f_mul_fract28 = {f_mul_fract48[47:21],|f_mul_fract48[20:0]};
+
+  wire [9:0] f_muldiv_shr =
+    f_zero_result ? 0 :
+    // Handle non-positive exponent sum. If the exponent sum is x, then the
+    // result needs to be right-shifted by 1-x, so that the exponent becomes
+    // 1.
+    f_muldiv_exp10sh0[9] | f_muldiv_exp10sh0 == 0 ? 10'd1 - f_muldiv_exp10sh0 :
+    // If the high bit is set in the result's fractional part, then it needs
+    // to be right-shifted.
+    ~is_div_i ? {9'd0,f_mul_fract48[47]} :
+    // TODO: DIV case
+    0;
+
+  wire f_muldiv_shl =
+    is_div_i ? 0 : // TODO: DIV case
+    // No need to shift left for multiplication.
+               0;
+
+  // Assertions on output.
+  always @(posedge clk) begin
+    if (f_initialized) begin
+      // No results should be emitted if the pipeline was reset or flushed.
+      // Multiplication takes four cycles.
+      if ($past(rst | flush_i) || $past(rst | flush_i,2)
+          || $past(rst | flush_i,3) || $past(rst | flush_i,4))
+        assert (!muldiv_rdy_o);
+
+      // Assertions on itr_state's behaviour.
+      assert ($onehot0(itr_state));
+      if (start_i & is_div_i) assert(itr_state == 0);
+
+      if (muldiv_rdy_o) begin
+        // The output must correspond to either a division from 16 cycles ago,
+        // or to a multiplication from four cycles ago, but not both.
+        assert (f_is_mul[3] ^ f_is_div[15]);
+
+        // Assert expected output for the multiplication case.
+        if (f_is_mul[3]) begin
+          assert (muldiv_sign_o == $past(f_muldiv_sign,4));
+          assert (muldiv_inv_o == $past(f_muldiv_inv,4));
+          assert (muldiv_inf_o == $past(f_muldiv_inf,4));
+          assert (muldiv_snan_o == $past(f_muldiv_snan,4));
+          assert (muldiv_qnan_o == $past(f_muldiv_qnan,4));
+          assert (muldiv_anan_sign_o == $past(f_muldiv_anan_sign,4));
+          assert (div_op_o == $past(f_div_op,4));
+
+          // Assert remaining outputs only when meaningful.
+          if (!$past(f_muldiv_inv | f_muldiv_inf, 4)) begin
+            assert (muldiv_shl_o == $past(f_muldiv_shl,4));
+            assert (muldiv_exp10sh0_o == $past(f_muldiv_exp10sh0,4));
+
+            // XXX The solver struggles when we try to verify multiplication
+            // directly, so we do it indirectly in two pieces. First, we check
+            // a series of equality assertions. Then, we make an assumption
+            // that is implied by the assertions, which will allow us to
+            // verify the multiplication output.
+            //
+            // Too bad making the first set of assertions isn't enough to
+            // guide the solver to a proof. :(
+`ifdef PFPU32_CHECK_MUL_ASSUMPTIONS
+            // Assertion group (1).
+            assert ($past(s2o_fract32_ahbh)
+              == $past({16'b0,s1o_mul16_ah} * {16'b0,s1o_mul16_bh},2));
+            assert ($past(s2o_fract32_ahbl)
+              == $past({16'b0,s1o_mul16_ah} * {16'b0,s1o_mul16_bl},2));
+            assert ($past(s2o_fract32_albh)
+              == $past({16'b0,s1o_mul16_al} * {16'b0,s1o_mul16_bh},2));
+            assert ($past(s2o_fract32_albl)
+              == $past({16'b0,s1o_mul16_al} * {16'b0,s1o_mul16_bl},2));
+
+            // Assertion group (2).
+            //
+            // XXX These are true, but the solver struggles with induction in
+            // step 0.
+`ifdef 0
+            assert ($past({16'b0,s1o_mul16_ah} * {16'b0,s1o_mul16_bh},2)
+              == $past({16'b0,s1o_mul16_ah},2) * $past({16'b0,s1o_mul16_bh},2));
+            assert ($past({16'b0,s1o_mul16_ah} * {16'b0,s1o_mul16_bl},2)
+              == $past({16'b0,s1o_mul16_ah},2) * $past({16'b0,s1o_mul16_bl},2));
+            assert ($past({16'b0,s1o_mul16_al} * {16'b0,s1o_mul16_bh},2)
+              == $past({16'b0,s1o_mul16_al},2) * $past({16'b0,s1o_mul16_bh},2));
+`endif
+            // Can handle al*bl, though.
+            assert ($past({16'b0,s1o_mul16_al} * {16'b0,s1o_mul16_bl},2)
+              == $past({16'b0,s1o_mul16_al},2) * $past({16'b0,s1o_mul16_bl},2));
+
+            // Assertion group (3).
+            assert ($past({16'b0,s1o_mul16_ah},2)
+              == $past({16'b0,f_mul16_ah},4));
+            assert ($past({16'b0,s1o_mul16_al},2)
+              == $past({16'b0,f_mul16_al},4));
+            assert ($past({16'b0,s1o_mul16_bh},2)
+              == $past({16'b0,f_mul16_bh},4));
+            assert ($past({16'b0,s1o_mul16_bl},2)
+              == $past({16'b0,f_mul16_bl},4));
+
+            // Assertion group (4).
+            //
+            // XXX These are true, but the solver struggles with induction
+            // in step 0.
+`ifdef 0
+            assert ($past({16'b0,f_mul16_ah},4) * $past({16'b0,f_mul16_bh},4)
+              == $past({16'b0,f_mul16_ah} * {16'b0,f_mul16_bh},4));
+            assert ($past({16'b0,f_mul16_ah},4) * $past({16'b0,f_mul16_bl},4)
+              == $past({16'b0,f_mul16_ah} * {16'b0,f_mul16_bl},4));
+            assert ($past({16'b0,f_mul16_al},4) * $past({16'b0,f_mul16_bh},4)
+              == $past({16'b0,f_mul16_al} * {16'b0,f_mul16_bh},4));
+`endif
+            // Can handle al*bl, though.
+            assert ($past({16'b0,f_mul16_al},4) * $past({16'b0,f_mul16_bl},4)
+              == $past({16'b0,f_mul16_al} * {16'b0,f_mul16_bl},4));
+
+            // Assertion group (5).
+            assert ($past({16'b0,f_mul16_ah} * {16'b0,f_mul16_bh},4)
+              == $past(f_fract32_ahbh,4));
+            assert ($past({16'b0,f_mul16_ah} * {16'b0,f_mul16_bl},4)
+              == $past(f_fract32_ahbl,4));
+            assert ($past({16'b0,f_mul16_al} * {16'b0,f_mul16_bh},4)
+              == $past(f_fract32_albh,4));
+            assert ($past({16'b0,f_mul16_al} * {16'b0,f_mul16_bl},4)
+              == $past(f_fract32_albl,4));
+
+            // From (1), (2), and transitivity of equality, we have:
+            //
+            //   $past(s2o_fract32_ahbh)
+            //     == $past({16'b0,s1o_mul16_ah},2)
+            //         * $past({16'b0,s1o_mul16_bh},2)
+            //   $past(s2o_fract32_ahbl)
+            //     == $past({16'b0,s1o_mul16_ah},2)
+            //         * $past({16'b0,s1o_mul16_bl},2)
+            //   $past(s2o_fract32_albh)
+            //     == $past({16'b0,s1o_mul16_al},2)
+            //         * $past({16'b0,s1o_mul16_bh},2)
+            //   $past(s2o_fract32_albl)
+            //     == $past({16'b0,s1o_mul16_al},2)
+            //         * $past({16'b0,s1o_mul16_bl},2)
+            //
+            // Substituting in from (3), we have:
+            //
+            //   $past(s2o_fract32_ahbh)
+            //     == $past({16'b0,f_mul16_ah},4)
+            //         * $past({16'b0,f_mul16_bh},4)
+            //   $past(s2o_fract32_ahbl)
+            //     == $past({16'b0,f_mul16_ah},4)
+            //         * $past({16'b0,f_mul16_bl},4)
+            //   $past(s2o_fract32_albh)
+            //     == $past({16'b0,f_mul16_al},4)
+            //         * $past({16'b0,f_mul16_bh},4)
+            //   $past(s2o_fract32_albl)
+            //     == $past({16'b0,f_mul16_al},4)
+            //         * $past({16'b0,f_mul16_bl},4)
+            //
+            // Combining this with (4), (5), and transitivity of equality,
+            // we have the assumptions below.
+`else
+            assume($past(s2o_fract32_ahbh) == $past(f_fract32_ahbh,4));
+            assume($past(s2o_fract32_ahbl) == $past(f_fract32_ahbl,4));
+            assume($past(s2o_fract32_albh) == $past(f_fract32_albh,4));
+            assume($past(s2o_fract32_albl) == $past(f_fract32_albl,4));
+
+            assert (muldiv_shr_o == $past(f_muldiv_shr,4));
+            assert (muldiv_fract28_o == $past(f_mul_fract28,4));
+`endif
+          end
+        end
+
+        // Assert expected output for the division case.
+        if (f_is_div[15]) begin
+          assert (muldiv_sign_o == $past(f_muldiv_sign,16));
+          assert (muldiv_inv_o == $past(f_muldiv_inv,16));
+          assert (muldiv_inf_o == $past(f_muldiv_inf,16));
+          assert (muldiv_snan_o == $past(f_muldiv_snan,16));
+          assert (muldiv_anan_sign_o == $past(f_muldiv_anan_sign,16));
+          assert (div_op_o == $past(f_div_op,16));
+          assert (div_dbz_o == $past(f_div_dbz,16));
+
+          // Assert remaining outputs only when meaningful.
+          if (!$past(f_muldiv_inv | f_muldiv_inf | f_div_dbz, 16)) begin
+            // TODO: assert (muldiv_shr_o == $past(f_muldiv_shr,16));
+            // TODO: assert (muldiv_shl_o == $past(f_muldiv_shl,16));
+            assert (muldiv_exp10sh0_o == $past(f_muldiv_exp10sh0,16));
+            // TODO: assert (muldiv_fract28_o == $past(f_div_fract28,16));
+            // TODO: assert (div_sign_rmnd_o == $past(f_div_sign_rmnd,16));
+          end
+        end
+      end
+    end
+  end
+
+  // Division takes 16 cycles. Verify that a result is produced within this
+  // amount of time.
+  generate
+  begin : f_muldiv_multiclock
+    f_multiclock_pfpu32_op #(
+      .OP_MAX_CLOCKS(16),
+    ) u_f_multiclock (
+      .clk(clk),
+      .flush_i(flush_i),
+      .adv_i(adv_i),
+      .start_i(start_i),
+      .result_rdy_i(muldiv_rdy_o),
+      .f_initialized(f_initialized),
+    );
+  end
+  endgenerate
+`endif // FORMAL
 
 endmodule // pfpu32_muldiv
 
