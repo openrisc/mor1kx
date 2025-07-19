@@ -12,12 +12,16 @@
 #  'RUN .travis/install-verilator.sh' to this dockerfile to have an image
 #  with the full environment already installed.
 #
-FROM ubuntu:22.04
-RUN apt-get update && apt-get -y install build-essential python3 python3-pip xz-utils git iverilog \
+FROM ubuntu:24.04
+RUN apt-get update && apt-get -y install build-essential python3 python3-pip python3.12-venv xz-utils git iverilog \
   libfl2 libelf-dev
 
-RUN pip3 install --upgrade setuptools wheel
-RUN pip3 install --upgrade fusesoc
+RUN python3 -m venv /tmp/fusesoc_venv
+ENV PATH="/tmp/fusesoc_venv/bin:$PATH"
+RUN pip3 install fusesoc
+
+#RUN pip3 install --upgrade setuptools wheel
+#RUN pip3 install --upgrade fusesoc
 
 RUN apt-get -y install curl
 

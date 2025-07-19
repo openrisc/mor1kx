@@ -26,7 +26,7 @@ jobs:
           verilator --lint-only rtl/verilog/*.v +incdir+rtl/verilog
 
   or1k-tests:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       LD_LIBRARY_PATH: "/tmp/tools/lib"
       EXPECTED_FAILURES: ${{ matrix.env.EXPECTED_FAILURES }}
@@ -39,11 +39,12 @@ jobs:
       # Install OS and Python Tools
       - name: Install Tools
         run: |
-          sudo apt-get install build-essential python3 python3-pip xz-utils git iverilog \
+          sudo apt-get install build-essential python3 python3-pip python3.12-venv \
+            xz-utils git iverilog \
             libfl2 libelf-dev
-          pip3 install --upgrade setuptools wheel
-          pip3 install --upgrade fusesoc
-          export PATH=$PATH:$HOME/.local/bin
+          python3 -m venv /tmp/fusesoc_venv
+          export PATH=$PATH:/tmp/fusesoc_venv/bin
+          pip3 install fusesoc
           fusesoc --version
 
       # Install Toolchain
