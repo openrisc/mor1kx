@@ -39,10 +39,10 @@ jobs:
       # Install OS and Python Tools
       - name: Install Tools
         run: |
-          sudo apt-get install build-essential python3 xz-utils git iverilog \
+          sudo apt-get install build-essential python3 python3-pip xz-utils git iverilog \
             libfl2 libelf-dev
-          pip3 install setuptools wheel
-          pip3 install fusesoc
+          pip3 install --upgrade setuptools wheel
+          pip3 install --upgrade fusesoc
           export PATH=$PATH:$HOME/.local/bin
           fusesoc --version
 

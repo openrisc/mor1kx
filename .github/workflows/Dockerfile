@@ -2,8 +2,8 @@
 # this is not actually used in ci
 #
 # to use:
-#   sudo docker build -t mor1kx-ci .github/workflows/
-#   sudo docker run -it --rm -v ${PWD}:/tmp/src/cores/mor1kx:Z mork1x-ci
+#   podman build -t mor1kx-ci .github/workflows/
+#   podman run -it --rm -v ${PWD}:/tmp/src/cores/mor1kx:Z mor1kx-ci
 #   $ # run stuff from ci.yml
 #
 # tip:
@@ -12,13 +12,12 @@
 #  'RUN .travis/install-verilator.sh' to this dockerfile to have an image
 #  with the full environment already installed.
 #
-FROM ubuntu:18.04
-RUN apt-get update && apt-get -y install \
-   build-essential python3 python3-pip xz-utils git iverilog \
-   flex libelf-dev
+FROM ubuntu:22.04
+RUN apt-get update && apt-get -y install build-essential python3 python3-pip xz-utils git iverilog \
+  libfl2 libelf-dev
 
-RUN pip3 install setuptools wheel
-RUN pip3 install fusesoc
+RUN pip3 install --upgrade setuptools wheel
+RUN pip3 install --upgrade fusesoc
 
 RUN apt-get -y install curl
 
