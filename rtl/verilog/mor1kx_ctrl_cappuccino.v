@@ -314,6 +314,7 @@ module mor1kx_ctrl_cappuccino
    /* Wires for SPR management */
    wire                              spr_access_valid;
    wire 			     spr_we;
+   wire 			     spr_write_authorized;
    wire                              spr_read;
    wire                              spr_ack;
    wire [OPTION_OPERAND_WIDTH-1:0]   spr_write_dat;
@@ -1206,13 +1207,17 @@ module mor1kx_ctrl_cappuccino
    assign spr_read_access = (ctrl_op_mfspr_i | (du_access & !du_we_i));
    assign spr_write_access = (ctrl_op_mtspr_i | (du_access & du_we_i));
 
+   /* Check privilege before allowing an SPR write. */
+   assign spr_write_authorized = (ctrl_op_mtspr_i & spr_sr[`OR1K_SPR_SR_SM]) |
+                                 (du_access & du_we_i);
+
    assign spr_write_dat = du_access ? du_dat_i : ctrl_rfb_i;
-   assign spr_we = spr_write_access & spr_access_valid;
+   assign spr_we = spr_write_authorized & spr_access_valid;
    assign spr_read = spr_read_access & spr_access_valid;
 
    /* A bus out to other units that live outside of the control unit */
    assign spr_bus_addr_o = spr_addr;
-   assign spr_bus_we_o = spr_write_access & spr_access_valid & spr_bus_access;
+   assign spr_bus_we_o = spr_write_authorized & spr_access_valid & spr_bus_access;
    assign spr_bus_stb_o = (spr_read_access | spr_write_access) &
                           spr_access_valid & spr_bus_access;
    assign spr_bus_dat_o = spr_write_dat;
@@ -1655,6 +1660,11 @@ endgenerate
    always @*
       if (spr_bus_we_o)
          assert (spr_we);
+
+   // User-mode l.mtspr must never enable an SPR write.
+   always @*
+      if (ctrl_op_mtspr_i & !du_access & !spr_sr[`OR1K_SPR_SR_SM])
+         assert (!spr_we & !spr_bus_we_o);
 
    always @(posedge clk) begin
       if (f_past_valid && !$past(rst) && $past(exception_re)) begin

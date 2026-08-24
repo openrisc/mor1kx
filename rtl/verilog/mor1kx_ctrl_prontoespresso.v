@@ -316,6 +316,7 @@ module mor1kx_ctrl_prontoespresso
    wire                              spr_group_present;
    wire [3:0] 			     spr_group;
    wire                              spr_we;
+   wire                              spr_write_authorized;
    wire                              spr_read;
    wire [OPTION_OPERAND_WIDTH-1:0]   spr_write_dat;
    wire [11:0] 			     spr_access_ack;
@@ -1056,13 +1057,17 @@ module mor1kx_ctrl_prontoespresso
    assign spr_read_access = (op_mfspr | (du_access & !du_we_i));
    assign spr_write_access = ((execute_done & op_mtspr) | (du_access & du_we_i));
 
+   /* Check privilege before allowing an SPR write. */
+   assign spr_write_authorized = (op_mtspr & spr_sr[`OR1K_SPR_SR_SM]) |
+                                 (du_access & du_we_i);
+
    assign spr_write_dat = du_access ? du_dat_i : b;
-   assign spr_we = spr_write_access & spr_group_present;
+   assign spr_we = spr_write_authorized & spr_group_present;
    assign spr_read = spr_read_access & spr_group_present;
 
    /* A bus out to other units that live outside of the control unit */
    assign spr_bus_addr_o = spr_addr;
-   assign spr_bus_we_o = spr_write_access & spr_group_present & spr_bus_access;
+   assign spr_bus_we_o = spr_write_authorized & spr_group_present & spr_bus_access;
    assign spr_bus_stb_o = (spr_read_access | spr_write_access) &
                           spr_group_present & spr_bus_access;
    assign spr_bus_dat_o = spr_write_dat;
