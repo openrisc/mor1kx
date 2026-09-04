@@ -826,22 +826,22 @@ endgenerate
    assign overflow_set_o = FEATURE_OVERFLOW!="NONE" &
 			   (op_add_i & adder_signed_overflow |
 			    op_mul_signed_i & mul_signed_overflow |
-			    op_div_signed_i & div_by_zero);
+			    op_div_signed_i & div_by_zero |
+			    op_div_unsigned_i & div_by_zero);
 
    assign overflow_clear_o = FEATURE_OVERFLOW!="NONE" &
 			     (op_add_i & !adder_signed_overflow |
 			      op_mul_signed_i & !mul_signed_overflow |
-			      op_div_signed_i & !div_by_zero);
+			      op_div_signed_i & !div_by_zero |
+			      op_div_unsigned_i & !div_by_zero);
 
    assign carry_set_o = FEATURE_CARRY_FLAG!="NONE" &
 			(op_add_i & adder_unsigned_overflow |
-			 op_mul_unsigned_i & mul_unsigned_overflow |
-			 op_div_unsigned_i & div_by_zero);
+			 op_mul_unsigned_i & mul_unsigned_overflow);
 
    assign carry_clear_o = FEATURE_CARRY_FLAG!="NONE" &
 			  (op_add_i & !adder_unsigned_overflow |
-			   op_mul_unsigned_i & !mul_unsigned_overflow |
-			   op_div_unsigned_i & !div_by_zero);
+			   op_mul_unsigned_i & !mul_unsigned_overflow);
 
    // Stall logic for multicycle ALU operations
    assign alu_stall = op_div_i & !div_valid |
